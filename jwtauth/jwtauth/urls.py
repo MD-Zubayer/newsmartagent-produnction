@@ -7,7 +7,7 @@ from rest_framework.routers import DefaultRouter
 from users.views import (
     UserViewSet, LoginView, LogoutView, ForgotPasswordView, 
     ResetPasswordView, OfferViewSet, SubscriptionViewSet, 
-    CookieTokenRefreshView, CookieTokenVerifyView, OrderSubmitView
+    CookieTokenRefreshView, CookieTokenVerifyView, OrderSubmitView, NSABalanceTransferView
 )
 from payments.views import PaymentViewSet
 from webhooks import views as webhook_views
@@ -41,6 +41,7 @@ urlpatterns = [
     path('api/token/refresh/', CookieTokenRefreshView.as_view(), name='token_refresh'),
     path('api/forgot-password/', ForgotPasswordView.as_view(), name='forgot_password'),
     path("api/reset-password/", ResetPasswordView.as_view(), name="reset-password"),
+    path('api/transfer/', NSABalanceTransferView.as_view(), name='tarnsfer'),
     
     # অ্যাপ ভিত্তিক ইউআরএল
     path('webhooks/', include('webhooks.urls')),

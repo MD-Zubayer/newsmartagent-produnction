@@ -61,8 +61,13 @@ export default function AuthPage() {
         await api.post("/token/verify/"); 
         router.push("/dashboard");
       } catch (err) {
-        console.log("Not authenticated");
-      }
+     const errorData = err.response?.data;
+    const msg = errorData 
+      ? (typeof errorData === 'object' ? Object.values(errorData).flat().join(", ") : errorData)
+      : "Signup failed!";
+    
+    // showAlert(msg, "error");
+    }
     };
     checkUserStatus();
   }, [router]);
@@ -113,7 +118,7 @@ export default function AuthPage() {
       if (res.status === 201 || res.status === 200) {
         // ✅ অ্যালার্টের বদলে সাকসেস স্টেট সেট করা
         setIsRegistered(true); 
-        showAlert("অ্যাকাউন্ট তৈরি হয়েছে! ইমেইল ভেরিফাই করুন।", "success");
+        showAlert("Account created! Verify email.", "success");
       }
     } catch (err) {
       const errorData = err.response?.data;

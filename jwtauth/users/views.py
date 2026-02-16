@@ -1,4 +1,5 @@
 from django.shortcuts import render, get_object_or_404
+from decimal import Decimal
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
@@ -20,7 +21,7 @@ from users.serializers import CookieTokenRefreshSerializer
 from rest_framework_simplejwt.serializers import TokenVerifySerializer
 from django.utils.timezone import now
 from datasheet.models import Spreadsheet
-from users.models import CustomerOrder, OrderForm, EmailVerificationToken
+from users.models import CustomerOrder, OrderForm, EmailVerificationToken, NSATransfer
 from users.serializers import CustomerOrderSerializer
 from man_agent.utils import distribute_agent_commission
 from django.db import transaction
@@ -442,3 +443,57 @@ def get_order_form_link(user):
         return None
 
 
+
+class NSABalanceTransferView(APIView):
+    def post(self, request):
+        sender_user = request.user
+        receiver_unique_id = request.data.get('receiver_unique_id')
+        amount_str = request.data.get('amount')
+
+        # 1. Input validation
+        try:
+            amount = Decimal(str(amount_str))
+            if amount <= 0:
+                return Response({'error': 'Amount must be greater than 0.' }, status=status.HTTP_400_BAD_REQUEST)
+        
+        except (ValueError, TypeError):
+            return Response({"error": "Enter the correct amount."}, status=status.HTTP_400_BAD_REQUEST)     
+
+        # 2. Start transaction block (so that money is not lost)
+        try:
+            with transaction.atomic():
+                # Locking sender profile (to avoid race condition)
+                sender_profile = Profile.objects.select_for_update().get(user=sender_user)
+
+                if sender_profile.acount_balance < amount:
+                    return Response({'error': "Not enough balance."},status=status.HTTP_400_BAD_REQUEST )
+                
+                # Finding the receiver (by Unique ID)
+                try:
+                    receiver_profile = Profile.objects.select_for_update().get(unique_id=receiver_unique_id)
+                
+                except Profile.DoesNotExist:
+                    return Response({"error": "Receiver's Unique ID not found."}, status=status.HTTP_404_NOT_FOUND)
+                
+                if sender_profile == receiver_profile:
+                    return Response({"error": "It is not possible to transfer yourself."}, status=status.HTTP_400_BAD_REQUEST)
+
+                sender_profile.acount_balance -= amount
+                sender_profile.save()
+
+                receiver_profile.acount_balance += amount
+                receiver_profile.save()
+
+                NSATransfer.objects.create(
+                    sender=sender_user,
+                    receiver=receiver_profile.user,
+                    amount=amount
+                )
+                
+                return Response({
+                   "message": "The transfer was successful.",
+                    "new_balance": sender_profile.acount_balance
+                }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": "There was a problem with the server. Please try again."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

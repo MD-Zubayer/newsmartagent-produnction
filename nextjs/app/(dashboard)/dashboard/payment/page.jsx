@@ -3,7 +3,8 @@ import { useState, useEffect } from "react";
 import api from "@/lib/api";
 import { 
   FaMobileAlt, FaWhatsapp, FaHistory, FaCreditCard, 
-  FaCopy, FaCheckCircle, FaFacebookMessenger, FaArrowRight 
+  FaCopy, FaCheckCircle, FaFacebookMessenger, FaArrowRight,
+  FaExchangeAlt, FaUserShield // নতুন আইকন
 } from "react-icons/fa";
 
 export default function ManualPaymentPage() {
@@ -13,7 +14,11 @@ export default function ManualPaymentPage() {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // পেমেন্ট হিস্ট্রি ফেচ করা (payments/ এন্ডপয়েন্ট থেকে)
+  // --- নতুন ট্রান্সফার স্টেট ---
+  const [receiverId, setReceiverId] = useState("");
+  const [transferAmount, setTransferAmount] = useState("");
+
+  // পেমেন্ট হিস্ট্রি ফেচ করা
   const fetchHistory = async () => {
     try {
       const res = await api.get("/payments/"); 
@@ -32,20 +37,41 @@ export default function ManualPaymentPage() {
     
     setLoading(true);
     try {
-      // নতুন পেমেন্ট সাবমিট (manual-payments/ এন্ডপয়েন্টে)
       await api.post("/manual-payments/", { 
         transaction_id: tranId,
         amount: amount 
       });
       
-      alert("✅ পেমেন্ট সফলভাবে সাবমিট হয়েছে! ভেরিফিকেশনের জন্য অপেক্ষা করুন।");
+      alert("✅ পেমেন্ট সফলভাবে সাবমিট হয়েছে! ভেরিফিকেশনের জন্য অপেক্ষা করুন।");
       
       setTranId("");
       setAmount("");
-      fetchHistory(); // হিস্ট্রি রিফ্রেশ করা
-      setActiveTab("history"); // ইউজারকে হিস্ট্রি ট্যাবে পাঠানো
+      fetchHistory();
+      setActiveTab("history");
     } catch (err) {
-      alert("Error: সাবমিট ব্যর্থ হয়েছে। আবার চেষ্টা করুন।");
+      alert("Error: সাবমিট ব্যর্থ হয়েছে। আবার চেষ্টা করুন।");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- নতুন ট্রান্সফার ফাংশন ---
+  const handleTransferBalance = async () => {
+    if (!receiverId || !transferAmount) return alert("রিসিভার আইডি এবং টাকার পরিমাণ দিন।");
+    
+    setLoading(true);
+    try {
+      const res = await api.post("/transfer/", { // আপনার ব্যাকএন্ড এন্ডপয়েন্ট অনুযায়ী
+        receiver_unique_id: receiverId,
+        amount: transferAmount
+      });
+      alert(`✅ সফলভাবে ${transferAmount} BDT ট্রান্সফার হয়েছে!`);
+      setReceiverId("");
+      setTransferAmount("");
+      fetchHistory(); // প্রয়োজনে হিস্ট্রি আপডেট
+    } catch (err) {
+      const errorMsg = err.response?.data?.error || "ট্রান্সফার ব্যর্থ হয়েছে।";
+      alert("Error: " + errorMsg);
     } finally {
       setLoading(false);
     }
@@ -55,19 +81,25 @@ export default function ManualPaymentPage() {
     <div className="min-h-screen bg-[#f4f7fe] py-4 px-2 md:p-12 font-sans text-slate-900">
       <div className="max-w-4xl mx-auto">
         
-        {/* Navigation Tabs */}
-        <div className="md:flex w-full bg-white p-2 rounded-[2rem] shadow-sm mb-10 border border-slate-100">
+        {/* Navigation Tabs - Updated with Transfer Tab */}
+        <div className="grid grid-cols-3 w-full bg-white p-2 rounded-[2rem] shadow-sm mb-10 border border-slate-100 overflow-hidden">
           <button 
             onClick={() => setActiveTab("payment")}
-            className={`flex-1 flex items-center justify-center mx-auto gap-2 px-3  w-full md:px-0 py-4 rounded-[1.5rem] font-black text-[10px] md:text-xs uppercase tracking-widest transition-all ${activeTab === 'payment' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
+            className={`flex items-center justify-center gap-2 px-1 py-4 rounded-[1.5rem] font-black text-[9px] md:text-xs uppercase tracking-widest transition-all ${activeTab === 'payment' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
           >
-            <FaCreditCard size={16}/> Add Balance
+            <FaCreditCard className="hidden xs:block" size={16}/> Add Balance
+          </button>
+          <button 
+            onClick={() => setActiveTab("transfer")}
+            className={`flex items-center justify-center gap-2 px-1 py-4 rounded-[1.5rem] font-black text-[9px] md:text-xs uppercase tracking-widest transition-all ${activeTab === 'transfer' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <FaExchangeAlt className="hidden xs:block" size={16}/> Transfer
           </button>
           <button 
             onClick={() => setActiveTab("history")}
-            className={`flex-1 flex items-center justify-center gap-2 mx-auto gap-2 px-3  w-full md:px-0 py-4 rounded-[1.5rem] font-black text-[10px] md:text-xs uppercase tracking-widest transition-all ${activeTab === 'history' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
+            className={`flex items-center justify-center gap-2 px-1 py-4 rounded-[1.5rem] font-black text-[9px] md:text-xs uppercase tracking-widest transition-all ${activeTab === 'history' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
           >
-            <FaHistory size={16}/> Payment History
+            <FaHistory className="hidden xs:block" size={16}/> History
           </button>
         </div>
 
@@ -133,6 +165,58 @@ export default function ManualPaymentPage() {
           </div>
         )}
 
+        {/* --- TRANSFER FORM (New Option) --- */}
+        {activeTab === "transfer" && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="max-w-2xl mx-auto space-y-6">
+              <div className="bg-slate-900 px-5 py-8 md:p-8 rounded-[2.5rem] text-white space-y-2 relative overflow-hidden">
+                 <div className="relative z-10">
+                    <h2 className="text-xl md:text-3xl font-black mb-1">ব্যালেন্স ট্রান্সফার</h2>
+                    <p className="text-slate-400 text-center md:text-left text-sm font-medium">অন্য ইউজারের ইউনিক আইডি দিয়ে সহজেই টাকা পাঠান।</p>
+                 </div>
+                 <FaExchangeAlt className="absolute -right-5 -bottom-5 w-32 h-32 text-white/5 rotate-12" />
+              </div>
+
+              <div className="bg-white px-4 py-8 md:p-10 rounded-[2.5rem] border border-slate-100 shadow-xl space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 italic flex items-center gap-2">
+                    <FaUserShield /> Receiver Unique ID
+                  </label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. USER12345" 
+                    value={receiverId}
+                    onChange={(e) => setReceiverId(e.target.value)}
+                    className="w-full p-5 bg-slate-50 rounded-[1.5rem] border-none focus:ring-2 focus:ring-indigo-500 font-black text-slate-800 uppercase"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 italic">Transfer Amount</label>
+                  <div className="relative">
+                    <input 
+                      type="number" 
+                      placeholder="0.00" 
+                      value={transferAmount}
+                      onChange={(e) => setTransferAmount(e.target.value)}
+                      className="w-full p-5 bg-slate-50 rounded-[1.5rem] border-none focus:ring-2 focus:ring-indigo-500 font-black text-slate-800"
+                    />
+                    <span className="absolute right-6 top-5 text-slate-400 font-bold">৳</span>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={handleTransferBalance}
+                  disabled={loading}
+                  className="w-full p-5 bg-indigo-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                >
+                  {loading ? "Processing..." : <>Send Balance <FaExchangeAlt /></>}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* --- HISTORY TABLE --- */}
         {activeTab === "history" && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -154,7 +238,7 @@ export default function ManualPaymentPage() {
                                   <tr key={pay.id} className="hover:bg-slate-50 transition-colors">
                                       <td className="p-6">
                                           <p className="font-black text-slate-700 text-base">৳{pay.amount}</p>
-                                          <p className="font-mono text-[10px] text-slate-400 uppercase">{pay.transaction_id}</p>
+                                          <p className="font-mono text-[10px] text-slate-400 uppercase">{pay.transaction_id || 'Transfer'}</p>
                                       </td>
                                       <td className="p-6 text-slate-500 font-bold uppercase text-[10px]">
                                           {new Date(pay.created_at).toLocaleDateString()}

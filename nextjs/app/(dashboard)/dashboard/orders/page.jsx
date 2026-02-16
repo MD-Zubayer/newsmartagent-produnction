@@ -235,33 +235,161 @@ export default function OrderDashboard() {
         </div>
       </div>
 
-      {/* ANALYTICS VIEW */}
+    {/* ANALYTICS VIEW */}
       {viewMode === "analytics" && (
-        <div className="space-y-4 md:space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
-            <div className="bg-white p-4 md:p-8 rounded-2xl shadow-sm border border-indigo-50">
-              <p className="text-gray-400 text-[8px] md:text-[10px] font-bold uppercase mb-1">Total</p>
-              <p className="text-xl md:text-4xl font-black text-indigo-600">{orders.length}</p>
+        <div className="space-y-6 md:space-y-10 animate-in fade-in slide-in-from-bottom-6 duration-700">
+          
+          {/* TOP STATS CARDS */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+            <div className="relative overflow-hidden bg-gradient-to-br from-indigo-600 to-indigo-700 p-6 md:p-8 rounded-[2rem] shadow-xl shadow-indigo-100 group transition-all hover:-translate-y-1">
+              <TrendingUp className="absolute -right-4 -top-4 w-24 h-24 text-white/10 rotate-12 group-hover:scale-110 transition-transform" />
+              <p className="text-indigo-100 text-[10px] md:text-xs font-black uppercase tracking-[0.2em] mb-2">Total Volume</p>
+              <h3 className="text-3xl md:text-5xl font-black text-white">{orders.length}</h3>
+              <div className="mt-4 flex items-center gap-2 text-indigo-100/80 text-[10px] font-bold">
+                <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" /> Live Orders Tracking
+              </div>
             </div>
-            <div className="bg-white p-4 md:p-8 rounded-2xl shadow-sm border border-emerald-50">
-              <p className="text-gray-400 text-[8px] md:text-[10px] font-bold uppercase mb-1">Delivered</p>
-              <p className="text-xl md:text-4xl font-black text-emerald-500">{orders.filter(o => o.status === 'delivered').length}</p>
+
+            <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-emerald-100 flex flex-col justify-between group transition-all hover:border-emerald-500">
+              <div>
+                <div className="w-10 h-10 bg-emerald-50 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-emerald-500 transition-colors">
+                  <Check className="w-5 h-5 text-emerald-600 group-hover:text-white" />
+                </div>
+                <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Success Rate</p>
+              </div>
+              <h3 className="text-2xl md:text-4xl font-black text-slate-900 mt-2">
+                {orders.length > 0 ? ((orders.filter(o => o.status === 'delivered').length / orders.length) * 100).toFixed(1) : 0}%
+              </h3>
             </div>
-            <div className="bg-white p-4 md:p-8 rounded-2xl shadow-sm border border-amber-50 col-span-2 lg:col-span-1">
-              <p className="text-gray-400 text-[8px] md:text-[10px] font-bold uppercase mb-1">Pending</p>
-              <p className="text-xl md:text-4xl font-black text-amber-500">{orders.filter(o => o.status === 'pending').length}</p>
+
+            <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-indigo-50 flex flex-col justify-between group transition-all hover:border-indigo-500">
+              <div>
+                <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-indigo-500 transition-colors">
+                  <Package className="w-5 h-5 text-indigo-600 group-hover:text-white" />
+                </div>
+                <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Shipped Items</p>
+              </div>
+              <h3 className="text-2xl md:text-4xl font-black text-slate-900 mt-2">{orders.filter(o => o.status === 'shipped').length}</h3>
+            </div>
+
+            <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-amber-100 flex flex-col justify-between group transition-all hover:border-amber-500">
+              <div>
+                <div className="w-10 h-10 bg-amber-50 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-amber-500 transition-colors">
+                  <BarChart3 className="w-5 h-5 text-amber-600 group-hover:text-white" />
+                </div>
+                <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Awaiting Action</p>
+              </div>
+              <h3 className="text-2xl md:text-4xl font-black text-slate-900 mt-2">{orders.filter(o => o.status === 'pending').length}</h3>
             </div>
           </div>
-          {/* Charts remain similar as they use maintainAspectRatio: false */}
+
+          {/* CHARTS SECTION */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 bg-white p-4 md:p-8 rounded-2xl md:rounded-[3rem] shadow-sm overflow-hidden">
-               <div className="h-[250px] md:h-[300px]">
-                  {analyticsData && <Line data={{ labels: analyticsData.labels, datasets: [{ label: 'Orders', data: analyticsData.lineData, borderColor: '#4f46e5', tension: 0.4, fill: true, backgroundColor: 'rgba(79, 70, 229, 0.05)' }] }} options={lineChartOptions} />}
+            <div className="lg:col-span-2 bg-white p-6 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] shadow-sm border border-slate-50 relative overflow-hidden">
+               <div className="flex items-center justify-between mb-8">
+                  <div>
+                    <h4 className="text-xl font-black text-slate-900 italic uppercase tracking-tighter">Order Trajectory</h4>
+                    <p className="text-slate-400 text-[10px] font-bold">Timeline of your business growth</p>
+                  </div>
+                  <div className="hidden sm:block bg-indigo-50 px-4 py-2 rounded-2xl text-indigo-600 font-black text-[10px] uppercase">
+                    Daily Analytics
+                  </div>
+               </div>
+               <div className="h-[300px] md:h-[350px] w-full">
+                  {analyticsData && (
+                    <Line 
+                      data={{ 
+                        labels: analyticsData.labels, 
+                        datasets: [{ 
+                          label: 'Orders', 
+                          data: analyticsData.lineData, 
+                          borderColor: '#4f46e5', 
+                          borderWidth: 4,
+                          pointBackgroundColor: '#fff',
+                          pointBorderColor: '#4f46e5',
+                          pointBorderWidth: 2,
+                          pointRadius: 4,
+                          pointHoverRadius: 6,
+                          tension: 0.4, 
+                          fill: true, 
+                          backgroundColor: (context) => {
+                            const ctx = context.chart.ctx;
+                            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+                            gradient.addColorStop(0, 'rgba(79, 70, 229, 0.2)');
+                            gradient.addColorStop(1, 'rgba(79, 70, 229, 0)');
+                            return gradient;
+                          },
+                        }] 
+                      }} 
+                      options={{
+                        ...lineChartOptions,
+                        plugins: { ...lineChartOptions.plugins, title: { display: false }, legend: { display: false } },
+                        scales: {
+                          x: { grid: { display: false }, ticks: { font: { size: 10, weight: 'bold' } } },
+                          y: { grid: { color: '#f8fafc' }, ticks: { font: { size: 10 } } }
+                        }
+                      }} 
+                    />
+                  )}
                </div>
             </div>
-            <div className="bg-white p-4 md:p-8 rounded-2xl md:rounded-[3rem] shadow-sm flex flex-col items-center justify-center">
-               <div className="w-full max-w-[180px] md:max-w-[250px]">
-                 {analyticsData && <Doughnut data={{ labels: ['P', 'S', 'D'], datasets: [{ data: analyticsData.statusData, backgroundColor: ['#fbbf24', '#4f46e5', '#10b981'] }] }} options={{ cutout: '70%', plugins: { legend: { display: false } } }} />}
+
+            <div className="bg-slate-900 p-8 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] shadow-2xl flex flex-col items-center justify-center relative overflow-hidden group">
+               {/* Background Glow */}
+               <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full blur-3xl" />
+               <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl" />
+               
+               <div className="text-center mb-8 relative z-10">
+                  <h4 className="text-white text-xl font-black italic uppercase tracking-tighter">Status Split</h4>
+                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">Order Distribution</p>
+               </div>
+               
+               <div className="w-full max-w-[200px] md:max-w-[240px] relative z-10 transition-transform group-hover:scale-105 duration-500">
+                 {analyticsData && (
+                   <Doughnut 
+                    data={{ 
+                      labels: ['Pending', 'Shipped', 'Delivered'], 
+                      datasets: [{ 
+                        data: analyticsData.statusData, 
+                        backgroundColor: ['#fbbf24', '#6366f1', '#10b981'],
+                        borderWidth: 0,
+                        hoverOffset: 15
+                      }] 
+                    }} 
+                    options={{ 
+                      cutout: '75%', 
+                      plugins: { 
+                        legend: { display: false },
+                        tooltip: {
+                          backgroundColor: '#1e293b',
+                          padding: 12,
+                          titleFont: { size: 14, weight: 'bold' },
+                          cornerRadius: 12
+                        }
+                      } 
+                    }} 
+                   />
+                 )}
+                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-white text-3xl font-black">{orders.length}</span>
+                    <span className="text-slate-500 text-[8px] font-black uppercase tracking-widest">Units</span>
+                 </div>
+               </div>
+
+               <div className="mt-8 w-full space-y-3 relative z-10">
+                  {[
+                    { label: 'Pending', count: orders.filter(o => o.status === 'pending').length, color: 'bg-amber-400' },
+                    { label: 'Shipped', count: orders.filter(o => o.status === 'shipped').length, color: 'bg-indigo-500' },
+                    { label: 'Delivered', count: orders.filter(o => o.status === 'delivered').length, color: 'bg-emerald-500' }
+                  ].map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between text-white/80">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${item.color}`} />
+                        <span className="text-[10px] font-bold uppercase tracking-widest">{item.label}</span>
+                      </div>
+                      <span className="text-xs font-black">{item.count}</span>
+                    </div>
+                  ))}
                </div>
             </div>
           </div>
@@ -320,6 +448,8 @@ export default function OrderDashboard() {
                         <span className="flex items-center gap-1 text-[9px] md:text-sm font-bold text-gray-600 bg-gray-50 px-2 py-1 rounded-md border border-gray-100"><Phone className="w-3 h-3 text-indigo-500" /> {order.phone_number}</span>
                         <span className="flex items-center gap-1 text-[9px] md:text-sm font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md border border-indigo-100 truncate max-w-[120px] xs:max-w-none"><Package className="w-3 h-3" /> {order.product_name || "Item"}</span>
                       </div>
+
+                        <span className="flex items-center gap-1 text-[9px] md:text-sm font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md border border-indigo-100 truncate max-w-[120px] xs:max-w-none"><Package className="w-3 h-3" /> {order.extra_info || "Item"}</span>
 
                       <p className="text-[10px] md:text-sm text-gray-500 leading-snug bg-slate-50 p-3 md:p-6 rounded-xl md:rounded-[2rem] border-l-4 md:border-l-8 border-indigo-500 break-words">
                         {order.address}

@@ -176,6 +176,12 @@ class Payment(models.Model):
                 profile = self.profile
                 offer = self.offer
             #<!---------------- The new token will be added to the previous token in the profile ------------------!>
+                if self.transaction_id == 'BALANCE_PURCHASE' and offer:
+                    if profile.acount_balance >= self.amount:
+                        profile.acount_balance -= self.amount
+                    else:
+                        raise ValueError("Insufficient profile balance.")
+
                 if offer:
                     profile.word_balance += offer.tokens
                     profile.save()
@@ -268,3 +274,20 @@ class EmailVerificationToken(models.Model):
         
         expiry_time = self.created_at + timedelta(hours=1)
         return timezone.now() <= expiry_time
+
+
+class NSATransfer(models.Model):
+    sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="sent_transfers")
+    receiver = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='received_transfers')
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        try:
+            
+            return f"{self.sender.profile.unique_id} -> {self.receiver.profile.unique_id} | {self.amount} BDT"
+
+        except:
+            return f"Transfer {self.id}"        
+
+

@@ -7,7 +7,7 @@ from django.utils.translation import gettext_lazy as _
 from .models import OrderForm, CustomerOrder, EmailVerificationToken
 
 from users.forms import UserAdminChangeForm, UserAdminCreationForm
-from .models import User, Profile, Payment, Offer, Subscription, Platform
+from .models import User, Profile, Payment, Offer, Subscription, Platform, NSATransfer
 
 # Force Django Admin to use allauth login if enabled
 if settings.DJANGO_ADMIN_FORCE_ALLAUTH:
@@ -175,3 +175,27 @@ class CustomerOrderAdmin(admin.ModelAdmin):
 @admin.register(EmailVerificationToken)
 class EmailVerificationTokenAdmin(admin.ModelAdmin):
     list_display = ['id', 'user', 'token', 'created_at']
+
+
+@admin.register(NSATransfer)
+class NSATransferAdmin(admin.ModelAdmin):
+    # প্যানেলের লিস্টে যে যে কলাম দেখাবে
+    list_display = ('id', 'get_sender_id', 'get_receiver_id', 'amount', 'created_at')
+    
+    # ফিল্টার করার অপশন (ডান পাশে থাকবে)
+    list_filter = ('created_at',)
+    
+    # সার্চ করার বক্স (ইউনিক আইডি দিয়ে সার্চ করা যাবে)
+    search_fields = ('sender__profile__unique_id', 'receiver__profile__unique_id', 'amount')
+    
+    # প্যানেলে রিড-অনলি মোডে রাখা (যাতে অ্যাডমিনও এডিট করে টাকা এদিক ওদিক না করতে পারে)
+    readonly_fields = ('sender', 'receiver', 'amount', 'created_at')
+
+    # কাস্টম ফাংশন প্রোফাইল থেকে ইউনিক আইডি দেখানোর জন্য
+    def get_sender_id(self, obj):
+        return obj.sender.profile.unique_id
+    get_sender_id.short_description = 'Sender ID'
+
+    def get_receiver_id(self, obj):
+        return obj.receiver.profile.unique_id
+    get_receiver_id.short_description = 'Receiver ID'
