@@ -1,0 +1,11 @@
+
+###
+GET http://localhost/api/offers/
+Content-Type: application/json
+Cookie: access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzcxMjIzMTEyLCJpYXQiOjE3NzEyMTk1MTIsImp0aSI6IjRkNWI3YjdhZDBlMDRkNTg4YmNkYzFhMDFmNWRiMWFiIiwidXNlcl9pZCI6IjQ2In0.GnFPcrefuuPdaLebYRRyo9WBE--YRKqxhly7lyLdEv4
+
+
+{
+    'email': 'newpart444@gmail.com',
+    'password': '1234'
+}

@@ -1,0 +1,28 @@
+# Environments
+.env
+.env.local
+.env.*.local
+
+# Docker
+.docker/
+data/
+
+# Python / Django
+__pycache__/
+*.py[cod]
+*$py.class
+db.sqlite3
+media/
+static/
+venv/
+
+# Node / Next.js
+nextjs/node_modules/
+frontend/node_modules/
+nextjs/.next/
+nextjs/out/
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*

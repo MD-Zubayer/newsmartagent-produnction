@@ -1,0 +1,16 @@
+TARGET_KEYWORDS =[
+             'প্রয়োজন', 'প্রয়োজন', 'লাগবে', 'দরকার', 'কিনতে চাই', 
+            'বললে ভাল হত', 'জানালে ভালো হতো', 'জানান', 'বলেন', 'আবেদন',
+            'নিতে চাই', 'খুঁজছি', 'price please', 'আছে কি', 'চাই', 'বাজেট', 'অ্যাভেইলঅ্যাবল', 'অ্যাভেলেবল', 'স্টক', 'অর্ডার',
+             'দাম কত', 'মূল্য কত', 'কোথায় পাব', 'ঠিকানা', 'লোকেশন',
+            'ডেলিভারি', 'কুরিয়ার', 'শপ', 'দোকান', 'কালার', 'সাইজ',
+             'ডিসকাউন্ট', 'অফার', 'পাব কি', 'পাওয়া যাবে', 'নিতে পারবো',
+            'বিস্তারিত', 'ডিটেইলস', 'details', 'available', 'location',
+            'delivery', 'inbox', 'ইনবক্স', 'মেসেজ', 'বুকিং','price', 'cost', 'how much', 'want to buy', 'need', 'available', 
+            'stock', 'available ki', 'ache ki', 'lagbe', 'dorkar', 'kinte chai',
+            'details please', 'info', 'specification', 'delivery', 'courier',
+            'discount', 'offer', 'budget', 'location', 'address', 'shop', 
+            'where to find', 'can i get', 'order', 'booking', 'inbox', 
+            'send photo', 'real picture', 'original', 'warranty', 'guarantee',
+            'color', 'size', 'model', 'brand', 'low price', 'cheap', 'best',
+]
