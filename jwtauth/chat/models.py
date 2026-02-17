@@ -1,4 +1,5 @@
 from django.db import models
+from django.conf import settings
 
 # Create your models here.
 
@@ -47,4 +48,12 @@ class Contact(models.Model):
     email = models.EmailField(max_length=50)
     subjects = models.CharField(max_length=255)
     messages = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class Notification(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    message = models.TextField()
+    is_read = models.BooleanField(default=False)
+    type = models.CharField(max_length=20, default='info')
     created_at = models.DateTimeField(auto_now_add=True)

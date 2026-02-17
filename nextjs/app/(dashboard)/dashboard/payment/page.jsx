@@ -3,8 +3,8 @@ import { useState, useEffect } from "react";
 import api from "@/lib/api";
 import { 
   FaMobileAlt, FaWhatsapp, FaHistory, FaCreditCard, 
-  FaCopy, FaCheckCircle, FaFacebookMessenger, FaArrowRight,
-  FaExchangeAlt, FaUserShield // নতুন আইকন
+  FaCopy, FaCheckCircle, FaArrowRight,
+  FaExchangeAlt, FaUserShield, FaArrowUp, FaArrowDown // নতুন আইকন FaArrowUp, FaArrowDown
 } from "react-icons/fa";
 
 export default function ManualPaymentPage() {
@@ -18,11 +18,33 @@ export default function ManualPaymentPage() {
   const [receiverId, setReceiverId] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
 
-  // পেমেন্ট হিস্ট্রি ফেচ করা
+  // পেমেন্ট এবং ট্রান্সফার হিস্ট্রি একসাথে ফেচ করা
   const fetchHistory = async () => {
     try {
-      const res = await api.get("/payments/"); 
-      setHistory(res.data || []);
+      // একসাথে পেমেন্ট এবং ট্রান্সফার ডাটা কল করা হচ্ছে
+      const [paymentRes, transferRes] = await Promise.all([
+        api.get("/payments/"),
+        api.get("/transfer/") // আপনার দেওয়া url অনুযায়ী GET রিকোয়েস্ট
+      ]);
+
+      // পেমেন্ট ডাটা প্রসেস করা (Type: Deposit)
+      const payments = (paymentRes.data || []).map(item => ({
+        ...item,
+        type: 'deposit' // টাকা জমা
+      }));
+
+      // ট্রান্সফার ডাটা প্রসেস করা (Type: Transfer)
+      const transfers = (transferRes.data || []).map(item => ({
+        ...item,
+        type: 'transfer' // টাকা পাঠানো
+      }));
+
+      // দুটি লিস্ট একসাথে করে তারিখ অনুযায়ী (নতুন আগে) সাজানো
+      const combinedHistory = [...payments, ...transfers].sort((a, b) => 
+        new Date(b.created_at) - new Date(a.created_at)
+      );
+
+      setHistory(combinedHistory);
     } catch (err) {
       console.error("Failed to fetch history:", err);
     }
@@ -61,16 +83,17 @@ export default function ManualPaymentPage() {
     
     setLoading(true);
     try {
-      const res = await api.post("/transfer/", { // আপনার ব্যাকএন্ড এন্ডপয়েন্ট অনুযায়ী
+      await api.post("/transfer/", { 
         receiver_unique_id: receiverId,
         amount: transferAmount
       });
-      alert(`✅ সফলভাবে ${transferAmount} BDT ট্রান্সফার হয়েছে!`);
+      alert(`✅ সফলভাবে ${transferAmount} BDT ট্রান্সফার হয়েছে!`);
       setReceiverId("");
       setTransferAmount("");
-      fetchHistory(); // প্রয়োজনে হিস্ট্রি আপডেট
+      fetchHistory(); // হিস্ট্রি আপডেট হবে
+      setActiveTab("history"); // অটোমেটিক হিস্ট্রি ট্যাবে নিয়ে যাবে
     } catch (err) {
-      const errorMsg = err.response?.data?.error || "ট্রান্সফার ব্যর্থ হয়েছে।";
+      const errorMsg = err.response?.data?.error || "ট্রান্সফার ব্যর্থ হয়েছে।";
       alert("Error: " + errorMsg);
     } finally {
       setLoading(false);
@@ -81,7 +104,7 @@ export default function ManualPaymentPage() {
     <div className="min-h-screen bg-[#f4f7fe] py-4 px-2 md:p-12 font-sans text-slate-900">
       <div className="max-w-4xl mx-auto">
         
-        {/* Navigation Tabs - Updated with Transfer Tab */}
+        {/* Navigation Tabs */}
         <div className="grid grid-cols-3 w-full bg-white p-2 rounded-[2rem] shadow-sm mb-10 border border-slate-100 overflow-hidden">
           <button 
             onClick={() => setActiveTab("payment")}
@@ -165,14 +188,14 @@ export default function ManualPaymentPage() {
           </div>
         )}
 
-        {/* --- TRANSFER FORM (New Option) --- */}
+        {/* --- TRANSFER FORM --- */}
         {activeTab === "transfer" && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="max-w-2xl mx-auto space-y-6">
               <div className="bg-slate-900 px-5 py-8 md:p-8 rounded-[2.5rem] text-white space-y-2 relative overflow-hidden">
                  <div className="relative z-10">
                     <h2 className="text-xl md:text-3xl font-black mb-1">ব্যালেন্স ট্রান্সফার</h2>
-                    <p className="text-slate-400 text-center md:text-left text-sm font-medium">অন্য ইউজারের ইউনিক আইডি দিয়ে সহজেই টাকা পাঠান।</p>
+                    <p className="text-slate-400 text-center md:text-left text-sm font-medium">অন্য ইউজারের ইউনিক আইডি দিয়ে সহজেই টাকা পাঠান।</p>
                  </div>
                  <FaExchangeAlt className="absolute -right-5 -bottom-5 w-32 h-32 text-white/5 rotate-12" />
               </div>
@@ -217,7 +240,7 @@ export default function ManualPaymentPage() {
           </div>
         )}
 
-        {/* --- HISTORY TABLE --- */}
+        {/* --- HISTORY TABLE (Updated with Transfer) --- */}
         {activeTab === "history" && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
              <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-50 overflow-hidden">
@@ -225,7 +248,7 @@ export default function ManualPaymentPage() {
                     <table className="w-full text-left">
                         <thead>
                             <tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
-                                <th className="p-6">Payment Details</th>
+                                <th className="p-6">Details</th>
                                 <th className="p-6">Date</th>
                                 <th className="p-6">Status</th>
                             </tr>
@@ -234,18 +257,33 @@ export default function ManualPaymentPage() {
                             {history.length === 0 ? (
                               <tr><td colSpan="3" className="p-10 text-center text-slate-400 font-bold tracking-widest uppercase">No transactions found</td></tr>
                             ) : (
-                              history.map((pay) => (
-                                  <tr key={pay.id} className="hover:bg-slate-50 transition-colors">
+                              history.map((pay, index) => (
+                                  <tr key={index} className="hover:bg-slate-50 transition-colors">
                                       <td className="p-6">
-                                          <p className="font-black text-slate-700 text-base">৳{pay.amount}</p>
-                                          <p className="font-mono text-[10px] text-slate-400 uppercase">{pay.transaction_id || 'Transfer'}</p>
+                                          <div className="flex items-center gap-3">
+                                            {/* আইকন দিয়ে ইন/আউট বোঝানো হচ্ছে */}
+                                            <div className={`p-2 rounded-full ${pay.type === 'transfer' ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-500'}`}>
+                                              {pay.type === 'transfer' ? <FaArrowUp size={12}/> : <FaArrowDown size={12}/>}
+                                            </div>
+                                            <div>
+                                              <p className={`font-black text-base ${pay.type === 'transfer' ? 'text-red-500' : 'text-slate-700'}`}>
+                                                {pay.type === 'transfer' ? '-' : '+'}৳{pay.amount}
+                                              </p>
+                                              <p className="font-mono text-[10px] text-slate-400 uppercase">
+                                                {pay.type === 'transfer' 
+                                                  ? `To: ${pay.receiver_unique_id || 'User'}` 
+                                                  : `Trx: ${pay.transaction_id || 'N/A'}`
+                                                }
+                                              </p>
+                                            </div>
+                                          </div>
                                       </td>
                                       <td className="p-6 text-slate-500 font-bold uppercase text-[10px]">
                                           {new Date(pay.created_at).toLocaleDateString()}
                                       </td>
                                       <td className="p-6">
-                                          <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase ${pay.status === 'paid' ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-600'}`}>
-                                              {pay.status}
+                                          <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase ${pay.status === 'paid' || pay.status === 'success' ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-600'}`}>
+                                              {pay.status || 'Pending'}
                                           </span>
                                       </td>
                                   </tr>

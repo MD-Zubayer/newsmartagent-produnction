@@ -169,16 +169,21 @@ class Payment(models.Model):
 
         super(Payment, self).save(*args, **kwargs)
         print(f"Model Level DEBUG: Saved ID is {self.id}")
+        
+    
             #<!----------------- If the status is now 'paid' and was not paid before -------------------!>
         if self.status == 'paid' and old_status != 'paid':
             #<!---------------- It is safe to use atomic transactions so that if one fails, the other does not. -------------------!>
             with transaction.atomic():
                 profile = self.profile
                 offer = self.offer
+
+                notif_msg = ""
             #<!---------------- The new token will be added to the previous token in the profile ------------------!>
                 if self.transaction_id == 'BALANCE_PURCHASE' and offer:
                     if profile.acount_balance >= self.amount:
                         profile.acount_balance -= self.amount
+                        notif_msg = f"Subscription  activate using balance! after verify {offer.tokens} words added."
                     else:
                         raise ValueError("Insufficient profile balance.")
 
@@ -197,10 +202,25 @@ class Payment(models.Model):
                         end_date=timezone.now() + timedelta(days=offer.duration_days),
                         is_active=True
                     )
+                    if not notif_msg:
+                        notif_msg = f"Payment Successful! {offer.price} plan activated. {offer.tokens} words added."
 
                 elif self.payment_type == 'balance' or not offer:
                     profile.acount_balance += int(self.amount)
                     profile.save()
+                    notif_msg = f"Success! {self.amount} BDT added to your account balance."
+
+                if notif_msg:
+                    try:
+                        from chat.models import Notification
+                        Notification.objects.create(
+                            user=profile.user,
+                            message=notif_msg,
+                            type='payment_success'
+                        )
+                        print(f"DEBUG: Notification created for {profile.user.email}")
+                    except Exception as e:
+                        print(f"DEBUG: Notification Error: {e}")
 
 
 

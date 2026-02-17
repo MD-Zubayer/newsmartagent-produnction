@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Conversation, Message, Contact
+from .models import Conversation, Message, Contact, Notification
 
 # Register your models here.
 
@@ -121,3 +121,9 @@ class ContactAdmin(admin.ModelAdmin):
             'fields': ('created_at',),
         }),
     )
+    
+@admin.register(Notification)
+class NotificationAdmin(admin.ModelAdmin):
+    list_display = ['id','user', 'message', 'is_read', 'created_at']
+    list_filter = ['is_read', 'created_at']
+    search_fields = ['message', 'user__username']

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from users.models import User, Subscription, Offer, Profile, Payment
+from users.models import User, Subscription, Offer, Profile, Payment, NSATransfer
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.exceptions import InvalidToken
 from users.models import CustomerOrder, OrderForm
@@ -195,3 +195,14 @@ class CustomerOrderSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"form_id": "Invalid Form ID."})
 
         return CustomerOrder.objects.create(user=user, **validated_data)
+
+
+class NSATransferSerializer(serializers.ModelSerializer):
+    sender_name = serializers.CharField(source='sender.profile.full_name', read_only=True)
+    receiver_name = serializers.CharField(source='receiver.profile.full_name', read_only=True)
+    sender_unique_id = serializers.CharField(source='sender.profile.unique_id', read_only=True)
+    receiver_unique_id = serializers.CharField(source='receiver.profile.unique_id', read_only=True)
+
+    class Meta:
+        model = NSATransfer
+        fields = ['id', 'sender_name', 'receiver_name', 'sender_unique_id', 'receiver_unique_id', 'amount', 'created_at']

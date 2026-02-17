@@ -105,7 +105,17 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'jwtauth.wsgi.application'
+ASGI_APPLICATION = 'jwtauth.asgi.application'
 
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("newsmartagent-redis", 6379)], # আপনার রেডিস কন্টেইনার নাম
+        },
+    },
+}
 
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases

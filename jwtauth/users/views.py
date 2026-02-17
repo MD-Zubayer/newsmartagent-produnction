@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from rest_framework import viewsets, permissions
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import User, Profile, Payment, Subscription, Offer
-from .serializers import UserSerializer, OfferSerializer, SubscriptionSerializer
+from .serializers import UserSerializer, OfferSerializer, SubscriptionSerializer, NSATransferSerializer
 from rest_framework import status
 from django.contrib.auth import authenticate
 from rest_framework.views import APIView
@@ -26,7 +26,7 @@ from users.serializers import CustomerOrderSerializer
 from man_agent.utils import distribute_agent_commission
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
-
+from django.db.models import Q
 # Create your views here.
 # Custom refresh token serializers, this set token to cookies after refresh
 
@@ -458,6 +458,18 @@ def get_order_form_link(user):
 
 
 class NSABalanceTransferView(APIView):
+
+    def get(self, request):
+        # ইউজার নিজে পাঠিয়েছে অথবা তাকে কেউ পাঠিয়েছে—এমন সব ট্রান্সফার
+        transfers = NSATransfer.objects.filter(
+            Q(sender=request.user) | Q(receiver=request.user)
+        ).order_by('-created_at')
+        
+        serializer = NSATransferSerializer(transfers, many=True)
+        return Response(serializer.data)
+
+
+
     def post(self, request):
         sender_user = request.user
         receiver_unique_id = request.data.get('receiver_unique_id')

@@ -78,3 +78,6 @@ django-redis
 django-celery-results
 django-celery-beat
 gunicorn==25.1.0
+channels
+uvicorn[standard]
+channels-redis==4.3.0
