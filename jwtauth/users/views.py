@@ -102,7 +102,7 @@ class UserViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['create_user', 'verify_email']:
             return [AllowAny()]
-        elif self.action in ['me', 'get_form_id']:
+        elif self.action in ['me', 'get_form_id', 'update_me']:
             return [IsAuthenticated()]
         return [IsAdminUser()]
 
@@ -149,6 +149,19 @@ class UserViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=False, methods=['patch', 'put'], url_path='update-me', permission_classes=[IsAuthenticated])
+    def update_me(self, request):
+        user = request.user
+        serializer = self.get_serializer(user, data=request.data, partial=True)
+
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    
     
     @action(detail=False, methods=['post'], url_path='verify-email')
     def verify_email(self, request):
