@@ -14,6 +14,7 @@ import {
   EyeSlashIcon 
 } from "@heroicons/react/24/outline";
 import api from "@/lib/api";
+import { toast } from 'react-hot-toast';
 
 export default function AIAgentPage() {
   const [agents, setAgents] = useState([]);
@@ -28,11 +29,11 @@ export default function AIAgentPage() {
     page_id: "",
     access_token: "",
     webhook_secret: "",
-    system_prompt: "",
-    greeting_message: "",
+    system_prompt: "You are a helpful, professional assistant. Keep responses clear and concise.",
+    greeting_message: "Hi there 👋 How can I help you today?",
     ai_model: "gemini-2.5-flash",
     temperature: 0.7,
-    max_tokens: 500,
+    max_tokens: 300,
     is_active: true,
   };
 
@@ -48,6 +49,7 @@ export default function AIAgentPage() {
       setAgents(res.data || []);
     } catch (err) {
       console.error("Failed to load AI Agents:", err);
+      toast.error("Failed to load agents.");
     } finally {
       setLoading(false);
     }
@@ -63,11 +65,14 @@ export default function AIAgentPage() {
 
   const openModal = (agent = null) => {
     if (agent && agent.id) {
-      // এডিট মোড: আইডি এবং ডাটা সেট করা
       setEditingAgent(agent);
-      setFormData({ ...agent });
+      // এডিট মোডে টোকেন ফিল্ড খালি রাখা ভালো যাতে ইউজার ভুল করে পুরনো টোকেন বদলে না ফেলে
+      setFormData({ 
+        ...agent,
+        access_token: "", // খালি রাখা হচ্ছে যাতে ডাটাবেজ থেকে আগেরটা না হারায়
+        webhook_secret: "" 
+      });
     } else {
-      // ক্রিয়েট মোড
       setEditingAgent(null);
       setFormData(initialFormState);
     }
@@ -77,66 +82,88 @@ export default function AIAgentPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const agentId = editingAgent?.id;
+    
+    // ডাটা কপি করা
+    const payload = { ...formData };
+    
+    // টাইপ কাস্টিং
+    payload.temperature = parseFloat(payload.temperature);
+    payload.max_tokens = parseInt(payload.max_tokens);
 
-    // আইডি চেক করে ডিসিশন নেওয়া (POST নাকি PUT)
-    const agentId = editingAgent?.id || formData?.id;
+    // অপ্রয়োজনীয় ফিল্ড রিমুভ (যা ডাটাবেজে সরাসরি যায় না)
+    delete payload.id;
+    delete payload.created_at;
 
-    // ডাটা ক্লিনআপ (সিরিয়ালাইজার যেন অপ্রয়োজনীয় ফিল্ডে এরর না দেয়)
-    const { id, created_at, ...cleanData } = formData;
-
-    const payload = {
-      ...cleanData,
-      temperature: parseFloat(formData.temperature),
-      max_tokens: parseInt(formData.max_tokens),
-    };
-
-    // এডিট করার সময় পাসওয়ার্ড/টোকেন ফিল্ড খালি থাকলে সেগুলো পেলোড থেকে বাদ দিন
+    // 🔥 এডিট লজিক: যদি টোকেন ফিল্ডে নতুন কিছু না থাকে, তবে আগেরটা যেন না হারায়
     if (agentId) {
-        if (!payload.access_token) delete payload.access_token;
-        if (!payload.webhook_secret) delete payload.webhook_secret;
+      if (!payload.access_token || payload.access_token.trim() === "") {
+        delete payload.access_token;
+      }
+      if (!payload.webhook_secret || payload.webhook_secret.trim() === "") {
+        delete payload.webhook_secret;
+      }
     }
 
+    const loadingToast = toast.loading(agentId ? "Updating Intelligence..." : "Deploying Agent...");
+
     try {
-      if (agentId && agentId !== "undefined") {
-        // PUT রিকোয়েস্ট (আপডেট)
-        console.log(`Updating agent: ${agentId}`);
-        const res = await api.put(`/AgentAI/agents/${agentId}/`, payload);
+      if (agentId) {
+        // ✅ PUT এর বদলে PATCH ব্যবহার করুন
+        const res = await api.patch(`/AgentAI/agents/${agentId}/`, payload);
         setAgents((prev) => prev.map((a) => (a.id === agentId ? res.data : a)));
-        alert("Intelligence Updated Successfully!");
+        toast.success("Intelligence Updated!", { id: loadingToast });
       } else {
-        // POST রিকোয়েস্ট (নতুন)
         const res = await api.post("/AgentAI/agents/", payload);
         setAgents((prev) => [res.data, ...prev]);
-        alert("Agent Deployed Successfully!");
+        toast.success("Agent Deployed! 🚀", { id: loadingToast });
       }
       setModalOpen(false);
     } catch (err) {
-      console.error("Backend Error Details:", err.response?.data);
-      const errorMsg = err.response?.data ? JSON.stringify(err.response.data) : "Check console for details";
-      alert("Error: " + errorMsg);
+      console.error("Error details:", err.response?.data);
+      const backendError = err.response?.data;
+      const message = backendError ? Object.values(backendError)[0] : "Check inputs.";
+      toast.error(`Error: ${message}`, { id: loadingToast });
     }
   };
 
   const handleDelete = async (targetId) => {
-    if (!targetId || targetId === "undefined") {
-        alert("Error: Valid Agent ID not found.");
-        return;
+    if (!targetId) {
+      toast.error("Valid Agent ID not found!");
+      return;
     }
 
-    if (!window.confirm("Are you sure you want to delete this agent?")) return;
-    
-    try {
-      await api.delete(`/AgentAI/agents/${targetId}/`);
-      setAgents((prev) => prev.filter((a) => a.id !== targetId));
-    } catch (err) {
-      console.error("Delete Error:", err);
-      alert("Failed to delete agent.");
-    }
+    toast((t) => (
+      <div className="flex flex-col gap-3">
+        <p className="text-sm font-bold text-slate-800">আপনি কি নিশ্চিত? এজেন্টটি চিরতরে মুছে যাবে!</p>
+        <div className="flex justify-end gap-2">
+          <button onClick={() => toast.dismiss(t.id)} className="px-3 py-1.5 text-xs font-semibold bg-slate-100 rounded-lg">বাতিল</button>
+          <button
+            onClick={async () => {
+              toast.dismiss(t.id);
+              try {
+                const lt = toast.loading("মুছে ফেলা হচ্ছে...");
+                await api.delete(`/AgentAI/agents/${targetId}/`);
+                setAgents((prev) => prev.filter((a) => a.id !== targetId));
+                toast.success("এজেন্ট সফলভাবে মুছে ফেলা হয়েছে!", { id: lt });
+              } catch (err) {
+                toast.error("দুঃখিত, ডিলিট করা যায়নি।");
+              }
+            }}
+            className="px-3 py-1.5 text-xs font-semibold bg-red-500 text-white rounded-lg shadow-md shadow-red-100"
+          >
+            হ্যাঁ, ডিলিট করুন
+          </button>
+        </div>
+      </div>
+    ), { duration: 6000, position: 'top-center' });
   };
 
   if (loading) return (
-    <div className="flex items-center justify-center min-h-screen bg-white">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-indigo-600"></div>
+    <div className="p-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="h-48 bg-white border border-slate-200 rounded-[2.5rem] animate-pulse"></div>
+      ))}
     </div>
   );
 
@@ -196,7 +223,7 @@ export default function AIAgentPage() {
               </div>
               
               <div className="flex items-center justify-between pt-6 border-t border-gray-100">
-                <div className="flex items-center gap-2">
+'                <div className="flex items-center gap'-2">
                     <div className={`w-2 h-2 rounded-full ${agent.is_active ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'}`}></div>
                     <span className={`text-[11px] font-black uppercase tracking-widest ${agent.is_active ? 'text-emerald-600' : 'text-gray-400'}`}>
                         {agent.is_active ? "Live" : "Disabled"}

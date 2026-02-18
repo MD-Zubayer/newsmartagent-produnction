@@ -3,7 +3,7 @@
 import { useState, Suspense } from "react";
 import axios from "axios";
 import { useSearchParams, useRouter } from "next/navigation";
-
+import toast from "react-hot-toast";
 // ১. লজিক এবং ফর্মের জন্য আলাদা কম্পোনেন্ট
 function ResetPasswordForm() {
   const router = useRouter();
@@ -16,28 +16,35 @@ function ResetPasswordForm() {
 
   const handleSubmit = async () => {
     if (!token) {
-      alert("Invalid reset link. Token missing.");
+      toast.error("Invalid reset link. Token missing.");
       return;
     }
     if (!password || !confirmPassword) {
-      alert("Both password fields are required");
+      toast.error("Both password fields are required");
       return;
     }
     if (password !== confirmPassword) {
-      alert("Passwords do not match");
+      toast.error("Passwords do not match");
       return;
     }
 
     setLoading(true);
+    const loadingToast = toast.loading("Updating password...");
     try {
       const res = await axios.post("http://127.0.0.1/api/reset-password/", {
         token,
         new_password: password,
       });
-      alert(res.data.message || "Password reset successfully!");
-      router.push("/signup");
+     // ✅ সাকসেস টোস্ট
+      toast.success(res.data.message || "Password successfully reset!পাসওয়ার্ড সফলভাবে রিসেট হয়েছে!", {
+        id: loadingToast, // লোডিং টোস্টকে রিপ্লেস করবে
+      });
+
+      setTimeout(() => router.push("/signup"), 2000);
     } catch (err) {
-      alert(err.response?.data?.error || "Something went wrong");
+      const msg = err.response?.data?.error || "Something went wrong. Try again!";
+      // ✅ এরর টোস্ট
+      toast.error(msg, { id: loadingToast });
     } finally {
       setLoading(false);
     }

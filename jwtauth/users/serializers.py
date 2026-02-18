@@ -115,6 +115,16 @@ class UserSerializer(serializers.ModelSerializer[User]):
                     referred_user=user,
                     used_otp_key=man_agent_otp_key
                 )
+            
+            try:
+                from chat.models import Notification
+                Notification.objects.create(
+                    user=user,
+                    message=f"Welcome {user.name or user.username}! Thank you for joining us. 🎉",
+                    type='welcome' # বা আপনার পছন্দের কোনো টাইপ
+                )
+            except Exception as e:
+                print(f"Notification Error: {e}")
         
 
 
@@ -198,11 +208,32 @@ class CustomerOrderSerializer(serializers.ModelSerializer):
 
 
 class NSATransferSerializer(serializers.ModelSerializer):
-    sender_name = serializers.CharField(source='sender.profile.full_name', read_only=True)
-    receiver_name = serializers.CharField(source='receiver.profile.full_name', read_only=True)
-    sender_unique_id = serializers.CharField(source='sender.profile.unique_id', read_only=True)
-    receiver_unique_id = serializers.CharField(source='receiver.profile.unique_id', read_only=True)
-
+    sender_name = serializers.SerializerMethodField()
+    receiver_name = serializers.SerializerMethodField()
+    sender_unique_id = serializers.SerializerMethodField()
+    receiver_unique_id = serializers.SerializerMethodField()
     class Meta:
         model = NSATransfer
         fields = ['id', 'sender_name', 'receiver_name', 'sender_unique_id', 'receiver_unique_id', 'amount', 'created_at']
+
+    def get_sender_name(self, obj):
+        # name না থাকলে username বা email দেখাবে যাতে None না আসে
+        user = obj.sender
+        return getattr(user, 'name', None) or getattr(user, 'username', None) or user.email
+
+    def get_receiver_name(self, obj):
+        user = obj.receiver
+        return getattr(user, 'name', None) or getattr(user, 'username', None) or user.email
+
+    def get_sender_unique_id(self, obj):
+        # সরাসরি প্রোফাইল থেকে আইডি আনা
+        try:
+            return obj.sender.profile.unique_id
+        except:
+            return "N/A"
+
+    def get_receiver_unique_id(self, obj):
+        try:
+            return obj.receiver.profile.unique_id
+        except:
+            return "N/A"

@@ -23,6 +23,8 @@ import {
   Filler
 } from 'chart.js';
 import { Line, Doughnut, Bar } from 'react-chartjs-2';
+import toast from "react-hot-toast";
+import { useNotifications } from "@/hooks/useNotifications";
 
 // Chart Register
 ChartJS.register(
@@ -44,6 +46,9 @@ export default function OrderDashboard() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [districtFilter, setDistrictFilter] = useState("all");
   const [selectedOrders, setSelectedOrders] = useState([]);
+  const { notifications } = useNotifications(user, setOrders);
+  
+ 
 
   const shopName = user?.name || "Smart Shop BD";
   
@@ -51,12 +56,22 @@ export default function OrderDashboard() {
     ? `${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'}/orders/${formId}`
     : "Generating link...";
 
+  // --- ১. কপি লিঙ্ক ফাংশন (প্রিমিয়াম) ---
   const copyLink = () => {
-    if (!formId) return alert("The link has not been created yet.");
-    navigator.clipboard.writeText(orderLink);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (!formId) return toast.error("The link has not been created yet!");
+    
+    navigator.clipboard.writeText(orderLink)
+      .then(() => {
+        setCopied(true);
+        toast.success("Order link copied!", {
+          icon: '🔗',
+          style: { borderRadius: '12px' }
+        });
+        setTimeout(() => setCopied(false), 2000);
+      })
+      .catch(() => toast.error("Could not copy link."));
   };
+
 
   useEffect(() => {
     fetchOrders();
@@ -83,6 +98,8 @@ export default function OrderDashboard() {
       console.error("Form ID fetch error:", error);
     }
   };
+
+  
 
   const analyticsData = useMemo(() => {
     if (!orders.length) return null;
@@ -139,48 +156,246 @@ export default function OrderDashboard() {
     else setSelectedOrders(filteredOrders.map(o => o.id));
   };
 
+  if (loading) return (
+    <div className="p-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+      {[1, 2, 3].map(i => (
+        <div key={i} className="h-64 bg-white border border-slate-200 rounded-[2.5rem] animate-pulse shadow-sm" />
+      ))}
+    </div>
+  );
+
+  // --- ২. স্ট্যাটাস আপডেট (ইউজার ফ্রেন্ডলি) ---
   const updateStatus = async (id, s) => {
+    const loadingToast = toast.loading(`${s} Updating status...`);
     try {
       await api.patch(`orders/${id}/`, { status: s });
       setOrders(prev => prev.map(o => o.id === id ? { ...o, status: s } : o));
-    } catch { alert("Status update failed."); }
+      
+      toast.success(`Order now ${s}`, { id: loadingToast });
+    } catch (error) {
+      toast.error("Update failed. Check network.", { id: loadingToast });
+    }
   };
 
+
   const handlePrint = (orderList = null) => {
+    // ১. অর্ডার লিস্ট ফিল্টার করা
     const ordersToPrint = orderList || orders.filter(o => selectedOrders.includes(o.id));
-    if (ordersToPrint.length === 0) return alert("Select order");
+    
+    // ২. সিলেক্ট না করলে এরর টোস্ট
+    if (ordersToPrint.length === 0) {
+      return toast.error("Select at least one order to print.", {
+        icon: '🖨️',
+      });
+    }
+
+    // ৩. প্রিন্ট উইন্ডো ওপেন করা
     const printWindow = window.open('', '_blank');
+
+    // পপ-আপ ব্লকার চেক
+    if (!printWindow) {
+      return toast.error("Your browser has blocked pop-ups! Allow them in settings.");
+    }
+
+    toast.success(`${ordersToPrint.length}Generating invoices...`);
+
+    // ৪. ইনভয়েস কন্টেন্ট রাইটিং
     printWindow.document.write(`
       <html>
-        <head>
-          <title>Invoice - ${shopName}</title>
-          <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap');
-            body { font-family: 'Inter', sans-serif; padding: 20px; }
-            .page { border: 1px solid #eee; padding: 20px; margin-bottom: 20px; }
-            .header { display: flex; justify-content: space-between; border-bottom: 2px solid #4f46e5; padding-bottom: 10px; }
-            h1 { color: #4f46e5; margin: 0; }
-            table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-            th, td { border-bottom: 1px solid #eee; padding: 8px; text-align: left; }
-          </style>
-        </head>
-        <body>
-          ${ordersToPrint.map(o => `
-            <div class="page">
-              <div class="header"><h1>${shopName}</h1><div>INVOICE #${o.id}</div></div>
-              <p><strong>Customer:</strong> ${o.customer_name} (${o.phone_number})</p>
-              <p><strong>Address:</strong> ${o.address}, ${o.district}</p>
-              <table>
-                <tr><th>Product</th><th>Status</th></tr>
-                <tr><td>${o.product_name || "Item"}</td><td>${o.status}</td></tr>
-              </table>
+    <head>
+      <title>Invoice - ${shopName}</title>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+        
+        * { box-sizing: border-box; }
+        body { 
+          font-family: 'Inter', sans-serif; 
+          margin: 0; 
+          padding: 0; 
+          background-color: #f1f5f9; 
+          color: #1e293b;
+        }
+
+        .page { 
+          background: white;
+          width: 210mm; /* A4 size */
+          min-height: 148mm; /* Half A4 or flexible */
+          padding: 50px; 
+          margin: 20px auto;
+          position: relative;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+          overflow: hidden;
+          page-break-after: always;
+        }
+
+        /* ডেকোরেশন এলিমেন্ট */
+        .page::before {
+          content: "";
+          position: absolute;
+          top: 0; left: 0; width: 100%; height: 8px;
+          background: linear-gradient(90deg, #4f46e5 0%, #818cf8 100%);
+        }
+
+        .header { 
+          display: flex; 
+          justify-content: space-between; 
+          align-items: flex-start;
+          margin-bottom: 40px;
+        }
+
+        .shop-info h1 { 
+          color: #4f46e5; 
+          margin: 0; 
+          font-size: 32px; 
+          font-weight: 800; 
+          letter-spacing: -1px;
+        }
+        .shop-info p { color: #64748b; margin: 5px 0; font-size: 14px; }
+
+        .invoice-badge {
+          background: #eef2ff;
+          color: #4f46e5;
+          padding: 10px 20px;
+          border-radius: 12px;
+          text-align: right;
+        }
+        .invoice-badge span { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; opacity: 0.7; }
+        .invoice-badge strong { font-size: 18px; }
+
+        .details-grid { 
+          display: grid; 
+          grid-template-cols: 1.5fr 1fr; 
+          gap: 30px; 
+          margin-bottom: 40px; 
+        }
+
+        .address-box {
+          border: 1.5px solid #e2e8f0;
+          padding: 20px;
+          border-radius: 16px;
+        }
+        .address-box h3 { margin: 0 0 10px 0; font-size: 14px; text-transform: uppercase; color: #64748b; letter-spacing: 1px; }
+        .address-box p { margin: 0; line-height: 1.6; font-weight: 600; font-size: 16px; }
+
+        .meta-box {
+          display: flex;
+          flex-direction: column;
+          gap: 15px;
+        }
+        .meta-item { display: flex; justify-content: space-between; font-size: 14px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 8px; }
+        .meta-item span { color: #64748b; }
+        .meta-item strong { color: #1e293b; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th { 
+          background: #f8fafc; 
+          color: #64748b; 
+          padding: 15px; 
+          text-align: left; 
+          font-size: 12px; 
+          text-transform: uppercase; 
+          border-bottom: 2px solid #e2e8f0;
+        }
+        td { padding: 20px 15px; border-bottom: 1px solid #f1f5f9; font-weight: 500; }
+
+        .footer { 
+          margin-top: 60px; 
+          padding-top: 20px;
+          text-align: center; 
+          border-top: 1px solid #f1f5f9;
+        }
+        .footer p { font-size: 12px; color: #94a3b8; margin: 5px 0; }
+
+        /* প্রিন্ট মিডিয়া কোয়েরি */
+        @media print {
+          body { background: white; }
+          .page { 
+            box-shadow: none; 
+            margin: 0; 
+            width: 100%;
+            padding: 40px;
+          }
+          .page::before { -webkit-print-color-adjust: exact; }
+        }
+      </style>
+    </head>
+    <body>
+      ${ordersToPrint.map(o => `
+        <div class="page">
+          <div class="header">
+            <div class="shop-info">
+              <h1>${shopName}</h1>
+              <p>Trusted Online Shopping Mall</p>
             </div>
-          `).join('')}
-        </body>
-      </html>
+            <div class="invoice-badge">
+              <span>Invoice Number</span>
+              <strong>#${o.id}</strong>
+            </div>
+          </div>
+
+          <div class="details-grid">
+            <div class="address-box">
+              <h3>Customer & Shipping</h3>
+              <p>${o.customer_name}</p>
+              <p>${o.phone_number}</p>
+              <p style="font-weight: 400; font-size: 14px; color: #64748b; margin-top: 5px;">
+                ${o.address}, ${o.district}
+              </p>
+            </div>
+            <div class="meta-box">
+              <div class="meta-item">
+                <span>Date</span>
+                <strong>${new Date(o.created_at).toLocaleDateString('en-En')}</strong>
+              </div>
+              <div class="meta-item">
+                <span>Payment</span>
+                <strong>Cash on Delivery</strong>
+              </div>
+              <div class="meta-item">
+                <span>Method</span>
+                <strong>Home Delivery</strong>
+              </div>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 60%">Product Description</th>
+                <th style="text-align: center">Qty</th>
+                <th style="text-align: right">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>${o.product_name || "Smart Gadget Item"}</td>
+                <td style="text-align: center">01</td>
+                <td style="text-align: right">
+                  <span style="color: #4f46e5; background: #eef2ff; padding: 4px 10px; border-radius: 6px; font-size: 12px;">
+                    ${o.status.toUpperCase()}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="footer">
+            <p style="color: #4f46e5; font-weight: 700; font-size: 14px;">Thank you for your order!</p>
+            <p>If you have any questions, please contact us at support@${shopName.toLowerCase().replace(/\s/g, '')}.com</p>
+            <p>This is a computer-generated invoice.</p>
+          </div>
+        </div>
+      `).join('')}
+    </body>
+  </html>
     `);
+
     printWindow.document.close();
-    printWindow.print();
+    
+    // ৫. ইমেজ বা ফন্ট লোড হওয়ার জন্য সামান্য বিরতি দিয়ে প্রিন্ট ডায়ালগ ওপেন করা
+    printWindow.onload = () => {
+      printWindow.print();
+    };
   };
 
   return (

@@ -6,14 +6,15 @@ import {
   FaCopy, FaCheckCircle, FaArrowRight,
   FaExchangeAlt, FaUserShield, FaArrowUp, FaArrowDown // নতুন আইকন FaArrowUp, FaArrowDown
 } from "react-icons/fa";
+import toast from "react-hot-toast";
 
 export default function ManualPaymentPage() {
   const [activeTab, setActiveTab] = useState("payment");
   const [tranId, setTranId] = useState("");
   const [amount, setAmount] = useState(""); 
   const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(false);
-
+  const [loading, setLoading] = useState(true);
+const [submitting, setSubmitting] = useState(false);
   // --- নতুন ট্রান্সফার স্টেট ---
   const [receiverId, setReceiverId] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
@@ -47,6 +48,9 @@ export default function ManualPaymentPage() {
       setHistory(combinedHistory);
     } catch (err) {
       console.error("Failed to fetch history:", err);
+      toast.error("History could not be loaded!");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -54,51 +58,66 @@ export default function ManualPaymentPage() {
     fetchHistory();
   }, []);
 
+  // --- পেমেন্ট সাবমিট ---
   const handleConfirmPayment = async () => {
-    if (!amount || !tranId) return alert("অনুগ্রহ করে টাকার পরিমাণ এবং ট্রানজেকশন আইডি দিন।");
+    if (!amount || !tranId) return toast.error("Enter the amount and transaction ID.");
     
-    setLoading(true);
+    setSubmitting(true);
+    const loadingToast = toast.loading("Verifying payment...");
+    
     try {
       await api.post("/manual-payments/", { 
         transaction_id: tranId,
         amount: amount 
       });
       
-      alert("✅ পেমেন্ট সফলভাবে সাবমিট হয়েছে! ভেরিফিকেশনের জন্য অপেক্ষা করুন।");
-      
+      toast.success("Payment submitted successfully! Wait for verification.", { id: loadingToast });
       setTranId("");
       setAmount("");
       fetchHistory();
       setActiveTab("history");
     } catch (err) {
-      alert("Error: সাবমিট ব্যর্থ হয়েছে। আবার চেষ্টা করুন।");
+      toast.error("Submit failed. Please try again.", { id: loadingToast });
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
-  // --- নতুন ট্রান্সফার ফাংশন ---
+  // --- ট্রান্সফার ফাংশন ---
   const handleTransferBalance = async () => {
-    if (!receiverId || !transferAmount) return alert("রিসিভার আইডি এবং টাকার পরিমাণ দিন।");
+    if (!receiverId || !transferAmount) return toast.error("Please provide all information correctly.");
     
-    setLoading(true);
+    setSubmitting(true);
+    const loadingToast = toast.loading("Sending money...");
+
     try {
       await api.post("/transfer/", { 
         receiver_unique_id: receiverId,
         amount: transferAmount
       });
-      alert(`✅ সফলভাবে ${transferAmount} BDT ট্রান্সফার হয়েছে!`);
+      toast.success(`${transferAmount} BDT Transfer successful!`, { id: loadingToast });
       setReceiverId("");
       setTransferAmount("");
-      fetchHistory(); // হিস্ট্রি আপডেট হবে
-      setActiveTab("history"); // অটোমেটিক হিস্ট্রি ট্যাবে নিয়ে যাবে
+      fetchHistory();
+      setActiveTab("history");
     } catch (err) {
-      const errorMsg = err.response?.data?.error || "ট্রান্সফার ব্যর্থ হয়েছে।";
-      alert("Error: " + errorMsg);
+      const errorMsg = err.response?.data?.error || "Transfer failed.";
+      toast.error(errorMsg, { id: loadingToast });
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
+
+  // --- ৩. লোডিং স্ট্যাট (Skeleton) ---
+  if (loading) return (
+    <div className="p-6 max-w-4xl mx-auto space-y-6">
+      <div className="h-12 bg-white rounded-2xl animate-pulse shadow-sm" />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="h-64 bg-white rounded-[2.5rem] animate-pulse" />
+        <div className="h-64 bg-white rounded-[2.5rem] animate-pulse" />
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-[#f4f7fe] py-4 px-2 md:p-12 font-sans text-slate-900">
