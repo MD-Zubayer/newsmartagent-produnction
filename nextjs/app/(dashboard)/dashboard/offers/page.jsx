@@ -7,6 +7,7 @@ import {
   FaFacebook, FaFacebookMessenger, FaCopy, FaCheckCircle,
   FaWallet, FaExclamationTriangle, FaArrowRight, FaInfoCircle
 } from "react-icons/fa";
+import toast from "react-hot-toast";
 
 export default function OffersPage() {
   const [offers, setOffers] = useState([]);
@@ -32,9 +33,6 @@ export default function OffersPage() {
         // আপনার দেওয়া পাথ: user.profile.acount_balance
         const balance = meRes.data?.profile?.acount_balance || 0;
         setProfileBalance(balance);
-        console.log(balance)
-        console.log(meRes.data)
-        console.log(offersRes.data)
       
       } catch (err) {
         console.error("API ERROR:", err);
@@ -45,10 +43,13 @@ export default function OffersPage() {
     loadOffers();
   }, []);
 
+  // --- ১. ট্রানজ্যাকশন আইডি পেমেন্ট (Manual) ---
   const handleConfirmPayment = async () => {
-    if (!tranId) return alert("Please enter Transaction ID");
+    if (!tranId) return toast.error("Please enter the transaction ID.");
     
     setSubmitting(true);
+    const lt = toast.loading("Submitting payment...");
+
     try {
       await api.post("/payments/", { 
         offer_id: selectedOffer.id,
@@ -56,20 +57,26 @@ export default function OffersPage() {
         amount: selectedOffer.price
       });
 
-      alert("✅ Payment submitted! Waiting for Admin approval.");
+      toast.success("Payment submitted! Wait for admin verification.", { id: lt });
       setSelectedOffer(null);
       setTranId("");
     } catch (err) {
-      console.error("Error:", err);
-      alert("Submission failed. Try again.");
+      toast.error("There was a problem submitting. Please try again.", { id: lt });
     } finally {
       setSubmitting(false);
     }
   };
 
+  // --- ২. ব্যালেন্স দিয়ে কেনা (Direct Purchase) ---
   const processBalancePurchase = async () => {
+    // ব্যালেন্স চেক (Client side)
+    if (profileBalance < selectedOffer.price) {
+      return toast.error("Your balance is not sufficient!");
+    }
+
     setSubmitting(true);
-    setErrorMessage("");
+    const lt = toast.loading("Buying the offer...");
+
     try {
       await api.post("/payments/", { 
         offer_id: selectedOffer.id,
@@ -79,20 +86,25 @@ export default function OffersPage() {
         transaction_id: "BALANCE_PURCHASE" 
       });
 
-      alert("✅ অফারটি সফলভাবে কেনা হয়েছে!");
+      toast.success("Congratulations! The offer has been purchased successfully.", { id: lt });
       setSelectedOffer(null);
-      window.location.reload(); 
+      
+      // পেজ রিলোড না করে ব্যালেন্স আপডেট করা ভালো, তবে আপনার কোড অনুযায়ী:
+      setTimeout(() => window.location.reload(), 1500); 
     } catch (err) {
-      const msg = err.response?.data?.error || "ব্যালেন্স কম অথবা সমস্যা হয়েছে।";
-      setErrorMessage(msg);
+      const msg = err.response?.data?.error || "Low balance or technical problem.";
+      toast.error(msg, { id: lt });
     } finally {
       setSubmitting(false);
     }
   };
 
+  // --- ৩. লোডিং কার্ড (Skeleton Look) ---
   if (loading) return (
-    <div className="flex justify-center items-center h-screen bg-slate-50">
-      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
+    <div className="p-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+      {[1, 2, 3].map(i => (
+        <div key={i} className="h-64 bg-white border border-slate-200 rounded-[2.5rem] animate-pulse shadow-sm" />
+      ))}
     </div>
   );
 
@@ -251,7 +263,7 @@ export default function OffersPage() {
                     <div>
                       <h2 className="text-2xl font-black text-slate-900 uppercase italic">Confirm Purchase</h2>
                       <p className="text-slate-500 text-sm mt-2 font-medium">
-                        আপনার ব্যালেন্স থেকে <span className="font-black text-slate-900">৳{selectedOffer.price}</span> কাটা হবে।
+                        From your balance <span className="font-black text-slate-900">৳{selectedOffer.price}</span> will be cut.
                       </p>
                     </div>
 
@@ -270,7 +282,7 @@ export default function OffersPage() {
                       <div className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 text-left animate-pulse">
                          <FaInfoCircle className="shrink-0" />
                          <p className="text-[11px] font-bold leading-tight">
-                            {errorMessage || "ব্যালেন্স কম! দয়া করে রিচার্জ করুন।"}
+                            {errorMessage || "Low balance! Please recharge."}
                          </p>
                       </div>
                     )}

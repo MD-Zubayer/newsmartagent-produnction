@@ -1,20 +1,25 @@
+// app/hooks/useNotifications.js
+
 "use client";
 import { useState, useEffect, useRef } from "react";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
 
-export const useNotifications = (user) => {
+export const useNotifications = (user, setOrders = null) => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const socketRef = useRef(null);
   
   // ১. অডিও রিফারেন্স তৈরি (যাতে বারবার লোড না হয়)
   const audioRef = useRef(null);
+  const orderAudioRef = useRef(null)
 
   useEffect(() => {
     // ব্রাউজারে অডিও অবজেক্ট ইনিশিয়ালাইজ করা
     // আপনার public ফোল্ডারে notification.mp3 নামে একটি ফাইল রাখুন
     audioRef.current = new Audio("/sounds/nextjs_ringe_1.mp3");
+
+    orderAudioRef.current = new Audio("/sounds/nextjs_ringe_2.mp3");
   }, []);
 
   // ২. পুরানো নোটিফিকেশন ফেচ করা
@@ -49,18 +54,36 @@ export const useNotifications = (user) => {
       try {
         const data = JSON.parse(event.data);
         
-        // --- সাউন্ড প্লে করার লজিক ---
-        if (audioRef.current) {
-          audioRef.current.play().catch(err => console.log("Audio play blocked:", err));
-        }
+        if (data.action === "NEW_ORDER") {
 
-        setNotifications((prev) => [data, ...prev]);
-        setUnreadCount((prev) => prev + 1);
+          if (orderAudioRef.current) {
+            orderAudioRef.current.play().catch(err => console.log("Audio play blocked:", err));
+
+          }
+          if (setOrders) {
+            setOrders((prev) => [data.order_data, ...prev]);
+
+          }
+          toast.success("নতুন অর্ডার আসছে! 💰", { 
+              duration: 5000,
+              icon: "📦" ,
+              id: `order-${data.order_data.id}`
+            });
+
+        } else{
+          if (audioRef.current) {
+            audioRef.current.play().catch(err => console.log("Audio play blocked:", err));
+
+          }
+          setNotifications((prev) => [data, ...prev]);
+            setUnreadCount((prev) => prev + 1);
+            
+            toast.success(data.message || "নতুন নোটিফিকেশন!", { 
+              icon: "🔔" 
+            });
+        } 
+
         
-        toast.success(data.message || "নতুন নোটিফিকেশন!", { 
-          icon: "🔔",
-          position: "top-right" 
-        });
       } catch (err) {
         console.error("Socket Data Parse Error:", err);
       }
@@ -71,7 +94,7 @@ export const useNotifications = (user) => {
     return () => {
       if (socketRef.current) socketRef.current.close();
     };
-  }, [user]);
+  }, [user, setOrders]);
 
   const markAsRead = async (id) => {
     try {
@@ -85,5 +108,5 @@ export const useNotifications = (user) => {
     }
   };
 
-  return { notifications, unreadCount, markAsRead };
+  return { notifications, setNotifications, unreadCount, markAsRead };
 };

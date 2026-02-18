@@ -407,7 +407,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
                 if payment.status == 'paid':
 
                     serializer.save(profile=self.request.user.profile, payment=payment, is_active=True)
-
+    
 
                 else:
                     raise ValidationError('Payment is not completed yet.')
@@ -513,6 +513,23 @@ class NSABalanceTransferView(APIView):
                     sender=sender_user,
                     receiver=receiver_profile.user,
                     amount=amount
+                )
+                sender_display = getattr(sender_user, 'name', None) or sender_user.email
+                receiver_display = getattr(receiver_profile.user, 'name', None) or receiver_profile.user.email
+                
+                
+                from chat.models import Notification
+                Notification.objects.create(
+                    user=receiver_profile.user,
+                    message=f"You received {amount} BDT from {sender_display}.",
+                    type='transfer_success'
+                    
+                )
+
+                Notification.objects.create(
+                    user=sender_user,
+                    message=f'Success! {amount} BDT transferred to {receiver_display}.',
+                    type='transfer_success'
                 )
                 
                 return Response({

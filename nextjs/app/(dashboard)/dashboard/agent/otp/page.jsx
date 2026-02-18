@@ -46,11 +46,38 @@ export default function OTPSettings() {
         }
         
         setTimeout(() => {
-            setConfig({ ...config, otp_key: result });
-            setIsSpinning(false);
-            toast.success("New secure key generated");
-        }, 600);
-    };
+        // নতুন কী সেট করা
+        setConfig({ ...config, otp_key: result });
+        setIsSpinning(false);
+        
+        // কাস্টম টোস্ট (আইকনসহ)
+        toast.custom((t) => (
+            <div className={`${t.visible ? 'animate-enter' : 'animate-leave'} max-w-md w-full bg-white shadow-2xl rounded-2xl pointer-events-auto flex ring-1 ring-black ring-opacity-5`}>
+                <div className="flex-1 w-0 p-4">
+                    <div className="flex items-start">
+                        <div className="flex-shrink-0 pt-0.5">
+                            <Fingerprint className="h-10 w-10 text-indigo-600 bg-indigo-50 p-2 rounded-xl" />
+                        </div>
+                        <div className="ml-3 flex-1">
+                            <p className="text-sm font-bold text-gray-900">New Key Ready!</p>
+                            <p className="mt-1 text-sm text-gray-500">
+                                আপনার নতুন সিকিউর কি এখন ব্যবহারের জন্য তৈরি। এটি সেভ করতে ভুলবেন না।
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div className="flex border-l border-gray-200">
+                    <button
+                        onClick={() => toast.dismiss(t.id)}
+                        className="w-full border border-transparent rounded-none rounded-r-lg p-4 flex items-center justify-center text-sm font-medium text-indigo-600 hover:text-indigo-500"
+                    >
+                        ঠিক আছে
+                    </button>
+                </div>
+            </div>
+        ));
+    }, 600);
+};
 
     // --- Fixed Copy Function ---
     const handleCopy = () => {
@@ -248,18 +275,12 @@ export default function OTPSettings() {
                         </div>
 
                         <button 
-                            onClick={handleSave}
                             disabled={saving}
-                            className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold text-base flex items-center justify-center gap-2 hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-200/50 disabled:opacity-70 disabled:cursor-not-allowed active:scale-[0.99]"
+                            onClick={handleSave}
+                            className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-2 rounded-xl hover:bg-indigo-700 disabled:opacity-50"
                         >
-                            {saving ? (
-                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                            ) : (
-                                <>
-                                    <Save size={20} />
-                                    Save Changes
-                                </>
-                            )}
+                            {saving ? <RefreshCw className="animate-spin h-4 w-4" /> : <Save size={18} />}
+                            {saving ? "Saving..." : "Save"}
                         </button>
                     </div>
                 </div>

@@ -1,13 +1,14 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useAuth } from "app/context/AuthContext";
-import { useState } from "react";
 import api from "@/lib/api";
 import { 
   FaUserEdit, FaSignOutAlt, FaEnvelope, FaPhone, 
   FaMapMarkerAlt, FaHashtag, FaGlobeAsia, FaTimes, 
   FaWallet, FaChartLine, FaCopy, FaCheckCircle, FaVenusMars, FaHistory
 } from "react-icons/fa";
+import toast from "react-hot-toast";
 
 export default function ProfilePage() {
   
@@ -26,33 +27,85 @@ export default function ProfilePage() {
     gender: user?.gender || ""
   });
 
-  // Unique ID Copy Function
+  // ইউজার ডাটা চেঞ্জ হলে ফর্ম আপডেট করা
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        name: user.name || "",
+        phone_number: user.phone_number || "",
+        division: user.division || "",
+        district: user.district || "",
+        upazila: user.upazila || "",
+        gender: user.gender || ""
+      });
+    }
+  }, [user]);
+
+  // --- ১. ইউনিক আইডি কপি ফাংশন (Premium Toast) ---
   const copyToClipboard = (text) => {
+    if (!text) return;
     navigator.clipboard.writeText(text);
     setCopied(true);
+    toast.success("Unique ID copied!", {
+      icon: '📋',
+      style: { borderRadius: '12px' }
+    });
     setTimeout(() => setCopied(false), 2000);
   };
 
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f8faff]">
-      <div className="w-16 h-16 border-8 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-    </div>
-  );
-
+  // --- ২. প্রোফাইল আপডেট ফাংশন ---
   const handleUpdate = async (e) => {
     e.preventDefault();
     setUpdating(true);
+    const lt = toast.loading("Updating profile...");
+    
     try {
       await api.patch("/users/update-me/", formData);
-      alert("✅ প্রোফাইল সফলভাবে আপডেট হয়েছে!");
+      toast.success("Profile updated successfully!", { id: lt });
+      
       setIsEditModalOpen(false);
-      window.location.reload(); 
+      // রিলোড করার আগে ১.৫ সেকেন্ড সময় দিচ্ছি যাতে টোস্ট দেখা যায়
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
     } catch (err) {
-      alert("আপডেট ব্যর্থ হয়েছে। আবার চেষ্টা করুন।");
+      toast.error("Update failed. Please try again.", { id: lt });
     } finally {
       setUpdating(false);
     }
   };
+
+  // --- ৩. লগআউট কনফার্মেশন ---
+  const handleLogout = () => {
+    toast((t) => (
+      <div className="flex flex-col gap-2">
+        <p className="text-sm font-bold">Do you want to log out?</p>
+        <div className="flex justify-end gap-2">
+          <button onClick={() => toast.dismiss(t.id)} className="px-3 py-1 text-xs bg-slate-100 rounded-lg">canceled</button>
+          <button 
+            onClick={() => {
+              toast.dismiss(t.id);
+              logout();
+            }}
+            className="px-3 py-1 text-xs bg-rose-600 text-white rounded-lg"
+          >
+          Yes, logout
+          </button>
+        </div>
+      </div>
+    ));
+  };
+
+  if (loading) return (
+    <div className="p-6 max-w-4xl mx-auto space-y-6">
+      <div className="h-12 bg-white rounded-2xl animate-pulse shadow-sm" />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="h-64 bg-white rounded-[2.5rem] animate-pulse" />
+        <div className="h-64 bg-white rounded-[2.5rem] animate-pulse" />
+      </div>
+    </div>
+  );
+
 
 
   

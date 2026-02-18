@@ -9,6 +9,7 @@ import {
 import { useNotifications } from "@/hooks/useNotifications";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
+import toast from "react-hot-toast";
 
 export default function NotificationsPage() {
   const { user } = useAuth();
@@ -37,42 +38,71 @@ export default function NotificationsPage() {
     }
   };
 
-  // --- ২. ডিলিট নোটিফিকেশন (FIXED & SYNCED) ---
-  const handleDelete = async (id) => {
+// --- ২. ডিলিট নোটিফিকেশন (Premium UI with Toast) ---
+const handleDelete = async (id) => {
     if (!id) return;
-    if (!window.confirm("Are you sure? This cannot be undone.")) return;
-    
-    setIsDeleting(id); // লোডিং শুরু
 
-    try {
-      // ব্যাকএন্ড কল (Trailing slash নিশ্চিত করা হয়েছে)
-      const response = await api.delete(`/notifications/delete/${id}/`);
+    // ১. ব্রাউজারের confirm এর বদলে কাস্টম টোস্ট কনফার্মেশন
+    toast((t) => (
+      <div className="flex flex-col gap-3">
+        <p className="text-sm font-semibold text-slate-800">
+          Are you sure?
+        </p>
+        <div className="flex justify-end gap-2">
+          {/* বাতিল বাটন */}
+          <button
+            onClick={() => toast.dismiss(t.id)}
+            className="px-3 py-1.5 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-all"
+          >
+          canceled
+          </button>
+          
+          {/* কনফার্ম বাটন */}
+          <button
+            onClick={async () => {
+              toast.dismiss(t.id); // আগের পপ-আপটা বন্ধ হবে
+              setIsDeleting(id); // লোডিং শুরু
+              const loadingToast = toast.loading("Deleting....");
 
-      if (response.status >= 200 && response.status < 300) {
-        // ১. মোডাল বন্ধ করি
-        if (selectedNotification?.id === id) {
-          setSelectedNotification(null);
-        }
+              try {
+                const response = await api.delete(`/notifications/delete/${id}/`);
 
-        // ২. স্টেট থেকে ডাটা রিমুভ (Spread operator দিয়ে নতুন রেফারেন্স নিশ্চিত)
-        setNotifications(prev => {
-          const updatedList = prev.filter(n => String(n.id) !== String(id));
-          return [...updatedList]; 
-        });
-        
-        console.log(`✅ ID ${id} deleted successfully`);
-      }
-    } catch (err) {
-      console.error("Delete Error:", err);
-      // যদি সার্ভারে আগে থেকেই না থাকে (404), তবে UI থেকে সরিয়ে দাও
-      if (err.response?.status === 404) {
-        setNotifications(prev => [...prev.filter(n => String(n.id) !== String(id))]);
-      } else {
-        alert("Server error! Could not delete.");
-      }
-    } finally {
-      setIsDeleting(null); // লোডিং শেষ
-    }
+                if (response.status >= 200 && response.status < 300) {
+                  // ১. মোডাল বন্ধ করি (যদি ওই নোটিফিকেশনটি ওপেন থাকে)
+                  if (selectedNotification?.id === id) {
+                    setSelectedNotification(null);
+                  }
+
+                  // ২. স্টেট আপডেট (সফলভাবে ডিলিট হলে)
+                  setNotifications(prev => prev.filter(n => String(n.id) !== String(id)));
+                  
+                  toast.success("Deleted successfully!", { id: loadingToast });
+                }
+              } catch (err) {
+                console.error("Delete Error:", err);
+                
+                if (err.response?.status === 404) {
+                  // যদি সার্ভারে না থাকে, তবে শুধু UI থেকে সরিয়ে দিন
+                  setNotifications(prev => prev.filter(n => String(n.id) !== String(id)));
+                  toast.error("The notification has already been deleted.", { id: loadingToast });
+                } else {
+                  toast.error("Server error! Could not delete.", { id: loadingToast });
+                }
+              } finally {
+                setIsDeleting(null); // লোডিং শেষ
+              }
+            }}
+            className="px-3 py-1.5 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-all shadow-md shadow-rose-100"
+          >
+            Yes, delete.
+          </button>
+        </div>
+      </div>
+    ), {
+      duration: 5000,
+      position: 'top-center',
+      style: { borderRadius: '20px', padding: '16px', minWidth: '320px' }
+    });
   };
 
   // --- আইকন হেল্পার (Normalized) ---
