@@ -46,6 +46,7 @@ class UserSerializer(serializers.ModelSerializer[User]):
             "email",
             "name",
             "phone_number",
+            "country",
             "division",
             "district",
             "upazila",

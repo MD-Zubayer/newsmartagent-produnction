@@ -5,6 +5,12 @@ import { useState, useEffect } from "react";
 import { FaEye, FaEyeSlash, FaUser, FaLock, FaEnvelope, FaPhone, FaArrowLeft, FaFingerprint, FaKey, FaCheckCircle, FaExclamationCircle } from "react-icons/fa";
 import { useRouter } from "next/navigation";
 
+// --- ১. ফোন এবং কান্ট্রি ফ্লাগ প্যাকেজ ইম্পোর্ট ---
+
+import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input';
+import 'react-phone-number-input/style.css'; 
+
+
 import api from '../../lib/api';
 
 export default function AuthPage() {
@@ -15,6 +21,11 @@ export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [alert, setAlert] = useState({show: false, message: "", type: ""})
+
+  // --- ২. ডিফল্ট কান্ট্রি স্টেট (অটো ডিটেকশনের জন্য) ---
+  const [defaultCountry, setDefaultCountry] = useState("BD");
+
+
 
   const createdByOptions = [
     { label: "Self", value: "self" },
@@ -29,6 +40,7 @@ export default function AuthPage() {
   const [formData, setFormData] = useState({
     name: "",
     phone_number: "",
+    country: "",
     email: "",
     division: "",
     district: "",
@@ -40,6 +52,19 @@ export default function AuthPage() {
     man_agent_unique_id: "",
     man_agent_otp_key: "",
   });
+  // --- ৩. অটো কান্ট্রি ডিটেকশন (IP API দিয়ে) ---
+  useEffect(() => {
+    fetch("https://ipapi.co/json/")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.country_code) {
+          setDefaultCountry(data.country_code);
+          setFormData(prev => ({ ...prev, country: data.country_code}));
+        }
+      })
+      .catch(() => console.log("IP detection failed, defaulting to BD"));
+  }, [])
+
 
 
   let alertTimer;
@@ -112,6 +137,12 @@ export default function AuthPage() {
     e.preventDefault();
     if (passwordError) return;
 
+    // --- ৪. ফোন নাম্বার ভ্যালিডেশন ---
+    if (formData.phone_number && !isValidPhoneNumber(formData.phone_number)) {
+      showAlert("Invalid phone number format!", "error");
+      return
+    }
+
     try {
       const res = await api.post("/users/create_user/", { ...formData });
 
@@ -144,6 +175,38 @@ export default function AuthPage() {
 
     
     <div className="min-h-screen w-full flex items-center justify-center p-4 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-indigo-50 via-white to-purple-50 py-28">
+
+      {/* --- ৫. ফোন ইনপুটের জন্য গ্লোবাল CSS (ডিজাইন ঠিক রাখার জন্য) --- */}
+<style jsx global>{`
+        .PhoneInput {
+          display: flex;
+          align-items: center;
+          width: 100%;
+          padding: 0.2rem 1rem;
+          background: rgba(249,250,251,0.5); /* bg-gray-50/50 matching */
+          border: 1px solid #f3f4f6; /* border-gray-100 matching */
+          border-radius: 1rem; /* rounded-2xl matching */
+          transition: all 0.3s;
+        }
+        .PhoneInput:focus-within {
+          background: white;
+          border-color: #6366f1; /* indigo-500 */
+          box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+        }
+        .PhoneInputInput {
+          outline: none;
+          background: transparent;
+          border: none;
+          width: 100%;
+          font-weight: 500;
+          font-size: 16px;
+          color: #374151;
+          padding: 0.8rem 0;
+        }
+        .PhoneInputCountry {
+          margin-right: 0.75rem;
+        }
+      `}</style>
 
 
 {/* --- সম্পূর্ণ মোবাইল রেসপন্সিভ অ্যালার্ট --- */}
@@ -291,6 +354,9 @@ export default function AuthPage() {
                 </form>
               </div>
             ) : (
+
+              // --- Sign Up Form (Updated with Phone Input) ---
+
               <div className="animate-in fade-in slide-in-from-left-4 duration-500">
                 <form className="space-y-4" onSubmit={handleSignUpSubmit}>
                   {/* Name */}
@@ -306,19 +372,22 @@ export default function AuthPage() {
                     />
                   </div>
 
-                  {/* Phone + Email */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className={inputGroup}>
-                      <FaPhone className={iconStyle} />
-                      <input
-                        name="phone_number"
-                        placeholder="Phone"
+
+                     {/* --- ৬. ফোন ইনপুট এবং ইমেইল সেকশন আপডেট --- */}
+                  <div className="grid grid-cols-1 gap-4">
+                    {/* PhoneInput ব্যবহার করা হয়েছে */}
+                    <div className="relative">
+                      <PhoneInput
+                        international
+                        defaultCountry={defaultCountry}
                         value={formData.phone_number}
-                        onChange={handleChange}
-                        className={inputStyle}
-                        required
+                        onChange={(val) => setFormData(prev => ({...prev, phone_number: val}))}
+                        onCountryChange={(country) => setFormData(prev => ({...prev, country: country}))}
+                        placeholder="Phone Number"
+                        className="custom-phone-class" // Global CSS দিয়ে স্টাইল করা হয়েছে
                       />
                     </div>
+                    
                     <div className={inputGroup}>
                       <FaEnvelope className={iconStyle} />
                       <input

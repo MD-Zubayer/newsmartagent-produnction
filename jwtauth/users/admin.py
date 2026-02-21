@@ -24,7 +24,7 @@ class UserAdmin(auth_admin.UserAdmin):
     fieldsets = (
         (None, {"fields": ("email", "password")}),
         (_("Personal info"), {"fields": ("name", "phone_number", "gender")}),
-        (_("Address info"), {"fields": ("division", "district", "upazila")}),
+        (_("Address info"), {"fields": ("country","division", "district", "upazila")}),
         (_("Agent info"), {"fields": ("id_type", "created_by")}),
         (_("Permissions"), {
             "fields": (
@@ -50,6 +50,7 @@ class UserAdmin(auth_admin.UserAdmin):
                     "password2",
                     "name",
                     "phone_number",
+                    "country",
                     "gender",
                     "division",
                     "district",

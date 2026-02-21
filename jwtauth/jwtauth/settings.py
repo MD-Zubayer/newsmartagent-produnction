@@ -28,11 +28,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-i6it!d42&fu(j0*&)*53ymr5k+7osf^r__i$+@vds)a#7r-&^^'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = ['*']
-
-
+ALLOWED_HOSTS = ['newsmartagent.com', 'api.newsmartagent.com', 'n8n.newsmartagent.com', 'newsmartagent-django', 'newsmartagent-n8n', 'localhost','127.0.0.1']
+CSRF_TRUSTED_ORIGINS = ['https://newsmartagent.com', 'https://api.newsmartagent.com', 'https://n8n.newsmartagent.com']
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
 # Application definition
 
 INSTALLED_APPS = [
@@ -164,6 +165,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = "/app/static/"
 
 AUTH_USER_MODEL = 'users.User'
 
@@ -185,7 +187,8 @@ REST_FRAMEWORK = {
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
-    # "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # "DE
+    # FAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
 
@@ -196,7 +199,7 @@ SIMPLE_JWT = {
     'AUTH_COOKIE': 'access_token',  # আপনি যে নামে কুকি সেভ করেছেন
     'AUTH_COOKIE_HTTP_ONLY': True,
     'AUTH_COOKIE_SAMESITE': 'Lax',
-    'AUTH_COOKIE_SECURE': False,      # ← এটা না থাকলে ডিফল্ট True → cookie ব্লক
+    'AUTH_COOKIE_SECURE': True,      # ← এটা না থাকলে ডিফল্ট True → cookie ব্লক
     'AUTH_COOKIE_PATH': '/',
 }
 JWT_AUTH_SECURE = False
@@ -209,20 +212,24 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3001",  # Next.js dev
     "http://127.0.0.1:3001",
 ]
-CSRF_TRUSTED_ORIGINS = ["http://localhost:3000", "http://localhost:3001"]
-CSRF_COOKIE_DOMAIN = '127.0.0.1'
-SESSION_COOKIE_SECURE = False
+CSRF_TRUSTED_ORIGINS = [
+    'https://newsmartagent.com', 
+    'https://api.newsmartagent.com', 
+    'https://n8n.newsmartagent.com'
+]
+CSRF_COOKIE_DOMAIN = '.newsmartagent.com'
+SESSION_COOKIE_SECURE = True
 SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SAMESITE = 'Lax'
-SESSION_COOKIE_DOMAIN = None
-CSRF_COOKIE_SECURE = False
+SESSION_COOKIE_DOMAIN = '.newsmartagent.com'
+CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
 # EMAIL_BACKEND = 'django_mailjet.backends.MailjetBackend'
 
 # MAILJET_API_KEY = 'd7fa03c2b6d8be8314e85dfce82f2cb7'
 # MAILJET_SECRET_KEY = '3d9fdd7b0ff557a559a915f7d5b393ee'
 
-
+SECURE_SSL_REDIRECT = True
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = "smtp.gmail.com"

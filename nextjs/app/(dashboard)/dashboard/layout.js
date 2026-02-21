@@ -7,7 +7,6 @@ import { useRouter, usePathname } from "next/navigation";
 import ProactiveRefresh from "@/(main)/components/ProactiveRefresh";
 import Sidebar from "../../(main)/components/Sidebar";
 import TopNav from "../../(main)/components/TopNav";
-import { Toaster } from "react-hot-toast";
 import { useNotifications } from "@/hooks/useNotifications"; // 🔥 আমাদের সেই কাস্টম হুক
 
 function DashboardContent({ children }) {
@@ -53,24 +52,7 @@ function DashboardContent({ children }) {
 
   return (
     <div className="flex h-screen bg-gray-100">
-      <Toaster position="top-right"
-  toastOptions={{
-    duration: 4000,
-    style: {
-      background: '#fff',
-      color: '#1e293b',
-      borderRadius: '16px',
-      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-      padding: '16px',
-      border: '1px solid #e2e8f0',
-    },
-    success: {
-      iconTheme: {
-        primary: '#4f46e5',
-        secondary: '#fff',
-      },
-    },
-  }} />
+    
       <Sidebar viewMode={viewMode} />
       <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
         {/* 🔥 TopNav এখন হুক থেকে আসা ফ্রেশ ডাটা পাবে */}

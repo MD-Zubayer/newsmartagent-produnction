@@ -50,7 +50,7 @@ class TokenUsageAnalyticsView(APIView):
     def get(self, request):
 
         today = timezone.now().date()
-        start_date = today - timedelta(days=7)
+        start_date = today - timedelta(days=30)
 
         # <! -------- Setting the base query -------------!>
 

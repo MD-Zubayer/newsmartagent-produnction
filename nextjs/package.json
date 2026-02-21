@@ -24,6 +24,7 @@
     "react-dom": "^18.3.1",
     "react-hot-toast": "^2.6.0",
     "react-icons": "^5.5.0",
+    "react-phone-number-input": "^3.4.14",
     "react-window": "^1.8.9",
     "react-window-infinite-loader": "^2.0.1",
     "use-sound": "^5.0.0",

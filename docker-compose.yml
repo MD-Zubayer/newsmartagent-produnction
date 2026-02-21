@@ -46,6 +46,9 @@ services:
   frontend:
     build: ./nextjs
     container_name: newsmartagent-nextjs
+    environment:
+      - NEXT_PUBLIC_BASE_URL=https://newsmartagent.com
+      - NEXT_PUBLIC_API_URL=https://newsmartagent.com/api
     restart: always
     depends_on:
       - backend
@@ -108,16 +111,18 @@ services:
     image: n8nio/n8n:latest
     container_name: newsmartagent-n8n
     environment:
-      # N8N_HOST: n8n.newsmartagent.com
-      # WEBHOOK_URL: https://n8n.newsmartagent.com
-      - N8N_HOST=localhost # অথবা আপনার পিসির লোকাল আইপি
-      - WEBHOOK_URL=http://localhost/n8n/
-      - N8N_BASE_URL=http://localhost/n8n/
-      - N8N_PATH=/n8n/
-      - N8N_PROTOCOL=http
-      - GENERIC_TIMEZONE=Asia/Dhaka
+      N8N_HOST: n8n.newsmartagent.com
+      N8N_URL: https://n8n.newsmartagent.com
+      WEBHOOK_URL: https://n8n.newsmartagent.com
+      N8N_TRUST_PROXY: true
+      N8N_PROTOCOL: https
+      GENERIC_TIMEZONE: Asia/Dhaka
     volumes:
       - n8n_data:/home/node/.n8n
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      
     depends_on:
       - backend
       - redis
@@ -168,4 +173,5 @@ volumes:
 
 networks:
   smart-network:
+    name: smart-network 
     driver: bridge

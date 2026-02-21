@@ -134,7 +134,7 @@ class UserViewSet(viewsets.ModelViewSet):
             # create verify token
             token_obj = EmailVerificationToken.objects.create(user=user)
             
-            verify_link = f'http://localhost/verify-email?token={token_obj.token}'
+            verify_link = f'https://newsmartagent.com/verify-email?token={token_obj.token}'
             
             try: 
                 send_verification_email(user.email, verify_link)
@@ -330,7 +330,7 @@ class ForgotPasswordView(APIView):
         if isinstance(token, bytes):
             token = token.decode("utf-8")
 
-        reset_link = f"http://localhost/reset-password?token={token}"
+        reset_link = f"https://newsmartagent.com/reset-password?token={token}"
 
         # send email
         send_reset_email(user.email, reset_link)

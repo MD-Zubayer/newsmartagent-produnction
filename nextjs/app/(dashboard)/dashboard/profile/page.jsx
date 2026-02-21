@@ -157,7 +157,7 @@ export default function ProfilePage() {
                    <p className="text-xl font-black text-blue-600 tracking-tighter italic">৳{user?.profile?.acount_balance}</p>
                 </div>
                 <div className="bg-purple-50 p-4 rounded-[2rem] border border-purple-100">
-                   <p className="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-1">Word Balance</p>
+                   <p className="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-1">Token Balance</p>
                    <p className="text-xl font-black text-purple-600 tracking-tighter italic">{user?.profile?.word_balance?.toLocaleString()}</p>
                 </div>
               </div>
