@@ -9,6 +9,10 @@ from datetime import datetime, timedelta
 from django.utils import timezone
 from django.db import transaction
 import uuid
+import phonenumbers
+from phonenumbers import geocoder
+from .validators import validate_international_phone
+
 # Create your models here.
 
 
@@ -24,7 +28,8 @@ class User(AbstractUser):
     )
     username = None
     name = models.CharField(_("Name of User"), blank=True, max_length=255)
-    phone_number = models.CharField("Phone Number", blank=True, max_length=20)
+    phone_number = models.CharField("Phone Number", blank=True, max_length=20, validators=[validate_international_phone],help_text="Enter number with country code (e.g. +88017...)")
+    country = models.CharField(_('Country'), max_length=100, blank=True)
     id_type = models.CharField("ID Type", max_length=20, choices=ID_TYPE_CHOICES, blank=True)
     email = models.EmailField(unique=True)
     division = models.CharField(
@@ -71,6 +76,21 @@ class User(AbstractUser):
 
         """
         return reverse("users:detail", kwargs={"id": self.id})
+
+    def save(self, *args, **kwargs):
+        if self.phone_number:
+            try:
+                parsed = phonenumbers.parse(self.phone_number, None)
+
+                if not self.country:
+                    self.country = geocoder.description_for_number(parsed, 'en')
+
+                self.phone_number = phonenumbers.format_number(
+                    parsed, phonenumbers.PhoneNumberFormat.E164
+                )
+            except Exception as e:
+                 print(f"Phone processing error: {e}")
+        super().save(*args, **kwargs)
 
 #  python3 manage.py generate_ids   after connect postgressql!!!!
 class UniqueIDPool(models.Model):

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback} from "react";
 import api from "@/lib/api"; 
 import { useAuth } from "app/context/AuthContext"; 
 import { 
@@ -53,17 +53,19 @@ export default function OrderDashboard() {
   const shopName = user?.name || "Smart Shop BD";
   
   const orderLink = formId 
-    ? `${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'}/orders/${formId}`
+    ? `${typeof window !== 'undefined' ? window.location.origin : 'https://newsmartagent.com/'}/orders/${formId}`
     : "Generating link...";
 
   // --- ১. কপি লিঙ্ক ফাংশন (প্রিমিয়াম) ---
   const copyLink = () => {
     if (!formId) return toast.error("The link has not been created yet!");
     
+    if (copied) return;
+
     navigator.clipboard.writeText(orderLink)
       .then(() => {
         setCopied(true);
-        toast.success("Order link copied!", {
+        toast.success("Order link copied !", {
           icon: '🔗',
           style: { borderRadius: '12px' }
         });

@@ -46,7 +46,7 @@ export default function Sidebar({ viewMode }) {
     { name: "Overview", href: "/dashboard/agent", icon: HomeIcon, roles: ["agent"] },
     { name: "My Referrals", href: "/dashboard/agent/referrals", icon: UsersIcon, roles: ["agent"] },
     { name: "OTP Settings", href: "/dashboard/agent/otp", icon: KeyIcon, roles: ["agent"] },
-    { name: "Agent Stats", href: "/dashboard/agent/stats", icon: ChartBarIcon, roles: ["agent"] },
+    { name: "Accounts", href: "/dashboard/agent/accounts", icon: ChartBarIcon, roles: ["agent"] },
 
     // কমন আইটেমস
     { name: "Payment", href: "/dashboard/payment", icon: CreditCardIcon, roles: ["user", "agent"] },

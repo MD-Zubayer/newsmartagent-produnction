@@ -53,7 +53,7 @@ def process_ai_reply_task(data):
         if settings.is_order_enable:
             try:
                 order_form = OrderForm.objects.get(user=agent_config.user)
-                link = f'http://localhost:3000/orders/{order_form.form_id}'
+                link = f'https://newsmartagent.com/orders/{order_form.form_id}'
                 order_instruction = f"If user wants to buy/order, strictly give this link: {link}."
             except OrderForm.DoesNotExist:
                 order_instruction = "If they want to buy, say order form is not ready yet."
@@ -88,7 +88,14 @@ def process_ai_reply_task(data):
                 matched_content = [doc.content for doc in related_docs]
                 clean_data = "\n".join(matched_content)
                 sheet_context = f"\n[DATA]:\n{clean_data}"
-                extra_instruction = f"\nAnswer short using [DATA] only. No bold/markdown. {order_instruction} End with: I can help more?"
+                extra_instruction = f"""
+Answer strictly using only the content inside [DATA].
+Keep the response short and clear.
+No markdown, no bold text, no formatting.
+Be friendly, natural, and conversational.
+If appropriate, end with a short, warm follow-up question that encourages the user to continue.
+{order_instruction}
+"""
                 print(f">>> RAG Match Found! Top Distance: {related_docs[0].distance}")
             else:
                 sheet_context = ""
@@ -244,7 +251,7 @@ def process_ai_reply_task(data):
 
 
     # n8n response webhook url
-    N8N_RESPONSE_WEBHOOK = "https://n8n.srv1106977.hstgr.cloud/webhook/acba4d27-6e32-4145-8a82-b3e67dbff028jdslfj094"
+    N8N_RESPONSE_WEBHOOK = "https://n8n.newsmartagent.com/webhook/fb-comment-message-delivery"
 
     payload = {
         "sender_id": data.get('sender_id'),

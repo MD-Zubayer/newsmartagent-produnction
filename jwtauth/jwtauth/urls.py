@@ -44,7 +44,7 @@ urlpatterns = [
     path('api/transfer/', NSABalanceTransferView.as_view(), name='tarnsfer'),
     
     # অ্যাপ ভিত্তিক ইউআরএল
-    path('webhooks/', include('webhooks.urls')),
+    path('api/webhooks/', include('webhooks.urls')),
     path('api/AgentAI/', include('aiAgent.urls')), # এই লাইনটি এখন কাজ করবে
     path('api/datasheet/', include("datasheet.urls")),
     path('api/agent-state/', AgentDashboardStatsView.as_view(), name='agent-stats')
