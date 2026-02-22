@@ -31,7 +31,7 @@ SECRET_KEY = 'django-insecure-i6it!d42&fu(j0*&)*53ymr5k+7osf^r__i$+@vds)a#7r-&^^
 DEBUG = False
 
 ALLOWED_HOSTS = ['newsmartagent.com', 'api.newsmartagent.com', 'n8n.newsmartagent.com', 'newsmartagent-django', 'newsmartagent-n8n', 'localhost','127.0.0.1']
-CSRF_TRUSTED_ORIGINS = ['https://newsmartagent.com', 'https://api.newsmartagent.com', 'https://n8n.newsmartagent.com']
+CSRF_TRUSTED_ORIGINS = ['https://newsmartagent.com', 'https://api.newsmartagent.com', 'https://n8n.newsmartagent.com', 'http://newsmartagent-django:8000']
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 USE_X_FORWARDED_HOST = True
 # Application definition
@@ -118,6 +118,17 @@ CHANNEL_LAYERS = {
     },
 }
 
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+    'visibility_timeout': 3600,
+    'sep_timeout': 30,
+}
+CELERY_REDIS_RETRY_ON_TIMEOUT = True
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 50  # ৫০টি কাজ শেষে ওয়ার্কার ফ্রেশ হবে
+CELERY_WORKER_MAX_MEMORY_PER_CHILD = 200 * 1024  # ২০০ এমবি ক্রস করলে রিস্টার্ট
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_TASK_TIME_LIMIT = 110
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
@@ -212,11 +223,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3001",  # Next.js dev
     "http://127.0.0.1:3001",
 ]
-CSRF_TRUSTED_ORIGINS = [
-    'https://newsmartagent.com', 
-    'https://api.newsmartagent.com', 
-    'https://n8n.newsmartagent.com'
-]
+
 CSRF_COOKIE_DOMAIN = '.newsmartagent.com'
 SESSION_COOKIE_SECURE = True
 SESSION_COOKIE_SAMESITE = 'Lax'
@@ -229,7 +236,7 @@ SESSION_COOKIE_HTTPONLY = True
 # MAILJET_API_KEY = 'd7fa03c2b6d8be8314e85dfce82f2cb7'
 # MAILJET_SECRET_KEY = '3d9fdd7b0ff557a559a915f7d5b393ee'
 
-SECURE_SSL_REDIRECT = True
+SECURE_SSL_REDIRECT = False
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = "smtp.gmail.com"

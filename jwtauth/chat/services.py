@@ -36,6 +36,9 @@ def get_last_message(agentAi, contact_id, limit=5):
 
 
     return [
-        {'role': m.role, 'content': m.content}
+        {'role': m.role,
+         'content': m.content,
+         'timestamp': m.sent_at.timestamp()
+         }
         for m in reversed(messages)
     ]

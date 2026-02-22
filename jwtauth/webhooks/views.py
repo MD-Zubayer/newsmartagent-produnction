@@ -4,6 +4,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from webhooks.tasks import process_ai_reply_task
+from chat.services import save_message
+from aiAgent.models import AgentAI
 # Create your views here.
 
 
@@ -24,8 +26,9 @@ def test_webhook(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def ai_webhook(request):
-    data = request.data
-
+    print("!!! REQUEST RECEIVED !!!")
+    data = dict(request.data)
+    print(data)
     # first validation
     sender_id = data.get('sender_id')
     page_id = data.get('page_id')
@@ -39,11 +42,22 @@ def ai_webhook(request):
         print(f"Missing data: sender={sender_id}, text={text}, page={page_id}")
         return Response({'error': 'Missing data'}, status=400)
 
+    agent_config = AgentAI.objects.get(page_id=page_id, is_active=True)
     
     # send to celery
-    process_ai_reply_task.delay(data)
+    
+    try:
+        # save_message(agent_config, sender_id, text, 'user')
 
-    return Response({
-        'status': 'accepted',
-        'message': 'Task is processing is background'
-    }, status=202)
+        # convo = agent_config.conversations.get(contact_id=sender_id)
+        
+        process_ai_reply_task.delay(data)
+        print(f">>> Task successfully sent to Celery for sender: {sender_id}")
+        return Response({
+             'status': 'accepted',
+              'message': 'Task is processing is background'
+            }, status=202)
+    except Exception as e:
+        # যদি রেডিস কানেকশন বা সিরিয়ালাইজেশন এরর হয়
+        print(f"ERROR SENDING TO CELERY: {str(e)}")
+        return Response({'error': 'Internal Task Queue Error'}, status=500)

@@ -83,6 +83,7 @@ class MessageAdmin(admin.ModelAdmin):
             )
         }),
     )
+    ordering = ['-sent_at']
 
     def short_content(self, obj):
         """Admin list-এ পুরো কনটেন্ট না দেখিয়ে ছোট করে দেখানো"""

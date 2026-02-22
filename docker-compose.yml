@@ -18,12 +18,14 @@ services:
     container_name: newsmartagent-redis
     restart: always
     networks:
-      - smart-network
+      smart-network:
+        aliases:
+          - newsmartagent-redis
 
   backend:
     build: ./jwtauth
     container_name: newsmartagent-django
-    command: gunicorn jwtauth.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --workers 4 --threads 2
+    command: gunicorn jwtauth.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --workers 2 --threads 4 --timeout 120
     volumes:
       - ./jwtauth:/app
       - static_volume:/app/static
@@ -74,7 +76,7 @@ services:
   celery_worker:
     build: ./jwtauth
     container_name: newsmartagent-celery-worker
-    command: celery -A jwtauth worker -l info
+    command: celery -A jwtauth worker -Q chat_queue -c 2 --loglevel=info
     volumes:
       - ./jwtauth:/app
     env_file:
@@ -89,6 +91,7 @@ services:
       - redis
     networks:
       - smart-network
+    restart: always
 
   celery_beat:
     build: ./jwtauth
@@ -115,14 +118,13 @@ services:
       N8N_URL: https://n8n.newsmartagent.com
       WEBHOOK_URL: https://n8n.newsmartagent.com
       N8N_TRUST_PROXY: true
+      EXPLICIT_TRUST_PROXY: true # এটি মাস্ট যোগ করুন
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: false # কনফিগ ফাইল পারমিশন ইস্যু এড়াতে
       N8N_PROTOCOL: https
       GENERIC_TIMEZONE: Asia/Dhaka
+      NODE_OPTIONS: --max-old-space-size=2048
     volumes:
       - n8n_data:/home/node/.n8n
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
-      
     depends_on:
       - backend
       - redis
