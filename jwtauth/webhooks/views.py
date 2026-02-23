@@ -4,8 +4,6 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from webhooks.tasks import process_ai_reply_task
-from chat.services import save_message
-from aiAgent.models import AgentAI
 # Create your views here.
 
 
@@ -42,15 +40,10 @@ def ai_webhook(request):
         print(f"Missing data: sender={sender_id}, text={text}, page={page_id}")
         return Response({'error': 'Missing data'}, status=400)
 
-    agent_config = AgentAI.objects.get(page_id=page_id, is_active=True)
     
     # send to celery
     
     try:
-        # save_message(agent_config, sender_id, text, 'user')
-
-        # convo = agent_config.conversations.get(contact_id=sender_id)
-        
         process_ai_reply_task.delay(data)
         print(f">>> Task successfully sent to Celery for sender: {sender_id}")
         return Response({

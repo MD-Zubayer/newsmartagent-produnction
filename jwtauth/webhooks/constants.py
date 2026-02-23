@@ -14,3 +14,20 @@ TARGET_KEYWORDS =[
             'send photo', 'real picture', 'original', 'warranty', 'guarantee',
             'color', 'size', 'model', 'brand', 'low price', 'cheap', 'best',
 ]
+
+embedding_skip_keyword = [
+    # --- বাংলা (BN) ---
+    'হাই', 'হ্যালো', 'কেমন আছেন', 'ভালো', 'শুভ সকাল', 'শুভ রাত্রি', 'ধন্যবাদ', 'সরি', 
+    'কি খবর', 'ঠিক আছি', 'ভাল আছি', 'আসসালামু আলাইকুম', 'ঠিক আছে', 'ধন্যবাদ ভাই', 
+    'শুভ দিন', 'শুভ সকাল ভাই', 'শুভ রাত্রি ভাই', 'ভাই কেমন', 'ভালো লাগল', 'ধন্যবাদ দাদা',
+    'মাফ করবেন', 'দুঃখিত', 'ধন্যবাদ বন্ধু', 'ভাই ভালো আছেন?', 'ভাল লাগল', 'শুভ অপরাহ্ন', 'শুভ সন্ধ্যা', 'কেমন চলছে', 'ভাই কেমন আছেন', 'সুপ্রভাত',
+
+    # --- English (EN) ---
+    'hi', 'hello', 'hey', 'yo', 'wassup', 'good morning', 'good night', 'morning', 'night', 
+    'hi bro', 'hello friend', 'thanks', 'thank you', 'ok', 'okk', 'sorry', 'welcome', 'good day', 'good evening',
+
+    # --- Banglish / Mix (BN+EN) ---
+    'kemon aso', 'bhalo aso', 'ki khabar', 'dhonnobad', 'shubho sokal', 'shubho ratri', 
+    'valo achi', 'ami bhalo', 'ki khobor bro', 'thik achi', 'bhalo achi', 'assalamualaikum', 
+    'shuvo din', 'shuvo sokal', 'shuvo ratri', 'valo laglo', 'dhonnobad bro', 'bhalo laglo', 'kemon aso bhai'
+]

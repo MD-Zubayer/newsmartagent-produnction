@@ -9,7 +9,7 @@ from aiAgent.models import AgentAI, MissingRequirement
 from aiAgent.utils import get_memory_context
 from aiAgent.memory_service import extract_and_update_memory
 from aiAgent.memory_handler import handle_smart_memory_update
-from webhooks.constants import TARGET_KEYWORDS
+from webhooks.constants import TARGET_KEYWORDS, embedding_skip_keyword
 from aiAgent.data_processor import processor_spreadsheet_data
 import json
 from django.http import JsonResponse
@@ -71,9 +71,8 @@ def process_ai_reply_task(self,data):
     lock_value = str(uuid.uuid4())
     lock = r.set(lock_key, lock_value, nx=True, ex=150)
     if not lock:
-        logger.info(f"User {sender_id} already processing.")
-        return
-          
+        logger.info(f"User {sender_id} busy. Retrying...")
+        raise self.retry(countdown=2)
 
     try:   
         
@@ -127,10 +126,24 @@ def process_ai_reply_task(self,data):
     
         try:
         
-        
+            skip_margin = 15
+            skip_embedding = False
+            text_len = len(text)
+            
+            for kw in embedding_skip_keyword:
+                kw_len = len(kw)
+                # flexible check: message length ~ keyword length ± margin
+                if kw.lower() in text.lower() and abs(text_len - kw_len) <= skip_margin:
+                    skip_embedding = True
+                    logger.info(f"Keyword '{kw}' found and message length within margin. Skipping embedding.")
+                    break
+
+            
             #<!------------------- Convert user message to vector -----------------------!>
-            query_vector = get_gemini_embedding(text)
-            logger.info(f"DEBUG: Vector Generated: {True if query_vector else False}")
+            query_vector = None
+            if not skip_embedding:
+                query_vector = get_gemini_embedding(text)
+                logger.info(f"DEBUG: Vector Generated: {True if query_vector else False}")
             if query_vector:
                 #<!------------------ Finding the 3 most relevant rows from a vector database ---------------!>
                 related_docs = SpreadsheetKnowledge.objects.filter(
@@ -140,24 +153,52 @@ def process_ai_reply_task(self,data):
                 ).order_by('distance')[:3]
     
            
-                if related_docs and related_docs[0].distance < 0.45:
+                if related_docs:
+                    top_distance = related_docs[0].distance
+                    if top_distance < 0.45:
+                                    # Strong match
+
+                        matched_content = [doc.content for doc in related_docs]
+                        clean_data = "\n".join(matched_content)
+                        sheet_context = f"\n[DATA]:\n{clean_data}"
+                        extra_instruction = f"""
+                                Answer strictly using only the content inside [DATA].
+                                Keep it short, clear, friendly, natural, conversational..
+                                No markdown, no bold text, no formatting.
+                                If appropriate, end with a short, warm follow-up question that encourages the user to continue.
+                                {order_instruction}
+                                """
+                        logger.info(f">>> Strong RAG Match! Distance: {top_distance}")
                     
-                    matched_content = [doc.content for doc in related_docs]
-                    clean_data = "\n".join(matched_content)
-                    sheet_context = f"\n[DATA]:\n{clean_data}"
-                    extra_instruction = f"""
-                            Answer strictly using only the content inside [DATA].
-                            Keep the response short and clear.
-                            No markdown, no bold text, no formatting.
-                            Be friendly, natural, and conversational.
-                            If appropriate, end with a short, warm follow-up question that encourages the user to continue.
-                            {order_instruction}
-                            """
-                    logger.info(f">>> RAG Match Found! Top Distance: {related_docs[0].distance}")
+                    elif top_distance < 0.65:
+                        # Weak match
+                        matched_content = [doc.content for doc in related_docs]
+                        sheet_context = f"\n[DATA]:\n{'\n'.join(matched_content)}"
+                        extra_instruction = f"""
+                        You may use [DATA] if relevant.
+                        If not, answer politely using your knowledge.
+                        {order_instruction}
+                        """
+                        logger.info(f">>> Weak RAG Match! Distance: {top_distance}")
+
+
+                    else:
+                         # No good match
+                        sheet_context = ""
+                        extra_instruction = f"""
+                        Answer naturally using your knowledge.
+                        If unsure, politely ask for clarification.
+                        {order_instruction}
+                        """
+                        logger.info(f">>> No useful RAG match. Distance: {top_distance}")
                 else:
-                    sheet_context = ""
-                    extra_instruction = f"\nIf not found in [DATA], ask them to wait. {order_instruction}"
-                    logger.info(f">>> Weak Match (Distance: {related_docs[0].distance if related_docs else 'N/A'}). Skipping context.")
+                    # Embedding skipped
+                    extra_instruction = f"""
+                    Answer naturally using your knowledge.
+                    {order_instruction}
+                    """
+                    logger.info(">>> Embedding skipped due to keyword + message length.")
+
         except Exception as e:
             logger.error(f"RAG Search Error: {e}")
             extra_instruction = f" Answer politely. If data missing, ask to wait. {order_instruction}"
