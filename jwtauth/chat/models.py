@@ -57,3 +57,10 @@ class Notification(models.Model):
     is_read = models.BooleanField(default=False)
     type = models.CharField(max_length=20, default='info')
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class PostCache(models.Model):
+    post_id = models.CharField(max_length=255, unique=True)
+    summary = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+

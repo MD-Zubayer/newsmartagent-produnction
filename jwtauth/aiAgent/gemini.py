@@ -90,6 +90,31 @@ def generate_reply(system_prompt, messages, agent_config):
         }
 
             
+def generate_quick_summary(raw_text):
+    try:
+        model_name = 'models/gemini-2.5-flash'
 
+        prompt = f"""Summarize the following Facebook post in maximum 3 short sentences.
+                Rules:
+                - Keep all key points.
+                - Keep total length under 60-80 words.
+                - No opinion.
+                - No extra explanation.
+                - Simple and clear language.
+                Post: {raw_text}"""
 
+        response = client.models.generate_content(
+            model=model_name,
+            contents=[prompt],
+            config=types.GenerateContentConfig(
+                temperature=0.3,
+                max_output_tokens=150
+            )
+        )
 
+        if response.text:
+            return response.text.strip()
+        return None
+    except Exception as e:
+        print(f'Summary Generation Error: {str(e)}')
+        return None

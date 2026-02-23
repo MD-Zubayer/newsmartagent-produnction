@@ -24,8 +24,13 @@ import redis
 import signal
 import logging
 import uuid
-logger = logging.getLogger(__name__)
 from django.db.models import F
+from webhooks.utils import fetch_facebook_post_text
+from chat.utils import get_smart_post_context
+
+logger = logging.getLogger(__name__)
+
+
 
 r = redis.Redis(host='newsmartagent-redis', port=6379, db=0)
 
@@ -86,6 +91,13 @@ def process_ai_reply_task(self,data):
             logger.error(f'Error: Agent not found for page_id {page_id} - {e}')
             return
 
+        post_context_text = ""
+        if request_type == 'facebook_comment':
+            post_id = data.get('post_id')
+            post_context_text = get_smart_post_context(post_id, agent_config.access_token)
+            if post_context_text:
+                logger.info(f">>> FB Post Context Loaded: {post_context_text[:50]}...")
+                
            # ---------- STRONG ZOMBIE CHECK ----------
 
         if incoming_ts:
@@ -123,7 +135,9 @@ def process_ai_reply_task(self,data):
          #<!----------------- 1. RAG logic start (Keyword filtering excluded) --------------!>
         sheet_context = ""
         extra_instruction = ""
-    
+
+        rag_query = f"{post_context_text} {text}" if post_context_text else text
+        
         try:
         
             skip_margin = 15
@@ -142,7 +156,7 @@ def process_ai_reply_task(self,data):
             #<!------------------- Convert user message to vector -----------------------!>
             query_vector = None
             if not skip_embedding:
-                query_vector = get_gemini_embedding(text)
+                query_vector = get_gemini_embedding(rag_query)
                 logger.info(f"DEBUG: Vector Generated: {True if query_vector else False}")
             if query_vector:
                 #<!------------------ Finding the 3 most relevant rows from a vector database ---------------!>
@@ -161,8 +175,9 @@ def process_ai_reply_task(self,data):
                         matched_content = [doc.content for doc in related_docs]
                         clean_data = "\n".join(matched_content)
                         sheet_context = f"\n[DATA]:\n{clean_data}"
+                        post_info = f"User commented on this post: '{post_context_text}'. " if post_context_text else ""
                         extra_instruction = f"""
-                                Answer strictly using only the content inside [DATA].
+                                {post_info}  strictly using only the content inside [DATA].
                                 Keep it short, clear, friendly, natural, conversational..
                                 No markdown, no bold text, no formatting.
                                 If appropriate, end with a short, warm follow-up question that encourages the user to continue.
