@@ -69,7 +69,7 @@ def get_smart_post_context(post_id, access_token):
     
     ai_summary = generate_quick_summary(raw_text)
 
-    if ai_summary and len(ai_summary) > 30:
+    if ai_summary and len(ai_summary) > 50:
         try:
             
             PostCache.objects.create(post_id=post_id, summary=ai_summary)

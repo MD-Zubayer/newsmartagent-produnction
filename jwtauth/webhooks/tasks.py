@@ -1,39 +1,37 @@
-from celery import shared_task
-import requests
+# aiAgent/tasks.py
 
+from celery import shared_task
+import time, uuid, logging, hashlib, redis, requests
 from aiAgent.models import AgentAI
-from chat.services import save_message, get_last_message
-from aiAgent.gemini import generate_reply
-from aiAgent.openai import generate_openai_reply
-from aiAgent.models import AgentAI, MissingRequirement
-from aiAgent.utils import get_memory_context
-from aiAgent.memory_service import extract_and_update_memory
+from chat.services import save_message
 from aiAgent.memory_handler import handle_smart_memory_update
-from webhooks.constants import TARGET_KEYWORDS, embedding_skip_keyword
-from aiAgent.data_processor import processor_spreadsheet_data
-import json
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-import time
-from embedding.models import SpreadsheetKnowledge
-from pgvector.django import CosineDistance
-from embedding.utils import get_gemini_embedding
-from settings.models import AgentSettings
-from users.models import OrderForm
-import redis
-import signal
-import logging
-import uuid
-from django.db.models import F
-from webhooks.utils import fetch_facebook_post_text
+from aiAgent.cache.hybrid_similarity import get_cached_reply, set_cached_reply
+from aiAgent.cache.ranking import incr_message_frequency
+from aiAgent.cache.metrics import incr_counter
+from aiAgent.cache.utils import normalize_text
 from chat.utils import get_smart_post_context
+
+# আপনার logic_handler থেকে ফাংশনগুলো ইম্পোর্ট
+from aiAgent.business_logic.logic_handler import (
+    is_duplicate_or_outdated, acquire_user_lock, get_order_instructions,
+    perform_rag_search, build_ai_context, get_ai_response,
+    log_token_usage, deduct_user_tokens, deliver_reply_to_n8n
+)
+from aiAgent.business_logic import logic_handler
+
+from celery.signals import after_setup_logger, after_setup_task_logger
+import logging.config
+from django.conf import settings
+
+@after_setup_logger.connect
+@after_setup_task_logger.connect
+def setup_celery_logging(logger, **kwargs):
+    # সেলেরিকে বাধ্য করা হচ্ছে Django-র LOGGING সেটিংস ব্যবহার করতে
+    logging.config.dictConfig(settings.LOGGING)
 
 logger = logging.getLogger(__name__)
 
-
-
 r = redis.Redis(host='newsmartagent-redis', port=6379, db=0)
-
 
 
 
@@ -49,7 +47,7 @@ r = redis.Redis(host='newsmartagent-redis', port=6379, db=0)
              time_limit=70,
              soft_time_limit=60
              )
-def process_ai_reply_task(self,data):
+def process_ai_reply_task(self, data):
 
     start_time = time.time()
 
@@ -64,352 +62,112 @@ def process_ai_reply_task(self,data):
     if not all([sender_id, text, page_id]):
             logger.error(f"Aborting: Missing core data in task. sender: {sender_id}, text: {text}")
             return
-        
-# ---------- IDEMPOTENCY CHECK (BEFORE LOCK) ----------
-    if msg_id and r.get(f'processed_msg:{msg_id}'):
-        logger.info(f"Duplicate message detected: {msg_id}")
+  
+    # ২. এজেন্ট ও প্রোফাইল লোড
+    try:
+        agent_config = AgentAI.objects.get(page_id=page_id, is_active=True)
+        user_profile = agent_config.user.profile
+    except Exception as e:
+        logger.error(f'Error: Agent not found for page_id {page_id} - {e}')
         return
-
-
-    # -------------------- SAFE REDIS LOCK -------------------- #
-    lock_key = f"chat_lock:{sender_id}"
-    lock_value = str(uuid.uuid4())
-    lock = r.set(lock_key, lock_value, nx=True, ex=150)
-    if not lock:
-        logger.info(f"User {sender_id} busy. Retrying...")
-        raise self.retry(countdown=2)
-
-    try:   
+    
+    # ৩. ইডেমপোটেন্সি ও জম্বি চেক (Early Exit)
+    if is_duplicate_or_outdated(msg_id, incoming_ts, agent_config, sender_id, r):
+        return
         
         
-        try:
-            agent_config = AgentAI.objects.get(page_id=page_id, is_active=True)
-            # <!---------------User profile -------------------!>
-            user_profile = agent_config.user.profile
+    # ৪. সেফ রেডিস লক
+    
+    _, lock_key, lock_value = acquire_user_lock(self, r, sender_id)
+
+    try:
+        # ৫. ইনিশিয়ালাইজেশন
+        reply, success, total_tokens = "System busy.", False, 0
+        ai_data = {'success': False, 'total_tokens': 0}
+
+        # ৬. ক্যাশ চেক
         
-        except Exception as e:
-            logger.error(f'Error: Agent not found for page_id {page_id} - {e}')
-            return
+        cached_res = get_cached_reply(page_id, text)
 
-        post_context_text = ""
-        if request_type == 'facebook_comment':
-            post_id = data.get('post_id')
-            post_context_text = get_smart_post_context(post_id, agent_config.access_token)
-            if post_context_text:
-                logger.info(f">>> FB Post Context Loaded: {post_context_text[:50]}...")
-                
-           # ---------- STRONG ZOMBIE CHECK ----------
-
-        if incoming_ts:
-            try:
-                incoming_ts = float(incoming_ts)
-            except (ValueError, TypeError):
-                incoming_ts = None
-            if incoming_ts > 1e12:
-                incoming_ts /= 1000
-
-            latest = get_last_message(agent_config, sender_id, limit=1)
-            if latest and latest[0].get('timestamp', 0) > incoming_ts:
-                logger.info("🧟 Outdated task detected. Skipping.")
-                return
-
-        # ---------- ORDER SETTINGS ----------
-        order_instruction = ""
-        try:
-            settings, created = AgentSettings.objects.get_or_create(user=agent_config.user)
-    
-            if settings.is_order_enable:
-                try:
-                    order_form = OrderForm.objects.get(user=agent_config.user)
-                    link = f'https://newsmartagent.com/orders/{order_form.form_id}'
-                    order_instruction = f"If user wants to buy/order, strictly give this link: {link}."
-                except OrderForm.DoesNotExist:
-                    order_instruction = "If they want to buy, say order form is not ready yet."
-            else:
-                order_instruction = "Online ordering is currently closed. Ask them to contact support for manual orders."
-        except Exception as e:
-            logger.error(f"Settings Error: {e}")
-            order_instruction = "Handle orders politely."
-        
-    
-         #<!----------------- 1. RAG logic start (Keyword filtering excluded) --------------!>
-        sheet_context = ""
-        extra_instruction = ""
-
-        rag_query = f"{post_context_text} {text}" if post_context_text else text
-        
-        try:
-        
-            skip_margin = 15
-            skip_embedding = False
-            text_len = len(text)
-            
-            for kw in embedding_skip_keyword:
-                kw_len = len(kw)
-                # flexible check: message length ~ keyword length ± margin
-                if kw.lower() in text.lower() and abs(text_len - kw_len) <= skip_margin:
-                    skip_embedding = True
-                    logger.info(f"Keyword '{kw}' found and message length within margin. Skipping embedding.")
-                    break
-
-            
-            #<!------------------- Convert user message to vector -----------------------!>
-            query_vector = None
-            if not skip_embedding:
-                query_vector = get_gemini_embedding(rag_query)
-                logger.info(f"DEBUG: Vector Generated: {True if query_vector else False}")
-            if query_vector:
-                #<!------------------ Finding the 3 most relevant rows from a vector database ---------------!>
-                related_docs = SpreadsheetKnowledge.objects.filter(
-                    user=agent_config.user
-                ).annotate(
-                    distance=CosineDistance('embedding', query_vector)
-                ).order_by('distance')[:3]
-    
-           
-                if related_docs:
-                    top_distance = related_docs[0].distance
-                    if top_distance < 0.45:
-                                    # Strong match
-
-                        matched_content = [doc.content for doc in related_docs]
-                        clean_data = "\n".join(matched_content)
-                        sheet_context = f"\n[DATA]:\n{clean_data}"
-                        post_info = f"User commented on this post: '{post_context_text}'. " if post_context_text else ""
-                        extra_instruction = f"""
-                                {post_info}  strictly using only the content inside [DATA].
-                                Keep it short, clear, friendly, natural, conversational..
-                                No markdown, no bold text, no formatting.
-                                If appropriate, end with a short, warm follow-up question that encourages the user to continue.
-                                {order_instruction}
-                                """
-                        logger.info(f">>> Strong RAG Match! Distance: {top_distance}")
-                    
-                    elif top_distance < 0.65:
-                        # Weak match
-                        matched_content = [doc.content for doc in related_docs]
-                        sheet_context = f"\n[DATA]:\n{'\n'.join(matched_content)}"
-                        extra_instruction = f"""
-                        You may use [DATA] if relevant.
-                        If not, answer politely using your knowledge.
-                        {order_instruction}
-                        """
-                        logger.info(f">>> Weak RAG Match! Distance: {top_distance}")
-
-
-                    else:
-                         # No good match
-                        sheet_context = ""
-                        extra_instruction = f"""
-                        Answer naturally using your knowledge.
-                        If unsure, politely ask for clarification.
-                        {order_instruction}
-                        """
-                        logger.info(f">>> No useful RAG match. Distance: {top_distance}")
-                else:
-                    # Embedding skipped
-                    extra_instruction = f"""
-                    Answer naturally using your knowledge.
-                    {order_instruction}
-                    """
-                    logger.info(">>> Embedding skipped due to keyword + message length.")
-
-        except Exception as e:
-            logger.error(f"RAG Search Error: {e}")
-            extra_instruction = f" Answer politely. If data missing, ask to wait. {order_instruction}"
-        
-    
-        page_access_token = agent_config.access_token
-        # save user message
-        # ---------- MEMORY ----------
-        memory_context = ""
-        memory_triggers = ['আমার', 'নাম', 'অর্ডার', 'আগের', 'my', 'name', 'order', 'status']
-        if any(word in text.lower() for word in memory_triggers):
-            mem_data =  get_memory_context(agent_config, sender_id)
-            if mem_data:
-                memory_context = f"\nMem: {mem_data}"
-                logger.info(f">>> Memory Loaded for Sender: {sender_id}")
-    
-    
-        save_message(agent_config, sender_id, text, 'user')
-    
-        # get memory context
-    
-        prompt_parts = [agent_config.system_prompt + extra_instruction]
-        if sheet_context:
-            prompt_parts.append(sheet_context)
-        if memory_context:
-            prompt_parts.append(memory_context)
-        full_prompt = "\n".join(prompt_parts)
-        # get history
-        history = get_last_message(agent_config, sender_id, limit=3)
-    
-        try:
-        
-            if user_profile.word_balance <=0:
-            
-                logger.info(f">>> User {user_profile.user.email} has 0 tokens. Aborting AI reply.")
-                return
-
-            
-            #   <!---------------- AI reply -----------------!>
-
-            ai_response = None
-            model_choice = agent_config.ai_model.lower()
-            try:
-
-                if 'gpt' in model_choice:
-                    logger.info("DEBUG FULL PROMPT:", full_prompt)
-                    ai_response = generate_openai_reply(full_prompt, history, agent_config=agent_config)
-                else:
-                    ai_response = generate_reply(full_prompt, history, agent_config=agent_config)
-
-
-            except Exception as e:
-                logger.error(f"AI Generation Error: {e}")
-   
-            
-            # --- DEBUG START ---
-            logger.info(f"🔍 DEBUG: AI Raw Response Type: {type(ai_response)}")
-            logger.info(f"🔍 DEBUG: AI Raw Response Content: {ai_response}")
-            # --- DEBUG END ---
-            
-            reply = "System busy."
-            input_tokens = 0
-            output_tokens = 0
+        if cached_res:
+            reply = cached_res.get('reply')
+            success = True
             total_tokens = 0
-            success = False
-            error_info = ""
-            # <!------------------- 1. Extracting data (Dictionary format handling) -------------------------!>
-    
-            if isinstance(ai_response, dict):
-                reply = ai_response.get('reply', "System busy.")
-                input_tokens = ai_response.get('input_tokens', 0)
-                output_tokens = ai_response.get('output_tokens', 0)
-                total_tokens = ai_response.get('total_tokens', 0)
-    
-                response_status = ai_response.get('status')
-                reply = reply.replace('**', '').replace('*', '')
-                # --- DEBUG START ---
-    
-                logger.info(f"🔍 DEBUG: Status from AI: '{response_status}'")
-                logger.info(f"🔍 DEBUG: Reply Length: {len(reply)}")
-    
-           
-                success = (response_status == 'success') or len(reply) > 5
-                logger.info(f"🔍 DEBUG: Final Success Decision: {success}")
-                # --- DEBUG END ---
-    
-                if not success:
-                    error_info = ai_response.get('error_message') or f'AI status: {response_status}'
-    
-            else:
-                # <!----------------------# If for some reason the old tuple format comes back (Fallback) ----------------------!>
-                logger.error("⚠️ WARNING: AI Response is NOT a dictionary!")
-                reply, total_tokens = ai_response if isinstance(ai_response, tuple) else (str(ai_response), 0)
-                input_tokens = int(total_tokens * 0.5)
-                output_tokens = total_tokens - input_tokens
-                success = True
-    
-            try:
-                #<! ----------------- Subtract spent tokens from profile --------------!>
-                if success and total_tokens > 0:
-                    user_profile.word_balance = F('word_balance') -  total_tokens
-                    user_profile.save(update_fields=['word_balance'])
-                    user_profile.refresh_from_db()
-                    remaining_tokens = user_profile.word_balance
-                    logger.info(f"Deducted {total_tokens} tokens. Remaining: {remaining_tokens}")
-            except Exception as e:
-                logger.error(f"Error deducting tokens: {e}")  
-    
-            #<!----------------- 2. Response time calculation -----------------!>
-    
-            duration = int((time.time() - start_time) * 1000)
-    
-            # <! ----------------3. Saving data in TokenUsageLog ----------------!>
-    
-            from aiAgent.models import TokenUsageLog
-            TokenUsageLog.objects.create(
-                user=agent_config.user,
-                ai_agent=agent_config,
-                sender_id=sender_id,
-                platform=data.get('type', 'messenger'),
-                model_name=model_choice,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                total_tokens=total_tokens,
-                response_time=duration,
-                success=success,
-                error_message=error_info,
-                request_type=request_type if request_type else 'chat'
-            )
-    
-    
-    
-            # <! ------------- save AI message ----------!>
-            save_message(agent_config, sender_id, reply, 'assistant', tokens=total_tokens)
-        except Exception as e:
-            logger.error(f"AI Generation Error: {e}")
-            reply = "I'm having some technical issues. Please wait a moment."
-            total_tokens = 0
-            
-            from aiAgent.models import TokenUsageLog
-            TokenUsageLog.objects.create(
-                ai_agent = agent_config,
-                sender_id = sender_id,
-                success =False,
-                error_message = str(e),
-                model_name = model_choice
-            )
-    
-        logger.info(f' Reply : {reply} | Tokens Used : {total_tokens}')
-        logger.info(sender_id)
-    
-        logger.info(">>> Calling Extractor Now!")
-        try:
+        
+            incr_counter(page_id, "cache_hit")
+            logger.info(f"⚡ CACHE HIT → Skipping RAG + Embedding + AI for '{text[:30]}'")
+        
+            # Save messages
+            save_message(agent_config, sender_id, text, 'user')
+            save_message(agent_config, sender_id, reply, 'assistant', tokens=0)
+        
+            # Memory update optional (lightweight)
             handle_smart_memory_update(agent_config, sender_id, text)
-    
-        except Exception as e:
-            logger.error(f"Memory Handler Error: {e}")
-    
-    
-
-        # n8n response webhook url
-        N8N_RESPONSE_WEBHOOK = "https://n8n.newsmartagent.com/webhook/fb-comment-message-delivery"
-
-        payload = {
-            "sender_id": data.get('sender_id'),
-            'reply': reply,
-            'page_id': page_id,
-            'page_access_token': page_access_token,
-            'type': data.get('type'),
-            'comment_id': data.get('comment_id'),
-            'post_id': data.get('post_id')
-        }
-
-
-        logger.info(f'Page ID : {page_id}')
-
-        try:
-            response = requests.post(N8N_RESPONSE_WEBHOOK, json=payload, timeout=10)
-            logger.info(f"Reply sent to n8n for {sender_id}")
-            response.raise_for_status()
-            logger.info("Successfully sent reply back to n8n")
-                    # ---------- SAFE IDEMPOTENCY (AFTER SUCCESS) ----------
-
-            if msg_id:
+        
+            # Deliver immediately
+            delivered = deliver_reply_to_n8n(
+                data, reply, page_id, agent_config.access_token
+            )
+        
+            if delivered and msg_id:
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+        
+            return   # 🔥🔥🔥 HARD STOP
+        else:
+            incr_counter(page_id, 'cache_miss')
 
-        except requests.exceptions.RequestException as e:
-            logger.error("Webhook failed. Retrying...")
-            raise self.retry(exc=e)
+            # ৭. জেনারেশন ফ্লো (ক্যাশ মিস হলে)
+            if user_profile.word_balance <= 0:
+                logger.info(f">>> User {user_profile.user.email} has 0 tokens. Aborting.")
+                return
+            
+            # কন্টেন্ট তৈরি
+            
+            post_context = ""
+            if request_type == 'facebook_comment':
+                post_context = get_smart_post_context(data.get('post_id'), agent_config.access_token)
+                
+            order_instr = get_order_instructions(agent_config.user)
+            sheet_ctx, extra_instr = perform_rag_search(agent_config, text, post_context, order_instr )
+            full_prompt, history = build_ai_context(agent_config, sender_id, text, extra_instr, sheet_ctx)
+            
+            # AI কল (আপনার সেই সলিড ডিকশনারি লজিক সহ)
+
+            ai_data = get_ai_response(agent_config, full_prompt, history)
+            reply, success, total_tokens = ai_data['reply'], ai_data['success'], ai_data['total_tokens']
+
+            if success:
+                deduct_user_tokens(user_profile, total_tokens)
+                set_cached_reply(page_id, text, reply, model=agent_config.ai_model, input_tokens=ai_data.get('input_tokens', 0), # 👈 রিয়েল ডাটা
+                    output_tokens=ai_data.get('output_tokens', 0)) # 👈 রিয়েল ডাটা)
+               
+
+            # ৯. লগিং ও ডাটাবেজ আপডেট
+            duration = int((time.time() - start_time) * 1000)
+            log_token_usage(agent_config, sender_id, ai_data, duration, request_type)
+
+            save_message(agent_config, sender_id, text, 'user')
+            save_message(agent_config, sender_id, reply, 'assistant', tokens=total_tokens)
+
+            # ১০. মেমোরি আপডেট
+            handle_smart_memory_update(agent_config, sender_id, text)
+
+            # ১১. এনএইটএন (n8n) ডেলিভারি
+            
+            delivered = deliver_reply_to_n8n(data, reply, page_id, agent_config.access_token)
+
+            if delivered and msg_id:
+                r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+            logger.info(f"Successfully sent reply back to n8n for {sender_id}")
 
     except Exception as e:
         logger.error(f"Task Error: {e}")
 
-    # Optionally retry here if it's a transient error
     finally:
-        # --- STEP 1: Release Lock ---
+        # ১২. লক রিলিজ
         current_lock = r.get(lock_key)
         if current_lock and current_lock.decode() == lock_value:
             r.delete(lock_key)
+            
+            
+            

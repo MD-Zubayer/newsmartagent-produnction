@@ -23,7 +23,7 @@ import {
 import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
 import api from "../../lib/api";
-
+import { PiggyBank } from "lucide-react";
 // viewMode প্রপসটি রিসিভ করছি layout.jsx থেকে
 export default function Sidebar({ viewMode }) {
   const pathname = usePathname();
@@ -36,6 +36,7 @@ export default function Sidebar({ viewMode }) {
     
     // শুধু ইউজার মোডের জন্য
     { name: "Overview", href: "/dashboard/user", icon: HomeIcon, roles: ["user"] },
+    { name: "Saving", href: "/dashboard/saving", icon: PiggyBank, roles: ["user"] },
     { name: "Orders", href: "/dashboard/orders", icon: ShoppingCartIcon, roles: ["user"] },
     { name: "Connect", href: "/dashboard/connect", icon: LinkIcon, roles: ["user"] },
     { name: "Sheet", href: user?.sheet_id ? `/dashboard/sheet/${user.sheet_id}` : "/dashboard/user", icon: TableCellsIcon, roles: ["user"] },

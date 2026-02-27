@@ -8,6 +8,7 @@ import ProactiveRefresh from "@/(main)/components/ProactiveRefresh";
 import Sidebar from "../../(main)/components/Sidebar";
 import TopNav from "../../(main)/components/TopNav";
 import { useNotifications } from "@/hooks/useNotifications"; // 🔥 আমাদের সেই কাস্টম হুক
+import DashboardAI from "@/(main)/components/DashboardAI";
 
 function DashboardContent({ children }) {
   const { user } = useAuth();
@@ -66,6 +67,8 @@ function DashboardContent({ children }) {
         <main className="p-4 flex-1 ml-12 md:ml-64 overflow-y-auto">
           {/* চিল্ড্রেন পেজগুলোও (যেমন NotificationsPage) চাইলে viewMode পাবে */}
           {isValidElement(children) ? cloneElement(children, { viewMode }) : children}
+
+          <DashboardAI />
         </main>
       </div>
     </div>

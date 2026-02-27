@@ -147,3 +147,33 @@ class TokenUsageLogAdmin(admin.ModelAdmin):
 
     # তারিখ অনুযায়ী ড্রিল-ডাউন করার সুবিধা
     date_hierarchy = 'created_at'
+
+
+from django.contrib import admin
+from .models import DashboardAILog
+
+@admin.register(DashboardAILog)
+class DashboardAILogAdmin(admin.ModelAdmin):
+    # লিস্ট ভিউতে যা যা দেখাবে
+    list_display = ('user', 'pathname', 'question_summary', 'answer', 'input_tokens', 'output_tokens', 'total_tokens', 'created_at')
+    
+    # ফিল্টার করার অপশন (ডানপাশে থাকবে)
+    list_filter = ('created_at', 'pathname', 'user')
+    
+    # সার্চ বার (ইউজারনাম এবং প্রশ্নের বিষয়বস্তু দিয়ে খোঁজা যাবে)
+    search_fields = ('user__username', 'question', 'answer', 'pathname')
+    
+    # শুধু পড়ার জন্য (অ্যাডমিন যাতে AI এর উত্তর বা টোকেন এডিট করতে না পারে)
+    readonly_fields = ('user', 'pathname', 'question', 'answer', 'input_tokens', 'output_tokens', 'total_tokens', 'created_at')
+    
+    # তারিখ অনুযায়ী ড্রিল-ডাউন করার অপশন
+    date_hierarchy = 'created_at'
+
+    # বড় প্রশ্নগুলোকে ছোট করে দেখানোর জন্য একটি কাস্টম মেথড
+    def question_summary(self, obj):
+        return obj.question[:50] + "..." if len(obj.question) > 50 else obj.question
+    question_summary.short_description = 'Question'
+
+    # নতুন ডাটা এন্ট্রি করার বাটন হাইড করা (যেহেতু এটি একটি লগ টেবিল)
+    def has_add_permission(self, request):
+        return False

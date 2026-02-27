@@ -16,11 +16,14 @@ services:
   redis:
     image: redis:7-alpine
     container_name: newsmartagent-redis
+    volumes:
+      - redis_data:/data
     restart: always
     networks:
       smart-network:
         aliases:
           - newsmartagent-redis
+      
 
   backend:
     build: ./jwtauth
@@ -76,7 +79,7 @@ services:
   celery_worker:
     build: ./jwtauth
     container_name: newsmartagent-celery-worker
-    command: celery -A jwtauth worker -Q chat_queue -c 2 --loglevel=info
+    command: celery -A jwtauth worker -Q chat_queue -c 2 --loglevel=info --logfile=/app/logs/celery_worker.log
     volumes:
       - ./jwtauth:/app
     env_file:
@@ -165,6 +168,7 @@ services:
 
 
 volumes:
+  redis_data:
   static_volume:
     name: newsmartagent-static
   media_volume:

@@ -126,3 +126,20 @@ class TokenUsageLog(models.Model):
 
     def __str__(self):
         return f"{self.platform} | {self.total_tokens} tokens | {self.created_at.strftime('%Y-%m-%d %H:%M')}"
+
+
+class DashboardAILog(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE,related_name='dashboard_ai_logs')
+    pathname = models.CharField(max_length=255)
+    question = models.TextField()
+    answer = models.TextField()
+
+    # টোকেন ট্র্যাকিং (ভবিষ্যতে খরচের হিসেব রাখতে)
+    input_tokens = models.IntegerField(default=0)
+    output_tokens = models.IntegerField(default=0)
+    total_tokens = models.IntegerField(default=0)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.pathname} - {self.created_at}"

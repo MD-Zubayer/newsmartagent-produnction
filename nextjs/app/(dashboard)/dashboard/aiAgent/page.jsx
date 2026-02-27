@@ -277,7 +277,9 @@ export default function AIAgentPage() {
 
               <div className="grid grid-cols-2 gap-6">
                 <select name="ai_model" value={formData.ai_model} onChange={handleChange} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none">
-                  <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                  <option value="models/gemini-2.5-flash">Gemini 2.5 Flash</option>
+                  <option value="models/gemini-2.0-flash"> Gemini 2.0 flash</option>
+                 
                   <option value="gpt-4o-mini">GPT-4o Mini</option>
                 </select>
                 <input type="number" name="max_tokens" value={formData.max_tokens} onChange={handleChange} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" placeholder="Max Tokens" />
