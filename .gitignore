@@ -26,3 +26,5 @@ nextjs/out/
 # Logs
 *.log
 npm-debug.log*jwtauth/core
+signoz/
+signoz/
