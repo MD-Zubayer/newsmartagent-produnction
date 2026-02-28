@@ -40,10 +40,6 @@ services:
       - DATABASE_URL=postgres://zubayer:mypassword@newsmartagent-db:5432/new_smart_db
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      # 🔥 এই লাইনটি যোগ করুন:
-      - OTEL_EXPORTER_OTLP_ENDPOINT=https://monitor.newsmartagent.com
-      # ঐচ্ছিক: ট্রেসিং এ অ্যাপের নাম দেখানোর জন্য
-      - OTEL_SERVICE_NAME=newsmartagent-django
       - REDIS_URL=redis://newsmartagent-redis:6379/0
     depends_on:
       - db
