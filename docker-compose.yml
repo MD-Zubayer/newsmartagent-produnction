@@ -54,8 +54,44 @@ services:
     restart: always
     depends_on:
       - backend
+
+    
     networks:
       - smart-network
+
+
+  clickhouse:
+    image: yandex/clickhouse-server:21.8
+    container_name: newsmartagent-clickhouse
+    ports:
+      - "9000:9000"
+      - "8123:8123"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    networks:
+      - smart-network
+
+  signoz:
+    image: signoz/signoz:latest
+    container_name: newsmartagent-signoz
+    restart: always
+    ports:
+      - "3301:3301"   # Signoz UI
+      - "4319:4318"   # OTLP HTTP
+    environment:
+      STORAGE_TYPE: clickhouse
+      CLICKHOUSE_HOST: newsmartagent-clickhouse
+      CLICKHOUSE_PORT: 9000
+    depends_on:
+      - clickhouse
+    volumes:
+      - signoz_data:/signoz-db
+    networks:
+      - smart-network
+
+
+
+
 
   nginx:
     build: ./nginx
@@ -165,6 +201,9 @@ services:
 
 
 volumes:
+  clickhouse_data:
+  signoz_data:
+    name: newsmartagent-signoz-data
   static_volume:
     name: newsmartagent-static
   media_volume:
@@ -176,4 +215,5 @@ volumes:
 networks:
   smart-network:
     name: smart-network 
+    external: true
     driver: bridge
