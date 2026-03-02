@@ -8,12 +8,15 @@ r = redis.Redis(host='newsmartagent-redis', port=6379, db=4)  # DB 4 for cluster
 
 def get_cluster_map(agent_id):
     key = f"agent:{agent_id}:clusters"
-    data = r.get(key)
-    return json.loads(data) if data else {}
-
+    return {
+        k.decode(): v.decode()
+        for k, v in r.hgetall(key).items()
+    }
 
 def assign_to_cluster(agent_id, msg_text, cluster_id):
     normalized = normalize_text(msg_text)
     key = f"agent:{agent_id}:clusters"
     msg_hash = hashlib.md5(normalized.encode()).hexdigest()
     r.hset(key, msg_hash, cluster_id)
+    
+    

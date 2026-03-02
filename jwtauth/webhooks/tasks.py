@@ -5,9 +5,10 @@ import time, uuid, logging, hashlib, redis, requests
 from aiAgent.models import AgentAI
 from chat.services import save_message
 from aiAgent.memory_handler import handle_smart_memory_update
-from aiAgent.cache.hybrid_similarity import get_cached_reply, set_cached_reply
+from aiAgent.cache.hybrid_similarity import get_cached_reply, set_cached_reply, fuzzy_match
 from aiAgent.cache.ranking import incr_message_frequency
 from aiAgent.cache.metrics import incr_counter
+from aiAgent.cache.cluster import get_cluster_map
 from aiAgent.cache.utils import normalize_text
 from chat.utils import get_smart_post_context
 
@@ -86,9 +87,27 @@ def process_ai_reply_task(self, data):
         ai_data = {'success': False, 'total_tokens': 0}
 
         # ৬. ক্যাশ চেক
+        cached_res = None
         
-        cached_res = get_cached_reply(page_id, text)
+        cached_res = get_cached_reply(page_id, msg_text=text)
 
+        if not cached_res:
+            cached_res = fuzzy_match(page_id, text, threshold=60)
+        
+        if not cached_res:
+            cluster_map = get_cluster_map(page_id)
+            normalized = normalize_text(text)
+            msg_hash = hashlib.md5(normalized.encode()).hexdigest()
+
+            cluster_id = cluster_map.get(msg_hash)
+
+            if cluster_id:
+                cached_res = get_cached_reply(page_id, msg_hash=cluster_id)
+                if cached_res:
+                    logger.info(f"🧬 CLUSTER MATCH FOUND for '{text[:30]}' -> Cluster: {cluster_id}")
+                    print(f"🧬 CLUSTER MATCH FOUND for '{text[:30]}' -> Cluster: {cluster_id}")
+            
+        
         if cached_res:
             reply = cached_res.get('reply')
             success = True
@@ -138,9 +157,22 @@ def process_ai_reply_task(self, data):
 
             if success:
                 deduct_user_tokens(user_profile, total_tokens)
-                set_cached_reply(page_id, text, reply, model=agent_config.ai_model, input_tokens=ai_data.get('input_tokens', 0), # 👈 রিয়েল ডাটা
-                    output_tokens=ai_data.get('output_tokens', 0)) # 👈 রিয়েল ডাটা)
-               
+                set_cached_reply(page_id, text, reply, model=agent_config.ai_model, input_tokens=ai_data.get('input_tokens', 0), output_tokens=ai_data.get('output_tokens', 0)) 
+                try:                
+                    from aiAgent.cache.cluster import assign_to_cluster  
+                    from aiAgent.cache.hybrid_similarity import find_best_cached_hash
+                            
+                            
+                    best_cluster_hash = find_best_cached_hash(page_id, text, threshold=70)
+                                                      
+                    target_hash = best_cluster_hash if best_cluster_hash else hashlib.md5(normalize_text(text).encode()).hexdigest()
+                    
+                    assign_to_cluster(page_id, text, target_hash)
+                    logger.info(f"🧬 Message assigned to cluster: {text[:20]}")                
+                    print(f"🧬 Message assigned to cluster: {text[:20]}")
+                except Exception as e:                
+                    logger.error(f"Failed to assign cluster: {e}")
+                    print(f"Failed to assign cluster: {e}")
 
             # ৯. লগিং ও ডাটাবেজ আপডেট
             duration = int((time.time() - start_time) * 1000)
