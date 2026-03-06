@@ -130,7 +130,7 @@ services:
       N8N_HOST: n8n.newsmartagent.com
       N8N_URL: https://n8n.newsmartagent.com
       WEBHOOK_URL: https://n8n.newsmartagent.com
-      N8N_TRUST_PROXY: true
+      N8N_TRUST_PROXY: "true"
       EXPLICIT_TRUST_PROXY: true # এটি মাস্ট যোগ করুন
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: false # কনফিগ ফাইল পারমিশন ইস্যু এড়াতে
       N8N_ENCRYPTION_KEY: sHZJzk+tGNCcLzOt6Px6fBM1kOJc7SaA
