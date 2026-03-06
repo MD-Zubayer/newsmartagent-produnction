@@ -16,6 +16,8 @@ jobs:
       - name: Deploy with Docker Compose
         run: |
           # যদি আগে থেকে কোনো কন্টেইনার চলে, তবে তা বন্ধ করবে
+          cp ~/newsmartagent.env .env
+          
           docker-compose down || true
           
           # নতুন করে ইমেজ বিল্ড করবে এবং ব্যাকগ্রাউন্ডে রান করবে
