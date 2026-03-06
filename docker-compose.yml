@@ -44,7 +44,7 @@ services:
       - media_volume:/app/media
     
     env_file:
-      - .env
+      - /home/ubuntu/smartagent.env
     environment:
       - DATABASE_URL=postgres://zubayer:mypassword@newsmartagent-db:5432/new_smart_db
       - GEMINI_API_KEY=${GEMINI_API_KEY}
@@ -94,7 +94,7 @@ services:
     volumes:
       - ./jwtauth:/app
     env_file:
-      - .env
+      - /home/ubuntu/smartagent.env
     
     environment:
       - DATABASE_URL=postgres://zubayer:mypassword@newsmartagent-db:5432/new_smart_db
@@ -114,7 +114,7 @@ services:
     volumes:
       - ./jwtauth:/app
     env_file:
-      - .env
+      - /home/ubuntu/smartagent.env
     environment:
       - DATABASE_URL=postgres://zubayer:mypassword@newsmartagent-db:5432/new_smart_db
       - REDIS_URL=redis://newsmartagent-redis:6379/0
