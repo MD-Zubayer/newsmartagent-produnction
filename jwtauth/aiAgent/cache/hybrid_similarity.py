@@ -9,6 +9,10 @@ from celery.signals import after_setup_logger, after_setup_task_logger
 import logging
 import logging.config
 from django.conf import settings
+from aiAgent.cache.client import get_redis_client
+
+
+
 
 @after_setup_logger.connect
 @after_setup_task_logger.connect
@@ -19,7 +23,8 @@ def setup_celery_logging(logger, **kwargs):
 logger = logging.getLogger(__name__)
 
 
-r = redis.Redis(host='newsmartagent-redis', port=6379, db=2)
+r = get_redis_client(db=2) # DB 2 for clusters
+
 
 def get_cached_reply(agent_id, msg_text=None, msg_hash=None):                
     """

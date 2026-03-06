@@ -59,35 +59,36 @@ def get_order_instructions(user):
 
 
 
-def perform_rag_search(agent_config, text, post_context_text, order_instruction):
+def perform_rag_search(agent_config, text, post_context_text, order_instruction, existing_vector=None):
     sheet_context = ""
     extra_instruction = ""
-    query_vector = None  # 🔹 Initialize query_vector for later reuse
+    query_vector = existing_vector  # 🔹 Initialize query_vector for later reuse
     rag_query = f"{post_context_text} {text}" if post_context_text else text
     
     try:
-    
-        skip_margin = 10
-        skip_embedding = False
-        text_len = len(text)
         
-        for kw in embedding_skip_keyword:
-            kw_len = len(kw)
-            # flexible check: message length ~ keyword length ± margin
-            if kw.lower() in text.lower() and abs(text_len - kw_len) <= skip_margin:
-                skip_embedding = True
-                logger.info(f"Keyword '{kw}' found and message length within margin. Skipping embedding.")
-                break
-            if len(text) < 3:
-                skip_embedding = True
-                logger.info("embeddign has been skiping because the message length is less than 3characters.")
-                break
+        if not query_vector:
+            skip_margin = 10
+            skip_embedding = False
+            text_len = len(text)
+
+            for kw in embedding_skip_keyword:
+                kw_len = len(kw)
+                # flexible check: message length ~ keyword length ± margin
+                if kw.lower() in text.lower() and abs(text_len - kw_len) <= skip_margin:
+                    skip_embedding = True
+                    logger.info(f"Keyword '{kw}' found and message length within margin. Skipping embedding.")
+                    break
+                if len(text) < 3:
+                    skip_embedding = True
+                    logger.info("embeddign has been skiping because the message length is less than 3characters.")
+                    break
         
         #<!------------------- Convert user message to vector -----------------------!>
-        query_vector = None
-        if not skip_embedding:
-            query_vector = get_gemini_embedding(rag_query)
-            logger.info(f"DEBUG: Vector Generated: {True if query_vector else False}")
+        
+            if not skip_embedding:
+                query_vector = get_gemini_embedding(rag_query)
+                logger.info(f"DEBUG: Vector Generated: {True if query_vector else False}")
         if query_vector:
             #<!------------------ Finding the 3 most relevant rows from a vector database ---------------!>
             related_docs = SpreadsheetKnowledge.objects.filter(

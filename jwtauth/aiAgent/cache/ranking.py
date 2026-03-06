@@ -2,8 +2,10 @@
 import redis
 import hashlib
 import json
+from aiAgent.cache.client import get_redis_client
 
-r = redis.Redis(host='newsmartagent-redis', port=6379, db=6)
+r = get_redis_client(db=4) # DB 4 for clusters
+
 
 def incr_message_frequency(agent_id, msg_hash):
     key = f"agent:{agent_id}:ranking"
