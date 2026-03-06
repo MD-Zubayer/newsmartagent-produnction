@@ -154,6 +154,7 @@ services:
     networks:
       - smart-network
   
+  
   flower:
     image: mher/flower
     container_name: newsmartagent-flower
