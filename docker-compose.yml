@@ -6,6 +6,7 @@ services:
     #!!!! must be named volume in production
 
     volumes:
+    # named volume
       - postgres_data:/var/lib/postgresql/data
     environment:
       - POSTGRES_DB=new_smart_db
