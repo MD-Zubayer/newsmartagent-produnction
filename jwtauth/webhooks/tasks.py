@@ -87,8 +87,7 @@ def process_ai_reply_task(self, data):
         return
         
         
-    # ৪. সেফ রেডিস লক
-    
+    # ৪. redis lock
     _, lock_key, lock_value = acquire_user_lock(self, r, sender_id)
 
     try:
