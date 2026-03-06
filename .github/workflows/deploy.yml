@@ -1,0 +1,25 @@
+name: Docker Deploy to Oracle VPS
+
+# যখনই মেইন ব্রাঞ্চে পুশ করবেন, তখনই এই অ্যাকশনটি শুরু হবে
+on:
+  push:
+    branches: [ main ]  # আপনার মেইন ব্রাঞ্চের নাম যদি 'master' হয়, তবে এখানে master লিখবেন
+
+jobs:
+  deploy:
+    runs-on: self-hosted  # এটিই আপনার ভিপিএস-এর রানারকে কল করবে
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Deploy with Docker Compose
+        run: |
+          # যদি আগে থেকে কোনো কন্টেইনার চলে, তবে তা বন্ধ করবে
+          docker-compose down || true
+          
+          # নতুন করে ইমেজ বিল্ড করবে এবং ব্যাকগ্রাউন্ডে রান করবে
+          docker-compose up -d --build
+          
+          # অপ্রয়োজনীয় পুরনো ইমেজগুলো ডিলিট করে মেমরি বাঁচাবে
+          docker image prune -f

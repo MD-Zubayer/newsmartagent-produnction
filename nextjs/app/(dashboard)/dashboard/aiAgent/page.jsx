@@ -127,30 +127,35 @@ export default function AIAgentPage() {
     }
   };
 
-  const handleDelete = async (targetId) => {
+ const handleDelete = async (targetId) => {
     if (!targetId) {
       toast.error("Valid Agent ID not found!");
       return;
     }
 
     toast((t) => (
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3 p-1">
         <p className="text-sm font-bold text-slate-800">আপনি কি নিশ্চিত? এজেন্টটি চিরতরে মুছে যাবে!</p>
         <div className="flex justify-end gap-2">
           <button onClick={() => toast.dismiss(t.id)} className="px-3 py-1.5 text-xs font-semibold bg-slate-100 rounded-lg">বাতিল</button>
           <button
             onClick={async () => {
               toast.dismiss(t.id);
+              const lt = toast.loading("মুছে ফেলা হচ্ছে...");
               try {
-                const lt = toast.loading("মুছে ফেলা হচ্ছে...");
+                // ✅ সাধারণ ডিলিট API ব্যবহার করুন যা এই এজেন্টের আইডি চেনে
+                // ফেসবুক ডিলিশন এপিআই শুধু ফেসবুক থেকে আসা 'signed_request' এর জন্য।
                 await api.delete(`/AgentAI/agents/${targetId}/`);
+
+                // UI আপডেট
                 setAgents((prev) => prev.filter((a) => a.id !== targetId));
-                toast.success("এজেন্ট সফলভাবে মুছে ফেলা হয়েছে!", { id: lt });
+                toast.success("সফলভাবে মুছে ফেলা হয়েছে!", { id: lt });
               } catch (err) {
-                toast.error("দুঃখিত, ডিলিট করা যায়নি।");
+                console.error("Deletion Error:", err.response?.data);
+                toast.error("দুঃখিত, ডিলিট করা যায়নি।", { id: lt });
               }
             }}
-            className="px-3 py-1.5 text-xs font-semibold bg-red-500 text-white rounded-lg shadow-md shadow-red-100"
+            className="px-3 py-1.5 text-xs font-semibold bg-red-500 text-white rounded-lg shadow-md"
           >
             হ্যাঁ, ডিলিট করুন
           </button>

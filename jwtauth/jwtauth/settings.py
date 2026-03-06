@@ -159,7 +159,8 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
+# settings.py
+SOCIAL_AUTH_FACEBOOK_SECRET = os.environ.get('SOCIAL_AUTH_FACEBOOK_SECRET')
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
