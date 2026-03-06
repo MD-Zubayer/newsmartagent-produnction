@@ -189,6 +189,7 @@ services:
 
 volumes:
   postgres_data:
+    external: true
     name: production_pg_data
   redis_data:
     name: production_redis_data
