@@ -40,7 +40,9 @@ def ai_webhook(request):
         print(f"Missing data: sender={sender_id}, text={text}, page={page_id}")
         return Response({'error': 'Missing data'}, status=400)
 
-    
+    if sender_id == page_id:
+        print(f"⏭️ View Filter: Ignoring self-activity from {page_id}")
+        return Response({'status': 'ignored'}, status=200)
     # send to celery
     
     try:

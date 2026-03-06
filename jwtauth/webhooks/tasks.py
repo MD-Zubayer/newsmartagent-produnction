@@ -16,8 +16,13 @@ from chat.utils import get_smart_post_context
 from aiAgent.business_logic.logic_handler import (
     is_duplicate_or_outdated, acquire_user_lock, get_order_instructions,
     perform_rag_search, build_ai_context, get_ai_response,
-    log_token_usage, deduct_user_tokens, deliver_reply_to_n8n
+    log_token_usage, deduct_user_tokens, deliver_reply_to_n8n, handle_public_comment_logic
 )
+from aiAgent.cache.redis_vector import (
+    save_vector_embedding,
+    search_similar_vectors
+)
+
 from aiAgent.business_logic import logic_handler
 
 from celery.signals import after_setup_logger, after_setup_task_logger
@@ -71,7 +76,12 @@ def process_ai_reply_task(self, data):
     except Exception as e:
         logger.error(f'Error: Agent not found for page_id {page_id} - {e}')
         return
+    # ৪. পাবলিক কমেন্ট হ্যান্ডলিং এবং লুপ প্রোটেকশন
+    should_continue, reason = handle_public_comment_logic(data, agent_config, r)
     
+    if not should_continue:
+        logger.info(f"⏭️ Task stopped: {reason}")
+        return # লুপ হলে এখানেই শেষ
     # ৩. ইডেমপোটেন্সি ও জম্বি চেক (Early Exit)
     if is_duplicate_or_outdated(msg_id, incoming_ts, agent_config, sender_id, r):
         return
@@ -147,7 +157,7 @@ def process_ai_reply_task(self, data):
                 post_context = get_smart_post_context(data.get('post_id'), agent_config.access_token)
                 
             order_instr = get_order_instructions(agent_config.user)
-            sheet_ctx, extra_instr = perform_rag_search(agent_config, text, post_context, order_instr )
+            sheet_ctx, extra_instr, query_vector = perform_rag_search(agent_config, text, post_context, order_instr )
             full_prompt, history = build_ai_context(agent_config, sender_id, text, extra_instr, sheet_ctx)
             
             # AI কল (আপনার সেই সলিড ডিকশনারি লজিক সহ)
@@ -158,6 +168,7 @@ def process_ai_reply_task(self, data):
             if success:
                 deduct_user_tokens(user_profile, total_tokens)
                 set_cached_reply(page_id, text, reply, model=agent_config.ai_model, input_tokens=ai_data.get('input_tokens', 0), output_tokens=ai_data.get('output_tokens', 0)) 
+                
                 try:                
                     from aiAgent.cache.cluster import assign_to_cluster  
                     from aiAgent.cache.hybrid_similarity import find_best_cached_hash
@@ -173,6 +184,14 @@ def process_ai_reply_task(self, data):
                 except Exception as e:                
                     logger.error(f"Failed to assign cluster: {e}")
                     print(f"Failed to assign cluster: {e}")
+
+                if query_vector:
+                    save_vector_embedding(page_id, text, query_vector)
+                    logger.info(f"✅ Saved vector embedding for '{text[:30]}'")
+
+            duration = int((time.time() - start_time) * 1000)
+            log_token_usage(agent_config, sender_id, ai_data, duration, request_type)
+
 
             # ৯. লগিং ও ডাটাবেজ আপডেট
             duration = int((time.time() - start_time) * 1000)

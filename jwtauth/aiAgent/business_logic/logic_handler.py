@@ -31,7 +31,7 @@ from aiAgent.cache.metrics import incr_counter
 import hashlib
 from aiAgent.cache.utils import normalize_text
 from chat.services import get_last_message
-
+from webhooks.comment import deliver_public_comment_reply
 logger = logging.getLogger('aiAgent')
 
 def get_order_instructions(user):
@@ -62,6 +62,7 @@ def get_order_instructions(user):
 def perform_rag_search(agent_config, text, post_context_text, order_instruction):
     sheet_context = ""
     extra_instruction = ""
+    query_vector = None  # 🔹 Initialize query_vector for later reuse
     rag_query = f"{post_context_text} {text}" if post_context_text else text
     
     try:
@@ -142,7 +143,7 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction)
     except Exception as e:
         logger.error(f"RAG Search Error: {e}")
         extra_instruction = f" Answer politely. If data missing, ask to wait. {order_instruction}"
-    return sheet_context, extra_instruction
+    return sheet_context, extra_instruction, query_vector
     
 def deduct_user_tokens(user_profile, total_tokens):
     if total_tokens > 0:
@@ -365,3 +366,32 @@ def is_duplicate_or_outdated(msg_id, incoming_ts, agent_config, sender_id, redis
             logger.error(f"Zombie Check Error: {e}")
             
     return False
+
+def handle_public_comment_logic(data, agent_config, r):
+    """ফেসবুক কমেন্ট হলে লুপ চেক করে পাবলিক রিপ্লাই পাঠাবে"""
+    sender_id = str(data.get('sender_id', ''))
+    page_id = str(data.get('page_id', ''))
+    comment_id = data.get('comment_id')
+    request_type = data.get('type')
+
+    # ১. লুপ প্রোটেকশন (পেজ আইডি আর সেন্ডার আইডি সেম হলে সাথে সাথে False)
+    if sender_id == page_id:
+        return False, "page_own_activity"
+
+    # ২. পাবলিক রিপ্লাই লজিক
+    if request_type == 'facebook_comment' and comment_id:
+        comment_lock_key = f'processed_comment:{comment_id}'
+        
+        # ডুপ্লিকেট চেক
+        if not r.get(comment_lock_key):
+            from webhooks.comment import deliver_public_comment_reply
+            reply_text = 'ধন্যবাদ! আপনার ইনবক্স চেক করুন, বিস্তারিত পাঠানো হয়েছে। 😊'
+            
+            # রেডিসে লক করে দিন
+            r.set(comment_lock_key, '1', ex=3600)
+            
+            # n8n-এ পাঠানো
+            deliver_public_comment_reply(comment_id, reply_text, agent_config.access_token)
+            return True, "public_reply_sent"
+            
+    return True, "continue"

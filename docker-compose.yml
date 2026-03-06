@@ -3,6 +3,8 @@ services:
   db:
     image: pgvector/pgvector:pg16
     container_name: newsmartagent-db
+    #!!!! must be named volume in production
+
     volumes:
       - ./data/db:/var/lib/postgresql/data
     environment:
@@ -14,16 +16,22 @@ services:
       - smart-network
       
   redis:
-    image: redis:7-alpine
+    image: redis/redis-stack-server:latest
     container_name: newsmartagent-redis
-    volumes:
-      - redis_data:/data
     restart: always
     networks:
       smart-network:
         aliases:
           - newsmartagent-redis
-      
+    volumes:
+      - redis_data:/data
+    command: >
+      redis-server
+      --protected-mode no
+      --appendonly yes
+      --appendfsync everysec
+      --save 60 1000
+
 
   backend:
     build: ./jwtauth
@@ -57,6 +65,8 @@ services:
     restart: always
     depends_on:
       - backend
+
+    
     networks:
       - smart-network
 
@@ -79,7 +89,7 @@ services:
   celery_worker:
     build: ./jwtauth
     container_name: newsmartagent-celery-worker
-    command: celery -A jwtauth worker -Q chat_queue -c 2 --loglevel=info --logfile=/app/logs/celery_worker.log
+    command: celery -A jwtauth worker -Q chat_queue -c 2 --loglevel=info
     volumes:
       - ./jwtauth:/app
     env_file:
@@ -123,14 +133,23 @@ services:
       N8N_TRUST_PROXY: true
       EXPLICIT_TRUST_PROXY: true # এটি মাস্ট যোগ করুন
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: false # কনফিগ ফাইল পারমিশন ইস্যু এড়াতে
+      N8N_ENCRYPTION_KEY: sHZJzk+tGNCcLzOt6Px6fBM1kOJc7SaA
       N8N_PROTOCOL: https
       GENERIC_TIMEZONE: Asia/Dhaka
       NODE_OPTIONS: --max-old-space-size=2048
+      # 🔥 Add these
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: newsmartagent-db
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: new_smart_db
+      DB_POSTGRESDB_USER: zubayer
+      DB_POSTGRESDB_PASSWORD: mypassword
     volumes:
       - n8n_data:/home/node/.n8n
     depends_on:
       - backend
       - redis
+      - db
     restart: always 
     networks:
       - smart-network
@@ -169,15 +188,17 @@ services:
 
 volumes:
   redis_data:
+    name: production_redis_data
   static_volume:
     name: newsmartagent-static
   media_volume:
     name: newsmartagent-media
   n8n_data:
-    name: newsmartagent-n8n-data
-
+    name: production_n8n_data
+    external: true
 
 networks:
   smart-network:
     name: smart-network 
+    external: true
     driver: bridge
