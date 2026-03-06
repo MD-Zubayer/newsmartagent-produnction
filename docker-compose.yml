@@ -181,7 +181,7 @@ services:
     networks:
       - smart-network
     volumes:
-      - /home/md-zubayer/.cloudflared:/etc/cloudflared:ro
+      - /home/ubuntu/.cloudflared:/etc/cloudflared:ro
     command: tunnel --config /etc/cloudflared/config-docker.yml run
     depends_on:
       - nginx
