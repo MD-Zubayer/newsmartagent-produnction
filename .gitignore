@@ -27,3 +27,9 @@ nextjs/out/
 *.log
 npm-debug.log*jwtauth/core
 signoz/
+backup/files/
+backup/*.log
+backup/files/
+*.dump
+*.tar.gz
+*.rdb
