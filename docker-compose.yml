@@ -132,7 +132,7 @@ services:
       WEBHOOK_URL: https://n8n.newsmartagent.com
       N8N_TRUST_PROXY: "true"
       EXPLICIT_TRUST_PROXY: "true" # এটি মাস্ট যোগ করুন
-      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: false # কনফিগ ফাইল পারমিশন ইস্যু এড়াতে
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "false" # কনফিগ ফাইল পারমিশন ইস্যু এড়াতে
       N8N_ENCRYPTION_KEY: sHZJzk+tGNCcLzOt6Px6fBM1kOJc7SaA
       N8N_PROTOCOL: https
       GENERIC_TIMEZONE: Asia/Dhaka
@@ -195,10 +195,9 @@ volumes:
     name: newsmartagent-media
   n8n_data:
     name: production_n8n_data
-    external: true
+  
 
 networks:
   smart-network:
     name: smart-network 
-    external: true
     driver: bridge
