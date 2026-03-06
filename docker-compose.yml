@@ -6,7 +6,7 @@ services:
     #!!!! must be named volume in production
 
     volumes:
-      - ./data/db:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     environment:
       - POSTGRES_DB=new_smart_db
       - POSTGRES_USER=zubayer
@@ -187,6 +187,8 @@ services:
 
 
 volumes:
+  postgres_data:
+    name: production_pg_data
   redis_data:
     name: production_redis_data
   static_volume:
