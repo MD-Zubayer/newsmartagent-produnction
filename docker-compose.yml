@@ -28,11 +28,12 @@ services:
       - redis_data:/data
     command: >
       redis-server
+      --loadmodule /opt/redis-stack/lib/redisearch.so
+      --loadmodule /opt/redis-stack/lib/rejson.so
       --protected-mode no
       --appendonly yes
       --appendfsync everysec
       --save 60 1000
-
 
   backend:
     build: ./jwtauth
