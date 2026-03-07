@@ -12,3 +12,5 @@ nextjs/.env.local merge=ours
 
 # Next.js এর নির্দিষ্ট ফোল্ডারের সব ফাইল রক্ষা করতে
 nextjs/app/lib/* merge=ours
+
+.gitattributes merge=ours
