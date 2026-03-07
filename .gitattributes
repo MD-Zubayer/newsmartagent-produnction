@@ -7,5 +7,5 @@ nginx/nginx.conf merge=ours
 # Next.js এর নির্দিষ্ট ফাইল রক্ষা করতে
 nextjs/package.json merge=ours
 nextjs/.env.local merge=ours
-
+nextjs/app/lib/* merge=ours
 # path/to/folder/* merge=ours
