@@ -10,6 +10,8 @@ jobs:
     runs-on: self-hosted  # এটিই আপনার ভিপিএস-এর রানারকে কল করবে
 
     steps:
+      - name: Fix Permissions
+        run: sudo chown -R $USER:$USER ${{ github.workspace }}
       - name: Checkout Repository
         uses: actions/checkout@v4
 

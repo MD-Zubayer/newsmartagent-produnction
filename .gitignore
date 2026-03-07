@@ -34,3 +34,5 @@ backup/files/
 *.tar.gz
 *.rdb
 **/logs/*.log
+jwtauth/logs/ai_agent.log
+jwtauth/logs/*.log
