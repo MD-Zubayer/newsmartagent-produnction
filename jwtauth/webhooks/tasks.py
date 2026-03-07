@@ -61,6 +61,8 @@ def process_ai_reply_task(self, data):
     sender_id = data.get('sender_id')
     page_id = data.get('page_id')
     request_type = data.get('type')
+    if not request_type:
+        request_type = 'messenger'
     text = data.get('comment_text') if request_type == 'facebook_comment' else data.get('message')
     msg_id = data.get('message_id')# Idempotency-র জন্য লাগবে
     incoming_ts = data.get('timestamp') # Zombie Killer

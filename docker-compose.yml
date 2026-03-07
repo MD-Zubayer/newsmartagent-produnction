@@ -27,11 +27,12 @@ services:
       - redis_data:/data
     command: >
       redis-server
+      --loadmodule /opt/redis-stack/lib/redisearch.so
+      --loadmodule /opt/redis-stack/lib/rejson.so
       --protected-mode no
       --appendonly yes
       --appendfsync everysec
       --save 60 1000
-
 
   backend:
     build: ./jwtauth
@@ -129,7 +130,7 @@ services:
     environment:
       N8N_HOST: dev-n8n.newsmartagent.com
       N8N_URL: https://dev-n8n.newsmartagent.com
-      WEBHOOK_URL: https://n8n.newsmartagent.com
+      WEBHOOK_URL: https://dev-n8n.newsmartagent.com
       N8N_TRUST_PROXY: "true"
       EXPLICIT_TRUST_PROXY: "true" # এটি মাস্ট যোগ করুন
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "false" # কনফিগ ফাইল পারমিশন ইস্যু এড়াতে

@@ -4,7 +4,7 @@ from aiAgent.cache.utils import normalize_text
 from aiAgent.cache.client import get_redis_client
 
 # -------------------- Redis Setup -------------------- #
-r = get_redis_client(db=7)  # Vector DB
+r = get_redis_client(db=0)  # Vector DB
 CACHE_DB = 2  # আপনার normal cache db
 CLUSTER_DB = 4
 

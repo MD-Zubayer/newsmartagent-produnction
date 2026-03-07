@@ -281,7 +281,7 @@ def get_ai_response(agent_config, full_prompt, history):
 
 def deliver_reply_to_n8n(data, reply, page_id, access_token):
     """n8n-এ ফাইনাল রিপ্লাই ডেলিভারি করে এবং JSON ভ্যালিডেশন নিশ্চিত করে"""
-    webhook_url = "https://n8n.newsmartagent.com/webhook/fb-comment-message-delivery"
+    webhook_url = "https://dev-n8n.newsmartagent.com/webhook/fb-comment-message-delivery"
     
     # নিশ্চিত করুন কোনো ভ্যালু যেন None না থাকে (Empty string দিয়ে রিপ্লেস করা)
     payload = {
