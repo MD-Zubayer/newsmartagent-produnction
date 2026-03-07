@@ -3,8 +3,11 @@ import redis
 import hashlib
 import json
 from .utils import normalize_text
+from aiAgent.cache.client import get_redis_client
 
-r = redis.Redis(host='newsmartagent-redis', port=6379, db=4)  # DB 4 for clusters
+
+
+r = get_redis_client(db=4) # DB 4 for clusters
 
 def get_cluster_map(agent_id):
     key = f"agent:{agent_id}:clusters"

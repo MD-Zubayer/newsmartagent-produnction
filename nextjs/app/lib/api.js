@@ -4,7 +4,7 @@ import createAuthRefreshInterceptor from 'axios-auth-refresh';
 
 // প্রধান API ইনস্ট্যান্স
 const api = axios.create({
-  baseURL: 'https://newsmartagent.com/api/',
+  baseURL: 'https://dev.newsmartagent.com/api/',
   withCredentials: true, // এটি বাধ্যতামূলক যাতে ব্রাউজার কুকি পাঠায়
 });
 
@@ -13,7 +13,7 @@ let isRefreshingFailed = false;
 const refreshAuthLogic = async (failedRequest) => {
   try {
     // এখানে ডিফল্ট 'axios' ব্যবহার করুন, 'api' নয়
-    await axios.post('https://newsmartagent.com/api/token/refresh/', {}, { withCredentials: true });
+    await axios.post('https://dev.newsmartagent.com/api/token/refresh/', {}, { withCredentials: true });
     return Promise.resolve();
   } catch (err) {
     isRefreshingFailed = true;
@@ -22,7 +22,7 @@ const refreshAuthLogic = async (failedRequest) => {
     // 🔴 সমস্যা এখানে ছিল: api.post('/logout/') ব্যবহার করলে লুপ হবে
     // ✅ সমাধান: সরাসরি axios.post ব্যবহার করুন অথবা সরাসরি রিডাইরেক্ট করুন
     try {
-      await axios.post('https://newsmartagent.com/api/logout/', {}, { withCredentials: true });
+      await axios.post('https://dev.newsmartagent.com/api/logout/', {}, { withCredentials: true });
     } catch (logoutErr) {
       console.log("Logout request failed, but we don't care, just redirecting.");
     }

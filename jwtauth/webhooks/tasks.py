@@ -28,6 +28,7 @@ from aiAgent.business_logic import logic_handler
 from celery.signals import after_setup_logger, after_setup_task_logger
 import logging.config
 from django.conf import settings
+from aiAgent.cache.client import get_redis_client
 
 @after_setup_logger.connect
 @after_setup_task_logger.connect
@@ -37,7 +38,7 @@ def setup_celery_logging(logger, **kwargs):
 
 logger = logging.getLogger(__name__)
 
-r = redis.Redis(host='newsmartagent-redis', port=6379, db=0)
+r = get_redis_client(db=0)
 
 
 
@@ -60,6 +61,8 @@ def process_ai_reply_task(self, data):
     sender_id = data.get('sender_id')
     page_id = data.get('page_id')
     request_type = data.get('type')
+    if not request_type:
+        request_type = 'messenger'
     text = data.get('comment_text') if request_type == 'facebook_comment' else data.get('message')
     msg_id = data.get('message_id')# Idempotency-র জন্য লাগবে
     incoming_ts = data.get('timestamp') # Zombie Killer
@@ -116,6 +119,21 @@ def process_ai_reply_task(self, data):
                     logger.info(f"🧬 CLUSTER MATCH FOUND for '{text[:30]}' -> Cluster: {cluster_id}")
                     print(f"🧬 CLUSTER MATCH FOUND for '{text[:30]}' -> Cluster: {cluster_id}")
             
+        if not cached_res:
+            from embedding.utils import get_gemini_embedding
+            # RAG কোয়েরি ফরম্যাট অনুযায়ী এম্বেডিং বানান
+            rag_query = f"{post_context} {text}" if (request_type == 'facebook_comment' and post_context) else text
+            query_vector = get_gemini_embedding(rag_query)
+            
+            if query_vector:
+                # ৩. ভেক্টর ক্যাশ চেক (Redis DB 7)
+                vector_hits = search_similar_vectors(page_id, query_vector, top_k=1)
+                if vector_hits and vector_hits[0]['score'] < 0.12: # ০.১২ থ্রেশহোল্ড (খুব ভালো মিল)
+                    similar_text = vector_hits[0]['text']
+                    cached_res = get_cached_reply(page_id, msg_text=similar_text)
+                    if cached_res:
+                        logger.info(f"🔮 VECTOR CACHE HIT! '{text[:20]}' matched with '{similar_text[:20]}'")
+            
         
         if cached_res:
             reply = cached_res.get('reply')
@@ -156,7 +174,7 @@ def process_ai_reply_task(self, data):
                 post_context = get_smart_post_context(data.get('post_id'), agent_config.access_token)
                 
             order_instr = get_order_instructions(agent_config.user)
-            sheet_ctx, extra_instr, query_vector = perform_rag_search(agent_config, text, post_context, order_instr )
+            sheet_ctx, extra_instr, query_vector = perform_rag_search(agent_config, text, post_context, order_instr, existing_vector=query_vector )
             full_prompt, history = build_ai_context(agent_config, sender_id, text, extra_instr, sheet_ctx)
             
             # AI কল (আপনার সেই সলিড ডিকশনারি লজিক সহ)
