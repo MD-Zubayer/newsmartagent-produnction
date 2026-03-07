@@ -1,0 +1,11 @@
+jwtauth/settings.py merge=ours
+
+# Docker/YML ফাইল রক্ষা করতে
+docker-compose.yml merge=ours
+nginx/nginx.conf merge=ours
+
+# Next.js এর নির্দিষ্ট ফাইল রক্ষা করতে
+nextjs/package.json merge=ours
+nextjs/.env.local merge=ours
+
+# path/to/folder/* merge=ours
