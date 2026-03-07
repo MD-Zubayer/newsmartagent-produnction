@@ -1,0 +1,33 @@
+
+0️⃣ Backup production volumes before restore
+🔹 Running: tar -czf /home/md-zubayer/newsmartagent/production/backup/files/restore_backup/media_volume_backup_2026-03-07_16-00-48.tar.gz -C /home/md-zubayer/newsmartagent/production/backup media_volume
+✅ Backup of /home/md-zubayer/newsmartagent/production/backup/media_volume saved as media_volume_backup_2026-03-07_16-00-48.tar.gz
+🔹 Running: tar -czf /home/md-zubayer/newsmartagent/production/backup/files/restore_backup/production_n8n_data_backup_2026-03-07_16-00-48.tar.gz -C /home/md-zubayer/newsmartagent/production/backup production_n8n_data
+✅ Backup of /home/md-zubayer/newsmartagent/production/backup/production_n8n_data saved as production_n8n_data_backup_2026-03-07_16-00-48.tar.gz
+
+1️⃣ Restoring Postgres
+🔹 Running: docker cp /home/md-zubayer/newsmartagent/production/backup/files/postgres_2026-03-07_02-00-02.dump newsmartagent-db:/dump.dump
+⏳ Waiting for Postgres container newsmartagent-db to be ready...
+✅ Postgres is ready!
+🔹 Running: docker exec -i newsmartagent-db pg_restore -U zubayer -d new_smart_db --no-owner --clean --if-exists /dump.dump || echo '⚠️ Warnings occurred'
+✅ Postgres restored
+
+2️⃣ Restoring Media
+🔹 Running: rm -rf /home/md-zubayer/newsmartagent/production/backup/media_volume/*
+🔹 Running: tar -xzf /home/md-zubayer/newsmartagent/production/backup/files/media_2026-03-05_22-58-45.tar.gz -C /home/md-zubayer/newsmartagent/production/backup
+✅ Media restored
+
+3️⃣ Preparing n8n for Postgres
+🔹 Running: rm -rf /home/md-zubayer/newsmartagent/production/backup/production_n8n_data/*
+✅ n8n volume cleaned. Will use Postgres on next start.
+
+4️⃣ Restoring Redis (live)
+🔹 Running: tar -xzf /home/md-zubayer/newsmartagent/production/backup/files/redis_2026-03-05_22-58-45.tar.gz -C /home/md-zubayer/newsmartagent/production/backup/files
+🔹 Running: docker cp /home/md-zubayer/newsmartagent/production/backup/files/dump.rdb newsmartagent-redis:/data/dump.rdb
+🔹 Running: docker restart newsmartagent-redis
+✅ Redis restored (dump.rdb)
+
+5️⃣ Cleaning up old backups
+
+✅ Full production backup & restore completed successfully!
+ℹ️ n8n will now start in Postgres mode, setup page will not appear.

@@ -60,8 +60,8 @@ services:
     build: ./nextjs
     container_name: newsmartagent-nextjs
     environment:
-      - NEXT_PUBLIC_BASE_URL=https://newsmartagent.com
-      - NEXT_PUBLIC_API_URL=https://newsmartagent.com/api
+      - NEXT_PUBLIC_BASE_URL=https://dev.newsmartagent.com
+      - NEXT_PUBLIC_API_URL=https://dev.newsmartagent.com/api
     restart: always
     depends_on:
       - backend
@@ -127,8 +127,8 @@ services:
     image: n8nio/n8n:latest
     container_name: newsmartagent-n8n
     environment:
-      N8N_HOST: n8n.newsmartagent.com
-      N8N_URL: https://n8n.newsmartagent.com
+      N8N_HOST: dev-n8n.newsmartagent.com
+      N8N_URL: https://dev-n8n.newsmartagent.com
       WEBHOOK_URL: https://n8n.newsmartagent.com
       N8N_TRUST_PROXY: "true"
       EXPLICIT_TRUST_PROXY: "true" # এটি মাস্ট যোগ করুন
@@ -173,7 +173,7 @@ services:
 
   cloudflare-tunnel:
     image: cloudflare/cloudflared:latest
-    container_name: newsmartagent-cloudflare-tunnel
+    container_name: dev-tunnel
     user: root
     restart: always
     dns:
@@ -182,10 +182,10 @@ services:
       - smart-network
     volumes:
       - /home/md-zubayer/.cloudflared:/etc/cloudflared:ro
-    command: tunnel --config /etc/cloudflared/config-docker.yml run
+    command: tunnel --config /etc/cloudflared/config.yml run
     depends_on:
       - nginx
-
+ 
 
 volumes:
   redis_data:
