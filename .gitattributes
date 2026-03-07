@@ -1,0 +1,13 @@
+# Django settings রক্ষা করতে
+jwtauth/settings.py merge=ours
+
+# Docker এবং Nginx কনফিগ ফাইল রক্ষা করতে
+docker-compose.yml merge=ours
+nginx/nginx.conf merge=ours
+
+# Next.js এর নির্দিষ্ট ফাইল ও এনভায়রনমেন্ট রক্ষা করতে
+nextjs/package.json merge=ours
+nextjs/.env.local merge=ours
+
+# Next.js এর নির্দিষ্ট ফোল্ডারের সব ফাইল রক্ষা করতে
+nextjs/app/lib/* merge=ours
