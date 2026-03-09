@@ -12,7 +12,7 @@ import uuid
 import phonenumbers
 from phonenumbers import geocoder
 from .validators import validate_international_phone
-
+from aiAgent.models import AIProviderModel
 # Create your models here.
 
 
@@ -141,6 +141,7 @@ class Offer(models.Model):
     ]
     
     allowed_platforms = models.ManyToManyField(Platform, related_name='offers')
+    allowed_models = models.ManyToManyField('aiAgent.AIProviderModel', related_name='offers', blank=True)
     tokens = models.PositiveIntegerField()
     shorthand_choices = models.CharField(max_length=10, blank=True, null=True)
     name = models.CharField(blank=True, null=True)

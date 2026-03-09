@@ -16,6 +16,8 @@ from django.http import JsonResponse
 from aiAgent.cache.ranking import get_top_message
 from aiAgent.cache.hybrid_similarity import r as redis_conn
 import json
+from users.models import Subscription
+from .serializers import AIProviderModelSerializer
 
 
 # Create your views here.
@@ -50,7 +52,38 @@ class AgentAIViewSet(viewsets.ModelViewSet):
         """
         return AgentAI.objects.filter(user=self.request.user).order_by('-created_at')
 
-    
+
+
+class UserAvailableModelsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # ১. ইউজারের লেটেস্ট একটিভ সাবস্ক্রিপশন এবং তার অফারটি বের করা
+        # prefetch_related ব্যবহার করছি যাতে এক কোয়েরিতেই allowed_models চলে আসে
+        active_sub = Subscription.objects.filter(
+            profile__user=request.user, 
+            is_active=True
+        ).select_related('offer').prefetch_related('offer__allowed_models').order_by('-created_at').first()
+
+        # ২. যদি সাবস্ক্রিপশন না থাকে
+        if not active_sub or not active_sub.offer:
+            return Response({
+                "status": "no_active_plan",
+                "message": "You don't have any active subscription. Please purchase a plan.",
+                "models": []
+            }, status=200)
+
+        # ৩. অফারের আন্ডারে থাকা একটিভ মডেলগুলো নেওয়া
+        allowed_models = active_sub.offer.allowed_models.filter(is_active=True)
+        
+        # ৪. সিরিয়ালাইজ করে ডেটা পাঠানো
+        serializer = AIProviderModelSerializer(allowed_models, many=True)
+        
+        return Response({
+            "status": "success",
+            "plan_name": active_sub.offer.name,
+            "models": serializer.data
+        })
 
 class TokenUsageAnalyticsView(APIView):
     permission_classes = [IsAuthenticated]

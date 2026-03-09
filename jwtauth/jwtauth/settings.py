@@ -63,7 +63,7 @@ INSTALLED_APPS = [
     'payments',
     'n8n',
     'webhooks',
-    'aiAgent',
+
     'chat',
     'datasheet',
     'openwa',
@@ -73,7 +73,8 @@ INSTALLED_APPS = [
     'embedding',
     'django.contrib.postgres',
     'settings',
-    'man_agent'
+    'man_agent',
+    "aiAgent.apps.AiagentConfig",
     
 
     
@@ -345,16 +346,20 @@ LOGGING = {
 
 
 
+
 from django.utils.translation import gettext_lazy as _
 
 UNFOLD = {
+    # সাইটের টাইটেল ও হেডার
     "SITE_TITLE": "New Smart Agent Admin",
     "SITE_HEADER": "New Smart Agent",
-    "SITE_SYMBOL": "smart_toy",  # Material Symbols থেকে রোবট আইকন
+    "SITE_SYMBOL": "smart_toy",  # Material icon: smart_toy
+
+    # সাইডবারের history & view on site
     "SHOW_HISTORY": True,
     "SHOW_VIEW_ON_SITE": True,
 
-    # কালার প্যালেট (একটু ডিপ পার্পল এবং মডার্ন লুকের জন্য)
+    # কালার প্যালেট: primary color + dark mode ready
     "COLORS": {
         "primary": {
             "50": "250 245 255",
@@ -362,7 +367,7 @@ UNFOLD = {
             "200": "233 213 255",
             "300": "216 180 254",
             "400": "192 132 252",
-            "500": "147 51 234",  # Main Brand Color (Rich Purple)
+            "500": "147 51 234",
             "600": "126 34 206",
             "700": "107 33 168",
             "800": "88 28 135",
@@ -371,47 +376,30 @@ UNFOLD = {
         },
     },
 
-    # সাইডবার এবং নেভিগেশন কাস্টমাইজেশন
+    # সাইডবার কাস্টমাইজেশন
     "SIDEBAR": {
-        "show_search": True,  # মেনু সার্চ করার জন্য
+        "show_search": True,
         "show_all_applications": True,
         "navigation": [
             {
                 "title": _("Main Navigation"),
                 "separator": True,
                 "items": [
-                    {
-                        "title": _("Dashboard"),
-                        "icon": "dashboard",
-                        "link": "/admin/",
-                    },
-                    {
-                        "title": _("Users & Permissions"),
-                        "icon": "group",
-                        "link": "/admin/users/user/",
-                    },
+                    {"title": _("Dashboard"), "icon": "dashboard", "link": "/admin/"},
+                    {"title": _("Users & Permissions"), "icon": "group", "link": "/admin/users/user/"},
                 ],
             },
             {
                 "title": _("AI & Automation"),
                 "separator": True,
                 "items": [
-                    {
-                        "title": _("AI Agents"),
-                        "icon": "psychology",
-                        "link": "/admin/aiAgent/aiagent/",
-                    },
-                    {
-                        "title": _("Workflows (n8n)"),
-                        "icon": "account_tree",
-                        "link": "https://dev-n8n.newsmartagent.com",
-                        "external": True, # সরাসরি n8n এ যাওয়ার জন্য
-                    },
+                    {"title": _("AI Agents"), "icon": "psychology", "link": "/admin/aiAgent/aiagent/"},
+                    {"title": _("Workflows (n8n)"), "icon": "account_tree", "link": "https://dev-n8n.newsmartagent.com", "external": True},
                 ],
             },
         ],
     },
 
-    # ড্যাশবোর্ডে স্ট্যাটাস বা গ্রাফ দেখানোর জন্য (যদি কাস্টম ভিউ থাকে)
-    "DASHBOARD_CALLBACK": "jwtauth.dashboard.dashboard_callback", # ঐচ্ছিক
+    # কোনো custom component ব্যবহার করবো না
+    "COMPONENTS": {},
 }

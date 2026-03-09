@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from aiAgent.models import AgentAI, TokenUsageLog
+from aiAgent.models import AgentAI, TokenUsageLog, AIProviderModel
 
 
 
@@ -32,7 +32,10 @@ class AgentAIListSerializer(serializers.ModelSerializer):
 
 
 
-
+class AIProviderModelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AIProviderModel # আপনার নতুন তৈরি করা মডেল
+        fields = ['id', 'name', 'model_id', 'provider']
 
 
 

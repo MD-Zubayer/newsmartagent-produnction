@@ -2,13 +2,24 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 from django_cryptography.fields import encrypt
-from django.contrib.auth import get_user_model
 
-User = get_user_model()
 
 
 # Create your models here.
+class AIProviderModel(models.Model):
+    PROVIDER_CHOICES = [
+        ('gemini', 'Google Gemini'),
+        ('openai', 'OpenAI'),
+        ('grok', 'xAI Grok'),
+        ('openrouter', 'OpenRouter'),
+    ]
+    name = models.CharField(max_length=100, help_text="e.g. GPT-4o Mini, Gemini Pro")
+    model_id = models.CharField(max_length=100, help_text="e.g. gpt-4o-mini, gemini-2.0-flash")
+    provider = models.CharField(max_length=20, choices=PROVIDER_CHOICES)
+    is_active = models.BooleanField(default=True)
 
+    def __str__(self):
+        return f"{self.get_provider_display()} - {self.name}"
 
 class AgentAI(models.Model):
 
@@ -30,7 +41,12 @@ class AgentAI(models.Model):
     name = models.CharField(max_length=120, null=True, blank=True)
     platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES)
     ai_agent_type = models.CharField(max_length=20, choices=AI_AGENT_CATEGORIES, default='business', help_text="এই AI এজেন্টটি মূলত কোন কাজের জন্য ব্যবহার করা হবে?")
-
+    selected_model = models.ForeignKey(
+        AIProviderModel, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True
+    )
     page_id = models.CharField(max_length=100, unique=True, db_index=True, blank=True)
 
     access_token = encrypt(models.TextField())
@@ -86,7 +102,7 @@ class MissingRequirement(models.Model):
 
 class TokenUsageLog(models.Model):
     user = models.ForeignKey(
-        User, on_delete=models.SET_NULL,
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='token_usages'
@@ -129,7 +145,7 @@ class TokenUsageLog(models.Model):
 
 
 class DashboardAILog(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE,related_name='dashboard_ai_logs')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,related_name='dashboard_ai_logs')
     pathname = models.CharField(max_length=255)
     question = models.TextField()
     answer = models.TextField()
@@ -143,3 +159,4 @@ class DashboardAILog(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.pathname} - {self.created_at}"
+

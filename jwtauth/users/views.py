@@ -381,12 +381,15 @@ class OfferViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         user = self.request.user
 
-        queryset = Offer.objects.filter(is_active=True).prefetch_related('allowed_platforms')
+        queryset = Offer.objects.filter(is_active=True).prefetch_related('allowed_platforms', 'allowed_models')
 
         if user.created_by != 'agent':
             queryset = queryset.filter(target_audience='all')
         
         return queryset
+
+
+
 
 
 class SubscriptionViewSet(viewsets.ModelViewSet):
