@@ -9,3 +9,4 @@ nextjs/package.json merge=ours
 nextjs/.env.local merge=ours
 nextjs/app/lib/* merge=ours
 # path/to/folder/* merge=ours
+.gitattributes merge=ours

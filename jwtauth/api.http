@@ -1,12 +1,26 @@
 
 ###
-GET http://localhost/api/offers/
+GET http://dev.newsmartagent.com/api/AgentAI/available-models/
 Content-Type: application/json
-Cookie: access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzcxMjIzMTEyLCJpYXQiOjE3NzEyMTk1MTIsImp0aSI6IjRkNWI3YjdhZDBlMDRkNTg4YmNkYzFhMDFmNWRiMWFiIiwidXNlcl9pZCI6IjQ2In0.GnFPcrefuuPdaLebYRRyo9WBE--YRKqxhly7lyLdEv4
+Cookie: access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzczMDU4NjA1LCJpYXQiOjE3NzMwNTUwMDUsImp0aSI6ImRmZWM5NGRlOWY4MTRjNWJiYTdlNmM3NmNkYzBhYWViIiwidXNlcl9pZCI6IjIifQ.6_onmhZWlnf--cJpbSBgS_kgFJ2YK2jVStzx-DJOVhA
+
+{
+    'email': 'junayed75489@gmail.com',
+    'password': '1234'
+}
+
+
+
+###
+GET http://dev.newsmartagent.com/api/offers/7/
+Content-Type: application/json
+Cookie: access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzczMDU4NjA1LCJpYXQiOjE3NzMwNTUwMDUsImp0aSI6ImRmZWM5NGRlOWY4MTRjNWJiYTdlNmM3NmNkYzBhYWViIiwidXNlcl9pZCI6IjIifQ.6_onmhZWlnf--cJpbSBgS_kgFJ2YK2jVStzx-DJOVhA
+
+
 
 
 {
-    'email': 'newpart444@gmail.com',
+    'email': 'junayed75489@gmail.com',
     'password': '1234'
 }
 

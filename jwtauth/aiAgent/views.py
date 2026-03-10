@@ -61,7 +61,7 @@ class UserAvailableModelsView(APIView):
         # ১. ইউজারের লেটেস্ট একটিভ সাবস্ক্রিপশন এবং তার অফারটি বের করা
         # prefetch_related ব্যবহার করছি যাতে এক কোয়েরিতেই allowed_models চলে আসে
         active_sub = Subscription.objects.filter(
-            profile__user=request.user, 
+            profile__user=request.user,
             is_active=True
         ).select_related('offer').prefetch_related('offer__allowed_models').order_by('-created_at').first()
 
@@ -78,7 +78,7 @@ class UserAvailableModelsView(APIView):
         
         # ৪. সিরিয়ালাইজ করে ডেটা পাঠানো
         serializer = AIProviderModelSerializer(allowed_models, many=True)
-        
+
         return Response({
             "status": "success",
             "plan_name": active_sub.offer.name,

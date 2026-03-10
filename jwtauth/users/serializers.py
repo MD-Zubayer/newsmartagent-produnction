@@ -5,7 +5,7 @@ from rest_framework_simplejwt.exceptions import InvalidToken
 from users.models import CustomerOrder, OrderForm
 from django.db import transaction
 from man_agent.models import ManAgentConfig, ReferralRelation
-
+from aiAgent.serializers import AIProviderModelSerializer
 #  Custom regresh token serializer
 class CookieTokenRefreshSerializer(TokenRefreshSerializer):
     refresh = None   # remove refresh from body
@@ -162,6 +162,8 @@ class UserRegisterSerializer(serializers.ModelSerializer[User]):
 
 
 class OfferSerializer(serializers.ModelSerializer):
+    allowed_models = AIProviderModelSerializer(many=True, read_only=True)
+    
     class Meta:
         model = Offer
         fields = ["id", "name","allowed_platforms", "allowed_models", "tokens", "description", "price", "duration_days", "is_active", 'target_audience']

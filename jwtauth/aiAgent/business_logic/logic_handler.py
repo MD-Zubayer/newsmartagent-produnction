@@ -146,13 +146,36 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
         extra_instruction = f" Answer politely. If data missing, ask to wait. {order_instruction}"
     return sheet_context, extra_instruction, query_vector
     
-def deduct_user_tokens(user_profile, total_tokens):
+def deduct_user_tokens(user_profile, total_tokens, ai_model_name):
     if total_tokens > 0:
         try:
-            user_profile.word_balance = F('word_balance') - total_tokens
-            user_profile.save(update_fields=['word_balance'])
-            user_profile.refresh_from_db()
-            logger.info(f"Deducted {total_tokens} tokens. Remaining: {user_profile.word_balance}")
+            from users.models import Subscription
+            from django.utils import timezone
+            
+            # Find an active subscription that has this model and has remaining tokens
+            active_sub = Subscription.objects.filter(
+                profile=user_profile,
+                is_active=True,
+                end_date__gt=timezone.now(),
+                remaining_tokens__gt=0,
+                offer__allowed_models__model_id=ai_model_name
+            ).order_by('end_date').first()
+
+            if active_sub:
+                new_balance = active_sub.remaining_tokens - total_tokens
+                if new_balance <= 0:
+                    active_sub.remaining_tokens = 0
+                    active_sub.is_active = False
+                else:
+                    active_sub.remaining_tokens = new_balance
+                active_sub.save()
+                logger.info(f"Deducted {total_tokens} tokens from Sub {active_sub.id}. Remaining: {active_sub.remaining_tokens}")
+            else:
+                # Fallback to old global balance if no specific subscription exists
+                user_profile.word_balance = F('word_balance') - total_tokens
+                user_profile.save(update_fields=['word_balance'])
+                user_profile.refresh_from_db()
+                logger.info(f"Deducted {total_tokens} global tokens. Remaining: {user_profile.word_balance}")
         except Exception as e:
             logger.error(f"Token Deduction Error: {e}")
 

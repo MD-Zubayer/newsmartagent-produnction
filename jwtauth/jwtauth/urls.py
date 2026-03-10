@@ -7,7 +7,7 @@ from rest_framework.routers import DefaultRouter
 from users.views import (
     UserViewSet, LoginView, LogoutView, ForgotPasswordView, 
     ResetPasswordView, OfferViewSet, SubscriptionViewSet, 
-    CookieTokenRefreshView, CookieTokenVerifyView, OrderSubmitView, NSABalanceTransferView
+    CookieTokenRefreshView, CookieTokenVerifyView, OrderSubmitView, NSABalanceTransferView, SendPaymentOTPView
 )
 from payments.views import PaymentViewSet
 from webhooks import views as webhook_views
@@ -30,7 +30,7 @@ router.register(r'man-agent-config', ManAgentConfigViewSet, basename='man-agent-
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('allauth.urls')),
-
+    path('api/send-payment-otp/', SendPaymentOTPView.as_view(), name='send-payment-otp'),
     path('api/', include(router.urls)),
     path('api/', include('chat.urls')),
     path('api/', include('payments.urls')),

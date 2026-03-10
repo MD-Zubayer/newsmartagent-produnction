@@ -115,6 +115,8 @@ class Profile(models.Model):
     word_balance = models.PositiveBigIntegerField(default=0)
     commission_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, blank=True, null=True)
     acount_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    otp_code = models.CharField(max_length=6, blank=True, null=True)
+    otp_created_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -213,7 +215,7 @@ class Payment(models.Model):
                     profile.save()
                     from .models import Subscription
                     #<!---------------------- If you have a previous active subscription, deactivate it (since the token has gone to the profile) ----------------!>
-                    Subscription.objects.filter(profile=profile, is_active=True).update(is_active=False)
+                    # Subscription.objects.filter(profile=profile, is_active=True).update(is_active=False)
                     #<! ----------------- Create subscription for new term ---------------!>
                     Subscription.objects.create(
                         profile=profile,
@@ -259,6 +261,7 @@ class Subscription(models.Model):
     start_date = models.DateTimeField(default=datetime.now)
     end_date = models.DateTimeField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
+    remaining_tokens = models.PositiveBigIntegerField(default=0) # Track tokens separately per subscription
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
