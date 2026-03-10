@@ -28,7 +28,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-i6it!d42&fu(j0*&)*53ymr5k+7osf^r__i$+@vds)a#7r-&^^'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
 ALLOWED_HOSTS = ['newsmartagent.com', 'api.newsmartagent.com', 'n8n.newsmartagent.com', 'newsmartagent-django', 'newsmartagent-n8n', 'localhost','127.0.0.1', 'monitor.newsmartagent.com', 'dev.newsmartagent.com', 'dev-api.newsmartagent.com', 'dev.newsmartagent.com', 'dev-n8n.newsmartagent.com' ]
 CSRF_TRUSTED_ORIGINS = ['https://newsmartagent.com', 'https://api.newsmartagent.com', 'https://n8n.newsmartagent.com', 'http://newsmartagent-django:8000', 'https://monitor.newsmartagent.com', 'https://dev.newsmartagent.com', 'https://dev-api.newsmartagent.com', 'https://dev-n8n.newsmartagent.com']
@@ -37,6 +37,15 @@ USE_X_FORWARDED_HOST = True
 # Application definition
 
 INSTALLED_APPS = [
+    "unfold",  # before django.contrib.admin
+    "unfold.contrib.filters",  # optional, if special filters are needed
+    "unfold.contrib.forms",  # optional, if special form elements are needed
+    "unfold.contrib.inlines",  # optional, if special inlines are needed
+    "unfold.contrib.import_export",  # optional, if django-import-export package is used
+    "unfold.contrib.guardian",  # optional, if django-guardian package is used
+    "unfold.contrib.simple_history",  # optional, if django-simple-history package is used
+    "unfold.contrib.location_field",  # optional, if django-location-field package is used
+    "unfold.contrib.constance",  # optional, if django-constance package is used
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -54,7 +63,7 @@ INSTALLED_APPS = [
     'payments',
     'n8n',
     'webhooks',
-    'aiAgent',
+
     'chat',
     'datasheet',
     'openwa',
@@ -64,7 +73,8 @@ INSTALLED_APPS = [
     'embedding',
     'django.contrib.postgres',
     'settings',
-    'man_agent'
+    'man_agent',
+    "aiAgent.apps.AiagentConfig",
     
 
     
@@ -91,7 +101,10 @@ ROOT_URLCONF = 'jwtauth.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],
+        'DIRS': [
+            os.path.join(BASE_DIR, 'templates'), 
+            os.path.join(BASE_DIR, 'jwtauth', 'templates'), # এটি যোগ করুন
+        ],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -329,4 +342,64 @@ LOGGING = {
             "propagate": True, # যাতে সাব-মডিউলের লগ মেইন লগারে পৌঁছায়
         },
     },
+}
+
+
+
+
+from django.utils.translation import gettext_lazy as _
+
+UNFOLD = {
+    # সাইটের টাইটেল ও হেডার
+    "SITE_TITLE": "New Smart Agent Admin",
+    "SITE_HEADER": "New Smart Agent",
+    "SITE_SYMBOL": "smart_toy",  # Material icon: smart_toy
+
+    # সাইডবারের history & view on site
+    "SHOW_HISTORY": True,
+    "SHOW_VIEW_ON_SITE": True,
+
+    # কালার প্যালেট: primary color + dark mode ready
+    "COLORS": {
+        "primary": {
+            "50": "250 245 255",
+            "100": "243 232 255",
+            "200": "233 213 255",
+            "300": "216 180 254",
+            "400": "192 132 252",
+            "500": "147 51 234",
+            "600": "126 34 206",
+            "700": "107 33 168",
+            "800": "88 28 135",
+            "900": "76 29 149",
+            "950": "46 16 101",
+        },
+    },
+
+    # সাইডবার কাস্টমাইজেশন
+    "SIDEBAR": {
+        "show_search": True,
+        "show_all_applications": True,
+        "navigation": [
+            {
+                "title": _("Main Navigation"),
+                "separator": True,
+                "items": [
+                    {"title": _("Dashboard"), "icon": "dashboard", "link": "/admin/"},
+                    {"title": _("Users & Permissions"), "icon": "group", "link": "/admin/users/user/"},
+                ],
+            },
+            {
+                "title": _("AI & Automation"),
+                "separator": True,
+                "items": [
+                    {"title": _("AI Agents"), "icon": "psychology", "link": "/admin/aiAgent/aiagent/"},
+                    {"title": _("Workflows (n8n)"), "icon": "account_tree", "link": "https://dev-n8n.newsmartagent.com", "external": True},
+                ],
+            },
+        ],
+    },
+
+    # কোনো custom component ব্যবহার করবো না
+    "COMPONENTS": {},
 }

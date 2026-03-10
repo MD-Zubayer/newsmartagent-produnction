@@ -1,4 +1,6 @@
+# aiAgent/admin.py
 from django.contrib import admin
+from unfold.admin import ModelAdmin
 from .models import AgentAI,MissingRequirement
 from django.utils.html import format_html
 from .models import UserMemory, AgentAI
@@ -6,14 +8,43 @@ import json
 from django.db.models import Sum, Count, Avg
 from django.utils.html import format_html
 from .models import TokenUsageLog
+from .models import AIProviderModel
+
+    
 
 
 # Register your models here.
 
+@admin.register(AIProviderModel)
+class AIProviderModelAdmin(admin.ModelAdmin):
+    # অ্যাডমিন লিস্টে যা যা দেখা যাবে
+    list_display = ('id', 'name', 'provider', 'model_id', 'is_active')
+    
+    # ডানপাশে ফিল্টার অপশন (প্রোভাইডার বা একটিভ স্ট্যাটাস অনুযায়ী খোঁজার জন্য)
+    list_filter = ('provider', 'is_active')
+    
+    # সার্চ বক্স (নাম বা মডেল আইডি দিয়ে সার্চ করার জন্য)
+    search_fields = ('name', 'model_id')
+    
+    # লিস্ট ভিউতেই যেন একটিভ/ইনএকটিভ করা যায়
+    list_editable = ('is_active',)
+    
+    # প্রোভাইডার অনুযায়ী গ্রুপ করে দেখানোর জন্য অর্ডারিং
+    ordering = ('provider', 'name')
+
+    # অ্যাডমিন প্যানেলে একটু সুন্দর দেখানোর জন্য ফিল্ডসেট (অপশনাল)
+    fieldsets = (
+        ('General Information', {
+            'fields': ('name', 'model_id', 'provider')
+        }),
+        ('Status', {
+            'fields': ('is_active',)
+        }),
+    )
 
 
 @admin.register(AgentAI)
-class AgentAIAdmin(admin.ModelAdmin):
+class AgentAIAdmin(ModelAdmin):
     list_display = [ 'id', 'name', 'user', 'platform', 'ai_agent_type', 'page_id', 'is_active','custom_keywords', 'created_at', 'access_token', 'webhook_secret', 'token_expires_at']
     list_filter = ['platform', 'is_active', 'user', 'ai_agent_type',]
     search_fields = ['name', 'page_id', 'user__username']
@@ -27,7 +58,7 @@ class AgentAIAdmin(admin.ModelAdmin):
 
 
 @admin.register(MissingRequirement)
-class MissingRequirementAdmin(admin.ModelAdmin):
+class MissingRequirementAdmin(ModelAdmin):
     list_display = [
         'question',
         'sender_id',
@@ -73,7 +104,7 @@ class MissingRequirementAdmin(admin.ModelAdmin):
 
 
 @admin.register(UserMemory)
-class UserMemoryAdmin(admin.ModelAdmin):
+class UserMemoryAdmin(ModelAdmin):
     list_display = ('ai_agent', 'sender_id', 'updated_at', 'short_data_preview')
     list_filter = ('ai_agent', 'updated_at')
     search_fields = ('sender_id',)
@@ -106,7 +137,7 @@ from django.contrib import admin
 from .models import TokenUsageLog
 
 @admin.register(TokenUsageLog)
-class TokenUsageLogAdmin(admin.ModelAdmin):
+class TokenUsageLogAdmin(ModelAdmin):
     # যে কলামগুলো অ্যাডমিন প্যানেলে দেখাবে
     list_display = (
         'short_user_info', 
@@ -153,7 +184,7 @@ from django.contrib import admin
 from .models import DashboardAILog
 
 @admin.register(DashboardAILog)
-class DashboardAILogAdmin(admin.ModelAdmin):
+class DashboardAILogAdmin(ModelAdmin):
     # লিস্ট ভিউতে যা যা দেখাবে
     list_display = ('user', 'pathname', 'question_summary', 'answer', 'input_tokens', 'output_tokens', 'total_tokens', 'created_at')
     
@@ -177,3 +208,6 @@ class DashboardAILogAdmin(admin.ModelAdmin):
     # নতুন ডাটা এন্ট্রি করার বাটন হাইড করা (যেহেতু এটি একটি লগ টেবিল)
     def has_add_permission(self, request):
         return False
+    
+    
+    

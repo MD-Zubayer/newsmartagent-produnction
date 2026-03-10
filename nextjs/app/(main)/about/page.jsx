@@ -11,7 +11,31 @@ import {
 } from "@heroicons/react/24/outline";
 
 export default function AboutPage() {
+
+    const organizationSchema = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "New Smart Agent",
+    url: "https://newsmartagent.com",
+    logo: "https://newsmartagent.com/logo.png",
+    description:
+      "New Smart Agent is an AI automation platform for Facebook pages, messenger automation, and smart customer management.",
+    sameAs: [
+      "https://facebook.com/newsmartagent",
+      "https://youtube.com/@newsmartagent"
+    ]
+  };
+
+
   return (
+    <>
+    <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(organizationSchema),
+        }}
+      />
+
     <section className="min-h-screen bg-white">
 
       {/* --- Hero Section --- */}
@@ -157,6 +181,7 @@ export default function AboutPage() {
         </div>
       </div>
     </section>
+    </>
   );
 }
 
@@ -171,5 +196,6 @@ function Feature({ Icon, title, text }) {
       <h3 className="text-xl font-black text-gray-900 mb-3">{title}</h3>
       <p className="text-gray-500 text-sm leading-relaxed font-medium">{text}</p>
     </div>
+    
   );
 }

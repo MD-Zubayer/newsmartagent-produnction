@@ -84,3 +84,4 @@ channels-redis==4.3.0
 phonenumbers
 pytz
 rapidfuzz
+django-unfold

@@ -27,6 +27,14 @@ from man_agent.utils import distribute_agent_commission
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
 from django.db.models import Q
+import random
+from django.core.mail import send_mail
+
+
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+
+
 # Create your views here.
 # Custom refresh token serializers, this set token to cookies after refresh
 
@@ -381,12 +389,15 @@ class OfferViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         user = self.request.user
 
-        queryset = Offer.objects.filter(is_active=True).prefetch_related('allowed_platforms')
+        queryset = Offer.objects.filter(is_active=True).prefetch_related('allowed_platforms', 'allowed_models')
 
         if user.created_by != 'agent':
             queryset = queryset.filter(target_audience='all')
         
         return queryset
+
+
+
 
 
 class SubscriptionViewSet(viewsets.ModelViewSet):
@@ -539,3 +550,161 @@ class NSABalanceTransferView(APIView):
 
         except Exception as e:
             return Response({"error": "There was a problem with the server. Please try again."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        
+        
+        
+class SendPaymentOTPView(APIView):
+    authentication_classes = [CookieJWTAuthentication] 
+    permission_classes = [IsAuthenticated]
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+    def post(self, request):
+        user = request.user
+        profile = user.profile
+
+        otp = str(random.randint(100000, 999999))
+
+        profile.otp_code = otp
+        profile.otp_created_at = now()
+        profile.save()
+
+        
+        subject = "Payment Verification Code - New Smart Agent"
+        message = f"Hello {getattr(user, 'name', '') or getattr(user, 'email', '')},\n\nYour OTP for payment verification is: {otp}.\n\nThis verify code will expire in 5 minutes.\n\nThank you,\nNew Smart Agent Team"
+        
+        html_message = f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body {{
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    background-color: #f3f4f6;
+                    margin: 0;
+                    padding: 0;
+                    color: #1f2937;
+                }}
+                .email-container {{
+                    max-width: 600px;
+                    margin: 40px auto;
+                    background-color: #ffffff;
+                    border-radius: 12px;
+                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+                    overflow: hidden;
+                    border: 1px solid #e5e7eb;
+                }}
+                .header {{
+                    background: linear-gradient(135deg, #111827 0%, #374151 100%);
+                    padding: 24px 20px;
+                    text-align: center;
+                }}
+                .header h1 {{
+                    color: #ffffff;
+                    margin: 0;
+                    font-size: 24px;
+                    font-weight: 700;
+                    letter-spacing: 0.5px;
+                }}
+                .content {{
+                    padding: 40px 32px;
+                    text-align: center;
+                }}
+                .content h2 {{
+                    color: #111827;
+                    margin-top: 0;
+                    font-size: 22px;
+                    margin-bottom: 16px;
+                }}
+                .content p {{
+                    font-size: 16px;
+                    line-height: 1.6;
+                    color: #4b5563;
+                    margin-bottom: 24px;
+                }}
+                .otp-box {{
+                    display: inline-block;
+                    background-color: #f8fafc;
+                    border: 2px dashed #cbd5e1;
+                    border-radius: 12px;
+                    padding: 24px 48px;
+                    margin-bottom: 24px;
+                }}
+                .otp-code {{
+                    font-size: 36px;
+                    font-weight: 800;
+                    color: #0f172a;
+                    letter-spacing: 8px;
+                    margin: 0;
+                    line-height: 1;
+                }}
+                .security-notice {{
+                    background-color: #fef2f2;
+                    border-left: 4px solid #ef4444;
+                    padding: 16px;
+                    text-align: left;
+                    border-radius: 0 8px 8px 0;
+                    margin-top: 8px;
+                }}
+                .security-notice p {{
+                    margin: 0;
+                    color: #991b1b;
+                    font-size: 14px;
+                    font-weight: 500;
+                }}
+                .footer {{
+                    background-color: #f9fafb;
+                    padding: 24px;
+                    text-align: center;
+                    border-top: 1px solid #e5e7eb;
+                }}
+                .footer p {{
+                    font-size: 13px;
+                    color: #6b7280;
+                    margin: 4px 0;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="email-container">
+                <div class="header">
+                    <h1>New Smart Agent</h1>
+                </div>
+                <div class="content">
+                    <h2>Payment Security Verification</h2>
+                    <p>Hello <strong>{getattr(user, 'name', '') or getattr(user, 'email', '')}</strong>,</p>
+                    <p>We received a request to verify your payment. Please use the following One-Time Password (OTP) to complete your transaction:</p>
+                    
+                    <div class="otp-box">
+                        <div class="otp-code">{otp}</div>
+                    </div>
+                    
+                    <div class="security-notice">
+                        <p>⚠️ <strong>Security Important:</strong> This code is valid for <strong>5 minutes</strong>. Never share this code with anyone. Our staff will never ask for this code.</p>
+                    </div>
+                </div>
+                <div class="footer">
+                    <p>If you didn't request this verification, please secure your account immediately or contact support.</p>
+                    <p>&copy; {now().year} New Smart Agent. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        from_email = settings.EMAIL_HOST_USER
+        
+        try:
+            send_mail(
+                subject=subject,
+                message=message,
+                from_email=from_email,
+                recipient_list=[user.email],
+                html_message=html_message
+            )
+            return Response({"message": "OTP sent successfully to your email."})
+        except Exception as e:
+            return Response({"error": "Failed to send email."}, status=500)

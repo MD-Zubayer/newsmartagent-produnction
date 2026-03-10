@@ -19,15 +19,66 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+
+
+
+
 export const metadata = {
-  title: "new smart agent",
-  description: "A 'New Smart Agent' AI system is launching soon to automate business customer replies. It will manage interactions across Facebook, WhatsApp, Instagram, and Telegram. Key features include no-code setup, multi-platform support, and 24/7 AI assistance.",
+  title: {
+    default: "New Smart Agent - AI Automation Platform",
+    template: "%s | New Smart Agent",
+  },
+  description:
+    "New Smart Agent is an AI automation platform that automatically replies to Facebook messages, comments, and manages customer orders 24/7.",
   icons: {
     icon: "/new-smart-agent.png"
-  }
+  },
+  keywords: [
+    "AI Automation",
+    "Facebook Auto Reply",
+    "Messenger Automation",
+    "AI Chatbot",
+    "Business Automation",
+    "New Smart Agent"
+  ],
+  metadataBase: new URL("https://newsmartagent.com"),
+
+  alternates: {
+    canonical: "/",
+  },
+
+  openGraph: {
+    title: "New Smart Agent - AI Automation Platform",
+    description:
+      "Automate Facebook replies, manage customers, and collect orders with AI.",
+    url: "https://newsmartagent.com",
+    siteName: "New Smart Agent",
+    locale: "en_US",
+    type: "website",
+  },
+
+  twitter: {
+    card: "summary_large_image",
+    title: "New Smart Agent",
+    description:
+      "AI automation platform for Facebook pages and customer management.",
+  },
+
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
+
 export default function RootLayout({ children }) {
+ const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: "New Smart Agent",
+    url: "https://newsmartagent.com",
+    applicationCategory: "BusinessApplication",
+  };
 
 
 
@@ -36,7 +87,12 @@ export default function RootLayout({ children }) {
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(structuredData),
+          }}
+        />
         
         {children}
         <MessengerButton />

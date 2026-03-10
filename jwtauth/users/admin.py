@@ -8,7 +8,7 @@ from .models import OrderForm, CustomerOrder, EmailVerificationToken
 
 from users.forms import UserAdminChangeForm, UserAdminCreationForm
 from .models import User, Profile, Payment, Offer, Subscription, Platform, NSATransfer
-
+from unfold.admin import ModelAdmin
 # Force Django Admin to use allauth login if enabled
 if settings.DJANGO_ADMIN_FORCE_ALLAUTH:
     admin.autodiscover()
@@ -77,13 +77,13 @@ class UserAdmin(auth_admin.UserAdmin):
 
 # Profile Admin
 @admin.register(Profile)
-class ProfileAdmin(admin.ModelAdmin):
+class ProfileAdmin(ModelAdmin):
     list_display = ('id', 'user', 'id_type','word_balance', 'unique_id', 'commission_balance', 'acount_balance', 'created_at', 'updated_at')
     search_fields = ('user__email', 'unique_id')
     list_filter = ('id_type',)
 
 @admin.register(Platform)
-class PlatformAdmin(admin.ModelAdmin):
+class PlatformAdmin(ModelAdmin):
     list_display = ['name', 'is_active', 'offer_count']
     list_filter = ['is_active']
     search_fields = ['name']
@@ -95,7 +95,7 @@ class PlatformAdmin(admin.ModelAdmin):
 
 # Payment Admin
 @admin.register(Payment)
-class PaymentAdmin(admin.ModelAdmin):
+class PaymentAdmin(ModelAdmin):
     list_display = ('id', 'profile','offer',  'amount', 'status', 'created_at')
     search_fields = ('profile__user__email',)
     list_filter = ('status',)
@@ -109,17 +109,24 @@ class PlatformInline(admin.TabularInline):
 
 
 @admin.register(Offer)
-class OfferAdmin(admin.ModelAdmin):
+class OfferAdmin(ModelAdmin):
     list_display = ['name', 'tokens', 'price', 'duration_days', 'is_active', 'platform_count', 'target_audience']
     inlines = [PlatformInline]
 
-    @admin.display(description="প্ল্যাটফর্ম সংখ্যা")
+    @admin.display(description="Count platforms")
     def platform_count(self, obj):
         return obj.allowed_platforms.count()
 
+    @admin.display(description="Allowed AI models")
+    def display_models(self, obj):
+        # এটি সব মডেলের নাম কমা দিয়ে যুক্ত করে দেখাবে
+        return ", ".join([model.name for model in obj.allowed_models.all()])
+    
+    # অ্যাডমিন প্যানেলে কলামের নাম কি হবে
+    display_models.short_description = 'Allowed Models'
 # Subscription Admin
 @admin.register(Subscription)
-class SubscriptionAdmin(admin.ModelAdmin):
+class SubscriptionAdmin(ModelAdmin):
     list_display = ('profile', 'offer', 'start_date', 'end_date', 'is_active', 'created_at')
     list_filter = ('is_active',)
     search_fields = ('profile__user__email', 'offer__name')
@@ -129,7 +136,7 @@ class SubscriptionAdmin(admin.ModelAdmin):
 
 
 @admin.register(OrderForm)
-class OrderFormAdmin(admin.ModelAdmin):
+class OrderFormAdmin(ModelAdmin):
     # কোন কলামগুলো লিস্টে দেখাবে
     list_display = ('user', 'form_id', 'created_at')
     
@@ -143,7 +150,7 @@ class OrderFormAdmin(admin.ModelAdmin):
     readonly_fields = ('form_id', 'created_at')
 
 @admin.register(CustomerOrder)
-class CustomerOrderAdmin(admin.ModelAdmin):
+class CustomerOrderAdmin(ModelAdmin):
     # অ্যাডমিন প্যানেলে অর্ডারের সারসংক্ষেপ দেখার জন্য
     list_display = ('customer_name', 'user', 'product_name', 'status', 'extra_info', 'district', 'upazila', 'created_at')
     
@@ -174,12 +181,12 @@ class CustomerOrderAdmin(admin.ModelAdmin):
     )
     
 @admin.register(EmailVerificationToken)
-class EmailVerificationTokenAdmin(admin.ModelAdmin):
+class EmailVerificationTokenAdmin(ModelAdmin):
     list_display = ['id', 'user', 'token', 'created_at']
 
 
 @admin.register(NSATransfer)
-class NSATransferAdmin(admin.ModelAdmin):
+class NSATransferAdmin(ModelAdmin):
     # প্যানেলের লিস্টে যে যে কলাম দেখাবে
     list_display = ('id', 'get_sender_id', 'get_receiver_id', 'amount', 'created_at')
     
