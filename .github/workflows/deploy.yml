@@ -20,10 +20,9 @@ jobs:
           # যদি আগে থেকে কোনো কন্টেইনার চলে, তবে তা বন্ধ করবে
           cp ~/newsmartagent.env .env
           
-          docker-compose down || true
           
           # নতুন করে ইমেজ বিল্ড করবে এবং ব্যাকগ্রাউন্ডে রান করবে
-          docker-compose up -d --build
+          docker-compose up -d --build --remove-orphans
           
           # অপ্রয়োজনীয় পুরনো ইমেজগুলো ডিলিট করে মেমরি বাঁচাবে
           docker image prune -f
