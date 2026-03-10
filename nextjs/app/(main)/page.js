@@ -9,6 +9,8 @@ import { FaFacebook, FaYoutube, FaCheckCircle  } from "react-icons/fa";
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "@/lib/api";
+import ThreeScene from "@/(main)/components/ThreeScene";
+import FloatingImage from "@/(main)/components/FloatingImage";
 
 const fadeInUp = {
   hidden: { opacity: 0, y: 30 },
@@ -145,6 +147,38 @@ export default function HomePage() {
 
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#4f46e505_1px,transparent_1px),linear-gradient(to_bottom,#4f46e505_1px,transparent_1px)] bg-[size:60px_60px]"></div>
 
+
+
+        <div className="absolute inset-0 z-0 opacity-20 md:opacity-40 pointer-events-none overflow-hidden">
+          <ThreeScene>
+            {/* Desktop and Mobile: Centered branding icon */}
+            <FloatingImage 
+              imgUrl="/3d_imge/newsmartagent_icon.png" 
+              position={[0, 0, 0]} 
+              scale={[1.2, 1.2, 1]} 
+              speed={1.5}
+            />
+            
+            {/* Desktop Only: Decorative side images */}
+            <group className="hidden md:block">
+              <FloatingImage 
+                imgUrl="/3d_imge/IMG_20260310_221124_720.png" 
+                position={[-4, -2, -2]} 
+                scale={[1, 1, 1]} 
+                rotation={[0, 0.5, 0]}
+                speed={0.8}
+              />
+              <FloatingImage 
+                imgUrl="/3d_imge/IMG_20260310_221309_887.png" 
+                position={[5, -3, -1]} 
+                scale={[0.8, 0.8, 1]} 
+                rotation={[0.2, -0.2, 0]}
+                speed={1.2}
+              />
+            </group>
+          </ThreeScene>
+        </div>
+
         <motion.div 
           variants={staggerContainer}
           initial="hidden"
@@ -247,34 +281,42 @@ export default function HomePage() {
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
+            className="relative"
           >
-            {features.map((feature, index) => (
-              <motion.div 
-                key={index}
-                variants={fadeInUp}
-                whileHover={{ y: -10 }}
-                className="group relative p-8 rounded-[2.5rem] bg-white border border-gray-100 shadow-xl shadow-gray-200/30 transition-all duration-300 overflow-hidden"
-              >
-                <div className={`absolute inset-0 bg-gradient-to-br ${feature.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-500`}></div>
-                <div className="relative z-10">
-                  <div className={`w-16 h-16 rounded-2xl ${feature.lightBg} ${feature.textColor} flex items-center justify-center text-3xl mb-8 group-hover:bg-white transition-all duration-500 shadow-sm`}>
-                    {feature.icon}
+            <div className="absolute top-0 right-0 w-64 h-64 -mr-20 -mt-20 opacity-20 pointer-events-none">
+              <ThreeScene>
+                <FloatingImage imgUrl="/3d_imge/IMG_20260310_223341_710.png" scale={[2, 2, 1]} />
+              </ThreeScene>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {features.map((feature, index) => (
+                <motion.div 
+                  key={index}
+                  variants={fadeInUp}
+                  whileHover={{ y: -10 }}
+                  className="group relative p-8 rounded-[2.5rem] bg-white border border-gray-100 shadow-xl shadow-gray-200/30 transition-all duration-300 overflow-hidden"
+                >
+                  <div className={`absolute inset-0 bg-gradient-to-br ${feature.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-500`}></div>
+                  <div className="relative z-10">
+                    <div className={`w-16 h-16 rounded-2xl ${feature.lightBg} ${feature.textColor} flex items-center justify-center text-3xl mb-8 group-hover:bg-white transition-all duration-500 shadow-sm`}>
+                      {feature.icon}
+                    </div>
+                    <h3 className="text-2xl font-black text-gray-900 mb-4 group-hover:text-white transition-colors duration-500">
+                      {feature.title}
+                    </h3>
+                    <p className="text-gray-500 font-medium leading-relaxed mb-8 group-hover:text-white/90 transition-colors duration-500">
+                      {feature.desc}
+                    </p>
+                    <button className={`flex items-center gap-3 text-sm font-black uppercase tracking-widest ${feature.textColor} group-hover:text-white transition-colors duration-500`}>
+                      Learn More 
+                      <FaArrowRight className="group-hover:translate-x-2 transition-transform" />
+                    </button>
                   </div>
-                  <h3 className="text-2xl font-black text-gray-900 mb-4 group-hover:text-white transition-colors duration-500">
-                    {feature.title}
-                  </h3>
-                  <p className="text-gray-500 font-medium leading-relaxed mb-8 group-hover:text-white/90 transition-colors duration-500">
-                    {feature.desc}
-                  </p>
-                  <button className={`flex items-center gap-3 text-sm font-black uppercase tracking-widest ${feature.textColor} group-hover:text-white transition-colors duration-500`}>
-                    Learn More 
-                    <FaArrowRight className="group-hover:translate-x-2 transition-transform" />
-                  </button>
-                </div>
-                <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-gray-50 rounded-full group-hover:bg-white/10 transition-colors"></div>
-              </motion.div>
-            ))}
+                  <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-gray-50 rounded-full group-hover:bg-white/10 transition-colors"></div>
+                </motion.div>
+              ))}
+            </div>
           </motion.div>
         </div>
       </section>
@@ -305,8 +347,14 @@ export default function HomePage() {
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-10"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-10 relative"
           >
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full opacity-10 pointer-events-none hidden lg:block">
+              <ThreeScene>
+                <FloatingImage imgUrl="/3d_imge/IMG_20260310_221431_617.png" position={[-8, 4, 0]} scale={[1.2, 1.2, 1]} />
+                <FloatingImage imgUrl="/3d_imge/IMG_20260310_221340_589.png" position={[8, -4, 0]} scale={[1.2, 1.2, 1]} />
+              </ThreeScene>
+            </div>
             {services.map((service, index) => (
               <motion.div 
                 key={index}
@@ -430,7 +478,12 @@ export default function HomePage() {
                   </div>
                 ))}
               </div>
-              <div className="pt-4">
+              <div className="pt-4 relative">
+                <div className="absolute -right-20 -top-20 w-40 h-40 opacity-30 pointer-events-none hidden lg:block">
+                  <ThreeScene>
+                    <FloatingImage imgUrl="/3d_imge/IMG_20260310_221231_508.png" scale={[1.5, 1.5, 1]} />
+                  </ThreeScene>
+                </div>
                 <Link
                   href="/about"
                   className="group inline-flex items-center gap-3 px-10 py-4 bg-gray-900 text-white font-black rounded-2xl shadow-xl hover:bg-indigo-600 transition-all duration-300"
@@ -457,6 +510,11 @@ export default function HomePage() {
             <h3 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tight">
               যোগাযোগ করুন <span className="text-indigo-600">আমাদের সাথে</span>
             </h3>
+            <div className="absolute top-0 left-0 w-32 h-32 opacity-20 pointer-events-none hidden sm:block">
+              <ThreeScene>
+                <FloatingImage imgUrl="/3d_imge/IMG_20260310_215541_854.png" scale={[2, 2, 1]} />
+              </ThreeScene>
+            </div>
           </motion.div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
@@ -512,6 +570,11 @@ export default function HomePage() {
                         className="w-full p-4 bg-gray-50/50 border border-gray-100 rounded-2xl outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 transition-all font-medium"
                       />
                     </div>
+                  </div>
+                  <div className="absolute -bottom-20 -left-20 w-64 h-64 opacity-10 pointer-events-none hidden sm:block">
+                    <ThreeScene>
+                      <FloatingImage imgUrl="/3d_imge/IMG_20260310_215834_398.png" scale={[3, 3, 1]} speed={0.5} />
+                    </ThreeScene>
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Subject</label>
