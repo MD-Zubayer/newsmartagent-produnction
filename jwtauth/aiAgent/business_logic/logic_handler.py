@@ -37,7 +37,6 @@ logger = logging.getLogger('aiAgent')
 def get_order_instructions(user):
     order_instruction = ""
     try:
-            
         settings, created = AgentSettings.objects.get_or_create(user=user)
         if settings.is_order_enable:
             try:
@@ -55,18 +54,14 @@ def get_order_instructions(user):
         logger.error(f"Settings Error: {e}")
         order_instruction = "Handle orders politely."
         return order_instruction
-    
-
-
 
 def perform_rag_search(agent_config, text, post_context_text, order_instruction, existing_vector=None):
     sheet_context = ""
     extra_instruction = ""
-    query_vector = existing_vector  # 🔹 Initialize query_vector for later reuse
+    query_vector = existing_vector  # Initialize query_vector for later reuse
     rag_query = f"{post_context_text} {text}" if post_context_text else text
     
     try:
-        
         if not query_vector:
             skip_margin = 10
             skip_embedding = False
@@ -74,34 +69,29 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
 
             for kw in embedding_skip_keyword:
                 kw_len = len(kw)
-                # flexible check: message length ~ keyword length ± margin
                 if kw.lower() in text.lower() and abs(text_len - kw_len) <= skip_margin:
                     skip_embedding = True
                     logger.info(f"Keyword '{kw}' found and message length within margin. Skipping embedding.")
                     break
                 if len(text) < 3:
                     skip_embedding = True
-                    logger.info("embeddign has been skiping because the message length is less than 3characters.")
+                    logger.info("embedding skipped due to length < 3.")
                     break
-        
-        #<!------------------- Convert user message to vector -----------------------!>
         
             if not skip_embedding:
                 query_vector = get_gemini_embedding(rag_query)
                 logger.info(f"DEBUG: Vector Generated: {True if query_vector else False}")
+        
         if query_vector:
-            #<!------------------ Finding the 3 most relevant rows from a vector database ---------------!>
             related_docs = SpreadsheetKnowledge.objects.filter(
                 user=agent_config.user
             ).annotate(
                 distance=CosineDistance('embedding', query_vector)
             ).order_by('distance')[:3]
 
-       
             if related_docs:
                 top_distance = related_docs[0].distance
                 if top_distance < 0.45:
-                                # Strong match
                     matched_content = [doc.content for doc in related_docs]
                     clean_data = "\n".join(matched_content)
                     sheet_context = f"\n[DATA]:\n{clean_data}"
@@ -116,7 +106,6 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                     logger.info(f">>> Strong RAG Match! Distance: {top_distance}")
                 
                 elif top_distance < 0.65:
-                    # Weak match
                     matched_content = [doc.content for doc in related_docs]
                     sheet_context = f"\n[DATA]:\n{'\n'.join(matched_content)}"
                     extra_instruction = f"""
@@ -126,7 +115,6 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                     """
                     logger.info(f">>> Weak RAG Match! Distance: {top_distance}")
                 else:
-                     # No good match
                     sheet_context = ""
                     extra_instruction = f"""
                     Answer naturally using your knowledge.
@@ -135,7 +123,6 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                     """
                     logger.info(f">>> No useful RAG match. Distance: {top_distance}")
             else:
-                # Embedding skipped
                 extra_instruction = f"""
                 Answer naturally using your knowledge.
                 {order_instruction}
@@ -152,7 +139,6 @@ def deduct_user_tokens(user_profile, total_tokens, ai_model_name):
             from users.models import Subscription
             from django.utils import timezone
             
-            # Find an active subscription that has this model and has remaining tokens
             active_sub = Subscription.objects.filter(
                 profile=user_profile,
                 is_active=True,
@@ -171,7 +157,6 @@ def deduct_user_tokens(user_profile, total_tokens, ai_model_name):
                 active_sub.save()
                 logger.info(f"Deducted {total_tokens} tokens from Sub {active_sub.id}. Remaining: {active_sub.remaining_tokens}")
             else:
-                # Fallback to old global balance if no specific subscription exists
                 user_profile.word_balance = F('word_balance') - total_tokens
                 user_profile.save(update_fields=['word_balance'])
                 user_profile.refresh_from_db()
@@ -179,18 +164,12 @@ def deduct_user_tokens(user_profile, total_tokens, ai_model_name):
         except Exception as e:
             logger.error(f"Token Deduction Error: {e}")
 
-
 def build_ai_context(agent_config, sender_id, text, extra_instruction=None, sheet_context=None):
-    """
-    Build final prompt + clean history
-    """
-
     from aiAgent.utils import get_memory_context
     from chat.services import get_last_message
 
     lower_text = text.lower()
     memory_context = ""
-
     memory_triggers = ['আমার', 'নাম', 'অর্ডার', 'আগের', 'my', 'name', 'order', 'status']
 
     if any(word in lower_text for word in memory_triggers):
@@ -206,62 +185,69 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
     if sheet_context: prompt_parts.append(sheet_context)
     if memory_context: prompt_parts.append(memory_context)
 
-    # 5️⃣ Current user message
     prompt_parts.append(f"\nUser: {text}")
     prompt_parts.append("Assistant:")
-
     full_prompt = "\n\n".join(prompt_parts)
 
     logger.info(f"\n======= FINAL PROMPT SENT TO AI =======\n{full_prompt}\n=======================================")
 
-    # Clean history (no empty messages)
     raw_history = get_last_message(agent_config, sender_id, limit=3)
     history = [
         msg for msg in raw_history
         if msg.get("message") and msg.get("message").strip()
     ]
-
     return full_prompt, history
 
-
 def get_ai_response(agent_config, full_prompt, history):
-    from aiAgent.gemini import generate_reply
+    """
+    Unified AI handler that dispatches to specific providers.
+    """
+    from aiAgent.gemini import generate_gemini_reply
     from aiAgent.openai import generate_openai_reply
+    from aiAgent.grok import generate_grok_reply
+    from aiAgent.openrouter import generate_openrouter_reply
     
-    model_choice = agent_config.ai_model.lower()
+    # 1. Determine model and provider
+    if agent_config.selected_model:
+        model_name = agent_config.selected_model.model_id
+        provider = agent_config.selected_model.provider # gemini, openai, grok, openrouter
+    else:
+        # Fallback to legacy field
+        model_name = agent_config.ai_model
+        provider = 'openai' if 'gpt' in model_name.lower() else 'gemini'
+    
     ai_response = None
     
     try:
-        # ১. মডেল অনুযায়ী কল করা
-        if 'gpt' in model_choice:
+        # 2. Dispatch based on provider
+        if provider == 'openai':
             ai_response = generate_openai_reply(full_prompt, history, agent_config=agent_config)
+        elif provider == 'grok':
+            ai_response = generate_grok_reply(full_prompt, history, agent_config=agent_config)
+        elif provider == 'openrouter':
+            ai_response = generate_openrouter_reply(full_prompt, history, agent_config=agent_config)
+        elif provider == 'gemini':
+            ai_response = generate_gemini_reply(full_prompt, history, agent_config=agent_config)
         else:
-            ai_response = generate_reply(full_prompt, history, agent_config=agent_config)
+            if 'gpt' in model_name.lower():
+                ai_response = generate_openai_reply(full_prompt, history, agent_config=agent_config)
+            else:
+                ai_response = generate_gemini_reply(full_prompt, history, agent_config=agent_config)
             
-        # --- DEBUG LOGS ---
-        logger.info(f"🔍 AI Raw Response Type: {type(ai_response)}")
-        logger.info(f"🔍 AI Raw Data: {ai_response}")
+        logger.info(f"🔍 [Provider: {provider}] AI Raw Data: {ai_response}")
 
-        # ২. ডিকশনারি ফরম্যাট হ্যান্ডলিং (আপনার নতুন সিস্টেম)
+        # 3. Handle Dictionary Format
         if isinstance(ai_response, dict):
-            # রিপ্লাইটি বের করা এবং পরিষ্কার করা
             raw_reply = ai_response.get('reply', "")
-            # যদি reply না থাকে তবে fallback হিসেবে error_message বা ডিফল্ট টেক্সট
             reply = raw_reply if raw_reply else ai_response.get('error_message', "System busy.")
             
-            # মেটা ডাটা এক্সট্রাকশন
             input_tokens = ai_response.get('input_tokens', 0)
             output_tokens = ai_response.get('output_tokens', 0)
             total_tokens = ai_response.get('total_tokens', 0)
             status = ai_response.get('status', 'unknown')
             
-            # ফরম্যাটিং ক্লিনআপ (বোল্ড বা ইটালিক সাইন রিমুভ)
             reply = str(reply).replace('**', '').replace('*', '').strip()
-            
-            # সাকসেস লজিক: স্ট্যাটাস সাকসেস হওয়া অথবা রিপ্লাই এর একটা মিনিমাম লেংথ থাকা
-            # (আপনার আগের ৫ অক্ষরের লজিকটাই রাখলাম, তবে status ছাড়াও চেক করবে)
             success = (status == 'success') or (len(reply) > 5 and "System busy" not in reply)
-            
             error_info = ai_response.get('error_message') if not success else ""
             
             return {
@@ -272,11 +258,7 @@ def get_ai_response(agent_config, full_prompt, history):
                 'output_tokens': output_tokens, 
                 'error': error_info
             }
-
-        # ৩. ফলব্যাক: যদি এআই সরাসরি স্ট্রিং বা টিউপল পাঠায়
         else:
-            logger.warning("⚠️ AI Response is NOT a dictionary! Using fallback logic.")
-            
             if isinstance(ai_response, tuple):
                 reply_text, total_tokens = ai_response
             else:
@@ -303,10 +285,9 @@ def get_ai_response(agent_config, full_prompt, history):
         }
 
 def deliver_reply_to_n8n(data, reply, page_id, access_token):
-    """n8n-এ ফাইনাল রিপ্লাই ডেলিভারি করে এবং JSON ভ্যালিডেশন নিশ্চিত করে"""
+    """Deliver final reply to n8n and ensures JSON validation"""
     webhook_url = "https://dev-n8n.newsmartagent.com/webhook/fb-comment-message-delivery"
     
-    # নিশ্চিত করুন কোনো ভ্যালু যেন None না থাকে (Empty string দিয়ে রিপ্লেস করা)
     payload = {
         "sender_id": str(data.get('sender_id', '')),
         "reply": str(reply),
@@ -318,19 +299,15 @@ def deliver_reply_to_n8n(data, reply, page_id, access_token):
     }
 
     try:
-        # টাইপ চেক করার জন্য লগ দিন
         logger.info(f"Sending payload to n8n: {payload}")
-        
         response = requests.post(
             webhook_url, 
-            json=payload, # json= প্যারামিটার ব্যবহার করলে requests নিজেই Header সেট করে
+            json=payload,
             timeout=15
         )
-        
         if response.status_code != 200:
             logger.error(f"n8n returned error: {response.status_code} - {response.text}")
             return False
-            
         return True
     except Exception as e:
         logger.error(f"Webhook delivery critical failure: {e}")
@@ -338,11 +315,12 @@ def deliver_reply_to_n8n(data, reply, page_id, access_token):
 
 def log_token_usage(agent_config, sender_id, ai_data, duration, request_type):
     try:
+        effective_model = agent_config.selected_model.model_id if agent_config.selected_model else agent_config.ai_model
         TokenUsageLog.objects.create(
             user=agent_config.user,
             ai_agent=agent_config,
             sender_id=sender_id,
-            model_name=agent_config.ai_model,
+            model_name=effective_model,
             input_tokens=ai_data.get('input_tokens', 0),
             output_tokens=ai_data.get('output_tokens', 0),
             total_tokens=ai_data.get('total_tokens', 0),
@@ -354,10 +332,7 @@ def log_token_usage(agent_config, sender_id, ai_data, duration, request_type):
     except Exception as e:
         logger.error(f"Logging Error: {e}")
 
-
-
 def acquire_user_lock(task_instance, redis_client, sender_id):
-    # -------------------- SAFE REDIS LOCK -------------------- #
     lock_key = f"chat_lock:{sender_id}"
     lock_value = str(uuid.uuid4())
     is_locked = redis_client.set(lock_key, lock_value, nx=True, ex=150)
@@ -366,56 +341,38 @@ def acquire_user_lock(task_instance, redis_client, sender_id):
         raise task_instance.retry(countdown=2)
     return is_locked, lock_key, lock_value
 
-
 def is_duplicate_or_outdated(msg_id, incoming_ts, agent_config, sender_id, redis_client):
-    
-    # ---------- IDEMPOTENCY CHECK (BEFORE LOCK) ----------
     if msg_id and redis_client.get(f'processed_msg:{msg_id}'):
         logger.info(f"Duplicate message detected: {msg_id}")
         return True
     
-    # ২. Zombie (Outdated) Check
     if incoming_ts:
         try:
             incoming_ts = float(incoming_ts)
-            if incoming_ts > 1e12: incoming_ts /= 1000 # ms to s conversion
-            
-            from chat.services import get_last_message
+            if incoming_ts > 1e12: incoming_ts /= 1000
             latest = get_last_message(agent_config, sender_id, limit=1)
-            
             if latest and latest[0].get('timestamp', 0) > incoming_ts:
-                logger.info(f"🧟 Outdated task detected for {sender_id}. Skipping.")
+                logger.info(f"Zombie Outdated task detected for {sender_id}. Skipping.")
                 return True
         except (ValueError, TypeError) as e:
             logger.error(f"Zombie Check Error: {e}")
-            
     return False
 
 def handle_public_comment_logic(data, agent_config, r):
-    """ফেসবুক কমেন্ট হলে লুপ চেক করে পাবলিক রিপ্লাই পাঠাবে"""
     sender_id = str(data.get('sender_id', ''))
     page_id = str(data.get('page_id', ''))
     comment_id = data.get('comment_id')
     request_type = data.get('type')
 
-    # ১. লুপ প্রোটেকশন (পেজ আইডি আর সেন্ডার আইডি সেম হলে সাথে সাথে False)
     if sender_id == page_id:
         return False, "page_own_activity"
 
-    # ২. পাবলিক রিপ্লাই লজিক
     if request_type == 'facebook_comment' and comment_id:
         comment_lock_key = f'processed_comment:{comment_id}'
-        
-        # ডুপ্লিকেট চেক
         if not r.get(comment_lock_key):
             from webhooks.comment import deliver_public_comment_reply
             reply_text = 'ধন্যবাদ! আপনার ইনবক্স চেক করুন, বিস্তারিত পাঠানো হয়েছে। 😊'
-            
-            # রেডিসে লক করে দিন
             r.set(comment_lock_key, '1', ex=3600)
-            
-            # n8n-এ পাঠানো
             deliver_public_comment_reply(comment_id, reply_text, agent_config.access_token)
             return True, "public_reply_sent"
-            
     return True, "continue"
