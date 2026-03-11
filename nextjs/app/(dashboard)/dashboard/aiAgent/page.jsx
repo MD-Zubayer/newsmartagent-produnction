@@ -22,6 +22,7 @@ export default function AIAgentPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState(null);
   const [showToken, setShowToken] = useState(false);
+  const [availableModels, setAvailableModels] = useState([]);
 
   const initialFormState = {
     name: "",
@@ -41,6 +42,7 @@ export default function AIAgentPage() {
 
   useEffect(() => {
     fetchAgents();
+    fetchAvailableModels();
   }, []);
 
   const fetchAgents = async () => {
@@ -52,6 +54,25 @@ export default function AIAgentPage() {
       toast.error("Failed to load agents.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAvailableModels = async () => {
+    try {
+      const res = await api.get("/AgentAI/available-models/");
+      if (res.data.status === "success") {
+        setAvailableModels(res.data.models || []);
+        
+        // If we're not editing and have models, set the first one as default
+        if (!editingAgent && res.data.models?.length > 0) {
+          setFormData(prev => ({
+            ...prev,
+            ai_model: res.data.models[0].model_id
+          }));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load available models:", err);
     }
   };
 
@@ -282,10 +303,19 @@ export default function AIAgentPage() {
 
               <div className="grid grid-cols-2 gap-6">
                 <select name="ai_model" value={formData.ai_model} onChange={handleChange} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none">
-                  <option value="models/gemini-2.5-flash">Gemini 2.5 Flash</option>
-                  <option value="models/gemini-2.0-flash"> Gemini 2.0 flash</option>
-                 
-                  <option value="gpt-4o-mini">GPT-4o Mini</option>
+                  {availableModels.length > 0 ? (
+                    availableModels.map((model) => (
+                      <option key={model.id} value={model.model_id}>
+                        {model.name} ({model.provider})
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="models/gemini-2.5-flash">Gemini 2.5 Flash</option>
+                      <option value="models/gemini-2.0-flash"> Gemini 2.0 flash</option>
+                      <option value="gpt-4o-mini">GPT-4o Mini</option>
+                    </>
+                  )}
                 </select>
                 <input type="number" name="max_tokens" value={formData.max_tokens} onChange={handleChange} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" placeholder="Max Tokens" />
               </div>
