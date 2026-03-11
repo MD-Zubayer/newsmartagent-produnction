@@ -10,6 +10,10 @@ jobs:
     runs-on: self-hosted
 
     steps:
+      - name: "🔓 Fix Permissions for Cleanup"
+        run: |
+          sudo chown -R $USER:$USER ${{ github.workspace }} || true
+          sudo chmod -R 777 ${{ github.workspace }} || true
       - name: "📂 Checkout Repository"
         uses: actions/checkout@v4
 
