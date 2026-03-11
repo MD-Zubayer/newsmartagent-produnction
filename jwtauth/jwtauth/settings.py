@@ -285,6 +285,7 @@ SITE_URL = "http://localhost:3000"
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+GROK_API_KEY = os.environ.get('GROK_API_KEY')
 
 
 CELERY_BROKER_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")

@@ -1,4 +1,4 @@
-# aiAgent/tasks.py
+# webhooks/tasks.py
 
 from celery import shared_task
 import time, uuid, logging, hashlib, redis, requests
@@ -98,6 +98,10 @@ def process_ai_reply_task(self, data):
         reply, success, total_tokens = "System busy.", False, 0
         ai_data = {'success': False, 'total_tokens': 0}
 
+        post_context = ""
+        if request_type == 'facebook_comment':
+            post_context = get_smart_post_context(data.get('post_id'), agent_config.access_token)
+
         # ৬. ক্যাশ চেক
         cached_res = None
         
@@ -117,7 +121,6 @@ def process_ai_reply_task(self, data):
                 cached_res = get_cached_reply(page_id, msg_hash=cluster_id)
                 if cached_res:
                     logger.info(f"🧬 CLUSTER MATCH FOUND for '{text[:30]}' -> Cluster: {cluster_id}")
-                    print(f"🧬 CLUSTER MATCH FOUND for '{text[:30]}' -> Cluster: {cluster_id}")
             
         if not cached_res:
             from embedding.utils import get_gemini_embedding
@@ -141,7 +144,7 @@ def process_ai_reply_task(self, data):
             total_tokens = 0
         
             incr_counter(page_id, "cache_hit")
-            logger.info(f"⚡ CACHE HIT → Skipping RAG + Embedding + AI for '{text[:30]}'")
+            logger.info(f"⚡ CACHE HIT → '{text[:30]}'")
         
             # Save messages
             save_message(agent_config, sender_id, text, 'user')
@@ -169,9 +172,7 @@ def process_ai_reply_task(self, data):
             
             # কন্টেন্ট তৈরি
             
-            post_context = ""
-            if request_type == 'facebook_comment':
-                post_context = get_smart_post_context(data.get('post_id'), agent_config.access_token)
+            
                 
             order_instr = get_order_instructions(agent_config.user)
             sheet_ctx, extra_instr, query_vector = perform_rag_search(agent_config, text, post_context, order_instr, existing_vector=query_vector )
@@ -183,50 +184,38 @@ def process_ai_reply_task(self, data):
             reply, success, total_tokens = ai_data['reply'], ai_data['success'], ai_data['total_tokens']
 
             if success:
-                deduct_user_tokens(user_profile, total_tokens)
-                set_cached_reply(page_id, text, reply, model=agent_config.ai_model, input_tokens=ai_data.get('input_tokens', 0), output_tokens=ai_data.get('output_tokens', 0)) 
+                # Use selected_model if available, otherwise fallback to ai_model
+                effective_model = agent_config.selected_model.model_id if agent_config.selected_model else agent_config.ai_model
                 
+                deduct_user_tokens(user_profile, total_tokens, effective_model)
+                set_cached_reply(page_id, text, reply, model=effective_model, input_tokens=ai_data.get('input_tokens', 0), output_tokens=ai_data.get('output_tokens', 0)) 
+                
+                # clustering and vector logic
                 try:                
                     from aiAgent.cache.cluster import assign_to_cluster  
                     from aiAgent.cache.hybrid_similarity import find_best_cached_hash
-                            
-                            
                     best_cluster_hash = find_best_cached_hash(page_id, text, threshold=70)
-                                                      
                     target_hash = best_cluster_hash if best_cluster_hash else hashlib.md5(normalize_text(text).encode()).hexdigest()
-                    
                     assign_to_cluster(page_id, text, target_hash)
-                    logger.info(f"🧬 Message assigned to cluster: {text[:20]}")                
-                    print(f"🧬 Message assigned to cluster: {text[:20]}")
                 except Exception as e:                
                     logger.error(f"Failed to assign cluster: {e}")
-                    print(f"Failed to assign cluster: {e}")
 
                 if query_vector:
                     save_vector_embedding(page_id, text, query_vector)
                     logger.info(f"✅ Saved vector embedding for '{text[:30]}'")
 
+                save_message(agent_config, sender_id, text, 'user')
+                save_message(agent_config, sender_id, reply, 'assistant', tokens=total_tokens)
+                handle_smart_memory_update(agent_config, sender_id, text)
+
             duration = int((time.time() - start_time) * 1000)
             log_token_usage(agent_config, sender_id, ai_data, duration, request_type)
 
-
-            # ৯. লগিং ও ডাটাবেজ আপডেট
-            duration = int((time.time() - start_time) * 1000)
-            log_token_usage(agent_config, sender_id, ai_data, duration, request_type)
-
-            save_message(agent_config, sender_id, text, 'user')
-            save_message(agent_config, sender_id, reply, 'assistant', tokens=total_tokens)
-
-            # ১০. মেমোরি আপডেট
-            handle_smart_memory_update(agent_config, sender_id, text)
-
-            # ১১. এনএইটএন (n8n) ডেলিভারি
-            
             delivered = deliver_reply_to_n8n(data, reply, page_id, agent_config.access_token)
-
             if delivered and msg_id:
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)
-            logger.info(f"Successfully sent reply back to n8n for {sender_id}")
+            
+            logger.info(f"Final reply processed for {sender_id}. Success: {success}")
 
     except Exception as e:
         logger.error(f"Task Error: {e}")
