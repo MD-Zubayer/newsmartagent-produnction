@@ -9,8 +9,6 @@ import { FaFacebook, FaYoutube, FaCheckCircle  } from "react-icons/fa";
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "@/lib/api";
-import ThreeScene from "@/(main)/components/ThreeScene";
-import FloatingImage from "@/(main)/components/FloatingImage";
 
 const fadeInUp = {
   hidden: { opacity: 0, y: 30 },
@@ -149,34 +147,15 @@ export default function HomePage() {
 
 
 
-        <div className="absolute inset-0 z-0 opacity-20 md:opacity-40 pointer-events-none overflow-hidden">
-          <ThreeScene>
-            {/* Desktop and Mobile: Centered branding icon */}
-            <FloatingImage 
-              imgUrl="/3d_imge/newsmartagent_icon.png" 
-              position={[0, 0, 0]} 
-              scale={[1.2, 1.2, 1]} 
-              speed={1.5}
-            />
-            
-            {/* Desktop Only: Decorative side images */}
-            <group className="hidden md:block">
-              <FloatingImage 
-                imgUrl="/3d_imge/IMG_20260310_221124_720.png" 
-                position={[-4, -2, -2]} 
-                scale={[1, 1, 1]} 
-                rotation={[0, 0.5, 0]}
-                speed={0.8}
-              />
-              <FloatingImage 
-                imgUrl="/3d_imge/IMG_20260310_221309_887.png" 
-                position={[5, -3, -1]} 
-                scale={[0.8, 0.8, 1]} 
-                rotation={[0.2, -0.2, 0]}
-                speed={1.2}
-              />
-            </group>
-          </ThreeScene>
+        <div className="absolute inset-0 z-0 opacity-10 md:opacity-20 pointer-events-none overflow-hidden flex items-center justify-center">
+          <motion.img 
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 1, delay: 0.5 }}
+            src="/3d_imge/newsmartagent_icon.png" 
+            alt="New Smart Agent Icon"
+            className="w-48 md:w-64 h-auto object-contain opacity-50"
+          />
         </div>
 
         <motion.div 
@@ -283,10 +262,8 @@ export default function HomePage() {
             viewport={{ once: true }}
             className="relative"
           >
-            <div className="absolute top-0 right-0 w-64 h-64 -mr-20 -mt-20 opacity-20 pointer-events-none">
-              <ThreeScene>
-                <FloatingImage imgUrl="/3d_imge/IMG_20260310_223341_710.png" scale={[2, 2, 1]} />
-              </ThreeScene>
+            <div className="absolute top-0 right-0 w-48 h-48 -mr-10 -mt-10 opacity-10 pointer-events-none select-none">
+              <img src="/3d_imge/IMG_20260310_223341_710.png" alt="" className="w-full h-full object-contain" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -349,11 +326,9 @@ export default function HomePage() {
             viewport={{ once: true }}
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-10 relative"
           >
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full opacity-10 pointer-events-none hidden lg:block">
-              <ThreeScene>
-                <FloatingImage imgUrl="/3d_imge/IMG_20260310_221431_617.png" position={[-8, 4, 0]} scale={[1.2, 1.2, 1]} />
-                <FloatingImage imgUrl="/3d_imge/IMG_20260310_221340_589.png" position={[8, -4, 0]} scale={[1.2, 1.2, 1]} />
-              </ThreeScene>
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full opacity-5 pointer-events-none hidden lg:flex justify-between items-center px-10">
+              <img src="/3d_imge/IMG_20260310_221431_617.png" alt="" className="w-40 h-auto" />
+              <img src="/3d_imge/IMG_20260310_221340_589.png" alt="" className="w-40 h-auto" />
             </div>
             {services.map((service, index) => (
               <motion.div 
@@ -479,10 +454,8 @@ export default function HomePage() {
                 ))}
               </div>
               <div className="pt-4 relative">
-                <div className="absolute -right-20 -top-20 w-40 h-40 opacity-30 pointer-events-none hidden lg:block">
-                  <ThreeScene>
-                    <FloatingImage imgUrl="/3d_imge/IMG_20260310_221231_508.png" scale={[1.5, 1.5, 1]} />
-                  </ThreeScene>
+                <div className="absolute -right-10 -top-10 w-24 h-24 opacity-20 pointer-events-none hidden lg:block">
+                  <img src="/3d_imge/IMG_20260310_221231_508.png" alt="" className="w-full h-full object-contain" />
                 </div>
                 <Link
                   href="/about"
@@ -510,10 +483,8 @@ export default function HomePage() {
             <h3 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tight">
               যোগাযোগ করুন <span className="text-indigo-600">আমাদের সাথে</span>
             </h3>
-            <div className="absolute top-0 left-0 w-32 h-32 opacity-20 pointer-events-none hidden sm:block">
-              <ThreeScene>
-                <FloatingImage imgUrl="/3d_imge/IMG_20260310_215541_854.png" scale={[2, 2, 1]} />
-              </ThreeScene>
+            <div className="absolute top-0 left-0 w-24 h-24 opacity-10 pointer-events-none hidden sm:block">
+              <img src="/3d_imge/IMG_20260310_215541_854.png" alt="" className="w-full h-full object-contain" />
             </div>
           </motion.div>
 
@@ -571,10 +542,8 @@ export default function HomePage() {
                       />
                     </div>
                   </div>
-                  <div className="absolute -bottom-20 -left-20 w-64 h-64 opacity-10 pointer-events-none hidden sm:block">
-                    <ThreeScene>
-                      <FloatingImage imgUrl="/3d_imge/IMG_20260310_215834_398.png" scale={[3, 3, 1]} speed={0.5} />
-                    </ThreeScene>
+                  <div className="absolute -bottom-10 -left-10 w-40 h-40 opacity-5 pointer-events-none hidden sm:block">
+                    <img src="/3d_imge/IMG_20260310_215834_398.png" alt="" className="w-full h-full object-contain" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Subject</label>
