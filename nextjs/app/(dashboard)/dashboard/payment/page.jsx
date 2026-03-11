@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { 
   FaMobileAlt, FaWhatsapp, FaHistory, FaCreditCard, 
@@ -9,6 +10,7 @@ import {
 import toast from "react-hot-toast";
 
 export default function ManualPaymentPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("payment");
   const [tranId, setTranId] = useState("");
   const [amount, setAmount] = useState(""); 
@@ -66,16 +68,13 @@ const [submitting, setSubmitting] = useState(false);
     const loadingToast = toast.loading("Verifying payment...");
     
     try {
-      await api.post("/manual-payments/", { 
+      const res = await api.post("/manual-payments/", { 
         transaction_id: tranId,
         amount: amount 
       });
       
-      toast.success("Payment submitted successfully! Wait for verification.", { id: loadingToast });
-      setTranId("");
-      setAmount("");
-      fetchHistory();
-      setActiveTab("history");
+      toast.success("Payment submitted successfully!", { id: loadingToast });
+      router.push(`/dashboard/payment-success?payment_id=${res.data.payment_id}`);
     } catch (err) {
       toast.error("Submit failed. Please try again.", { id: loadingToast });
     } finally {

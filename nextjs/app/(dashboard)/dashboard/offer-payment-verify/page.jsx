@@ -45,7 +45,7 @@ export default function PaymentVerifyPage() {
     const lt = toast.loading("Verifying security details...");
 
     try {
-      await api.post("/payments/", {
+      const res = await api.post("/payments/", {
         offer_id: offerId,
         payment_type: "subscription",
         amount: offer.price,
@@ -54,11 +54,9 @@ export default function PaymentVerifyPage() {
         password: password,
         otp_code: otpCode
       });
-
-
       
       toast.success("Payment Successful!", { id: lt });
-      router.push("/dashboard/payment-success"); // আপনার সাকসেস পেজ
+      router.push(`/dashboard/payment-success?payment_id=${res.data.payment_id}`); // আপনার সাকসেস পেজ
     } catch (err) {
       const msg = err.response?.data?.detail || "Invalid Password or Code.";
       toast.error(msg, { id: lt });

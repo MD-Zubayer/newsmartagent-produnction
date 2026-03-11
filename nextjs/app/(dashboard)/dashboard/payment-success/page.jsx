@@ -1,18 +1,36 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { CheckCircle2, FileText, Home } from "lucide-react";
+import api from "@/lib/api";
+import { CheckCircle2, FileText, Home, Loader2 } from "lucide-react";
 
 export default function PaymentSuccessPage() {
+  const searchParams = useSearchParams();
+  const paymentId = searchParams.get("payment_id");
   const [mounted, setMounted] = useState(false);
-  const [transactionId] = useState(() => 
-    `TRX-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
-  );
+  const [loading, setLoading] = useState(true);
+  const [paymentData, setPaymentData] = useState(null);
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    if (paymentId) {
+      fetchPaymentDetails();
+    } else {
+      setLoading(false);
+    }
+  }, [paymentId]);
+
+  const fetchPaymentDetails = async () => {
+    try {
+      const res = await api.get(`/payments/${paymentId}/`);
+      setPaymentData(res.data);
+    } catch (err) {
+      console.error("Failed to fetch payment details:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-[85vh] flex items-center justify-center p-4">
@@ -36,28 +54,45 @@ export default function PaymentSuccessPage() {
             Thank you for your purchase. We've successfully received your payment and your transaction is now complete.
           </p>
 
-          <div className="w-full bg-gray-50 dark:bg-gray-800/40 rounded-2xl p-6 mb-8 border border-gray-100 dark:border-gray-800/80">
-            <div className="flex justify-between items-center mb-3">
-              <span className="text-sm text-gray-500 dark:text-gray-400">Transaction ID</span>
-              <span className="text-sm font-semibold text-gray-900 dark:text-white font-mono">
-                {mounted ? transactionId : "TRX-........"}
-              </span>
-            </div>
-            <div className="flex justify-between items-center mb-3">
-              <span className="text-sm text-gray-500 dark:text-gray-400">Date</span>
-              <span className="text-sm font-medium text-gray-900 dark:text-white">
-                {mounted 
-                  ? new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-                  : "Loading..."
-                }
-              </span>
-            </div>
-            <div className="flex justify-between items-center pt-4 mt-1 border-t border-gray-200 dark:border-gray-700/80">
-              <span className="text-base font-medium text-gray-900 dark:text-white">Amount Paid</span>
-              <span className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-teal-500 dark:from-green-400 dark:to-teal-300">
-                $99.00
-              </span>
-            </div>
+          <div className="w-full bg-gray-50 dark:bg-gray-800/40 rounded-2xl p-6 mb-8 border border-gray-100 dark:border-gray-800/80 min-h-[160px] flex flex-col justify-center">
+            {loading ? (
+              <div className="flex flex-col items-center justify-center gap-2">
+                <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
+                <span className="text-xs text-gray-400 font-medium tracking-widest uppercase">Fetching Details...</span>
+              </div>
+            ) : paymentData ? (
+              <>
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Transaction ID</span>
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white font-mono">
+                    {paymentData.transaction_id}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Date</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                    {new Date(paymentData.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Status</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-600 border border-emerald-100">
+                    {paymentData.status}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-4 mt-1 border-t border-gray-200 dark:border-gray-700/80">
+                  <span className="text-base font-medium text-gray-900 dark:text-white">Amount Paid</span>
+                  <span className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-600 to-teal-500 dark:from-green-400 dark:to-teal-300">
+                    ৳{paymentData.amount}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-sm text-rose-500 font-bold uppercase tracking-tighter">Details not found</p>
+                <p className="text-[10px] text-gray-400 mt-1">Please check your history for transaction info.</p>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 w-full">
