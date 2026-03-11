@@ -63,7 +63,7 @@ class UserAvailableModelsView(APIView):
         active_sub = Subscription.objects.filter(
             profile__user=request.user,
             is_active=True
-        ).select_related('offer').prefetch_related('offer__allowed_models').order_by('-created_at').first()
+        ).select_related('offer').prefetch_related('offer__allowed_models').order_by('-created_at')
 
         # ২. যদি সাবস্ক্রিপশন না থাকে
         if not active_sub or not active_sub.offer:
