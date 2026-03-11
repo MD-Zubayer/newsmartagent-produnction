@@ -5,7 +5,8 @@ import api from "@/lib/api";
 import { 
   FaMobileAlt, FaWhatsapp, FaHistory, FaCreditCard, 
   FaCopy, FaCheckCircle, FaArrowRight,
-  FaExchangeAlt, FaUserShield, FaArrowUp, FaArrowDown // নতুন আইকন FaArrowUp, FaArrowDown
+  FaExchangeAlt, FaUserShield, FaArrowUp, FaArrowDown,
+  FaLock, FaEnvelopeOpenText, FaShieldAlt // added for verification
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 
@@ -82,29 +83,9 @@ const [submitting, setSubmitting] = useState(false);
     }
   };
 
-  // --- ট্রান্সফার ফাংশন ---
-  const handleTransferBalance = async () => {
+  const startTransferFlow = () => {
     if (!receiverId || !transferAmount) return toast.error("Please provide all information correctly.");
-    
-    setSubmitting(true);
-    const loadingToast = toast.loading("Sending money...");
-
-    try {
-      await api.post("/transfer/", { 
-        receiver_unique_id: receiverId,
-        amount: transferAmount
-      });
-      toast.success(`${transferAmount} BDT Transfer successful!`, { id: loadingToast });
-      setReceiverId("");
-      setTransferAmount("");
-      fetchHistory();
-      setActiveTab("history");
-    } catch (err) {
-      const errorMsg = err.response?.data?.error || "Transfer failed.";
-      toast.error(errorMsg, { id: loadingToast });
-    } finally {
-      setSubmitting(false);
-    }
+    router.push(`/dashboard/transfer-verify?receiver_id=${receiverId}&amount=${transferAmount}`);
   };
 
   // --- ৩. লোডিং স্ট্যাট (Skeleton) ---
@@ -247,11 +228,11 @@ const [submitting, setSubmitting] = useState(false);
                 </div>
 
                 <button 
-                  onClick={handleTransferBalance}
-                  disabled={loading}
-                  className="w-full p-5 bg-indigo-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                  onClick={startTransferFlow}
+                  disabled={submitting}
+                  className="w-full p-5 bg-indigo-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-slate-900 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
                 >
-                  {loading ? "Processing..." : <>Send Balance <FaExchangeAlt /></>}
+                  {submitting ? "Processing..." : <>Next to Verify <FaArrowRight /></>}
                 </button>
               </div>
             </div>

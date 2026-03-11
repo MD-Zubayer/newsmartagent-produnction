@@ -495,11 +495,30 @@ class NSABalanceTransferView(APIView):
         except (ValueError, TypeError):
             return Response({"error": "Enter the correct amount."}, status=status.HTTP_400_BAD_REQUEST)     
 
-        # 2. Start transaction block (so that money is not lost)
+        # 2. OTP and Password Verification
+        password = request.data.get('password')
+        otp_code = request.data.get('otp_code')
+
+        if not password or not otp_code:
+            return Response({'error': 'Password and OTP code are required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not sender_user.check_password(password):
+            return Response({'error': 'Incorrect password.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 3. Start transaction block
         try:
             with transaction.atomic():
-                # Locking sender profile (to avoid race condition)
+                # Locking sender profile
                 sender_profile = Profile.objects.select_for_update().get(user=sender_user)
+
+                # Verify OTP
+                if not sender_profile.otp_code or str(sender_profile.otp_code) != str(otp_code):
+                    return Response({'error': 'Incorrect OTP code.'}, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Check OTP expiry
+                time_limit = sender_profile.otp_created_at + timedelta(minutes=5)
+                if now() > time_limit:
+                    return Response({'error': 'OTP has expired.'}, status=status.HTTP_400_BAD_REQUEST)
 
                 if sender_profile.acount_balance < amount:
                     return Response({'error': "Not enough balance."},status=status.HTTP_400_BAD_REQUEST )
@@ -515,6 +534,7 @@ class NSABalanceTransferView(APIView):
                     return Response({"error": "It is not possible to transfer yourself."}, status=status.HTTP_400_BAD_REQUEST)
 
                 sender_profile.acount_balance -= amount
+                sender_profile.otp_code = "" # Clear OTP after use
                 sender_profile.save()
 
                 receiver_profile.acount_balance += amount
@@ -563,15 +583,6 @@ class SendPaymentOTPView(APIView):
         return super().dispatch(*args, **kwargs)
     def post(self, request):
         user = request.user
-        profile = user.profile
-
-        otp = str(random.randint(100000, 999999))
-
-        profile.otp_code = otp
-        profile.otp_created_at = now()
-        profile.save()
-
-        
         subject = "Payment Verification Code - New Smart Agent"
         message = f"Hello {getattr(user, 'name', '') or getattr(user, 'email', '')},\n\nYour OTP for payment verification is: {otp}.\n\nThis verify code will expire in 5 minutes.\n\nThank you,\nNew Smart Agent Team"
         
@@ -665,7 +676,7 @@ class SendPaymentOTPView(APIView):
                     font-size: 13px;
                     color: #6b7280;
                     margin: 4px 0;
-                }}
+                    }}
             </style>
         </head>
         <body>
@@ -706,5 +717,152 @@ class SendPaymentOTPView(APIView):
                 html_message=html_message
             )
             return Response({"message": "OTP sent successfully to your email."})
+        except Exception as e:
+            return Response({"error": "Failed to send email."}, status=500)
+
+
+class SendTransferOTPView(APIView):
+    authentication_classes = [CookieJWTAuthentication] 
+    permission_classes = [IsAuthenticated]
+
+    @method_decorator(csrf_exempt)
+    def dispatch(self, *args, **kwargs):
+        return super().dispatch(*args, **kwargs)
+        
+    def post(self, request):
+        user = request.user
+        profile = user.profile
+
+        otp = str(random.randint(100000, 999999))
+
+        profile.otp_code = otp
+        profile.otp_created_at = now()
+        profile.save()
+
+        subject = "Transfer Verification Code - New Smart Agent"
+        message = f"Hello {getattr(user, 'name', '') or getattr(user, 'email', '')},\n\nYour OTP for balance transfer verification is: {otp}.\n\nThis verify code will expire in 5 minutes.\n\nThank you,\nNew Smart Agent Team"
+        
+        html_message = f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body {{
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    background-color: #f3f4f6;
+                    margin: 0;
+                    padding: 0;
+                    color: #1f2937;
+                }}
+                .email-container {{
+                    max-width: 600px;
+                    margin: 40px auto;
+                    background-color: #ffffff;
+                    border-radius: 12px;
+                    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+                    overflow: hidden;
+                    border: 1px solid #e5e7eb;
+                }}
+                .header {{
+                    background: linear-gradient(135deg, #111827 0%, #6366f1 100%);
+                    padding: 24px 20px;
+                    text-align: center;
+                }}
+                .header h1 {{
+                    color: #ffffff;
+                    margin: 0;
+                    font-size: 24px;
+                    font-weight: 700;
+                    letter-spacing: 0.5px;
+                }}
+                .content {{
+                    padding: 40px 32px;
+                    text-align: center;
+                }}
+                .content h2 {{
+                    color: #111827;
+                    font-size: 22px;
+                    margin-bottom: 16px;
+                }}
+                .content p {{
+                    font-size: 16px;
+                    line-height: 1.6;
+                    color: #4b5563;
+                    margin-bottom: 24px;
+                }}
+                .otp-box {{
+                    display: inline-block;
+                    background-color: #f5f3ff;
+                    border: 2px dashed #8b5cf6;
+                    border-radius: 12px;
+                    padding: 24px 48px;
+                    margin-bottom: 24px;
+                }}
+                .otp-code {{
+                    font-size: 36px;
+                    font-weight: 800;
+                    color: #5b21b6;
+                    letter-spacing: 8px;
+                    margin: 0;
+                }}
+                .security-notice {{
+                    background-color: #fff7ed;
+                    border-left: 4px solid #f97316;
+                    padding: 16px;
+                    text-align: left;
+                    border-radius: 0 8px 8px 0;
+                }}
+                .security-notice p {{
+                    margin: 0;
+                    color: #9a3412;
+                    font-size: 14px;
+                    font-weight: 500;
+                }}
+                .footer {{
+                    background-color: #f9fafb;
+                    padding: 24px;
+                    text-align: center;
+                    border-top: 1px solid #e5e7eb;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="email-container">
+                <div class="header">
+                    <h1>New Smart Agent</h1>
+                </div>
+                <div class="content">
+                    <h2>Balance Transfer Verification</h2>
+                    <p>Hello <strong>{getattr(user, 'name', '') or getattr(user, 'email', '')}</strong>,</p>
+                    <p>You are initiating a balance transfer. Please use the following OTP to confirm this transaction:</p>
+                    
+                    <div class="otp-box">
+                        <div class="otp-code">{otp}</div>
+                    </div>
+                    
+                    <div class="security-notice">
+                        <p>⚠️ <strong>Important:</strong> This code is valid for 5 minutes. If you did not initiate this transfer, please change your password immediately.</p>
+                    </div>
+                </div>
+                <div class="footer">
+                    <p>&copy; {now().year} New Smart Agent. All rights reserved.</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        
+        from_email = settings.EMAIL_HOST_USER
+        
+        try:
+            send_mail(
+                subject=subject,
+                message=message,
+                from_email=from_email,
+                recipient_list=[user.email],
+                html_message=html_message
+            )
+            return Response({"message": "Transfer OTP sent successfully to your email."})
         except Exception as e:
             return Response({"error": "Failed to send email."}, status=500)
