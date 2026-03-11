@@ -147,29 +147,6 @@ export default function HomePage() {
 
 
 
-        <div className="absolute inset-0 z-0 opacity-20 md:opacity-40 pointer-events-none overflow-hidden">
-          <ThreeScene>
-
-            
-            {/* Desktop Only: Decorative side images */}
-            <group className="hidden md:block">
-              <FloatingImage 
-                imgUrl="/3d_imge/IMG_20260310_221124_720.png" 
-                position={[-4, -2, -2]} 
-                scale={[1, 1, 1]} 
-                rotation={[0, 0.5, 0]}
-                speed={0.8}
-              />
-              <FloatingImage 
-                imgUrl="/3d_imge/IMG_20260310_221309_887.png" 
-                position={[5, -3, -1]} 
-                scale={[0.8, 0.8, 1]} 
-                rotation={[0.2, -0.2, 0]}
-                speed={1.2}
-              />
-            </group>
-          </ThreeScene>
-        </div>
 
         <motion.div 
           variants={staggerContainer}
