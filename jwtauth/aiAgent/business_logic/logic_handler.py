@@ -206,16 +206,24 @@ def get_ai_response(agent_config, full_prompt, history):
     from aiAgent.openai import generate_openai_reply
     from aiAgent.grok import generate_grok_reply
     from aiAgent.openrouter import generate_openrouter_reply
-    
+    # --- [DEBUG START] ---
+    logger.info("🛠️ --- AI DISPATCHER DEBUG START ---")
+    logger.info(f"🛠️ Agent ID: {agent_config.id} | Page ID: {agent_config.page_id}")
+    logger.info(f"🛠️ Config AI Model (Legacy): {agent_config.ai_model}")
     # 1. Determine model and provider
     if agent_config.selected_model:
+        logger.info(f"🛠️ Selected Model Found: {agent_config.selected_model.name}")
+        logger.info(f"🛠️ Provider Detected: {agent_config.selected_model.provider}")
         model_name = agent_config.selected_model.model_id
         provider = agent_config.selected_model.provider # gemini, openai, grok, openrouter
     else:
         # Fallback to legacy field
+        logger.warning("⚠️ WARNING: selected_model is NULL! Falling back to legacy fields.")
         model_name = agent_config.ai_model
         provider = 'openai' if 'gpt' in model_name.lower() else 'gemini'
-    
+        logger.info(f"🛠️ Fallback Provider: {provider} | Fallback Model: {model_name}")
+    logger.info(f"🚀 FINAL DISPATCH: Provider={provider}, Model={model_name}")
+    logger.info("🛠️ --- AI DISPATCHER DEBUG END ---")
     ai_response = None
     
     try:
@@ -223,12 +231,16 @@ def get_ai_response(agent_config, full_prompt, history):
         if provider == 'openai':
             ai_response = generate_openai_reply(full_prompt, history, agent_config=agent_config)
         elif provider == 'grok':
+            logger.info("🔥 CALLING GROK PROVIDER...")
             ai_response = generate_grok_reply(full_prompt, history, agent_config=agent_config)
         elif provider == 'openrouter':
+            logger.info("🌐 CALLING OPENROUTER PROVIDER...")
             ai_response = generate_openrouter_reply(full_prompt, history, agent_config=agent_config)
         elif provider == 'gemini':
+            logger.info("♊ CALLING GEMINI PROVIDER...")
             ai_response = generate_gemini_reply(full_prompt, history, agent_config=agent_config)
         else:
+            logger.error(f"🚨 UNKNOWN PROVIDER '{provider}'. Defaulting to Gemini/OpenAI logic.")
             if 'gpt' in model_name.lower():
                 ai_response = generate_openai_reply(full_prompt, history, agent_config=agent_config)
             else:
