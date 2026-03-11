@@ -1,11 +1,12 @@
 "use client";
 
+import React, { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import api from "@/lib/api";
 import { CheckCircle2, FileText, Home, Loader2 } from "lucide-react";
 
-export default function PaymentSuccessPage() {
+function PaymentSuccessContent() {
   const searchParams = useSearchParams();
   const paymentId = searchParams.get("payment_id");
   const [mounted, setMounted] = useState(false);
@@ -117,5 +118,17 @@ export default function PaymentSuccessPage() {
         <div className="h-2 w-full bg-gradient-to-r from-green-400 via-teal-400 to-emerald-400"></div>
       </div>
     </div>
+  );
+}
+
+export default function PaymentSuccessPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-[85vh] flex items-center justify-center">
+        <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
+      </div>
+    }>
+      <PaymentSuccessContent />
+    </Suspense>
   );
 }
