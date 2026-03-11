@@ -204,11 +204,9 @@ class Payment(models.Model):
                 notif_msg = ""
             #<!---------------- The new token will be added to the previous token in the profile ------------------!>
                 if self.transaction_id == 'BALANCE_PURCHASE' and offer:
-                    if profile.acount_balance >= self.amount:
-                        profile.acount_balance -= self.amount
-                        notif_msg = f"Subscription  activate using balance! after verify {offer.tokens} tokens added."
-                    else:
-                        raise ValueError("Insufficient profile balance.")
+                    
+                    notif_msg = f"Subscription  activate using balance! after verify {offer.tokens} tokens added."
+
 
                 if offer:
                     profile.word_balance += offer.tokens
