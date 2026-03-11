@@ -151,13 +151,7 @@ export default function HomePage() {
 
         <div className="absolute inset-0 z-0 opacity-20 md:opacity-40 pointer-events-none overflow-hidden">
           <ThreeScene>
-            {/* Desktop and Mobile: Centered branding icon */}
-            <FloatingImage 
-              imgUrl="/3d_imge/newsmartagent_icon.png" 
-              position={[0, 0, 0]} 
-              scale={[1.2, 1.2, 1]} 
-              speed={1.5}
-            />
+
             
             {/* Desktop Only: Decorative side images */}
             <group className="hidden md:block">
