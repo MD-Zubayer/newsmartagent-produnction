@@ -2,6 +2,11 @@ from rest_framework import serializers
 from aiAgent.models import AgentAI, TokenUsageLog, AIProviderModel
 
 
+class AIProviderModelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AIProviderModel # আপনার নতুন তৈরি করা মডেল
+        fields = ['id', 'name', 'model_id', 'provider']
+
 
 
 class AgentAIListSerializer(serializers.ModelSerializer):
@@ -9,6 +14,7 @@ class AgentAIListSerializer(serializers.ModelSerializer):
     List & details
     
     """
+    selected_model_detail = AIProviderModelSerializer(source='selected_model', read_only=True)
     class Meta:
         model = AgentAI
         fields = [
@@ -20,6 +26,7 @@ class AgentAIListSerializer(serializers.ModelSerializer):
             'system_prompt',
             'greeting_message',
             'ai_model',
+            'selected_model', 'selected_model_detail',
             'temperature',
             'max_tokens',
             'token_expires_at',
@@ -31,11 +38,6 @@ class AgentAIListSerializer(serializers.ModelSerializer):
  
 
 
-
-class AIProviderModelSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = AIProviderModel # আপনার নতুন তৈরি করা মডেল
-        fields = ['id', 'name', 'model_id', 'provider']
 
 
 
@@ -55,6 +57,7 @@ class AgentAISerializer(serializers.ModelSerializer):
             'system_prompt',
             'greeting_message',
             'ai_model',
+            'selected_model',
             'temperature',
             'max_tokens',
             'token_expires_at',
@@ -64,6 +67,7 @@ class AgentAISerializer(serializers.ModelSerializer):
             'access_token': {'write_only': True},     # শুধু write করা যাবে, response-এ দেখাবে না
             'webhook_secret': {'write_only': True},
             'token_expires_at': {'required': False},
+            'selected_model': {'required': False, 'allow_null': True},
         }
 
        # set validation serializer 
@@ -89,9 +93,9 @@ class AgentAISerializer(serializers.ModelSerializer):
              raise serializers.ValidationError("Max tokens must be at least 1.")
         return value
 
-        def create(self, validated_data):
-            user = self.context['request'].user
-            return AgentAI.objects.create(user=user, **validated_data)
+    def create(self, validated_data):
+        user = self.context['request'].user
+        return AgentAI.objects.create(user=user, **validated_data)
 
 
 
