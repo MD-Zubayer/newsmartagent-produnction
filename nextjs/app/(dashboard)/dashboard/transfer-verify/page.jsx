@@ -90,57 +90,80 @@ function TransferVerifyContent() {
           </div>
         </div>
 
-        <form onSubmit={handleFinalVerify} className="space-y-5">
-          {/* Password Input */}
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Account Password</label>
-            <div className="relative">
-              <FaLock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" />
-              <input 
-                type="password"
-                required
-                className="w-full p-5 pl-12 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-indigo-600 focus:bg-white outline-none font-bold text-slate-800 transition-all shadow-inner"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-          </div>
+<form onSubmit={handleFinalVerify} className="space-y-6">
+  {/* Password Input */}
+  <div className="space-y-2">
+    <label className="text-[11px] font-black text-slate-400 uppercase ml-2 tracking-widest flex items-center gap-2">
+      <FaLock className="text-indigo-500" /> Account Password
+    </label>
+    <div className="relative group">
+      <FaLock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-indigo-500 transition-colors" />
+      <input 
+        type="password"
+        required
+        className="w-full p-5 pl-12 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-indigo-600 focus:bg-white focus:ring-4 focus:ring-indigo-50 outline-none font-bold text-slate-800 transition-all shadow-inner"
+        placeholder="••••••••"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
+    </div>
+  </div>
 
-          {/* OTP Input */}
-          <div className="space-y-2">
-            <div className="flex justify-between items-center px-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email Code</label>
-                <button 
-                    type="button"
-                    onClick={sendOtp}
-                    disabled={sendingOtp}
-                    className="text-[9px] font-black text-indigo-600 uppercase hover:underline disabled:opacity-50"
-                >
-                    {sendingOtp ? "Sending..." : "Send Code"}
-                </button>
-            </div>
-            <div className="relative">
-              <FaEnvelopeOpenText className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" />
-              <input 
-                type="text"
-                required
-                className="w-full p-5 pl-12 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-indigo-600 focus:bg-white outline-none font-bold text-slate-800 tracking-[0.5em] text-center shadow-inner"
-                placeholder="000000"
-                value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value)}
-              />
-            </div>
-          </div>
+  {/* OTP Input with Integrated Send Button */}
+  <div className="space-y-2">
+    <label className="text-[11px] font-black text-slate-400 uppercase ml-2 tracking-widest flex items-center gap-2">
+      <FaEnvelopeOpenText className="text-indigo-500" /> Email Verification
+    </label>
+    <div className="relative flex items-center bg-slate-50 rounded-2xl border-2 border-transparent focus-within:border-indigo-600 focus-within:bg-white focus-within:ring-4 focus-within:ring-indigo-50 transition-all shadow-inner overflow-hidden">
+      <FaEnvelopeOpenText className="absolute left-5 text-slate-300 pointer-events-none" />
+      <input 
+        type="text"
+        required
+        maxLength={6}
+        className="w-full p-5 pl-12 pr-32 bg-transparent outline-none font-bold text-slate-800 tracking-[0.5em] text-lg"
+        placeholder="000000"
+        value={otpCode}
+        onChange={(e) => setOtpCode(e.target.value)}
+      />
+      
+      {/* Dynamic Action Button */}
+      <button 
+        type="button"
+        onClick={sendOtp}
+        disabled={sendingOtp}
+        className={`absolute right-2 px-4 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all
+          ${sendingOtp 
+            ? "bg-slate-200 text-slate-500 cursor-not-allowed" 
+            : "bg-indigo-600 text-white hover:bg-slate-900 shadow-lg shadow-indigo-200 active:scale-95"
+          }`}
+      >
+        {sendingOtp ? (
+          <span className="flex items-center gap-2">
+            <div className="w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
+            Sending
+          </span>
+        ) : "Send Code"}
+      </button>
+    </div>
+    <p className="text-[9px] text-slate-400 ml-2 italic">A 6-digit code will be sent to your inbox.</p>
+  </div>
 
-          <button 
-            type="submit"
-            disabled={submitting}
-            className="w-full p-6 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-[0.3em] shadow-xl shadow-indigo-100 hover:bg-slate-900 transition-all active:scale-95 disabled:opacity-50 mt-4"
-          >
-            {submitting ? "Verifying..." : "Confirm Transfer"}
-          </button>
-        </form>
+  {/* Main Action Button */}
+  <button 
+    type="submit"
+    disabled={submitting}
+    className="w-full p-6 bg-indigo-600 text-white rounded-2xl font-black uppercase text-xs tracking-[0.3em] shadow-xl shadow-indigo-100 hover:bg-slate-900 transition-all active:scale-[0.98] disabled:opacity-50 mt-4 flex justify-center items-center gap-3"
+  >
+    {submitting ? (
+      <>
+        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+        Verifying...
+      </>
+    ) : (
+      "Confirm Transfer"
+    )}
+  </button>
+</form>
 
         <p className="text-[9px] text-center text-slate-300 font-bold mt-8 uppercase tracking-tighter italic">
            Transactions are protected by end-to-end encryption.

@@ -86,58 +86,86 @@ export default function PaymentVerifyPage() {
           </p>
         </div>
 
-        <form onSubmit={handleFinalVerify} className="space-y-5">
-          {/* Password Input */}
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest">Account Password</label>
-            <div className="relative">
-              <FaLock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" />
-              <input 
-                type="password"
-                required
-                className="w-full p-5 pl-12 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-600 focus:bg-white outline-none font-bold text-slate-800 transition-all shadow-inner"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-          </div>
+        <form onSubmit={handleFinalVerify} className="space-y-6">
+  {/* Password Input */}
+  <div className="group space-y-2">
+    <label className="text-[11px] font-bold text-slate-500 uppercase ml-1 tracking-widest flex items-center gap-2">
+      <FaLock className="text-blue-500 text-[10px]" /> Account Password
+    </label>
+    <div className="relative overflow-hidden">
+      <input 
+        type="password"
+        required
+        className="w-full p-4 pl-12 bg-slate-50 rounded-2xl border-2 border-slate-100 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-50/50 outline-none font-bold text-slate-800 transition-all shadow-sm"
+        placeholder="••••••••"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
+      <FaLock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+    </div>
+  </div>
 
-          {/* OTP Input */}
-          <div className="space-y-2">
-            <div className="flex justify-between items-center px-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email Code</label>
-                <button 
-                    type="button"
-                    onClick={sendOtp}
-                    disabled={sendingOtp}
-                    className="text-[9px] font-black text-blue-600 uppercase hover:underline disabled:opacity-50"
-                >
-                    {sendingOtp ? "Sending..." : "Send Code"}
-                </button>
-            </div>
-            <div className="relative">
-              <FaEnvelopeOpenText className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" />
-              <input 
-                type="text"
-                required
-                className="w-full p-5 pl-12 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-600 focus:bg-white outline-none font-bold text-slate-800 tracking-[0.5em] text-center shadow-inner"
-                placeholder="000000"
-                value={otpCode}
-                onChange={(e) => setOtpCode(e.target.value)}
-              />
-            </div>
-          </div>
+  {/* OTP Input with Integrated Send Button */}
+  <div className="group space-y-2">
+    <label className="text-[11px] font-bold text-slate-500 uppercase ml-1 tracking-widest flex items-center gap-2">
+      <FaEnvelopeOpenText className="text-blue-500 text-[10px]" /> Verification Code
+    </label>
+    <div className="relative flex items-center bg-slate-50 rounded-2xl border-2 border-slate-100 focus-within:border-blue-500 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-50/50 transition-all shadow-sm">
+      {/* Icon */}
+      <FaEnvelopeOpenText className="absolute left-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+      
+      {/* Input */}
+      <input 
+        type="text"
+        required
+        maxLength={6}
+        className="w-full p-4 pl-12 pr-32 bg-transparent outline-none font-bold text-slate-800 tracking-[0.4em] text-lg"
+        placeholder="000000"
+        value={otpCode}
+        onChange={(e) => setOtpCode(e.target.value)}
+      />
 
-          <button 
-            type="submit"
-            disabled={submitting}
-            className="w-full p-6 bg-blue-600 text-white rounded-2xl font-black uppercase text-xs tracking-[0.3em] shadow-xl shadow-blue-100 hover:bg-slate-900 transition-all active:scale-95 disabled:opacity-50 mt-4"
-          >
-            {submitting ? "Verifying..." : "Complete Payment"}
-          </button>
-        </form>
+      {/* Dynamic Send Button Inside Input */}
+      <button 
+        type="button"
+        onClick={sendOtp}
+        disabled={sendingOtp}
+        className={`absolute right-2 px-4 py-2.5 rounded-xl font-bold text-[10px] uppercase tracking-wider transition-all
+          ${sendingOtp 
+            ? "bg-slate-200 text-slate-500 cursor-not-allowed" 
+            : "bg-blue-600 text-white hover:bg-blue-700 shadow-md shadow-blue-200 active:scale-95"
+          }`}
+      >
+        {sendingOtp ? (
+          <span className="flex items-center gap-1">
+            <svg className="animate-spin h-3 w-3 text-slate-500" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Sending
+          </span>
+        ) : "Send Code"}
+      </button>
+    </div>
+    <p className="text-[9px] text-slate-400 ml-2 italic">Check your email for the 6-digit verification code.</p>
+  </div>
 
+  {/* Submit Button */}
+  <button 
+    type="submit"
+    disabled={submitting}
+    className="w-full p-5 bg-slate-900 text-white rounded-2xl font-bold uppercase text-[11px] tracking-[0.3em] shadow-lg hover:bg-blue-600 hover:shadow-blue-200 transition-all active:scale-[0.98] disabled:opacity-50 mt-4 flex justify-center items-center gap-2"
+  >
+    {submitting ? (
+      <>
+        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+        Verifying...
+      </>
+    ) : (
+      "Confirm & Pay Now"
+    )}
+  </button>
+</form>
         <p className="text-[9px] text-center text-slate-300 font-bold mt-8 uppercase tracking-tighter italic">
            Your IP and device info are being logged for security.
         </p>
