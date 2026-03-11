@@ -10,3 +10,4 @@ nextjs/.env.local merge=ours
 nextjs/app/lib/* merge=ours
 # path/to/folder/* merge=ours
 .gitattributes merge=ours
+.github/workflows/deploy.yml merge=ours
