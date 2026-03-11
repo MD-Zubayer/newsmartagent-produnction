@@ -16,3 +16,4 @@ nextjs/app/lib/* merge=ours
 .gitattributes merge=ours
 .github/workflows/deploy.yml merge=ours
 
+nextjs/app/(main)/page.js merge=ours
