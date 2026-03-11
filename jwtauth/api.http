@@ -2,7 +2,7 @@
 ###
 GET http://dev.newsmartagent.com/api/AgentAI/available-models/
 Content-Type: application/json
-Cookie: access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzczMDU4NjA1LCJpYXQiOjE3NzMwNTUwMDUsImp0aSI6ImRmZWM5NGRlOWY4MTRjNWJiYTdlNmM3NmNkYzBhYWViIiwidXNlcl9pZCI6IjIifQ.6_onmhZWlnf--cJpbSBgS_kgFJ2YK2jVStzx-DJOVhA
+Cookie: access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzczMjQ2MTUyLCJpYXQiOjE3NzMyNDI1NTIsImp0aSI6ImI0NTg0ZjJiOTc4NDQzZDZhZmY4MmIwODI1OWEyMDZkIiwidXNlcl9pZCI6IjIifQ.6zjLAeaoyZHSXGjyfkGr0Uijr3Ut1N95CXpKRUbSKPc
 
 {
     'email': 'junayed75489@gmail.com',

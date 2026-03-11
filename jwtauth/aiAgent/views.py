@@ -53,7 +53,6 @@ class AgentAIViewSet(viewsets.ModelViewSet):
         return AgentAI.objects.filter(user=self.request.user).order_by('-created_at')
 
 
-
 class UserAvailableModelsView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -64,7 +63,6 @@ class UserAvailableModelsView(APIView):
             is_active=True
         ).values_list('offer_id', flat=True)
 
-        # ২. যদি কোনো একটিভ অফার না থাকে
         if not active_offer_ids:
             return Response({
                 "status": "no_active_plan",
@@ -72,19 +70,17 @@ class UserAvailableModelsView(APIView):
                 "models": []
             }, status=200)
 
-        # ৩. এই অফারগুলোর আন্ডারে থাকা সব একটিভ মডেলগুলো নেওয়া
-        # Distinct ব্যবহার করছি যাতে একই মডেল বারবার না আসে
+        # ২. এখানে 'offers__id__in' ব্যবহার করতে হবে কারণ related_name='offers'
         allowed_models = AIProviderModel.objects.filter(
-            offer_models__id__in=active_offer_ids,
+            offers__id__in=active_offer_ids, 
             is_active=True
         ).distinct()
 
-        # ৪. ডাটা সিরিয়ালাইজ করা
         serializer = AIProviderModelSerializer(allowed_models, many=True)
 
         return Response({
             "status": "success",
-            "count": allowed_models.count(),
+            "plan_count": len(active_offer_ids),
             "models": serializer.data
         })
 
