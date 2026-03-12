@@ -17,14 +17,24 @@ def generate_openai_reply(system_promt, messages, agent_config, memory_context="
                 'role': m['role'],
                 'content': m['content']
             })
+        temp = agent_config.temperature if agent_config.temperature is not None else 1.0
+        tokens = agent_config.max_tokens if agent_config.max_tokens is not None else 500
+        payload = {
+            "model": agent_config.ai_model,
+            "messages": formatted_messages,
+            "temperature": agent_config.temperature,
+        }
+        new_models = ["gpt-5", "o1", "o3", "gpt-4.1"]
+        if any(model_name in agent_config.ai_model.lower() for model_name in new_models):
+            payload["max_completion_tokens"] = agent_config.max_tokens
+            # নতুন মডেলগুলোতে temperature অনেক সময় ১ ই রাখা হয়
+            if "o1" in agent_config.ai_model or "o3" in agent_config.ai_model:
+                payload["temperature"] = 1
+        else:
+            payload["max_tokens"] = agent_config.max_tokens
 
-        response = client.chat.completions.create(
-            model=agent_config.ai_model,
-            messages=formatted_messages,
-            temperature=agent_config.temperature,
-            max_tokens=agent_config.max_tokens
-        )
-
+        # আনপ্যাক করে কল করা
+        response = client.chat.completions.create(**payload)
         reply =  response.choices[0].message.content.strip()
 
         output_tokens = response.usage.completion_tokens
