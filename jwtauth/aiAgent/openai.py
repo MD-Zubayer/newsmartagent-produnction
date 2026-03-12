@@ -6,7 +6,6 @@ from aiAgent.utils import count_openai_tokens
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 
-
 def generate_openai_reply(system_promt, messages, agent_config, memory_context=""):
     full_text = system_promt + memory_context + str(messages)
     input_tokens = count_openai_tokens(full_text, agent_config.ai_model)
