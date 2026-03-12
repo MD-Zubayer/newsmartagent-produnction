@@ -65,5 +65,9 @@ class SpreadsheetDetailView(APIView):
         if not sheet:
             return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
         
-        sheet.delete() # আগে ডিলিট হবে, তারপর রেসপন্স
-        return Response({'message': 'Deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+        # স্প্রেডশিট ডিলিট করার সাথে সাথে নলেজ বেসও ক্লিয়ার হবে
+        from embedding.models import SpreadsheetKnowledge
+        SpreadsheetKnowledge.objects.filter(user=request.user).delete()
+        
+        sheet.delete()
+        return Response({'message': 'Deleted and knowledge cleared'}, status=status.HTTP_204_NO_CONTENT)
