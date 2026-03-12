@@ -8,13 +8,10 @@ services:
     volumes:
     # named volume
       - postgres_data:/var/lib/postgresql/data
-    env_file:
-      - /home/ubuntu/smartagent.env
     environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-    command: postgres -c shared_buffers=4GB -c effective_cache_size=10GB -c work_mem=64MB -c maintenance_work_mem=1GB
+      - POSTGRES_DB=new_smart_db
+      - POSTGRES_USER=zubayer
+      - POSTGRES_PASSWORD=mypassword 
     restart: always
     networks:
       - smart-network
@@ -33,8 +30,6 @@ services:
       redis-server
       --loadmodule /opt/redis-stack/lib/redisearch.so
       --loadmodule /opt/redis-stack/lib/rejson.so
-      --maxmemory 6gb
-      --maxmemory-policy allkeys-lru
       --protected-mode no
       --appendonly yes
       --appendfsync everysec
@@ -43,28 +38,22 @@ services:
   backend:
     build: ./jwtauth
     container_name: newsmartagent-django
-    command: gunicorn jwtauth.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --workers 5 --threads 4 --timeout 120
+    command: gunicorn jwtauth.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --workers 2 --threads 4 --timeout 120
     volumes:
       - ./jwtauth:/app
       - static_volume:/app/static
       - media_volume:/app/media
     
     env_file:
-      - /home/ubuntu/smartagent.env
+      - .env
     environment:
-      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@newsmartagent-db:5432/${POSTGRES_DB}     
+      - DATABASE_URL=postgres://zubayer:mypassword@newsmartagent-db:5432/new_smart_db
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - REDIS_URL=${REDIS_URL}
+      - REDIS_URL=redis://newsmartagent-redis:6379/0
     depends_on:
       - db
       - redis
-    deploy:
-      update_config:
-        order: start-first # জিরো ডাউনটাইম নিশ্চিত করবে
-      resources:
-        limits:
-          memory: 4G
     networks:
       - smart-network
 
@@ -73,17 +62,12 @@ services:
     build: ./nextjs
     container_name: newsmartagent-nextjs
     environment:
-      - NEXT_PUBLIC_BASE_URL=https://newsmartagent.com
-      - NEXT_PUBLIC_API_URL=https://newsmartagent.com/api
+      - NEXT_PUBLIC_BASE_URL=https://dev.newsmartagent.com
+      - NEXT_PUBLIC_API_URL=https://dev.newsmartagent.com/api
     restart: always
     depends_on:
       - backend
-    deploy:
-      update_config:
-        order: start-first
-      resources:
-        limits:
-          memory: 4G
+
     
     networks:
       - smart-network
@@ -99,9 +83,6 @@ services:
     depends_on:
        - backend
        - frontend
-    deploy:
-      update_config:
-        order: start-first
     restart: always
     networks:
       - smart-network
@@ -110,15 +91,15 @@ services:
   celery_worker:
     build: ./jwtauth
     container_name: newsmartagent-celery-worker
-    command: celery -A jwtauth worker -Q chat_queue -c 8 --prefetch-multiplier 1 --max-tasks-per-child 1000 --loglevel=info
+    command: celery -A jwtauth worker -Q chat_queue -c 2 --loglevel=info
     volumes:
       - ./jwtauth:/app
     env_file:
-      - /home/ubuntu/smartagent.env
+      - .env
     
     environment:
-      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@newsmartagent-db:5432/${POSTGRES_DB}
-      - REDIS_URL=${REDIS_URL}
+      - DATABASE_URL=postgres://zubayer:mypassword@newsmartagent-db:5432/new_smart_db
+      - REDIS_URL=redis://newsmartagent-redis:6379/0
 
     depends_on:
       - db
@@ -134,10 +115,10 @@ services:
     volumes:
       - ./jwtauth:/app
     env_file:
-      - /home/ubuntu/smartagent.env
+      - .env
     environment:
-      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@newsmartagent-db:5432/${POSTGRES_DB}
-      - REDIS_URL=${REDIS_URL}
+      - DATABASE_URL=postgres://zubayer:mypassword@newsmartagent-db:5432/new_smart_db
+      - REDIS_URL=redis://newsmartagent-redis:6379/0
     depends_on:
       - db
       - redis
@@ -149,12 +130,12 @@ services:
     container_name: newsmartagent-n8n
     environment:
       N8N_HOST: n8n.newsmartagent.com
-      N8N_URL: https://n8n.newsmartagent.com
-      WEBHOOK_URL: https://n8n.newsmartagent.com
+      N8N_URL: https://dev-n8n.newsmartagent.com
+      WEBHOOK_URL: https://dev-n8n.newsmartagent.com
       N8N_TRUST_PROXY: "true"
       EXPLICIT_TRUST_PROXY: "true" # এটি মাস্ট যোগ করুন
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "false" # কনফিগ ফাইল পারমিশন ইস্যু এড়াতে
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      N8N_ENCRYPTION_KEY: sHZJzk+tGNCcLzOt6Px6fBM1kOJc7SaA
       N8N_PROTOCOL: https
       GENERIC_TIMEZONE: Asia/Dhaka
       NODE_OPTIONS: --max-old-space-size=2048
@@ -162,18 +143,15 @@ services:
       DB_TYPE: postgresdb
       DB_POSTGRESDB_HOST: newsmartagent-db
       DB_POSTGRESDB_PORT: 5432
-      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
-      DB_POSTGRESDB_USER: ${POSTGRES_USER}
-      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_POSTGRESDB_DATABASE: new_smart_db
+      DB_POSTGRESDB_USER: zubayer
+      DB_POSTGRESDB_PASSWORD: mypassword
     volumes:
       - n8n_data:/home/node/.n8n
     depends_on:
       - backend
       - redis
       - db
-    deploy:
-      update_config:
-        order: start-first
     restart: always 
     networks:
       - smart-network
@@ -181,10 +159,10 @@ services:
   flower:
     image: mher/flower
     container_name: newsmartagent-flower
-    command: celery --broker=${REDIS_URL} flower --basic_auth=${FLOWER_BASIC_AUTH}
+    command: celery --broker=redis://newsmartagent-redis:6379/0 flower --basic_auth=admin:1234
     environment:
-      - CELERY_BROKER_URL=${REDIS_URL}
-      - FLOWER_BASIC_AUTH=${FLOWER_BASIC_AUTH}
+      - CELERY_BROKER_URL=redis://newsmartagent-redis:6379/0
+      - FLOWER_BASIC_AUTH=admin:1234
     ports:
       - "5555:5555"
     depends_on:
@@ -199,15 +177,12 @@ services:
     container_name: newsmartagent-cloudflare-tunnel
     user: root
     restart: always
-    deploy:
-      update_config:
-        order: start-first
     dns:
       - 1.1.1.1 
     networks:
       - smart-network
     volumes:
-      - /home/ubuntu/cloudflare-config:/etc/cloudflared:ro
+      - /home/md-zubayer/.cloudflared:/etc/cloudflared:ro
     command: tunnel --config /etc/cloudflared/config.yml run
     depends_on:
       - nginx
