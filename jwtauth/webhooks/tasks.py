@@ -118,7 +118,7 @@ def process_ai_reply_task(self, data):
         cached_res = get_cached_reply(page_id, msg_text=text)
 
         if not cached_res:
-            cached_res = fuzzy_match(page_id, text, threshold=60)
+            cached_res = fuzzy_match(page_id, text, threshold=80)
         
         if not cached_res:
             cluster_map = get_cluster_map(page_id)
