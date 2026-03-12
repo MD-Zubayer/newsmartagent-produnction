@@ -79,7 +79,7 @@ def process_ai_reply_task(self, data):
         # সবচেয়ে সাম্প্রতিক/আপডেটেড agent কনফিগ ব্যবহার হবে
         agent_config = AgentAI.objects.filter(
             page_id=page_id, is_active=True
-        ).order_by('-updated_at').first()
+        ).order_by('-id').first()  # সর্বোচ্চ ID = সর্বশেষ তৈরি agent
         if not agent_config:
             logger.error(f'Error: No active agent found for page_id {page_id}')
             return
