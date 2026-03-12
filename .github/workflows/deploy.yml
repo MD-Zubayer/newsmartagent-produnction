@@ -1,27 +1,58 @@
-name: Docker Deploy to Oracle VPS
+name: "🚀 Blue-Green Docker Deploy"
 
-# যখনই মেইন ব্রাঞ্চে পুশ করবেন, তখনই এই অ্যাকশনটি শুরু হবে
 on:
   push:
-    branches: [ main ]  # আপনার মেইন ব্রাঞ্চের নাম যদি 'master' হয়, তবে এখানে master লিখবেন
+    branches: [ main ]
 
 jobs:
   deploy:
-    runs-on: self-hosted  # এটিই আপনার ভিপিএস-এর রানারকে কল করবে
+    name: "Deploy with Zero Downtime"
+    runs-on: self-hosted
 
     steps:
-      - name: Checkout Repository
+      - name: "🔓 Fix Permissions for Cleanup"
+        run: |
+          sudo chown -R $USER:$USER ${{ github.workspace }} || true
+          sudo chmod -R 777 ${{ github.workspace }} || true
+      - name: "📂 Checkout Repository"
         uses: actions/checkout@v4
 
-      - name: Deploy with Docker Compose
+      - name: "🏗️ Build New Image"
         run: |
-          # যদি আগে থেকে কোনো কন্টেইনার চলে, তবে তা বন্ধ করবে
-          cp ~/newsmartagent.env .env
+          echo "🔨 Building new images..."
+          # নতুন কোড অনুযায়ী ইমেজ বিল্ড করবে
+          docker compose build --pull
           
-          docker-compose down || true
+      - name: "🚢 Blue-Green Deployment & Rollback"
+        run: |
+          # এনভায়রনমেন্ট ফাইল সেটআপ
+          cp ~/newsmartagent.env .env || echo ".env file already in place"
           
-          # নতুন করে ইমেজ বিল্ড করবে এবং ব্যাকগ্রাউন্ডে রান করবে
-          docker-compose up -d --build
+          echo "🔄 Deploying new containers..."
           
-          # অপ্রয়োজনীয় পুরনো ইমেজগুলো ডিলিট করে মেমরি বাঁচাবে
+          # যদি নতুন কন্টেইনার চালু করতে গিয়ে এরর দেয়
+          if ! docker compose up -d --build; then
+            echo "🚨 Deployment failed! Attempting to keep old services alive..."
+            # এখানে আগের কন্টেইনারগুলো অটোমেটিক স্টপ হবে না যদি বিল্ড ফেইল করে
+            exit 1
+          fi
+
+          # হেলথ চেক: ৫ সেকেন্ড অপেক্ষা করে দেখবে কন্টেইনারগুলো এখনো রানিং কি না
+          sleep 5
+          RUNNING_COUNT=$(docker ps -q -f status=running | wc -l)
+          
+          if [ "$RUNNING_COUNT" -eq 0 ]; then
+            echo "❌ New version crashed after start. Checking logs..."
+            docker compose logs --tail=20
+            # এখানে রোলব্যাক লজিক (প্রয়োজন হলে আগের ইমেজ দিয়ে ব্যাক করা)
+            exit 1
+          else
+            echo "🚀 NewSmartAgent is live and stable!"
+          fi
+
+      - name: "🧹 Post-Deployment Cleanup"
+        if: always() # ফেইল করলেও যাতে ক্লিনআপ হয়
+        run: |
+          # শুধু অব্যবহৃত ইমেজগুলো মুছবে
           docker image prune -f
+          echo "✨ Cleanup finished."

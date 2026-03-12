@@ -66,7 +66,7 @@ def set_cached_reply(agent_id, msg_text, reply, model, input_tokens=0, output_to
     incr_message_frequency(agent_id, msg_hash)
     
     
-def fuzzy_match(agent_id, msg_text, threshold=75): # ⚡ RapidFuzz সাধারণত ০-১০০ স্কেলে কাজ করে
+def fuzzy_match(agent_id, msg_text, threshold=85): # ⚡ RapidFuzz সাধারণত ০-১০০ স্কেলে কাজ করে
     normalized_input = normalize_text(msg_text)
     
     # ১. ওই এজেন্টের সব ক্যাশ কি (keys) নিয়ে আসা

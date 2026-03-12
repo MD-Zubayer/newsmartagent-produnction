@@ -74,11 +74,20 @@ def process_ai_reply_task(self, data):
   
     # ২. এজেন্ট ও প্রোফাইল লোড
     try:
-        agent_config = AgentAI.objects.get(page_id=page_id, is_active=True)
+        # 🔥 Fix: get() এর বদলে filter().first() ব্যবহার করা হচ্ছে
+        # এতে একই page_id-এ একাধিক active agent থাকলেও ক্র্যাশ হবে না
+        # সবচেয়ে সাম্প্রতিক/আপডেটেড agent কনফিগ ব্যবহার হবে
+        agent_config = AgentAI.objects.filter(
+            page_id=page_id, is_active=True
+        ).order_by('-id').first()  # সর্বোচ্চ ID = সর্বশেষ তৈরি agent
+        if not agent_config:
+            logger.error(f'Error: No active agent found for page_id {page_id}')
+            return
         user_profile = agent_config.user.profile
     except Exception as e:
         logger.error(f'Error: Agent not found for page_id {page_id} - {e}')
         return
+
     # ৪. পাবলিক কমেন্ট হ্যান্ডলিং এবং লুপ প্রোটেকশন
     should_continue, reason = handle_public_comment_logic(data, agent_config, r)
     
@@ -90,14 +99,14 @@ def process_ai_reply_task(self, data):
         return
         
         
-    # ৪. সেফ রেডিস লক
-    
+    # ৪. redis lock
     _, lock_key, lock_value = acquire_user_lock(self, r, sender_id)
 
     try:
         # ৫. ইনিশিয়ালাইজেশন
         reply, success, total_tokens = "System busy.", False, 0
         ai_data = {'success': False, 'total_tokens': 0}
+        query_vector = None  # 🔥 Fix: Avoid UnboundLocalError
 
         post_context = ""
         if request_type == 'facebook_comment':
@@ -109,7 +118,7 @@ def process_ai_reply_task(self, data):
         cached_res = get_cached_reply(page_id, msg_text=text)
 
         if not cached_res:
-            cached_res = fuzzy_match(page_id, text, threshold=60)
+            cached_res = fuzzy_match(page_id, text, threshold=80)
         
         if not cached_res:
             cluster_map = get_cluster_map(page_id)
@@ -124,19 +133,38 @@ def process_ai_reply_task(self, data):
                     logger.info(f"🧬 CLUSTER MATCH FOUND for '{text[:30]}' -> Cluster: {cluster_id}")
             
         if not cached_res:
-            from embedding.utils import get_gemini_embedding
-            # RAG কোয়েরি ফরম্যাট অনুযায়ী এম্বেডিং বানান
-            rag_query = f"{post_context} {text}" if (request_type == 'facebook_comment' and post_context) else text
-            query_vector = get_gemini_embedding(rag_query)
+            from webhooks.constants import embedding_skip_keyword
+            from django.db.models import Q
+            from embedding.models import SpreadsheetKnowledge
             
-            if query_vector:
-                # ৩. ভেক্টর ক্যাশ চেক (Redis DB 7)
-                vector_hits = search_similar_vectors(page_id, query_vector, top_k=1)
-                if vector_hits and vector_hits[0]['score'] < 0.12: # ০.১২ থ্রেশহোল্ড (খুব ভালো মিল)
-                    similar_text = vector_hits[0]['text']
-                    cached_res = get_cached_reply(page_id, msg_text=similar_text)
-                    if cached_res:
-                        logger.info(f"🔮 VECTOR CACHE HIT! '{text[:20]}' matched with '{similar_text[:20]}'")
+            # Optimization: Skip if no knowledge base exists
+            has_knowledge = SpreadsheetKnowledge.objects.filter(user=agent_config.user).exists()
+            
+            # Optimization: Skip for common keywords
+            skip_margin = 10
+            skip_embedding = False
+            text_len = len(text)
+            for kw in embedding_skip_keyword:
+                if kw.lower() in text.lower() and abs(text_len - len(kw)) <= skip_margin:
+                    skip_embedding = True
+                    break
+
+            if has_knowledge and not skip_embedding and len(text) > 3:
+                from embedding.utils import get_gemini_embedding
+                # RAG কোয়েরি ফরম্যাট অনুযায়ী এম্বেডিং বানান
+                rag_query = f"{post_context} {text}" if (request_type == 'facebook_comment' and post_context) else text
+                query_vector = get_gemini_embedding(rag_query)
+                
+                if query_vector:
+                    # ৩. ভেক্টর ক্যাশ চেক (Redis DB 7)
+                    vector_hits = search_similar_vectors(page_id, query_vector, top_k=1)
+                    if vector_hits and vector_hits[0]['score'] < 0.12: # ০.১২ থ্রেশহোল্ড (খুব ভালো মিল)
+                        similar_text = vector_hits[0]['text']
+                        cached_res = get_cached_reply(page_id, msg_text=similar_text)
+                        if cached_res:
+                            logger.info(f"🔮 VECTOR CACHE HIT! '{text[:20]}' matched with '{similar_text[:20]}'")
+            else:
+                logger.info(f"⏭️ Skipping Gemini Embedding for User {agent_config.user.email} (No knowledge or skip kw)")
             
         
         if cached_res:
@@ -161,6 +189,8 @@ def process_ai_reply_task(self, data):
         
             if delivered and msg_id:
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                # Cleanup processing lock
+                r.delete(f'processing_msg:{msg_id}')
         
             return   # 🔥🔥🔥 HARD STOP
         else:
@@ -215,6 +245,8 @@ def process_ai_reply_task(self, data):
             delivered = deliver_reply_to_n8n(data, reply, page_id, agent_config.access_token)
             if delivered and msg_id:
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                # Cleanup processing lock
+                r.delete(f'processing_msg:{msg_id}')
             
             logger.info(f"Final reply processed for {sender_id}. Success: {success}")
 

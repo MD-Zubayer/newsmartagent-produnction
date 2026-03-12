@@ -55,6 +55,19 @@ export const metadata = {
     siteName: "New Smart Agent",
     locale: "en_US",
     type: "website",
+    images: [
+    {
+      url: "/new-smart-agent.png", // আপনার লোগো বা একটি ব্যানার ইমেজ
+      width: 1200,
+      height: 630,
+      alt: "New Smart Agent - AI Automation Platform",
+    },
+  ],
+},
+// favicon এবং অ্যাপল টাচ আইকন এর জন্য icons সেকশনটি এভাবে দিতে পারেন
+icons: {
+  icon: "/new-smart-agent.png",
+  apple: "/new-smart-agent.png",
   },
 
   twitter: {
@@ -72,14 +85,42 @@ export const metadata = {
 
 
 export default function RootLayout({ children }) {
- const structuredData = {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    name: "New Smart Agent",
-    url: "https://newsmartagent.com",
-    applicationCategory: "BusinessApplication",
-  };
+ const structuredData =[ {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "New Smart Agent",
+  url: "https://newsmartagent.com",
+  description:
+    "AI automation platform for Facebook pages, messenger automation, and smart customer management.",
+  applicationCategory: "BusinessApplication",
+  operatingSystem: "Web",
 
+  offers: {
+    "@type": "Offer",
+    price: "100",
+    priceCurrency: "BDT",
+    priceSpecification: {
+      "@type": "PriceSpecification",
+      price: "100",
+      priceCurrency: "BDT",
+      valueAddedTaxIncluded: false
+    },
+    availability: "https://schema.org/InStock",
+    url: "https://newsmartagent.com/signup"
+  }
+}, 
+{
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "New Smart Agent",
+    "url": "https://newsmartagent.com",
+    "logo": "https://newsmartagent.com/new-smart-agent.png",
+    "sameAs": [
+      "https://www.facebook.com/share/1G5CKXCgCk/", // আপনার ফেসবুক পেজ লিঙ্ক
+      "http://www.youtube.com/@NewSmartAgent"
+    ]
+  }
+ ]
 
 
   return (

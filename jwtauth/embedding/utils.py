@@ -98,7 +98,54 @@ def sync_spreadsheet_to_knowledge(user, grid_data):
 
     return updated_count
 
+import re
+from embedding.models import DocumentKnowledge
 
+def chunk_text(text, max_words=100, overlap=20):
+    """
+    Splits a large text into smaller chunks with word overlap.
+    """
+    words = text.split()
+    chunks = []
+    
+    if len(words) <= max_words:
+        return [text]
+        
+    for i in range(0, len(words), max_words - overlap):
+        chunk = " ".join(words[i : i + max_words])
+        if chunk:
+            chunks.append(chunk)
+            
+    return chunks
+
+def process_document_text(user, text, doc_title="Generic Document"):
+    """
+    Take generic text, chunk it, embed and save it.
+    """
+    print(f"\n--- [DEBUG] Processing Document for {user.email} ---")
+    
+    text = re.sub(r'\s+', ' ', text).strip()
+    if not text:
+        return 0
+        
+    chunks = chunk_text(text, max_words=150, overlap=30)
+    saved_chunks = 0
+    
+    for i, content in enumerate(chunks):
+        vector = get_gemini_embedding(content)
+        if vector:
+            DocumentKnowledge.objects.create(
+                user=user,
+                doc_title=doc_title,
+                chunk_index=i,
+                content=content,
+                embedding=vector
+            )
+            saved_chunks += 1
+            print(f"[DEBUG] Saved chunk {i} ({len(content)} chars)")
+            
+    print(f"--- [DEBUG] Finished Process. Saved {saved_chunks} chunks. ---\n")
+    return saved_chunks
 
 
 

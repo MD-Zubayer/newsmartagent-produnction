@@ -13,7 +13,7 @@ import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import time
-from embedding.models import SpreadsheetKnowledge
+from embedding.models import SpreadsheetKnowledge, DocumentKnowledge
 from pgvector.django import CosineDistance
 from embedding.utils import get_gemini_embedding
 from settings.models import AgentSettings
@@ -63,6 +63,14 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
     
     try:
         if not query_vector:
+            # OPTIMIZATION: Only generate embedding if user has knowledge base
+            has_spread_knowledge = SpreadsheetKnowledge.objects.filter(user=agent_config.user).exists()
+            has_doc_knowledge = DocumentKnowledge.objects.filter(user=agent_config.user).exists()
+            
+            if not has_spread_knowledge and not has_doc_knowledge:
+                logger.info(f"⏭️ Skipping embedding: User {agent_config.user.email} has no records in Knowledge bases.")
+                return "", "Answer naturally using your knowledge.", None
+
             skip_margin = 10
             skip_embedding = False
             text_len = len(text)
@@ -79,55 +87,76 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                     break
         
             if not skip_embedding:
+                logger.info(f"Generating Gemini Embedding inside perform_rag_search for '{text[:20]}'")
                 query_vector = get_gemini_embedding(rag_query)
                 logger.info(f"DEBUG: Vector Generated: {True if query_vector else False}")
+        else:
+            logger.info("Using existing query_vector passed to perform_rag_search")
         
         if query_vector:
-            related_docs = SpreadsheetKnowledge.objects.filter(
+            # Search Spreadsheet Knowledge
+            related_sheets = SpreadsheetKnowledge.objects.filter(
                 user=agent_config.user
             ).annotate(
                 distance=CosineDistance('embedding', query_vector)
             ).order_by('distance')[:3]
 
-            if related_docs:
-                top_distance = related_docs[0].distance
-                if top_distance < 0.45:
-                    matched_content = [doc.content for doc in related_docs]
-                    clean_data = "\n".join(matched_content)
-                    sheet_context = f"\n[DATA]:\n{clean_data}"
-                    post_info = f"User commented on this post: '{post_context_text}'. " if post_context_text else ""
+            # Search Document Knowledge
+            related_docs = DocumentKnowledge.objects.filter(
+                user=agent_config.user
+            ).annotate(
+                distance=CosineDistance('embedding', query_vector)
+            ).order_by('distance')[:3]
+
+            best_sheet_distance = related_sheets[0].distance if related_sheets else 1.0
+            best_doc_distance = related_docs[0].distance if related_docs else 1.0
+            
+            # Combine contents based on distance thresholds
+            matched_content = []
+            overall_best_dist = min(best_sheet_distance, best_doc_distance)
+            
+            # If distance < 0.65, we consider it a match (strong < 0.45, weak < 0.65)
+            if best_sheet_distance < 0.65:
+                matched_content.extend([doc.content for doc in related_sheets if doc.distance < 0.65])
+                
+            if best_doc_distance < 0.65:
+                matched_content.extend([doc.content for doc in related_docs if doc.distance < 0.65])
+                
+            if matched_content:
+                clean_data = "\n".join(matched_content)
+                sheet_context = f"\n[KNOWLEDGE BASE DATA]:\n{clean_data}"
+                post_info = f"User commented on this post: '{post_context_text}'. " if post_context_text else ""
+                
+                if overall_best_dist < 0.45:
                     extra_instruction = f"""
-                            {post_info}  strictly using only the content inside [DATA].
+                            {post_info}  strictly using only the content inside [KNOWLEDGE BASE DATA].
                             Keep it short, clear, friendly, natural, conversational..
                             No markdown, no bold text, no formatting.
                             If appropriate, end with a short, warm follow-up question that encourages the user to continue.
                             {order_instruction}
                             """
-                    logger.info(f">>> Strong RAG Match! Distance: {top_distance}")
-                
-                elif top_distance < 0.65:
-                    matched_content = [doc.content for doc in related_docs]
-                    sheet_context = f"\n[DATA]:\n{'\n'.join(matched_content)}"
+                    logger.info(f">>> Strong RAG Match! overall best distance: {overall_best_dist}")
+                else:
                     extra_instruction = f"""
-                    You may use [DATA] if relevant.
+                    You may use [KNOWLEDGE BASE DATA] if relevant.
                     If not, answer politely using your knowledge.
                     {order_instruction}
                     """
-                    logger.info(f">>> Weak RAG Match! Distance: {top_distance}")
-                else:
-                    sheet_context = ""
-                    extra_instruction = f"""
-                    Answer naturally using your knowledge.
-                    If unsure, politely ask for clarification.
-                    {order_instruction}
-                    """
-                    logger.info(f">>> No useful RAG match. Distance: {top_distance}")
+                    logger.info(f">>> Weak RAG Match! overall best distance: {overall_best_dist}")
             else:
+                sheet_context = ""
                 extra_instruction = f"""
                 Answer naturally using your knowledge.
+                If unsure, politely ask for clarification.
                 {order_instruction}
                 """
-                logger.info(">>> Embedding skipped due to keyword + message length.")
+                logger.info(f">>> No useful RAG match. overall best distance: {overall_best_dist}")
+        else:
+            extra_instruction = f"""
+            Answer naturally using your knowledge.
+            {order_instruction}
+            """
+            logger.info(">>> Embedding skipped due to keyword + message length.")
     except Exception as e:
         logger.error(f"RAG Search Error: {e}")
         extra_instruction = f" Answer politely. If data missing, ask to wait. {order_instruction}"
@@ -206,16 +235,24 @@ def get_ai_response(agent_config, full_prompt, history):
     from aiAgent.openai import generate_openai_reply
     from aiAgent.grok import generate_grok_reply
     from aiAgent.openrouter import generate_openrouter_reply
-    
+    # --- [DEBUG START] ---
+    logger.info("🛠️ --- AI DISPATCHER DEBUG START ---")
+    logger.info(f"🛠️ Agent ID: {agent_config.id} | Page ID: {agent_config.page_id}")
+    logger.info(f"🛠️ Config AI Model (Legacy): {agent_config.ai_model}")
     # 1. Determine model and provider
     if agent_config.selected_model:
+        logger.info(f"🛠️ Selected Model Found: {agent_config.selected_model.name}")
+        logger.info(f"🛠️ Provider Detected: {agent_config.selected_model.provider}")
         model_name = agent_config.selected_model.model_id
         provider = agent_config.selected_model.provider # gemini, openai, grok, openrouter
     else:
         # Fallback to legacy field
+        logger.warning("⚠️ WARNING: selected_model is NULL! Falling back to legacy fields.")
         model_name = agent_config.ai_model
         provider = 'openai' if 'gpt' in model_name.lower() else 'gemini'
-    
+        logger.info(f"🛠️ Fallback Provider: {provider} | Fallback Model: {model_name}")
+    logger.info(f"🚀 FINAL DISPATCH: Provider={provider}, Model={model_name}")
+    logger.info("🛠️ --- AI DISPATCHER DEBUG END ---")
     ai_response = None
     
     try:
@@ -223,12 +260,16 @@ def get_ai_response(agent_config, full_prompt, history):
         if provider == 'openai':
             ai_response = generate_openai_reply(full_prompt, history, agent_config=agent_config)
         elif provider == 'grok':
+            logger.info("🔥 CALLING GROK PROVIDER...")
             ai_response = generate_grok_reply(full_prompt, history, agent_config=agent_config)
         elif provider == 'openrouter':
+            logger.info("🌐 CALLING OPENROUTER PROVIDER...")
             ai_response = generate_openrouter_reply(full_prompt, history, agent_config=agent_config)
         elif provider == 'gemini':
+            logger.info("♊ CALLING GEMINI PROVIDER...")
             ai_response = generate_gemini_reply(full_prompt, history, agent_config=agent_config)
         else:
+            logger.error(f"🚨 UNKNOWN PROVIDER '{provider}'. Defaulting to Gemini/OpenAI logic.")
             if 'gpt' in model_name.lower():
                 ai_response = generate_openai_reply(full_prompt, history, agent_config=agent_config)
             else:
@@ -247,7 +288,13 @@ def get_ai_response(agent_config, full_prompt, history):
             status = ai_response.get('status', 'unknown')
             
             reply = str(reply).replace('**', '').replace('*', '').strip()
-            success = (status == 'success') or (len(reply) > 5 and "System busy" not in reply)
+            
+            # If explicit failure status is given, rely on it
+            if status in ['error', 'empty_response', 'failed']:
+                success = False
+            else:
+                success = (status == 'success') or (len(reply) > 5 and "System busy" not in reply)
+                
             error_info = ai_response.get('error_message') if not success else ""
             
             return {
@@ -286,7 +333,7 @@ def get_ai_response(agent_config, full_prompt, history):
 
 def deliver_reply_to_n8n(data, reply, page_id, access_token):
     """Deliver final reply to n8n and ensures JSON validation"""
-    webhook_url = "https://dev-n8n.newsmartagent.com/webhook/fb-comment-message-delivery"
+    webhook_url = "https://n8n.newsmartagent.com/webhook/fb-comment-message-delivery"
     
     payload = {
         "sender_id": str(data.get('sender_id', '')),
@@ -342,10 +389,18 @@ def acquire_user_lock(task_instance, redis_client, sender_id):
     return is_locked, lock_key, lock_value
 
 def is_duplicate_or_outdated(msg_id, incoming_ts, agent_config, sender_id, redis_client):
-    if msg_id and redis_client.get(f'processed_msg:{msg_id}'):
-        logger.info(f"Duplicate message detected: {msg_id}")
-        return True
-    
+    if msg_id:
+        # 1. Check if already permanently processed
+        if redis_client.get(f'processed_msg:{msg_id}'):
+            logger.info(f"Duplicate message detected (Already Processed): {msg_id}")
+            return True
+        
+        # 2. Check if currently being processed (Race Condition Prevention)
+        # We use a 'processing' key with 60s expiry to ensure one worker handles it
+        if not redis_client.set(f'processing_msg:{msg_id}', '1', nx=True, ex=60):
+            logger.info(f"⏭️ Task Already in Progress for msg_id: {msg_id}")
+            return True
+
     if incoming_ts:
         try:
             incoming_ts = float(incoming_ts)

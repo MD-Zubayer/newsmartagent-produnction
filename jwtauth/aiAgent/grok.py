@@ -35,7 +35,13 @@ def generate_grok_reply(system_prompt, messages, agent_config):
             max_tokens=agent_config.max_tokens
         )
 
-        reply = response.choices[0].message.content.strip()
+        reply = response.choices[0].message.content
+        if reply:
+            reply = reply.strip()
+            status = "success"
+        else:
+            reply = "System busy: Grok returned an empty response."
+            status = "empty_response"
         
         # Grok tokens (approximation if not provided by usage)
         input_tokens = getattr(response.usage, 'prompt_tokens', 0)
@@ -48,7 +54,7 @@ def generate_grok_reply(system_prompt, messages, agent_config):
             "output_tokens": output_tokens,
             "total_tokens": total_tokens,
             "model_name": model_name,
-            "status": "success"
+            "status": status
         }
 
     except Exception as e:

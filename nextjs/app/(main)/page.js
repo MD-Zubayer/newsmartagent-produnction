@@ -147,16 +147,6 @@ export default function HomePage() {
 
 
 
-        <div className="absolute inset-0 z-0 opacity-10 md:opacity-20 pointer-events-none overflow-hidden flex items-center justify-center">
-          <motion.img 
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ duration: 1, delay: 0.5 }}
-            src="/3d_imge/newsmartagent_icon.png" 
-            alt="New Smart Agent Icon"
-            className="w-48 md:w-64 h-auto object-contain opacity-50"
-          />
-        </div>
 
         <motion.div 
           variants={staggerContainer}
@@ -326,8 +316,10 @@ export default function HomePage() {
             viewport={{ once: true }}
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-10 relative"
           >
-            
-            
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full opacity-5 pointer-events-none hidden lg:flex justify-between items-center px-10">
+              <img src="/3d_imge/IMG_20260310_221431_617.png" alt="" className="w-40 h-auto" />
+              <img src="/3d_imge/IMG_20260310_221340_589.png" alt="" className="w-40 h-auto" />
+            </div>
             {services.map((service, index) => (
               <motion.div 
                 key={index}

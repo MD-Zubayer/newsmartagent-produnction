@@ -74,7 +74,7 @@ def generate_gemini_reply(system_prompt, messages, agent_config):
             "output_tokens": output_tokens,
             "total_tokens": total_tokens,
             "model_name": model_name,
-            "status": "success" if reply else "empty"
+            "status": "success" if reply else "empty_response"
         }
 
     except Exception as e:

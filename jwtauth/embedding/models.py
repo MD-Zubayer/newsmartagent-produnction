@@ -28,3 +28,25 @@ class SpreadsheetKnowledge(models.Model):
     def __str__(self):
         return f"{self.user.email}"
 
+
+class DocumentKnowledge(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='document_knowledge')
+    doc_title = models.CharField(max_length=255, blank=True)
+    chunk_index = models.IntegerField(default=0)
+    content = models.TextField()
+    embedding = VectorField(dimensions=768, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            HnswIndex(
+                name='doc_vector_hnsw_idx',
+                fields=['embedding'],
+                m=16,
+                ef_construction=64,
+                opclasses=['vector_cosine_ops']
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.user.email} - {self.doc_title} (Chunk {self.chunk_index})"

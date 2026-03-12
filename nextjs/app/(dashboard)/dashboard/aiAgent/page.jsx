@@ -22,6 +22,7 @@ export default function AIAgentPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState(null);
   const [showToken, setShowToken] = useState(false);
+  const [availableModels, setAvailableModels] = useState([]);
 
   const initialFormState = {
     name: "",
@@ -31,7 +32,8 @@ export default function AIAgentPage() {
     webhook_secret: "",
     system_prompt: "You are a helpful, professional assistant. Keep responses clear and concise.",
     greeting_message: "Hi there 👋 How can I help you today?",
-    ai_model: "gemini-2.5-flash",
+    ai_model: "",
+    selected_model: "",
     temperature: 0.7,
     max_tokens: 300,
     is_active: true,
@@ -41,6 +43,7 @@ export default function AIAgentPage() {
 
   useEffect(() => {
     fetchAgents();
+    fetchAvailableModels();
   }, []);
 
   const fetchAgents = async () => {
@@ -55,6 +58,27 @@ export default function AIAgentPage() {
     }
   };
 
+const fetchAvailableModels = async () => {
+  try {
+    const res = await api.get("/AgentAI/available-models/");
+    if (res.data.status === "success") {
+      const models = res.data.models || [];
+      setAvailableModels(models);
+      
+      // ডিফল্টভাবে প্রথম মডেলের ID সেট করুন
+      if (!editingAgent && models.length > 0) {
+        setFormData(prev => ({
+          ...prev,
+          selected_model: models[0].id, // এখানে model_id নয়, ডাটাবেজ ID পাঠান
+          ai_model: models[0].model_id // ব্যাকআপের জন্য টেক্সটও থাকল
+        }));
+      }
+    }
+  } catch (err) {
+    console.error("Failed to load available models:", err);
+  }
+};
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
@@ -63,18 +87,23 @@ export default function AIAgentPage() {
     }));
   };
 
-  const openModal = (agent = null) => {
+const openModal = (agent = null) => {
     if (agent && agent.id) {
       setEditingAgent(agent);
-      // এডিট মোডে টোকেন ফিল্ড খালি রাখা ভালো যাতে ইউজার ভুল করে পুরনো টোকেন বদলে না ফেলে
       setFormData({ 
         ...agent,
-        access_token: "", // খালি রাখা হচ্ছে যাতে ডাটাবেজ থেকে আগেরটা না হারায়
+        // যদি agent.selected_model একটি অবজেক্ট হয়, তবে আইডি নিন, নতুবা সরাসরি মান নিন
+        selected_model: agent.selected_model?.id || agent.selected_model || "",
+        access_token: "", 
         webhook_secret: "" 
       });
     } else {
       setEditingAgent(null);
       setFormData(initialFormState);
+      // নতুন এজেন্ট হলে প্রথম এভেইলবল মডেলটি সেট করে দিন
+      if (availableModels.length > 0) {
+        setFormData(prev => ({ ...prev, selected_model: availableModels[0].id }));
+      }
     }
     setShowToken(false);
     setModalOpen(true);
@@ -281,12 +310,18 @@ export default function AIAgentPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-6">
-                <select name="ai_model" value={formData.ai_model} onChange={handleChange} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none">
-                  <option value="models/gemini-2.5-flash">Gemini 2.5 Flash</option>
-                  <option value="models/gemini-2.0-flash"> Gemini 2.0 flash</option>
-                 
-                  <option value="gpt-4o-mini">GPT-4o Mini</option>
-                </select>
+                <select 
+  name="selected_model" // ai_model এর বদলে selected_model দিন
+  value={formData.selected_model} 
+  onChange={handleChange} 
+  className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none"
+>
+  {availableModels.map((model) => (
+    <option key={model.id} value={model.id}> {/* value হিসেবে model.id (Primary Key) ব্যবহার করুন */}
+      {model.name} ({model.provider})
+    </option>
+  ))}
+</select>
                 <input type="number" name="max_tokens" value={formData.max_tokens} onChange={handleChange} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" placeholder="Max Tokens" />
               </div>
 

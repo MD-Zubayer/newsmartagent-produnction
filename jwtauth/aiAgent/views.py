@@ -3,7 +3,7 @@ from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
-from aiAgent.models import AgentAI, TokenUsageLog, DashboardAILog
+from aiAgent.models import AgentAI, TokenUsageLog, DashboardAILog, AIProviderModel
 from aiAgent.serializers import AgentAISerializer, AgentAIListSerializer, TokenUsageAnalyticsSerializer
 from rest_framework.views import APIView
 from datetime import timedelta
@@ -53,35 +53,34 @@ class AgentAIViewSet(viewsets.ModelViewSet):
         return AgentAI.objects.filter(user=self.request.user).order_by('-created_at')
 
 
-
 class UserAvailableModelsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # ১. ইউজারের লেটেস্ট একটিভ সাবস্ক্রিপশন এবং তার অফারটি বের করা
-        # prefetch_related ব্যবহার করছি যাতে এক কোয়েরিতেই allowed_models চলে আসে
-        active_sub = Subscription.objects.filter(
+        # ১. ইউজারের সকল একটিভ সাবস্ক্রিপশনের অফার আইডিগুলো বের করা
+        active_offer_ids = Subscription.objects.filter(
             profile__user=request.user,
             is_active=True
-        ).select_related('offer').prefetch_related('offer__allowed_models').order_by('-created_at').first()
+        ).values_list('offer_id', flat=True)
 
-        # ২. যদি সাবস্ক্রিপশন না থাকে
-        if not active_sub or not active_sub.offer:
+        if not active_offer_ids:
             return Response({
                 "status": "no_active_plan",
-                "message": "You don't have any active subscription. Please purchase a plan.",
+                "message": "You don't have any active subscription.",
                 "models": []
             }, status=200)
 
-        # ৩. অফারের আন্ডারে থাকা একটিভ মডেলগুলো নেওয়া
-        allowed_models = active_sub.offer.allowed_models.filter(is_active=True)
-        
-        # ৪. সিরিয়ালাইজ করে ডেটা পাঠানো
+        # ২. এখানে 'offers__id__in' ব্যবহার করতে হবে কারণ related_name='offers'
+        allowed_models = AIProviderModel.objects.filter(
+            offers__id__in=active_offer_ids, 
+            is_active=True
+        ).distinct()
+
         serializer = AIProviderModelSerializer(allowed_models, many=True)
 
         return Response({
             "status": "success",
-            "plan_name": active_sub.offer.name,
+            "plan_count": len(active_offer_ids),
             "models": serializer.data
         })
 

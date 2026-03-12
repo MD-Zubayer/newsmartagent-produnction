@@ -70,6 +70,12 @@ class AgentAI(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     
 
+    def save(self, *args, **kwargs):
+        # Sync legacy ai_model field with selected_model if present
+        if self.selected_model:
+            self.ai_model = self.selected_model.model_id
+        super().save(*args, **kwargs)
+
     def is_token_valid(self):
         if not self.token_expires_at:
             return True
