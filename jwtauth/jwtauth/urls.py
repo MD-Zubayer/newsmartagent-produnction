@@ -46,7 +46,8 @@ urlpatterns = [
     
     # অ্যাপ ভিত্তিক ইউআরএল
     path('api/webhooks/', include('webhooks.urls')),
-    path('api/AgentAI/', include('aiAgent.urls')), # এই লাইনটি এখন কাজ করবে
+    path('api/AgentAI/', include('aiAgent.urls')),
     path('api/datasheet/', include("datasheet.urls")),
+    path('api/embedding/', include("embedding.urls")),
     path('api/agent-state/', AgentDashboardStatsView.as_view(), name='agent-stats')
 ]

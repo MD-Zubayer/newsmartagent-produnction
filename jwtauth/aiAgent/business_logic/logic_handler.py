@@ -13,7 +13,7 @@ import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import time
-from embedding.models import SpreadsheetKnowledge
+from embedding.models import SpreadsheetKnowledge, DocumentKnowledge
 from pgvector.django import CosineDistance
 from embedding.utils import get_gemini_embedding
 from settings.models import AgentSettings
@@ -64,9 +64,11 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
     try:
         if not query_vector:
             # OPTIMIZATION: Only generate embedding if user has knowledge base
-            has_knowledge = SpreadsheetKnowledge.objects.filter(user=agent_config.user).exists()
-            if not has_knowledge:
-                logger.info(f"⏭️ Skipping embedding: User {agent_config.user.email} has no records in SpreadsheetKnowledge.")
+            has_spread_knowledge = SpreadsheetKnowledge.objects.filter(user=agent_config.user).exists()
+            has_doc_knowledge = DocumentKnowledge.objects.filter(user=agent_config.user).exists()
+            
+            if not has_spread_knowledge and not has_doc_knowledge:
+                logger.info(f"⏭️ Skipping embedding: User {agent_config.user.email} has no records in Knowledge bases.")
                 return "", "Answer naturally using your knowledge.", None
 
             skip_margin = 10
@@ -92,51 +94,69 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
             logger.info("Using existing query_vector passed to perform_rag_search")
         
         if query_vector:
-            related_docs = SpreadsheetKnowledge.objects.filter(
+            # Search Spreadsheet Knowledge
+            related_sheets = SpreadsheetKnowledge.objects.filter(
                 user=agent_config.user
             ).annotate(
                 distance=CosineDistance('embedding', query_vector)
             ).order_by('distance')[:3]
 
-            if related_docs:
-                top_distance = related_docs[0].distance
-                if top_distance < 0.45:
-                    matched_content = [doc.content for doc in related_docs]
-                    clean_data = "\n".join(matched_content)
-                    sheet_context = f"\n[DATA]:\n{clean_data}"
-                    post_info = f"User commented on this post: '{post_context_text}'. " if post_context_text else ""
+            # Search Document Knowledge
+            related_docs = DocumentKnowledge.objects.filter(
+                user=agent_config.user
+            ).annotate(
+                distance=CosineDistance('embedding', query_vector)
+            ).order_by('distance')[:3]
+
+            best_sheet_distance = related_sheets[0].distance if related_sheets else 1.0
+            best_doc_distance = related_docs[0].distance if related_docs else 1.0
+            
+            # Combine contents based on distance thresholds
+            matched_content = []
+            overall_best_dist = min(best_sheet_distance, best_doc_distance)
+            
+            # If distance < 0.65, we consider it a match (strong < 0.45, weak < 0.65)
+            if best_sheet_distance < 0.65:
+                matched_content.extend([doc.content for doc in related_sheets if doc.distance < 0.65])
+                
+            if best_doc_distance < 0.65:
+                matched_content.extend([doc.content for doc in related_docs if doc.distance < 0.65])
+                
+            if matched_content:
+                clean_data = "\n".join(matched_content)
+                sheet_context = f"\n[KNOWLEDGE BASE DATA]:\n{clean_data}"
+                post_info = f"User commented on this post: '{post_context_text}'. " if post_context_text else ""
+                
+                if overall_best_dist < 0.45:
                     extra_instruction = f"""
-                            {post_info}  strictly using only the content inside [DATA].
+                            {post_info}  strictly using only the content inside [KNOWLEDGE BASE DATA].
                             Keep it short, clear, friendly, natural, conversational..
                             No markdown, no bold text, no formatting.
                             If appropriate, end with a short, warm follow-up question that encourages the user to continue.
                             {order_instruction}
                             """
-                    logger.info(f">>> Strong RAG Match! Distance: {top_distance}")
-                
-                elif top_distance < 0.65:
-                    matched_content = [doc.content for doc in related_docs]
-                    sheet_context = f"\n[DATA]:\n{'\n'.join(matched_content)}"
+                    logger.info(f">>> Strong RAG Match! overall best distance: {overall_best_dist}")
+                else:
                     extra_instruction = f"""
-                    You may use [DATA] if relevant.
+                    You may use [KNOWLEDGE BASE DATA] if relevant.
                     If not, answer politely using your knowledge.
                     {order_instruction}
                     """
-                    logger.info(f">>> Weak RAG Match! Distance: {top_distance}")
-                else:
-                    sheet_context = ""
-                    extra_instruction = f"""
-                    Answer naturally using your knowledge.
-                    If unsure, politely ask for clarification.
-                    {order_instruction}
-                    """
-                    logger.info(f">>> No useful RAG match. Distance: {top_distance}")
+                    logger.info(f">>> Weak RAG Match! overall best distance: {overall_best_dist}")
             else:
+                sheet_context = ""
                 extra_instruction = f"""
                 Answer naturally using your knowledge.
+                If unsure, politely ask for clarification.
                 {order_instruction}
                 """
-                logger.info(">>> Embedding skipped due to keyword + message length.")
+                logger.info(f">>> No useful RAG match. overall best distance: {overall_best_dist}")
+        else:
+            extra_instruction = f"""
+            Answer naturally using your knowledge.
+            {order_instruction}
+            """
+            logger.info(">>> Embedding skipped due to keyword + message length.")
     except Exception as e:
         logger.error(f"RAG Search Error: {e}")
         extra_instruction = f" Answer politely. If data missing, ask to wait. {order_instruction}"
