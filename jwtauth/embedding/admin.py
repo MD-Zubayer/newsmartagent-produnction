@@ -3,7 +3,7 @@ from .models import DocumentKnowledge
 
 @admin.register(DocumentKnowledge)
 class DocumentKnowledgeAdmin(admin.ModelAdmin):
-    list_display = ('user', 'doc_title', 'chunk_index', 'created_at', 'get_embedding_preview')
+    list_display = ('id', 'user', 'doc_title', 'chunk_index', 'created_at', 'get_embedding_preview')
     list_filter = ('user', 'created_at', 'doc_title')
     search_fields = ('doc_title', 'content', 'user__email')
     readonly_fields = ('created_at', 'embedding_full_view')

@@ -139,7 +139,7 @@ def process_document_text(user, text, doc_title="Generic Document"):
                 doc_title=doc_title,
                 chunk_index=i,
                 content=content,
-                embedding=vector
+                embedding=list(vector)
             )
             saved_chunks += 1
             print(f"[DEBUG] Saved chunk {i} ({len(content)} chars)")

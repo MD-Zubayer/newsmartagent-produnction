@@ -20,7 +20,7 @@ import {
   Trash2,
   X,
   List as ListIcon
-} from "lucide-react";
+} from "lucide-center";
 import toast from "react-hot-toast";
 
 /* ================= FILE MENU MODAL ================= */
@@ -93,15 +93,24 @@ export default function DocumentEditor() {
     setShowFileMenu(false);
   };
 
-  const loadDoc = (title) => {
-    // We only have the text embedded, we can't fully "load" the editable rich text back right now, 
-    // but we can set the title to overwrite it. 
-    // Usually, RAG systems don't reconstruct the full doc in editor, but we'll set the title so they can append/overwrite.
-    setDocTitle(title);
-    if (editorRef.current) {
-        editorRef.current.innerHTML = `<div style="color: grey; font-style: italic;">(Editing existing knowledge index for: ${title}...)</div>`;
+  // --- UPDATED LOAD FUNCTION ---
+  const loadDoc = async (title) => {
+    setLoading(true);
+    try {
+      const res = await api.get(`/embedding/document/?doc_title=${encodeURIComponent(title)}`);
+      setDocTitle(res.data.doc_title);
+      if (editorRef.current) {
+          // প্লেইন টেক্সট হিসেবে কন্টেন্ট লোড করা
+          editorRef.current.innerText = res.data.text; 
+      }
+      setShowFileMenu(false);
+      toast.success("Document loaded successfully");
+    } catch (err) {
+      toast.error("Failed to load document content");
+      console.error(err);
+    } finally {
+      setLoading(false);
     }
-    setShowFileMenu(false);
   };
 
   const deleteDoc = async (title) => {
@@ -110,13 +119,13 @@ export default function DocumentEditor() {
         await api.delete('/embedding/document/', { data: { doc_title: title } });
         toast.success(`Deleted ${title}`);
         if(docTitle === title) createNewDoc();
-        // The menu will refresh itself when it re-opens or we could force a state update, but user will likely close it.
         setShowFileMenu(false);
     } catch(err) { 
         toast.error("Delete failed");
     }
   };
 
+  // --- UPDATED SAVE FUNCTION ---
   const handleSave = async () => {
     if (!editorRef.current) return;
     const textContent = editorRef.current.innerText || "";
@@ -126,21 +135,26 @@ export default function DocumentEditor() {
     }
 
     setLoading(true);
-    const savePromise = api.post("/embedding/document/", {
-      doc_title: docTitle,
-      text: textContent,
-    });
-
-    toast.promise(savePromise, {
-      loading: "Saving and Embedding Document...",
-      success: (res) => `Saved successfully! Generated ${res.data.chunks_saved} chunks.`,
-      error: (err) => err.response?.data?.error || "Failed to save document.",
-    });
-
+    
+    // আমরা প্রথমে PUT ট্রাই করব, যদি টাইটেল এক্সিস্ট করে তবে আপডেট হবে। 
+    // যদি টাইটেল নতুন হয় (৪৪০ এরর বা ৪৪৪ এরর দেয়), তবে POST ট্রাই করবে।
     try {
-      await savePromise;
+      const res = await api.put("/embedding/document/", {
+        doc_title: docTitle,
+        text: textContent,
+      });
+      toast.success(`Saved and updated! Generated ${res.data.chunks_saved} chunks.`);
     } catch (error) {
-      console.error(error);
+      // যদি PUT মেথড কাজ না করে (নতুন ফাইল), তবে POST মেথড কল করবে
+      try {
+        const res = await api.post("/embedding/document/", {
+          doc_title: docTitle,
+          text: textContent,
+        });
+        toast.success(`New document created! Generated ${res.data.chunks_saved} chunks.`);
+      } catch (postErr) {
+        toast.error(postErr.response?.data?.error || "Failed to save document.");
+      }
     } finally {
       setLoading(false);
     }
@@ -246,8 +260,10 @@ export default function DocumentEditor() {
           suppressContentEditableWarning
           ref={editorRef}
           onPaste={(e) => {
-            // Force plain text paste to keep vector clean OR allow basic formatting.
-            // Allowed default for now.
+            // প্লেইন টেক্সট পেস্ট নিশ্চিত করা (ভেক্টর এমবেডিংয়ের জন্য ভালো)
+            e.preventDefault();
+            const text = e.clipboardData.getData("text/plain");
+            document.execCommand("insertText", false, text);
           }}
         >
           {/* Start typing... */}
