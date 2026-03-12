@@ -22,12 +22,17 @@ def generate_openai_reply(system_promt, messages, agent_config, memory_context="
         }
 
         new_models = ["gpt-5", "o1", "o3", "gpt-4.1"]
+        # nano এবং mini দুইটাই চেক করুন
         is_new_model = any(m_name in agent_config.ai_model.lower() for m_name in new_models)
         
+        # মডেলের নামে mini বা nano থাকলে temperature ১ হতে হবে
+        force_temp_one = any(x in agent_config.ai_model.lower() for x in ["mini", "nano", "o1", "o3"])
+
         if is_new_model:
             payload["max_completion_tokens"] = agent_config.max_tokens if agent_config.max_tokens else 500
-            if "mini" in agent_config.ai_model.lower() or "o1" in agent_config.ai_model.lower() or "o3" in agent_config.ai_model.lower():
-                payload["temperature"] = 1.0
+            
+            if force_temp_one:
+                payload["temperature"] = 1.0  # এরর থেকে বাঁচতে ফিক্সড ১
             else:
                 payload["temperature"] = agent_config.temperature if agent_config.temperature is not None else 0.7
         else:
