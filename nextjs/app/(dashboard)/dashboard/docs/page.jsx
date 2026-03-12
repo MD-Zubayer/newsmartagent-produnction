@@ -20,7 +20,7 @@ import {
   Trash2,
   X,
   List as ListIcon
-} from "lucide-center";
+} from "lucide-react";
 import toast from "react-hot-toast";
 
 /* ================= FILE MENU MODAL ================= */
