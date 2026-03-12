@@ -268,7 +268,13 @@ def get_ai_response(agent_config, full_prompt, history):
             status = ai_response.get('status', 'unknown')
             
             reply = str(reply).replace('**', '').replace('*', '').strip()
-            success = (status == 'success') or (len(reply) > 5 and "System busy" not in reply)
+            
+            # If explicit failure status is given, rely on it
+            if status in ['error', 'empty_response', 'failed']:
+                success = False
+            else:
+                success = (status == 'success') or (len(reply) > 5 and "System busy" not in reply)
+                
             error_info = ai_response.get('error_message') if not success else ""
             
             return {

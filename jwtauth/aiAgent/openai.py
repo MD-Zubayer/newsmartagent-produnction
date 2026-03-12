@@ -56,6 +56,7 @@ def generate_openai_reply(system_promt, messages, agent_config, memory_context="
 
         if raw_reply:
             reply = raw_reply.strip()
+            result_status = "success"
         else:
             # Fallback: check for a refusal reason and surface it
             refusal = getattr(message, 'refusal', None)
@@ -63,6 +64,7 @@ def generate_openai_reply(system_promt, messages, agent_config, memory_context="
                 reply = f"[AI Refusal] {refusal}"
             else:
                 reply = f"System busy: model '{agent_config.ai_model}' returned an empty response."
+            result_status = "empty_response"  # ← success না, কারণ content আসেনি
 
         output_tokens = response.usage.completion_tokens if response.usage.completion_tokens else count_openai_tokens(reply, agent_config.ai_model)
         total_tokens = input_tokens + output_tokens
@@ -75,7 +77,7 @@ def generate_openai_reply(system_promt, messages, agent_config, memory_context="
             "output_tokens": output_tokens,
             "total_tokens": total_tokens,
             "model_name": agent_config.ai_model,
-            "status": "success"
+            "status": result_status  # ← এখন সঠিকভাবে "success" বা "empty_response"
         }
 
     except Exception as e:
