@@ -43,16 +43,26 @@ def generate_openai_reply(system_promt, messages, agent_config, memory_context="
         response = client.chat.completions.create(**payload)
         
         # --- সেফলি রিপ্লাই এক্সট্রাক্ট করা ---
-        raw_reply = response.choices[0].message.content
-        
+        message = response.choices[0].message
+        raw_reply = message.content
+
         # ডিবাগ করার জন্য টার্মিনালে প্রিন্ট করুন
         print(f"\n--- [DEBUG] Raw AI Reply Length: {len(raw_reply) if raw_reply else 0} ---")
-        print(f"--- [DEBUG] Content: {raw_reply}\n")
+        print(f"--- [DEBUG] Content: {raw_reply}")
+        # Newer models (e.g. gpt-5-nano) may return None in content; log full message for diagnosis
+        if not raw_reply:
+            print(f"--- [DEBUG] Full message object: {message}")
+        print()
 
         if raw_reply:
             reply = raw_reply.strip()
         else:
-            reply = "System busy (Empty response from AI)."
+            # Fallback: check for a refusal reason and surface it
+            refusal = getattr(message, 'refusal', None)
+            if refusal:
+                reply = f"[AI Refusal] {refusal}"
+            else:
+                reply = f"System busy: model '{agent_config.ai_model}' returned an empty response."
 
         output_tokens = response.usage.completion_tokens if response.usage.completion_tokens else count_openai_tokens(reply, agent_config.ai_model)
         total_tokens = input_tokens + output_tokens
