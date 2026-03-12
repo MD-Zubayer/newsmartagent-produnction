@@ -9,7 +9,30 @@ CACHE_DB = 2  # আপনার normal cache db
 CLUSTER_DB = 4
 
 # -------------------- Vector Embedding Save -------------------- #
+def ensure_index_exists():
+    try:
+        r.execute_command("FT.INFO", "idx:embeddings")
+    except redis.exceptions.ResponseError as e:
+        if "Unknown index name" in str(e):
+            print("🚀 Creating RediSearch index: idx:embeddings")
+            r.execute_command(
+                "FT.CREATE", "idx:embeddings",
+                "ON", "HASH",
+                "PREFIX", 1, "emb:",
+                "SCHEMA",
+                "page_id", "TAG",
+                "text", "TEXT",
+                "embedding", "VECTOR", "HNSW", 6,
+                "TYPE", "FLOAT32",
+                "DIM", 768,
+                "DISTANCE_METRIC", "COSINE"
+            )
+            print("✅ Index idx:embeddings created successfully.")
+        else:
+            raise e
+
 def save_vector_embedding(agent_id, text, embedding_vector):
+    ensure_index_exists()
     vec_bytes = np.array(embedding_vector, dtype=np.float32).tobytes()
     key = f"emb:{uuid.uuid4()}"
     
@@ -22,6 +45,7 @@ def save_vector_embedding(agent_id, text, embedding_vector):
 
 # -------------------- Vector Search -------------------- #
 def search_similar_vectors(agent_id, query_vector, top_k=3):
+    ensure_index_exists()
     vec_bytes = np.array(query_vector, dtype=np.float32).tobytes()
     query = f'(@page_id:{{{agent_id}}})=>[KNN {top_k} @embedding $vec AS vector_score]'
     
