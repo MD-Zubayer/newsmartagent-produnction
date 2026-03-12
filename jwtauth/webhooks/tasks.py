@@ -74,11 +74,20 @@ def process_ai_reply_task(self, data):
   
     # ২. এজেন্ট ও প্রোফাইল লোড
     try:
-        agent_config = AgentAI.objects.get(page_id=page_id, is_active=True)
+        # 🔥 Fix: get() এর বদলে filter().first() ব্যবহার করা হচ্ছে
+        # এতে একই page_id-এ একাধিক active agent থাকলেও ক্র্যাশ হবে না
+        # সবচেয়ে সাম্প্রতিক/আপডেটেড agent কনফিগ ব্যবহার হবে
+        agent_config = AgentAI.objects.filter(
+            page_id=page_id, is_active=True
+        ).order_by('-updated_at').first()
+        if not agent_config:
+            logger.error(f'Error: No active agent found for page_id {page_id}')
+            return
         user_profile = agent_config.user.profile
     except Exception as e:
         logger.error(f'Error: Agent not found for page_id {page_id} - {e}')
         return
+
     # ৪. পাবলিক কমেন্ট হ্যান্ডলিং এবং লুপ প্রোটেকশন
     should_continue, reason = handle_public_comment_logic(data, agent_config, r)
     
