@@ -18,7 +18,8 @@ import {
   CpuChipIcon,
   UsersIcon,      // 🔥 নতুন আইকন
   KeyIcon,        // 🔥 ওটিপি বা কি-এর জন্য
-  ChartBarIcon    // 🔥 এনালাইটিক্স এর জন্য
+  ChartBarIcon,    // 🔥 এনালাইটিক্স এর জন্য
+  DocumentTextIcon // For the Word-like Editor
 } from "@heroicons/react/24/outline";
 import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
@@ -40,6 +41,7 @@ export default function Sidebar({ viewMode }) {
     { name: "Orders", href: "/dashboard/orders", icon: ShoppingCartIcon, roles: ["user"] },
     { name: "Connect", href: "/dashboard/connect", icon: LinkIcon, roles: ["user"] },
     { name: "Sheet", href: user?.sheet_id ? `/dashboard/sheet/${user.sheet_id}` : "/dashboard/user", icon: TableCellsIcon, roles: ["user"] },
+    { name: "Docs", href: "/dashboard/docs", icon: DocumentTextIcon, roles: ["user"] },
     { name: "Offers", href: "/dashboard/offers", icon: TagIcon, roles: ["user"] },
     { name: "History", href: "/dashboard/history", icon: ClockIcon, roles: ["user"] },
     
