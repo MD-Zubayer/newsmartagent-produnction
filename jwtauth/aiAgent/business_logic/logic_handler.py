@@ -307,7 +307,7 @@ def get_ai_response(agent_config, full_prompt, history):
 
 def deliver_reply_to_n8n(data, reply, page_id, access_token):
     """Deliver final reply to n8n and ensures JSON validation"""
-    webhook_url = "https://.newsmartagent.com/webhook/fb-comment-message-delivery"
+    webhook_url = "https://n8n.newsmartagent.com/webhook/fb-comment-message-delivery"
     
     payload = {
         "sender_id": str(data.get('sender_id', '')),
