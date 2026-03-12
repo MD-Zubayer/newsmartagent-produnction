@@ -17,22 +17,27 @@ def generate_openai_reply(system_promt, messages, agent_config, memory_context="
                 'role': m['role'],
                 'content': m['content']
             })
-        temp = agent_config.temperature if agent_config.temperature is not None else 1.0
-        tokens = agent_config.max_tokens if agent_config.max_tokens is not None else 500
+        
         payload = {
             "model": agent_config.ai_model,
             "messages": formatted_messages,
             "temperature": agent_config.temperature,
         }
         new_models = ["gpt-5", "o1", "o3", "gpt-4.1"]
-        if any(model_name in agent_config.ai_model.lower() for model_name in new_models):
-            payload["max_completion_tokens"] = agent_config.max_tokens
-            # নতুন মডেলগুলোতে temperature অনেক সময় ১ ই রাখা হয়
-            if "o1" in agent_config.ai_model or "o3" in agent_config.ai_model:
-                payload["temperature"] = 1
+        is_new_model = any(m_name in agent_config.ai_model.lower() for m_name in new_models)
+        if is_new_model:
+            # নতুন মডেলে max_completion_tokens ব্যবহার হয়
+            payload["max_completion_tokens"] = agent_config.max_tokens if agent_config.max_tokens else 500
+            
+            # gpt-5-mini বা ও-সিরিজের জন্য temperature সবসময় ১ হতে হবে
+            if "mini" in agent_config.ai_model.lower() or "o1" in agent_config.ai_model.lower() or "o3" in agent_config.ai_model.lower():
+                payload["temperature"] = 1.0
+            else:
+                payload["temperature"] = agent_config.temperature if agent_config.temperature is not None else 0.7
         else:
-            payload["max_tokens"] = agent_config.max_tokens
-
+            # পুরাতন মডেলের জন্য ডিফল্ট লজিক
+            payload["max_tokens"] = agent_config.max_tokens if agent_config.max_tokens else 500
+            payload["temperature"] = agent_config.temperature if agent_config.temperature is not None else 0.7
         # আনপ্যাক করে কল করা
         response = client.chat.completions.create(**payload)
         reply =  response.choices[0].message.content.strip()
