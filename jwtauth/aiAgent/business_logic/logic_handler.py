@@ -85,8 +85,11 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                     break
         
             if not skip_embedding:
+                logger.info(f"Generating Gemini Embedding inside perform_rag_search for '{text[:20]}'")
                 query_vector = get_gemini_embedding(rag_query)
                 logger.info(f"DEBUG: Vector Generated: {True if query_vector else False}")
+        else:
+            logger.info("Using existing query_vector passed to perform_rag_search")
         
         if query_vector:
             related_docs = SpreadsheetKnowledge.objects.filter(

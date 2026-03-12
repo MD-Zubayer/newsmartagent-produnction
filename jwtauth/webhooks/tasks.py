@@ -97,6 +97,7 @@ def process_ai_reply_task(self, data):
         # ৫. ইনিশিয়ালাইজেশন
         reply, success, total_tokens = "System busy.", False, 0
         ai_data = {'success': False, 'total_tokens': 0}
+        query_vector = None  # 🔥 Fix: Avoid UnboundLocalError
 
         post_context = ""
         if request_type == 'facebook_comment':
@@ -123,7 +124,7 @@ def process_ai_reply_task(self, data):
                     logger.info(f"🧬 CLUSTER MATCH FOUND for '{text[:30]}' -> Cluster: {cluster_id}")
             
         if not cached_res:
-            from jwtauth.webhooks.constants import embedding_skip_keyword
+            from webhooks.constants import embedding_skip_keyword
             from django.db.models import Q
             from embedding.models import SpreadsheetKnowledge
             
@@ -179,6 +180,8 @@ def process_ai_reply_task(self, data):
         
             if delivered and msg_id:
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                # Cleanup processing lock
+                r.delete(f'processing_msg:{msg_id}')
         
             return   # 🔥🔥🔥 HARD STOP
         else:
@@ -233,6 +236,8 @@ def process_ai_reply_task(self, data):
             delivered = deliver_reply_to_n8n(data, reply, page_id, agent_config.access_token)
             if delivered and msg_id:
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                # Cleanup processing lock
+                r.delete(f'processing_msg:{msg_id}')
             
             logger.info(f"Final reply processed for {sender_id}. Success: {success}")
 
