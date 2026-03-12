@@ -32,7 +32,7 @@ export default function AIAgentPage() {
     webhook_secret: "",
     system_prompt: "You are a helpful, professional assistant. Keep responses clear and concise.",
     greeting_message: "Hi there 👋 How can I help you today?",
-    ai_model: "gemini-2.5-flash",
+    ai_model: "",
     selected_model: "",
     temperature: 0.7,
     max_tokens: 300,

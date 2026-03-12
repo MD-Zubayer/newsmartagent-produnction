@@ -123,19 +123,38 @@ def process_ai_reply_task(self, data):
                     logger.info(f"🧬 CLUSTER MATCH FOUND for '{text[:30]}' -> Cluster: {cluster_id}")
             
         if not cached_res:
-            from embedding.utils import get_gemini_embedding
-            # RAG কোয়েরি ফরম্যাট অনুযায়ী এম্বেডিং বানান
-            rag_query = f"{post_context} {text}" if (request_type == 'facebook_comment' and post_context) else text
-            query_vector = get_gemini_embedding(rag_query)
+            from jwtauth.webhooks.constants import embedding_skip_keyword
+            from django.db.models import Q
+            from embedding.models import SpreadsheetKnowledge
             
-            if query_vector:
-                # ৩. ভেক্টর ক্যাশ চেক (Redis DB 7)
-                vector_hits = search_similar_vectors(page_id, query_vector, top_k=1)
-                if vector_hits and vector_hits[0]['score'] < 0.12: # ০.১২ থ্রেশহোল্ড (খুব ভালো মিল)
-                    similar_text = vector_hits[0]['text']
-                    cached_res = get_cached_reply(page_id, msg_text=similar_text)
-                    if cached_res:
-                        logger.info(f"🔮 VECTOR CACHE HIT! '{text[:20]}' matched with '{similar_text[:20]}'")
+            # Optimization: Skip if no knowledge base exists
+            has_knowledge = SpreadsheetKnowledge.objects.filter(user=agent_config.user).exists()
+            
+            # Optimization: Skip for common keywords
+            skip_margin = 10
+            skip_embedding = False
+            text_len = len(text)
+            for kw in embedding_skip_keyword:
+                if kw.lower() in text.lower() and abs(text_len - len(kw)) <= skip_margin:
+                    skip_embedding = True
+                    break
+
+            if has_knowledge and not skip_embedding and len(text) > 3:
+                from embedding.utils import get_gemini_embedding
+                # RAG কোয়েরি ফরম্যাট অনুযায়ী এম্বেডিং বানান
+                rag_query = f"{post_context} {text}" if (request_type == 'facebook_comment' and post_context) else text
+                query_vector = get_gemini_embedding(rag_query)
+                
+                if query_vector:
+                    # ৩. ভেক্টর ক্যাশ চেক (Redis DB 7)
+                    vector_hits = search_similar_vectors(page_id, query_vector, top_k=1)
+                    if vector_hits and vector_hits[0]['score'] < 0.12: # ০.১২ থ্রেশহোল্ড (খুব ভালো মিল)
+                        similar_text = vector_hits[0]['text']
+                        cached_res = get_cached_reply(page_id, msg_text=similar_text)
+                        if cached_res:
+                            logger.info(f"🔮 VECTOR CACHE HIT! '{text[:20]}' matched with '{similar_text[:20]}'")
+            else:
+                logger.info(f"⏭️ Skipping Gemini Embedding for User {agent_config.user.email} (No knowledge or skip kw)")
             
         
         if cached_res:

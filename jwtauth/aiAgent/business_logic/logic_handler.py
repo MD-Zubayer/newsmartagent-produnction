@@ -63,6 +63,12 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
     
     try:
         if not query_vector:
+            # OPTIMIZATION: Only generate embedding if user has knowledge base
+            has_knowledge = SpreadsheetKnowledge.objects.filter(user=agent_config.user).exists()
+            if not has_knowledge:
+                logger.info(f"⏭️ Skipping embedding: User {agent_config.user.email} has no records in SpreadsheetKnowledge.")
+                return "", "Answer naturally using your knowledge.", None
+
             skip_margin = 10
             skip_embedding = False
             text_len = len(text)
@@ -354,10 +360,18 @@ def acquire_user_lock(task_instance, redis_client, sender_id):
     return is_locked, lock_key, lock_value
 
 def is_duplicate_or_outdated(msg_id, incoming_ts, agent_config, sender_id, redis_client):
-    if msg_id and redis_client.get(f'processed_msg:{msg_id}'):
-        logger.info(f"Duplicate message detected: {msg_id}")
-        return True
-    
+    if msg_id:
+        # 1. Check if already permanently processed
+        if redis_client.get(f'processed_msg:{msg_id}'):
+            logger.info(f"Duplicate message detected (Already Processed): {msg_id}")
+            return True
+        
+        # 2. Check if currently being processed (Race Condition Prevention)
+        # We use a 'processing' key with 60s expiry to ensure one worker handles it
+        if not redis_client.set(f'processing_msg:{msg_id}', '1', nx=True, ex=60):
+            logger.info(f"⏭️ Task Already in Progress for msg_id: {msg_id}")
+            return True
+
     if incoming_ts:
         try:
             incoming_ts = float(incoming_ts)
