@@ -52,8 +52,10 @@ function DashboardContent({ children }) {
   if (!viewMode) return <div className="h-screen flex items-center justify-center font-bold font-mono">Initializing...</div>;
 
   return (
-    <div className="flex h-screen bg-gray-100">
-    
+    <div 
+      className="flex h-screen bg-gray-100 overflow-x-auto" 
+      style={{ minWidth: "1024px" }} // 🔥 FORCE DESKTOP VIEW ON MOBILE
+    >
       <Sidebar viewMode={viewMode} />
       <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
         {/* 🔥 TopNav এখন হুক থেকে আসা ফ্রেশ ডাটা পাবে */}

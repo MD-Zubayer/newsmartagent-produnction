@@ -168,15 +168,15 @@ export default function DocumentPage() {
 };
 
   return (
-    <div className="flex flex-col min-h-screen sm:h-[calc(100vh-80px)] bg-[#F3F2F1] text-gray-800 font-sans m-0 sm:-m-4 relative">
+    <div className="flex flex-col h-[calc(100vh-80px)] bg-[#F3F2F1] text-gray-800 font-sans -m-4 relative">
       <FileMenu 
    isOpen={showFileMenu} 
    onClose={() => setShowFileMenu(false)}
    onCreate={createNewDoc} // এটি নিশ্চিত করুন
    currentId={docId}
 />
-      <div className="bg-[#2B579A] text-white px-4 py-2 flex flex-wrap gap-3 items-start sm:items-center justify-between shadow-md z-10">
-        <div className="flex flex-wrap items-center gap-3 flex-1 min-w-[220px]">
+      <div className="bg-[#2B579A] text-white px-4 py-2 flex items-center justify-between shadow-md z-10">
+        <div className="flex items-center gap-3">
           <button onClick={() => setShowFileMenu(true)} className="p-1.5 hover:bg-white/20 rounded-md transition-colors mr-1">
              <Menu size={22} />
           </button>
@@ -187,16 +187,16 @@ export default function DocumentPage() {
             type="text"
             value={docTitle}
             onChange={(e) => setDocTitle(e.target.value)}
-            className="bg-transparent border-b border-transparent hover:border-white/50 focus:border-white outline-none text-base sm:text-lg font-medium px-1 placeholder-white/70 w-full sm:w-64 transition-colors text-white"
+            className="bg-transparent border-b border-transparent hover:border-white/50 focus:border-white outline-none text-lg font-medium px-1 placeholder-white/70 w-64 transition-colors text-white"
             placeholder="Document Title"
           />
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-          <span className="text-xs text-white/80 mr-0 sm:mr-4">AI Knowledge Base Document</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-white/80 mr-4">AI Knowledge Base Document</span>
           <button
             onClick={handleSave}
             disabled={loading}
-            className="flex items-center gap-2 bg-white text-[#2B579A] px-4 py-1.5 rounded-md text-sm font-semibold hover:bg-gray-100 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed w-full sm:w-auto justify-center"
+            className="flex items-center gap-2 bg-white text-[#2B579A] px-4 py-1.5 rounded-md text-sm font-semibold hover:bg-gray-100 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed"
           >
             <Save size={16} />
             {loading ? "Saving..." : "Save to Smart Agent"}
@@ -204,39 +204,39 @@ export default function DocumentPage() {
         </div>
       </div>
 
-      <div className="bg-white border-b border-gray-200 px-3 sm:px-4 py-2 flex flex-wrap gap-3 sm:gap-4 items-center justify-start shadow-sm z-0">
-        <div className="flex items-center gap-1 border-r border-gray-200 pr-4 flex-shrink-0">
+      <div className="bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-4 shadow-sm z-0">
+        <div className="flex items-center gap-1 border-r border-gray-200 pr-4">
           <ToolbarButton icon={<Undo size={16} />} onClick={() => execCommand('undo')} title="Undo" />
           <ToolbarButton icon={<Redo size={16} />} onClick={() => execCommand('redo')} title="Redo" />
         </div>
         
-        <div className="flex items-center gap-1 border-r border-gray-200 pr-4 flex-shrink-0">
-          <select className="text-sm border border-gray-300 rounded px-2 py-1 outline-none focus:border-[#2B579A] bg-white min-w-[120px]">
+        <div className="flex items-center gap-1 border-r border-gray-200 pr-4">
+          <select className="text-sm border border-gray-300 rounded px-2 py-1 outline-none focus:border-[#2B579A] bg-white">
             <option value="Arial">Arial</option>
             <option value="Calibri">Calibri</option>
           </select>
         </div>
 
-        <div className="flex items-center gap-1 border-r border-gray-200 pr-4 flex-shrink-0">
+        <div className="flex items-center gap-1 border-r border-gray-200 pr-4">
           <ToolbarButton icon={<Bold size={16} />} onClick={() => execCommand('bold')} title="Bold" />
           <ToolbarButton icon={<Italic size={16} />} onClick={() => execCommand('italic')} title="Italic" />
           <ToolbarButton icon={<Underline size={16} />} onClick={() => execCommand('underline')} title="Underline" />
         </div>
 
-        <div className="flex items-center gap-1 border-r border-gray-200 pr-4 flex-shrink-0">
+        <div className="flex items-center gap-1 border-r border-gray-200 pr-4">
           <ToolbarButton icon={<AlignLeft size={16} />} onClick={() => execCommand('justifyLeft')} title="Align Left" />
           <ToolbarButton icon={<AlignCenter size={16} />} onClick={() => execCommand('justifyCenter')} title="Align Center" />
           <ToolbarButton icon={<AlignRight size={16} />} onClick={() => execCommand('justifyRight')} title="Align Right" />
         </div>
 
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex items-center gap-1">
           <ToolbarButton icon={<List size={16} />} onClick={() => execCommand('insertUnorderedList')} title="Bullet List" />
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-[#F3F2F1] p-4 sm:p-8 flex justify-center">
+      <div className="flex-1 overflow-auto bg-[#F3F2F1] p-8 flex justify-center">
         <div 
-  className="bg-white w-full max-w-[816px] min-h-[70vh] sm:min-h-[1056px] shadow-lg border border-gray-200 p-6 sm:p-12 text-gray-900 outline-none editor-canvas rounded-xl"
+  className="bg-white w-full max-w-[816px] min-h-[1056px] shadow-lg border border-gray-200 p-12 text-gray-900 outline-none editor-canvas"
   style={{
     boxShadow: "0 4px 12px 0 rgba(0,0,0,0.1)", 
     fontFamily: "Calibri, Arial, sans-serif", 
