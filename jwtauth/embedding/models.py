@@ -47,6 +47,7 @@ class DocumentKnowledge(models.Model):
     document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name='chunks', null=True, blank=True)
     doc_title = models.CharField(max_length=255, blank=True)
     chunk_index = models.IntegerField(default=0)
+    content_hash = models.CharField(max_length=64, db_index=True, null=True, blank=True)
     content = models.TextField()
     embedding = VectorField(dimensions=768, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

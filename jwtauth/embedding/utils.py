@@ -151,38 +151,64 @@ def chunk_text(text, max_words=100, overlap=20):
             
     return chunks
 
+
+def get_hash(text):
+    """টেক্সট থেকে ইউনিক MD5 হাশ তৈরি করে"""
+    return hashlib.md5(text.encode('utf-8')).hexdigest()
+    
+    
 def process_document_text(user, text, document):
     """
     Take generic text, chunk it, embed and save it.
     """
     print(f"\n--- [DEBUG] Processing Document '{document.title}' for {user.email} ---")
     
+    # ১. টেক্সট ক্লিন করা
     text = re.sub(r'\s+', ' ', text).strip()
     if not text:
         return 0
         
+    # ২. চাঙ্ক বানানো
     chunks = chunk_text(text, max_words=150, overlap=30)
-    saved_chunks = 0
     
-    # OLD chunks deletion if any (though typically handled in view)
-    document.chunks.all().delete()
+    # ৩. ডাটাবেসে বর্তমানে কী কী চাঙ্ক আছে তার একটা লিস্ট নেওয়া
+    existing_chunks = DocumentKnowledge.objects.filter(document=document)
+    hash_map = {c.content_hash: c for c in existing_chunks}
     
+    processed_hashes = []
+    new_saved = 0
+    skipped = 0
+
     for i, content in enumerate(chunks):
-        vector = get_gemini_embedding(content)
-        if vector:
-            DocumentKnowledge.objects.create(
-                user=user,
-                document=document,
-                doc_title=document.title,
-                chunk_index=i,
-                content=content,
-                embedding=list(vector)
-            )
-            saved_chunks += 1
-            print(f"[DEBUG] Saved chunk {i} ({len(content)} chars)")
-            
-    print(f"--- [DEBUG] Finished Process. Saved {saved_chunks} chunks. ---\n")
-    return saved_chunks
+        c_hash = get_hash(content)
+        processed_hashes.append(c_hash)
+        
+        if c_hash in hash_map:
+            # যদি হাশ মিলে যায়, তবে এম্বেড করার দরকার নেই, শুধু ইনডেক্স আপডেট করো
+            obj = hash_map[c_hash]
+            obj.chunk_index = i # পজিশন চেঞ্জ হতে পারে
+            obj.save()
+            skipped += 1
+        else:
+            # নতুন ডাটা বা আপডেট হওয়া ডাটা - এম্বেড করো
+            vector = get_gemini_embedding(content)
+            if vector:
+                DocumentKnowledge.objects.create(
+                    user=user,
+                    document=document,
+                    doc_title=document.title,
+                    chunk_index=i,
+                    content=content,
+                    content_hash=c_hash,
+                    embedding=list(vector)
+                )
+                new_saved += 1
+    
+    # ৪. যে চাঙ্কগুলো এখন আর লেখায় নেই (ডিলিট করা হয়েছে), সেগুলো ডাটাবেস থেকে মুছে ফেলো
+    DocumentKnowledge.objects.filter(document=document).exclude(content_hash__in=processed_hashes).delete()
+    
+    print(f"--- [DEBUG] Finished. New: {new_saved}, Skipped: {skipped} ---")
+    return new_saved
 
 
 
