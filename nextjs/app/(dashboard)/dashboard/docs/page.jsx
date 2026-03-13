@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { 
   Save, 
-  Type, 
   Bold, 
   Italic, 
   Underline, 
@@ -24,11 +24,12 @@ import {
 import toast from "react-hot-toast";
 
 /* ================= FILE MENU MODAL ================= */
-const FileMenu = ({ isOpen, onClose, onCreate, loadFile, deleteFile, currentId }) => {
+const FileMenu = ({ isOpen, onClose, onCreate, currentId }) => {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen) {
       setLoading(true);
       api.get('/embedding/documents/')
@@ -37,6 +38,23 @@ const FileMenu = ({ isOpen, onClose, onCreate, loadFile, deleteFile, currentId }
          .finally(() => setLoading(false));
     }
   }, [isOpen]);
+
+  const loadFile = (id) => {
+    router.push(`/dashboard/docs/${id}`);
+    onClose();
+  };
+
+  const deleteFile = async (id, title) => {
+    if(!confirm(`Delete Document '${title}'? This will remove it from the AI's knowledge.`)) return;
+    try {
+        await api.delete(`/embedding/documents/${id}/`);
+        toast.success(`Deleted ${title}`);
+        setFiles(prev => prev.filter(f => f.id !== id));
+        if(currentId === id.toString()) router.push('/dashboard/docs');
+    } catch(err) { 
+        toast.error("Delete failed");
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -57,7 +75,7 @@ const FileMenu = ({ isOpen, onClose, onCreate, loadFile, deleteFile, currentId }
         <div className="flex-1 overflow-y-auto p-3 space-y-2 no-scrollbar">
            {loading ? <div className="text-center p-6 text-slate-500 font-medium">Loading documents...</div> : 
              files.map((doc, idx) => (
-               <div key={doc.id} className={`group flex items-center justify-between p-3.5 rounded-xl border transition-all duration-200 ${currentId === doc.id ? "border-[#2B579A] bg-blue-50" : "border-slate-100 hover:border-blue-200 hover:bg-slate-50"}`}>
+               <div key={doc.id} className={`group flex items-center justify-between p-3.5 rounded-xl border transition-all duration-200 ${currentId === doc.id.toString() ? "border-[#2B579A] bg-blue-50" : "border-slate-100 hover:border-blue-200 hover:bg-slate-50"}`}>
                  <div onClick={() => loadFile(doc.id)} className="flex-1 cursor-pointer">
                     <div className="font-semibold text-slate-800 text-sm group-hover:text-[#2B579A] transition-colors">{idx + 1}. {doc.title || "Untitled"}</div>
                  </div>
@@ -83,8 +101,16 @@ export default function DocumentMain() {
   const [showFileMenu, setShowFileMenu] = useState(false);
   const editorRef = useRef(null);
 
-  // We are on the main /docs/ page, which is treated as "New Document" mode.
-  // Save will trigger a POST and then redirect to /[id].
+  // --- AUTO REDIRECT TO FIRST DOC ---
+  useEffect(() => {
+    api.get('/embedding/documents/')
+       .then(res => {
+         if (res.data?.documents?.length > 0) {
+           router.push(`/dashboard/docs/${res.data.documents[0].id}`);
+         }
+       })
+       .catch(err => console.error("Initial load failed", err));
+  }, []);
 
   const execCommand = (command, value = null) => {
     document.execCommand(command, false, value);
