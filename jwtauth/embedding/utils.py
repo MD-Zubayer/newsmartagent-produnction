@@ -100,23 +100,28 @@ def sync_spreadsheet_to_knowledge(user, grid_data, sheet_id):
 
         # ৫. শুধু পরিবর্তন হলেই আপডেট হবে (Saving API Costs)
         if created or old_hash != combined_hash:
-            # কন্টেন্ট তৈরি
-            row_text = ", ".join([f"{headers.get(c, f'col_{c}')}: {cols[c]}" for c in sorted_cols])
+            # কন্টেন্ট তৈরি (শুধুমাত্র ভ্যালু থাকলে)
+            row_parts = []
+            for c in sorted_cols:
+                if cols[c]: # Check if the value is not an empty string
+                    row_parts.append(f"{headers.get(c, f'col_{c}')}: {cols[c]}")
             
-            
-            # Gemini Embedding জেনারেশন
-            try:
-                vector = get_gemini_embedding(row_text)
-                if vector:
-                    obj.content = row_text
-                    obj.column_hashes = {'combined_hash': combined_hash}
-                    obj.embedding = vector
-                    obj.save()
-                    updated_count += 1
-                    # রেট লিমিট এড়াতে ছোট বিরতি (যদি বড় ডাটা হয়)
-                    # time.sleep(0.1) 
-            except Exception as e:
-                print(f"Error updating Row {r_idx}: {e}")
+            row_text = ", ".join(row_parts)
+
+            if row_text: # Only proceed if there is some content
+                # Gemini Embedding জেনারেশন
+                try:
+                    vector = get_gemini_embedding(row_text)
+                    if vector:
+                        obj.content = row_text
+                        obj.column_hashes = {'combined_hash': combined_hash}
+                        obj.embedding = vector
+                        obj.save()
+                        updated_count += 1
+                        # রেট লিমিট এড়াতে ছোট বিরতি (যদি বড় ডাটা হয়)
+                        # time.sleep(0.1) 
+                except Exception as e:
+                    print(f"Error updating Row {r_idx}: {e}")
         else:
             print(f"[DEBUG] Row {r_idx} No change. Skipping.")
 
