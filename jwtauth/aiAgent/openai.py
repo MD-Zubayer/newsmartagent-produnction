@@ -44,7 +44,7 @@ def generate_openai_reply(system_promt, messages, agent_config, memory_context="
 
         # ২. টোকেন লিমিট সেট করা (নতুন মডেলে max_completion_tokens ব্যবহার হয়)
         max_t = agent_config.max_tokens if agent_config.max_tokens else 500
-        if is__new_model:
+        if is_new_model:
             payload["max_completion_tokens"] = max_t
         else:
             payload["max_tokens"] = max_t
