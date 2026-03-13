@@ -199,7 +199,7 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
 
     lower_text = text.lower()
     memory_context = ""
-    memory_triggers = ['আমার', 'নাম', 'অর্ডার', 'আগের', 'my', 'name', 'order', 'status']
+    memory_triggers = ['আমার অর্ডার', 'আমার নাম', 'নাম', 'অর্ডার', 'আগের', 'my', 'name', 'order', 'status']
 
     if any(word in lower_text for word in memory_triggers):
         mem_data = get_memory_context(agent_config, sender_id)
@@ -223,7 +223,7 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
     raw_history = get_last_message(agent_config, sender_id, limit=3)
     history = [
         msg for msg in raw_history
-        if msg.get("message") and msg.get("message").strip()
+        if msg.get("content") and msg.get("content").strip()
     ]
     return full_prompt, history
 
