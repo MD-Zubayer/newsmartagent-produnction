@@ -111,8 +111,8 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
             first_sheet = related_sheets.first()
             first_doc = related_docs.first()
             # 🔥 FIX: Safe float conversion and None check
-            best_sheet_distance = float(first_sheet.distance) if first_sheet and first_sheet.distance is not None else 1.0
-            best_doc_distance = float(first_doc.distance) if first_doc and first_doc.distance is not None else 1.0
+            best_sheet_distance = float(first_sheet.distance) if (first_sheet and first_sheet.distance is not None) else 1.0
+            best_doc_distance = float(first_doc.distance) if (first_doc and first_doc.distance is not None) else 1.0
             overall_best_dist = min(best_sheet_distance, best_doc_distance)
             
             # Combine contents based on distance thresholds
