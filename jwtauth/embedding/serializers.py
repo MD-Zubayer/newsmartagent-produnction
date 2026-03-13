@@ -12,7 +12,7 @@ class DocumentDetailSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Document
-        fields = ['id', 'user', 'title', 'full_text', 'created_at', 'updated_at']
+        fields = ['id', 'user', 'title', 'full_content', 'created_at', 'updated_at']
         read_only_fields = ['id', 'user', 'created_at', 'updated_at']
         
     def get_full_text(self, obj):
