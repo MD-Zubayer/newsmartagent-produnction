@@ -51,11 +51,11 @@ def generate_openai_reply(system_promt, messages, agent_config, memory_context="
         # --- রিপ্লাই এক্সট্রাক্ট করা ---
         message = response.choices[0].message
         raw_reply = message.content
-
         print(f"\n--- [DEBUG] Raw AI Reply Length: {len(raw_reply) if raw_reply else 0} ---")
         
         if raw_reply:
-            reply = raw_reply.strip()
+            reply = raw_reply.replace("\n", " ").replace("\r", " ").strip()
+            
             result_status = "success"
         else:
             refusal = getattr(message, 'refusal', None)

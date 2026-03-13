@@ -51,6 +51,7 @@ r = get_redis_client(db=0)
              autoretry_for=(requests.exceptions.RequestException,),
              retry_backoff=True,
              max_retries=3,
+             retry_jitter=True,
              time_limit=70,
              soft_time_limit=60
              )
@@ -183,8 +184,9 @@ def process_ai_reply_task(self, data):
             handle_smart_memory_update(agent_config, sender_id, text)
         
             # Deliver immediately
+            clean_reply = reply.replace("\n", " ").replace("\r", " ").strip()
             delivered = deliver_reply_to_n8n(
-                data, reply, page_id, agent_config.access_token
+                data, clean_reply, page_id, agent_config.access_token
             )
         
             if delivered and msg_id:
@@ -241,8 +243,8 @@ def process_ai_reply_task(self, data):
 
             duration = int((time.time() - start_time) * 1000)
             log_token_usage(agent_config, sender_id, ai_data, duration, request_type)
-
-            delivered = deliver_reply_to_n8n(data, reply, page_id, agent_config.access_token)
+            clean_reply = reply.replace("\n", " ").replace("\r", " ").strip()
+            delivered = deliver_reply_to_n8n(data, clean_reply, page_id, agent_config.access_token)
             if delivered and msg_id:
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)
                 # Cleanup processing lock
@@ -254,10 +256,17 @@ def process_ai_reply_task(self, data):
         logger.error(f"Task Error: {e}")
 
     finally:
-        # ১২. লক রিলিজ
-        current_lock = r.get(lock_key)
-        if current_lock and current_lock.decode() == lock_value:
-            r.delete(lock_key)
+        # ১২. লক রিলিজ (User Lock)
+        try:
+            current_lock = r.get(lock_key)
+            if current_lock and current_lock.decode() == lock_value:
+                r.delete(lock_key)
+                logger.info(f"🔓 Lock released for {sender_id}")
             
+            # processing_msg লক রিলিজ নিশ্চিত করা (Idempotency cleanup)
+            if msg_id:
+                r.delete(f'processing_msg:{msg_id}')
+        except Exception as lock_err:
+            logger.error(f"Lock release error: {lock_err}")
             
             
