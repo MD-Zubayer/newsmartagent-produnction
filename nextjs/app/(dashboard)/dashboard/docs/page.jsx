@@ -56,10 +56,10 @@ const FileMenu = ({ isOpen, onClose, onCreate, loadFile, deleteFile, currentId }
 
         <div className="flex-1 overflow-y-auto p-3 space-y-2 no-scrollbar">
            {loading ? <div className="text-center p-6 text-slate-500 font-medium">Loading documents...</div> : 
-             files.map((doc) => (
+             files.map((doc, idx) => (
                <div key={doc.id} className={`group flex items-center justify-between p-3.5 rounded-xl border transition-all duration-200 ${currentId === doc.id ? "border-[#2B579A] bg-blue-50" : "border-slate-100 hover:border-blue-200 hover:bg-slate-50"}`}>
                  <div onClick={() => loadFile(doc.id)} className="flex-1 cursor-pointer">
-                    <div className="font-semibold text-slate-800 text-sm group-hover:text-[#2B579A] transition-colors">{doc.title || "Untitled"}</div>
+                    <div className="font-semibold text-slate-800 text-sm group-hover:text-[#2B579A] transition-colors">{idx + 1}. {doc.title || "Untitled"}</div>
                  </div>
                  <button onClick={() => deleteFile(doc.id, doc.title)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100" title="Delete">
                     <Trash2 size={18}/>
