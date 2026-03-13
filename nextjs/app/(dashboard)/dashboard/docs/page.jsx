@@ -24,7 +24,7 @@ import {
 import toast from "react-hot-toast";
 
 /* ================= FILE MENU MODAL ================= */
-const FileMenu = ({ isOpen, onClose, onCreate, currentId }) => {
+const FileMenu = ({ isOpen, onClose, currentId }) => {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -41,6 +41,11 @@ const FileMenu = ({ isOpen, onClose, onCreate, currentId }) => {
 
   const loadFile = (id) => {
     router.push(`/dashboard/docs/${id}`);
+    onClose();
+  };
+
+  const onCreateNew = () => {
+    router.push('/dashboard/docs?new=true');
     onClose();
   };
 
@@ -67,7 +72,7 @@ const FileMenu = ({ isOpen, onClose, onCreate, currentId }) => {
         </div>
         
         <div className="p-4 bg-slate-50/50 border-b border-slate-100">
-           <button onClick={onCreate} className="w-full py-2.5 bg-[#2B579A] hover:bg-[#1f4278] text-white shadow-md rounded-xl flex items-center justify-center gap-2 transition-all font-semibold">
+           <button onClick={onCreateNew} className="w-full py-2.5 bg-[#2B579A] hover:bg-[#1f4278] text-white shadow-md rounded-xl flex items-center justify-center gap-2 transition-all font-semibold">
              <FilePlus size={20}/> Create New Document
            </button>
         </div>
@@ -101,8 +106,12 @@ export default function DocumentMain() {
   const [showFileMenu, setShowFileMenu] = useState(false);
   const editorRef = useRef(null);
 
-  // --- AUTO REDIRECT TO FIRST DOC ---
+  // --- AUTO REDIRECT TO FIRST DOC (UNLESS CREATING NEW) ---
   useEffect(() => {
+    // URL-এ যদি ?new=true থাকে তবে রিডাইরেক্ট করবে না
+    const isNew = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('new') === 'true';
+    if (isNew) return;
+
     api.get('/embedding/documents/')
        .then(res => {
          if (res.data?.documents?.length > 0) {
@@ -151,7 +160,6 @@ export default function DocumentMain() {
       <FileMenu 
          isOpen={showFileMenu} 
          onClose={() => setShowFileMenu(false)}
-         onCreate={createNewDoc}
          currentId={null}
       />
       <div className="bg-[#2B579A] text-white px-4 py-2 flex items-center justify-between shadow-md z-10">

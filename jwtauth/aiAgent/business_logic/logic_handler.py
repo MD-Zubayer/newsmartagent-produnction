@@ -104,7 +104,7 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
             # Search Document Knowledge
             related_docs = DocumentKnowledge.objects.filter(
                 user=agent_config.user
-            ).annotate(
+            ).select_related('document').annotate(
                 distance=CosineDistance('embedding', query_vector)
             ).filter(distance__lt=0.65).order_by('distance')[:3]
 
@@ -117,8 +117,10 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
             
             # Combine contents based on distance thresholds
             matched_content = []
-            matched_content.extend([doc.content for doc in related_sheets])
-            matched_content.extend([doc.content for doc in related_docs])
+            matched_content.extend([f"[Source: Spreadsheet] {doc.content}" for doc in related_sheets])
+            for doc in related_docs:
+                title = doc.document.title if doc.document else doc.doc_title
+                matched_content.append(f"[Source: Document - {title}] {doc.content}")
 
             if matched_content:
                 unique_content = list(dict.fromkeys(matched_content))

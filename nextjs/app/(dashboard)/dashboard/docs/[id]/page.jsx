@@ -171,7 +171,6 @@ export default function DocumentPage() {
       <FileMenu 
          isOpen={showFileMenu} 
          onClose={() => setShowFileMenu(false)}
-         onCreate={createNewDoc}
          currentId={docId}
       />
       <div className="bg-[#2B579A] text-white px-4 py-2 flex items-center justify-between shadow-md z-10">
