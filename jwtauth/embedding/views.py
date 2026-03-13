@@ -5,82 +5,83 @@ from rest_framework import status
 from .utils import process_document_text
 from .models import DocumentKnowledge
 
-class DocumentUploadView(APIView):
+from .models import Document, DocumentKnowledge
+from .serializers import DocumentSerializer, DocumentDetailSerializer
+
+class DocumentListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def post(self, request, *args, **kwargs):
+    def get(self, request):
+        documents = Document.objects.filter(user=request.user)
+        serializer = DocumentSerializer(documents, many=True)
+        return Response({"documents": serializer.data}, status=status.HTTP_200_OK)
+
+    def post(self, request):
         text = request.data.get('text')
-        doc_title = request.data.get('doc_title', 'Generic Document')
+        title = request.data.get('doc_title', 'Untitled Document')
 
         if not text:
             return Response({"error": "Text content is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            chunks_saved = process_document_text(request.user, text, doc_title)
+            document = Document.objects.create(user=request.user, title=title)
+            chunks_saved = process_document_text(request.user, text, document)
+            
             return Response({
-                "message": "Document processed and knowledge base updated successfully.",
+                "message": "Document created and processed successfully.",
+                "id": document.id,
+                "title": document.title,
                 "chunks_saved": chunks_saved
             }, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    def get(self, request, *args, **kwargs):
-        # query_params থেকে doc_title চেক করা হচ্ছে
-        doc_title = request.query_params.get('doc_title')
-        
-        if doc_title:
-            # নির্দিষ্ট ডকুমেন্টের সব chunks সিরিয়ালি নিয়ে আসা
-            chunks = DocumentKnowledge.objects.filter(
-                user=request.user, 
-                doc_title=doc_title
-            ).order_by('chunk_index')
-            
-            if not chunks.exists():
-                return Response({"error": "Document not found."}, status=status.HTTP_404_NOT_FOUND)
-            
-            # সব কন্টেন্ট একসাথে জোড়া দেওয়া
-            full_text = " ".join([c.content for c in chunks])
-            return Response({
-                "doc_title": doc_title,
-                "text": full_text
-            }, status=status.HTTP_200_OK)
 
-        # যদি টাইটেল না থাকে তবে আগের মতো শুধু লিস্ট পাঠানো
-        docs = DocumentKnowledge.objects.filter(user=request.user).values('doc_title').distinct()
-        titles = [doc['doc_title'] for doc in docs]
-        return Response({"documents": titles}, status=status.HTTP_200_OK)
+class DocumentDetailView(APIView):
+    permission_classes = [IsAuthenticated]
 
-    def put(self, request, *args, **kwargs):
-        """
-        ডকুমেন্ট আপডেট করার জন্য। 
-        পুরানো ভেক্টরগুলো মুছে নতুন করে চাঙ্ক এবং এমবেডিং তৈরি করবে।
-        """
-        text = request.data.get('text')
-        doc_title = request.data.get('doc_title')
-
-        if not text or not doc_title:
-            return Response({"error": "Title and text are required."}, status=status.HTTP_400_BAD_REQUEST)
-
+    def get_object(self, pk, user):
         try:
-            # ১. পুরানো ডাটা মুছে ফেলা (যেহেতু টেক্সট চেঞ্জ হলে ভেক্টর বদলে যায়)
-            DocumentKnowledge.objects.filter(user=request.user, doc_title=doc_title).delete()
+            return Document.objects.get(pk=pk, user=user)
+        except Document.DoesNotExist:
+            return None
+
+    def get(self, request, pk):
+        document = self.get_object(pk, request.user)
+        if not document:
+            return Response({"error": "Document not found."}, status=status.HTTP_404_NOT_FOUND)
             
-            # ২. নতুন টেক্সট প্রসেস করা
-            chunks_saved = process_document_text(request.user, text, doc_title)
+        serializer = DocumentDetailSerializer(document)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def put(self, request, pk):
+        document = self.get_object(pk, request.user)
+        if not document:
+            return Response({"error": "Document not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        text = request.data.get('text')
+        title = request.data.get('doc_title')
+
+        if title:
+            document.title = title
+            document.save()
+
+        if text:
+            try:
+                chunks_saved = process_document_text(request.user, text, document)
+                return Response({
+                    "message": "Document updated and re-indexed successfully.",
+                    "chunks_saved": chunks_saved
+                }, status=status.HTTP_200_OK)
+            except Exception as e:
+                return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        return Response({"message": "Document title updated."}, status=status.HTTP_200_OK)
+
+    def delete(self, request, pk):
+        document = self.get_object(pk, request.user)
+        if not document:
+            return Response({"error": "Document not found."}, status=status.HTTP_404_NOT_FOUND)
             
-            return Response({
-                "message": "Document updated and re-indexed successfully.",
-                "chunks_saved": chunks_saved
-            }, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    def delete(self, request, *args, **kwargs):
-        # Delete specific document by title
-        doc_title = request.data.get('doc_title')
-        if not doc_title:
-            return Response({"error": "doc_title is required."}, status=status.HTTP_400_BAD_REQUEST)
-            
-        deleted, _ = DocumentKnowledge.objects.filter(user=request.user, doc_title=doc_title).delete()
-        if deleted > 0:
-            return Response({"message": f"Deleted document '{doc_title}'."}, status=status.HTTP_200_OK)
-        return Response({"error": "Document not found."}, status=status.HTTP_404_NOT_FOUND)
+        document.delete()
+        return Response({"message": "Document deleted successfully."}, status=status.HTTP_200_OK)

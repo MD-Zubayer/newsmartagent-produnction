@@ -24,14 +24,14 @@ import {
 import toast from "react-hot-toast";
 
 /* ================= FILE MENU MODAL ================= */
-const FileMenu = ({ isOpen, onClose, onCreate, loadFile, deleteFile, currentTitle }) => {
+const FileMenu = ({ isOpen, onClose, onCreate, loadFile, deleteFile, currentId }) => {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
 
   React.useEffect(() => {
     if (isOpen) {
       setLoading(true);
-      api.get('/embedding/document/')
+      api.get('/embedding/documents/')
          .then(res => setFiles(res.data?.documents || []))
          .catch(err => console.error("Failed to load documents", err))
          .finally(() => setLoading(false));
@@ -56,12 +56,12 @@ const FileMenu = ({ isOpen, onClose, onCreate, loadFile, deleteFile, currentTitl
 
         <div className="flex-1 overflow-y-auto p-3 space-y-2 no-scrollbar">
            {loading ? <div className="text-center p-6 text-slate-500 font-medium">Loading documents...</div> : 
-             files.map((title, idx) => (
-               <div key={title + idx} className={`group flex items-center justify-between p-3.5 rounded-xl border transition-all duration-200 ${currentTitle === title ? "border-[#2B579A] bg-blue-50" : "border-slate-100 hover:border-blue-200 hover:bg-slate-50"}`}>
-                 <div onClick={() => loadFile(title)} className="flex-1 cursor-pointer">
-                    <div className="font-semibold text-slate-800 text-sm group-hover:text-[#2B579A] transition-colors">{title || "Untitled"}</div>
+             files.map((doc) => (
+               <div key={doc.id} className={`group flex items-center justify-between p-3.5 rounded-xl border transition-all duration-200 ${currentId === doc.id ? "border-[#2B579A] bg-blue-50" : "border-slate-100 hover:border-blue-200 hover:bg-slate-50"}`}>
+                 <div onClick={() => loadFile(doc.id)} className="flex-1 cursor-pointer">
+                    <div className="font-semibold text-slate-800 text-sm group-hover:text-[#2B579A] transition-colors">{doc.title || "Untitled"}</div>
                  </div>
-                 <button onClick={() => deleteFile(title)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100" title="Delete">
+                 <button onClick={() => deleteFile(doc.id, doc.title)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100" title="Delete">
                     <Trash2 size={18}/>
                  </button>
                </div>
@@ -77,6 +77,7 @@ const FileMenu = ({ isOpen, onClose, onCreate, loadFile, deleteFile, currentTitl
 };
 
 export default function DocumentEditor() {
+  const [docId, setDocId] = useState(null);
   const [docTitle, setDocTitle] = useState("Untitled Document");
   const [loading, setLoading] = useState(false);
   const [showFileMenu, setShowFileMenu] = useState(false);
@@ -88,20 +89,22 @@ export default function DocumentEditor() {
   };
 
   const createNewDoc = () => {
+    setDocId(null);
     setDocTitle("Untitled Document");
     if (editorRef.current) editorRef.current.innerHTML = "";
     setShowFileMenu(false);
   };
 
   // --- UPDATED LOAD FUNCTION ---
-  const loadDoc = async (title) => {
+  const loadDoc = async (id) => {
     setLoading(true);
     try {
-      const res = await api.get(`/embedding/document/?doc_title=${encodeURIComponent(title)}`);
-      setDocTitle(res.data.doc_title);
+      const res = await api.get(`/embedding/documents/${id}/`);
+      setDocId(res.data.id);
+      setDocTitle(res.data.title);
       if (editorRef.current) {
           // প্লেইন টেক্সট হিসেবে কন্টেন্ট লোড করা
-          editorRef.current.innerText = res.data.text; 
+          editorRef.current.innerText = res.data.full_text; 
       }
       setShowFileMenu(false);
       toast.success("Document loaded successfully");
@@ -113,12 +116,12 @@ export default function DocumentEditor() {
     }
   };
 
-  const deleteDoc = async (title) => {
+  const deleteDoc = async (id, title) => {
     if(!confirm(`Delete Document '${title}'? This will remove it from the AI's knowledge.`)) return;
     try {
-        await api.delete('/embedding/document/', { data: { doc_title: title } });
+        await api.delete(`/embedding/documents/${id}/`);
         toast.success(`Deleted ${title}`);
-        if(docTitle === title) createNewDoc();
+        if(docId === id) createNewDoc();
         setShowFileMenu(false);
     } catch(err) { 
         toast.error("Delete failed");
@@ -136,25 +139,26 @@ export default function DocumentEditor() {
 
     setLoading(true);
     
-    // আমরা প্রথমে PUT ট্রাই করব, যদি টাইটেল এক্সিস্ট করে তবে আপডেট হবে। 
-    // যদি টাইটেল নতুন হয় (৪৪০ এরর বা ৪৪৪ এরর দেয়), তবে POST ট্রাই করবে।
     try {
-      const res = await api.put("/embedding/document/", {
-        doc_title: docTitle,
-        text: textContent,
-      });
-      toast.success(`Saved and updated! Generated ${res.data.chunks_saved} chunks.`);
-    } catch (error) {
-      // যদি PUT মেথড কাজ না করে (নতুন ফাইল), তবে POST মেথড কল করবে
-      try {
-        const res = await api.post("/embedding/document/", {
+      if (docId) {
+        // UPDATE existing document
+        const res = await api.put(`/embedding/documents/${docId}/`, {
           doc_title: docTitle,
           text: textContent,
         });
+        toast.success(`Saved and updated! Generated ${res.data.chunks_saved} chunks.`);
+      } else {
+        // CREATE new document
+        const res = await api.post("/embedding/documents/", {
+          doc_title: docTitle,
+          text: textContent,
+        });
+        setDocId(res.data.id);
         toast.success(`New document created! Generated ${res.data.chunks_saved} chunks.`);
-      } catch (postErr) {
-        toast.error(postErr.response?.data?.error || "Failed to save document.");
       }
+    } catch (error) {
+      toast.error(error.response?.data?.error || "Failed to save document.");
+      console.error(error);
     } finally {
       setLoading(false);
     }
@@ -168,7 +172,7 @@ export default function DocumentEditor() {
          onCreate={createNewDoc}
          loadFile={loadDoc}
          deleteFile={deleteDoc}
-         currentTitle={docTitle}
+         currentId={docId}
       />
       {/* Top Ribbon (Microsoft Word Style) */}
       <div className="bg-[#2B579A] text-white px-4 py-2 flex items-center justify-between shadow-md z-10">

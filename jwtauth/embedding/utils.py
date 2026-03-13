@@ -151,11 +151,11 @@ def chunk_text(text, max_words=100, overlap=20):
             
     return chunks
 
-def process_document_text(user, text, doc_title="Generic Document"):
+def process_document_text(user, text, document):
     """
     Take generic text, chunk it, embed and save it.
     """
-    print(f"\n--- [DEBUG] Processing Document for {user.email} ---")
+    print(f"\n--- [DEBUG] Processing Document '{document.title}' for {user.email} ---")
     
     text = re.sub(r'\s+', ' ', text).strip()
     if not text:
@@ -164,12 +164,16 @@ def process_document_text(user, text, doc_title="Generic Document"):
     chunks = chunk_text(text, max_words=150, overlap=30)
     saved_chunks = 0
     
+    # OLD chunks deletion if any (though typically handled in view)
+    document.chunks.all().delete()
+    
     for i, content in enumerate(chunks):
         vector = get_gemini_embedding(content)
         if vector:
             DocumentKnowledge.objects.create(
                 user=user,
-                doc_title=doc_title,
+                document=document,
+                doc_title=document.title,
                 chunk_index=i,
                 content=content,
                 embedding=list(vector)
