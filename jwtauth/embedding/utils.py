@@ -2,10 +2,12 @@ from google import genai
 from django.conf import settings
 import hashlib
 from embedding.models import SpreadsheetKnowledge
+import logging
+
 
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
-
+logger = logging.getLogger('aiAgent')
 
 
 
@@ -41,7 +43,9 @@ def get_gemini_embedding(text):
 
 import hashlib
 
-def sync_spreadsheet_to_knowledge(user, grid_data):
+
+def sync_spreadsheet_to_knowledge(user, grid_data, sheet_id):
+    
     # ১. হেডারগুলো নিয়ে একটি সর্টেড ডিকশনারি তৈরি (অর্ডার ফিক্সড করার জন্য)
     header_keys = sorted([k for k in grid_data.keys() if k.startswith('0-')])
     headers = {
@@ -56,16 +60,25 @@ def sync_spreadsheet_to_knowledge(user, grid_data):
     # ২. ডাটা রো প্রসেস করা
     rows = {}
     current_row_ids = []
+    
+    
     for k, v in grid_data.items():
         if '-' not in k or k.startswith('0-'): continue
         r_idx, c_idx = k.split('-')
+        
+        # ইউনিক রো আইডি (যেমন: sheet_1_row_1)
+        row_unique_id = f"sheet_{sheet_id}_row_{r_idx}"
+        
         if r_idx not in rows: 
             rows[r_idx] = {}
-            current_row_ids.append(f"row_{r_idx}")
-        rows[r_idx][c_idx] = str(v).strip()
+            current_row_ids.append(row_unique_id)
+            
+        rows[r_idx][c_idx] = str(v).strip() if v is not None else ""
         
-    from embedding.models import SpreadsheetKnowledge
-    SpreadsheetKnowledge.objects.filter(user=user).exclude(row_id__in=current_row_ids).delete()
+    SpreadsheetKnowledge.objects.filter(
+        user=user, 
+        spreadsheet_id=sheet_id 
+    ).exclude(row_id__in=current_row_ids).delete()
 
     updated_count = 0
 
@@ -75,10 +88,11 @@ def sync_spreadsheet_to_knowledge(user, grid_data):
         data_content = "|".join([f"{c}:{cols[c]}" for c in sorted_cols])
         combined_hash = hashlib.md5((data_content + header_hash).encode()).hexdigest()
         
-        row_id = f"row_{r_idx}"
+        row_unique_id = f"sheet_{sheet_id}_row_{r_idx}"
         obj, created = SpreadsheetKnowledge.objects.get_or_create(
             user=user, 
-            row_id=row_id, 
+            spreadsheet_id=sheet_id,
+            row_id=row_unique_id, 
             defaults={'column_hashes': {}, 'content': ''}
         )
         

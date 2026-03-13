@@ -73,14 +73,17 @@ class SpreadsheetDetailView(APIView):
 
                 # ধাপ ৩: যদি কোনো ডেটা থাকে (হেডার বাদে), তবেই সিঙ্ক কল করা
                 if rows_with_content:
-                    updated_rows = sync_spreadsheet_to_knowledge(request.user, clean_data)
+                    updated_rows = sync_spreadsheet_to_knowledge(
+                    user=request.user, 
+                    grid_data=clean_data, # আপনার ফিল্টার করা ডাটা
+                    sheet_id=saved_sheet.id # এখানে ডিফল্ট আইডি পাস হচ্ছে
+                )
                     print(f"Total {updated_rows} valid rows updated in Knowledge Base.")
                 else:
                     # যদি কোনো ডেটা না থাকে, তবে নলেজ বেস থেকে ওই ইউজারের ডাটা ক্লিয়ার করে দেওয়া ভালো
                     from embedding.models import SpreadsheetKnowledge
-                    SpreadsheetKnowledge.objects.filter(user=request.user).delete()
-                    print("Knowledge base cleared as spreadsheet is empty.")
-
+                    SpreadsheetKnowledge.objects.filter(user=request.user, spreadsheet_id=saved_sheet.id).delete()
+                    print(f"Knowledge base cleared for Sheet {saved_sheet.id}.")
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -89,9 +92,9 @@ class SpreadsheetDetailView(APIView):
         if not sheet:
             return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
         
-        # স্প্রেডশিট ডিলিট করার সাথে সাথে নলেজ বেসও ক্লিয়ার হবে
+        # 🔥 FIX: শুধু এই নির্দিষ্ট স্প্রেডশিটের নলেজ ডিলিট করুন
         from embedding.models import SpreadsheetKnowledge
-        SpreadsheetKnowledge.objects.filter(user=request.user).delete()
+        SpreadsheetKnowledge.objects.filter(user=request.user, spreadsheet_id=pk).delete()
         
         sheet.delete()
-        return Response({'message': 'Deleted and knowledge cleared'}, status=status.HTTP_204_NO_CONTENT)
+        return Response({'message': 'Deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
