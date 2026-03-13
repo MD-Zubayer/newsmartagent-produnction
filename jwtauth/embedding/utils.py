@@ -55,44 +55,55 @@ def sync_spreadsheet_to_knowledge(user, grid_data):
 
     # ২. ডাটা রো প্রসেস করা
     rows = {}
+    current_row_ids = []
     for k, v in grid_data.items():
         if '-' not in k or k.startswith('0-'): continue
         r_idx, c_idx = k.split('-')
-        if r_idx not in rows: rows[r_idx] = {}
+        if r_idx not in rows: 
+            rows[r_idx] = {}
+            current_row_ids.append(f"row_{r_idx}")
         rows[r_idx][c_idx] = str(v).strip()
+        
+    from embedding.models import SpreadsheetKnowledge
+    SpreadsheetKnowledge.objects.filter(user=user).exclude(row_id__in=current_row_ids).delete()
 
     updated_count = 0
 
     for r_idx, cols in rows.items():
-        # ৩. ডাটা স্ট্রিং তৈরির সময় কলাম আইডি সর্ট করা বাধ্যতামূলক
+        # ৪. ডাটা স্ট্রিং এবং কম্বাইন্ড হ্যাশ
         sorted_cols = sorted(cols.keys())
         data_content = "|".join([f"{c}:{cols[c]}" for c in sorted_cols])
-        
-        # কম্বাইন্ড হ্যাশ: ডাটা + হেডার হ্যাশ
         combined_hash = hashlib.md5((data_content + header_hash).encode()).hexdigest()
         
+        row_id = f"row_{r_idx}"
         obj, created = SpreadsheetKnowledge.objects.get_or_create(
             user=user, 
-            row_id=f"row_{r_idx}", 
+            row_id=row_id, 
             defaults={'column_hashes': {}, 'content': ''}
         )
-
+        
         # ৪. ডাটাবেসের হ্যাশ চেক
         old_hash = obj.column_hashes.get('combined_hash')
 
+        # ৫. শুধু পরিবর্তন হলেই আপডেট হবে (Saving API Costs)
         if created or old_hash != combined_hash:
-            print(f"[DEBUG] Row {r_idx} Changed! Updating...")
-            
-            # কন্টেন্ট তৈরি (সর্টেড অর্ডারে)
+            # কন্টেন্ট তৈরি
             row_text = ", ".join([f"{headers.get(c, f'col_{c}')}: {cols[c]}" for c in sorted_cols])
             
-            vector = get_gemini_embedding(row_text)
-            if vector:
-                obj.content = row_text
-                obj.column_hashes = {'combined_hash': combined_hash}
-                obj.embedding = vector
-                obj.save()
-                updated_count += 1
+            
+            # Gemini Embedding জেনারেশন
+            try:
+                vector = get_gemini_embedding(row_text)
+                if vector:
+                    obj.content = row_text
+                    obj.column_hashes = {'combined_hash': combined_hash}
+                    obj.embedding = vector
+                    obj.save()
+                    updated_count += 1
+                    # রেট লিমিট এড়াতে ছোট বিরতি (যদি বড় ডাটা হয়)
+                    # time.sleep(0.1) 
+            except Exception as e:
+                print(f"Error updating Row {r_idx}: {e}")
         else:
             print(f"[DEBUG] Row {r_idx} No change. Skipping.")
 

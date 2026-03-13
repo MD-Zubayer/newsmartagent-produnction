@@ -43,21 +43,45 @@ class SpreadsheetDetailView(APIView):
         if not sheet:
             return Response({'error': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
         
-        # partial=True দেওয়া আছে যাতে শুধু পরিবর্তিত ডাটা সেভ করা যায় (যেমন: শুধু data বা শুধু title)
         serializer = SpreadsheetSerializer(sheet, data=request.data, partial=True)
         if serializer.is_valid():
-           saved_sheet = serializer.save()
+            saved_sheet = serializer.save()
 
-            # ২. যদি রিকোয়েস্টে 'data' (গ্রিড ডাটা) থাকে, তবেই এমবেডিং আপডেট হবে
-           if 'data' in request.data:
+            # ২. যদি রিকোয়েস্টে 'data' থাকে, তবে ক্লিনিং লজিক চলবে
+            if 'data' in request.data:
+                print("--- Triggering Smart Embedding Sync ---")
+                
+                raw_data = saved_sheet.data  # ডিকশনারি ফর্মেট: {'0-0': 'Head', '1-0': 'Value'}
+                clean_data = {}
+                rows_with_content = set()
 
+                # ধাপ ১: কোন কোন রো-তে আসল তথ্য (Value) আছে তা খুঁজে বের করা
+                for key, value in raw_data.items():
+                    try:
+                        r_idx = key.split('-')[0]
+                        # রো যদি ০ না হয় (হেডার বাদে) এবং ভ্যালু যদি খালি না থাকে
+                        if r_idx != "0" and str(value).strip():
+                            rows_with_content.add(r_idx)
+                    except (IndexError, AttributeError):
+                        continue
 
+                # ধাপ ২: হেডার রো (Row 0) এবং শুধু তথ্য থাকা রো গুলোকে আলাদা করা
+                for key, value in raw_data.items():
+                    r_idx = key.split('-')[0]
+                    if r_idx == "0" or r_idx in rows_with_content:
+                        clean_data[key] = value
 
-                print("--- Triggering Embedding Sync ---")
-                updated_rows = sync_spreadsheet_to_knowledge(request.user, saved_sheet.data)
-                print(f"Total {updated_rows} rows updated in Knowledge Base.")
+                # ধাপ ৩: যদি কোনো ডেটা থাকে (হেডার বাদে), তবেই সিঙ্ক কল করা
+                if rows_with_content:
+                    updated_rows = sync_spreadsheet_to_knowledge(request.user, clean_data)
+                    print(f"Total {updated_rows} valid rows updated in Knowledge Base.")
+                else:
+                    # যদি কোনো ডেটা না থাকে, তবে নলেজ বেস থেকে ওই ইউজারের ডাটা ক্লিয়ার করে দেওয়া ভালো
+                    from embedding.models import SpreadsheetKnowledge
+                    SpreadsheetKnowledge.objects.filter(user=request.user).delete()
+                    print("Knowledge base cleared as spreadsheet is empty.")
 
-           return Response(serializer.data)
+            return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, pk):
