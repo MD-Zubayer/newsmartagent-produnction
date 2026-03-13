@@ -8,7 +8,7 @@ class DocumentSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'user', 'created_at', 'updated_at']
 
 class DocumentDetailSerializer(serializers.ModelSerializer):
-    full_text = serializers.SerializerMethodField()
+
     
     class Meta:
         model = Document
