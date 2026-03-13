@@ -7,6 +7,7 @@ client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 
 def generate_openai_reply(system_promt, messages, agent_config, memory_context=""):
+    model_name = agent_config.ai_model
     full_text = system_promt + memory_context + str(messages)
     input_tokens = count_openai_tokens(full_text, agent_config.ai_model)
     
@@ -71,21 +72,22 @@ def generate_openai_reply(system_promt, messages, agent_config, memory_context="
         print(f'OpenAI Input: {input_tokens} | Output: {output_tokens} | Total: {total_tokens}')
         
         return {
-            "reply": reply,
+            "reply": reply or "Sorry, I didn't understand.",
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
             "total_tokens": total_tokens,
-            "model_name": agent_config.ai_model,
+            "model_name": model_name,
             "status": result_status
         }
 
     except Exception as e:
         print(f'OpenAi API Error: {str(e)}')
         return {
-            "reply": "OpenAI system is currently unavailable. Please try again later.",
+            "reply": "The system is experiencing some problems, please try again later.",
             "input_tokens": 0,
             "output_tokens": 0,
             "total_tokens": 0,
+            "model_name": model_name,
             "status": "error",
             "error_message": str(e)
         }
