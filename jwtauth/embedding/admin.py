@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import DocumentKnowledge
+from .models import DocumentKnowledge, Document
 
 @admin.register(DocumentKnowledge)
 class DocumentKnowledgeAdmin(admin.ModelAdmin):
@@ -39,3 +39,21 @@ class DocumentKnowledgeAdmin(admin.ModelAdmin):
             'fields': ('embedding_full_view', 'created_at'),
         }),
     )
+    
+    
+@admin.register(Document)
+class DocumentAdmin(admin.admin.ModelAdmin):
+    # এডমিন লিস্টে যা যা কলাম দেখাবে
+    list_display = ('id','title', 'user', 'created_at', 'updated_at')
+    
+    # ডানপাশে ফিল্টার করার অপশন (ইউজার এবং তারিখ অনুযায়ী)
+    list_filter = ('user', 'created_at', 'updated_at')
+    
+    # সার্চ বার (টাইটেল বা ইউজারের ইমেইল দিয়ে খোঁজা যাবে)
+    search_fields = ('title', 'user__email', 'user__username')
+    
+    # তারিখ অনুযায়ী ড্রিলডাউন করার অপশন
+    date_hierarchy = 'updated_at'
+    
+    # শুধু রিড-অনলি হিসেবে রাখার জন্য (অপশনাল)
+    readonly_fields = ('created_at', 'updated_at')
