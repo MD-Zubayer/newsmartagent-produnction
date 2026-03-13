@@ -1,10 +1,10 @@
-# aiAgent/gemini.py
+import logging
 from google import genai
 from google.genai import types
 from django.conf import settings
 from aiAgent.utils import count_gemini_tokens
 
-
+logger = logging.getLogger('aiAgent')
 
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
@@ -51,6 +51,7 @@ def generate_gemini_reply(prompt, history, agent_config):
         max_token = 500
 
     try:
+        logger.info(f"Gemini History: {formatted_history}")
         response = client.models.generate_content(
             model=model_name,
             contents=formatted_history,

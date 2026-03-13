@@ -1,6 +1,9 @@
+import logging
 from openai import OpenAI
 from django.conf import settings
 from aiAgent.utils import count_openai_tokens
+
+logger = logging.getLogger('aiAgent')
 
 # open ai client
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
@@ -12,12 +15,13 @@ def generate_openai_reply(system_promt, messages, agent_config, memory_context="
     input_tokens = count_openai_tokens(full_text, agent_config.ai_model)
     
     try:
-        formatted_messages = [{'role': 'system', 'content': system_promt}]
+        formatted_messages = []
         for m in messages:
             formatted_messages.append({
                 'role': m['role'],
                 'content': m['content']
             })
+        formatted_messages.append({'role': 'user', 'content': system_promt})
 
         # --- পে-লোড তৈরি (একবারই করা ভালো) ---
         payload = {
@@ -40,12 +44,13 @@ def generate_openai_reply(system_promt, messages, agent_config, memory_context="
 
         # ২. টোকেন লিমিট সেট করা (নতুন মডেলে max_completion_tokens ব্যবহার হয়)
         max_t = agent_config.max_tokens if agent_config.max_tokens else 500
-        if is_new_model:
+        if is__new_model:
             payload["max_completion_tokens"] = max_t
         else:
             payload["max_tokens"] = max_t
 
         # API কল
+        logger.info(f"OpenAI History: {formatted_messages}")
         response = client.chat.completions.create(**payload)
         
         # --- রিপ্লাই এক্সট্রাক্ট করা ---
