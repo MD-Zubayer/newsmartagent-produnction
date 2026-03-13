@@ -100,16 +100,19 @@ def sync_spreadsheet_to_knowledge(user, grid_data, sheet_id):
 
         # ৫. শুধু পরিবর্তন হলেই আপডেট হবে (Saving API Costs)
         if created or old_hash != combined_hash:
-            # কন্টেন্ট তৈরি (শুধুমাত্র ভ্যালু থাকলে)
-            row_parts = []
+            # 🔥 পরিবর্তন এখানে: শুধু যেসব কলামে ডাটা আছে (Empty নয়) সেগুলো ফিল্টার করা
+            row_text_parts = []
             for c in sorted_cols:
-                if cols[c]: # Check if the value is not an empty string
-                    row_parts.append(f"{headers.get(c, f'col_{c}')}: {cols[c]}")
+                col_val = cols[c].strip()
+                if col_val and col_val.lower() != 'none': # খালি বা 'none' হলে বাদ
+                    header_name = headers.get(c, f'col_{c}')
+                    row_text_parts.append(f"{header_name}: {col_val}")
             
-            row_text = ", ".join(row_parts)
-
-            if row_text: # Only proceed if there is some content
-                # Gemini Embedding জেনারেশন
+            # সব পার্টস জোড়া দিয়ে ফাইনাল টেক্সট
+            row_text = ", ".join(row_text_parts)
+            
+            # যদি কন্টেন্ট থাকে তবেই সেভ হবে, নাহলে ডিলিট/স্কিপ
+            if row_text.strip():
                 try:
                     vector = get_gemini_embedding(row_text)
                     if vector:
@@ -118,10 +121,11 @@ def sync_spreadsheet_to_knowledge(user, grid_data, sheet_id):
                         obj.embedding = vector
                         obj.save()
                         updated_count += 1
-                        # রেট লিমিট এড়াতে ছোট বিরতি (যদি বড় ডাটা হয়)
-                        # time.sleep(0.1) 
                 except Exception as e:
-                    print(f"Error updating Row {r_idx}: {e}")
+                    print(f"Error: {e}")
+            else:
+                # যদি রো-তে কোনো কাজের তথ্যই না থাকে তবে ডাটাবেস থেকে মুছে ফেলুন
+                obj.delete()
         else:
             print(f"[DEBUG] Row {r_idx} No change. Skipping.")
 
