@@ -49,3 +49,13 @@ Cookie: access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYW
 }
 
 
+###
+GET https://newsmartagent.com/api/embedding/documents/3
+Content-Type: application/json
+Cookie: access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzczNDQ2MzU2LCJpYXQiOjE3NzM0NDI3NTYsImp0aSI6ImM4ZTI1OGQ3OWI5NTQxNzVhZDdiYWVmNjkzMjJkZjY1IiwidXNlcl9pZCI6IjIifQ.Z-t5awXkRQbtU-ZgM3l3L-KOLuyVmnwLUmBXTH61G3k
+
+
+{
+    'email': 'junayed75489@gmail.com',
+    'password': '1234'
+}

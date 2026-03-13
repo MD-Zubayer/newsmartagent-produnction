@@ -121,7 +121,7 @@ export default function DocumentPage() {
       const res = await api.get(`/embedding/documents/${id}/`);
       setDocTitle(res.data.title);
       if (editorRef.current) {
-          editorRef.current.innerText = res.data.full_content || ""; 
+          editorRef.current.innerText = res.data.full_text || ""; 
       }
       toast.success("Document loaded");
     } catch (err) {
