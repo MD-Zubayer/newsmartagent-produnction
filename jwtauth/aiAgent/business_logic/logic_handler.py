@@ -99,34 +99,34 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                 user=agent_config.user
             ).annotate(
                 distance=CosineDistance('embedding', query_vector)
-            ).order_by('distance')[:3]
+            ).filter(distance__lt=0.65).order_by('distance')[:3]
 
             # Search Document Knowledge
             related_docs = DocumentKnowledge.objects.filter(
                 user=agent_config.user
             ).annotate(
                 distance=CosineDistance('embedding', query_vector)
-            ).order_by('distance')[:3]
+            ).filter(distance__lt=0.65).order_by('distance')[:3]
 
-            best_sheet_distance = related_sheets[0].distance if related_sheets else 1.0
-            best_doc_distance = related_docs[0].distance if related_docs else 1.0
+            first_sheet = related_sheets.first()
+            first_doc = related_docs.first()
+            # 🔥 FIX: Safe float conversion and None check
+            best_sheet_distance = float(first_sheet.distance) if first_sheet and first_sheet.distance is not None else 1.0
+            best_doc_distance = float(first_doc.distance) if first_doc and first_doc.distance is not None else 1.0
+            overall_best_dist = min(best_sheet_distance, best_doc_distance)
             
             # Combine contents based on distance thresholds
             matched_content = []
-            overall_best_dist = min(best_sheet_distance, best_doc_distance)
-            
-            # If distance < 0.65, we consider it a match (strong < 0.45, weak < 0.65)
-            if best_sheet_distance < 0.65:
-                matched_content.extend([doc.content for doc in related_sheets if doc.distance < 0.65])
-                
-            if best_doc_distance < 0.65:
-                matched_content.extend([doc.content for doc in related_docs if doc.distance < 0.65])
-                
+            matched_content.extend([doc.content for doc in related_sheets])
+            matched_content.extend([doc.content for doc in related_docs])
+
             if matched_content:
-                clean_data = "\n".join(matched_content)
+                unique_content = list(dict.fromkeys(matched_content))
+                clean_data = "\n".join(unique_content)
                 sheet_context = f"\n[KNOWLEDGE BASE DATA]:\n{clean_data}"
                 post_info = f"User commented on this post: '{post_context_text}'. " if post_context_text else ""
-                
+
+
                 if overall_best_dist < 0.45:
                     extra_instruction = f"""
                             {post_info}  strictly using only the content inside [KNOWLEDGE BASE DATA].
@@ -158,7 +158,7 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
             """
             logger.info(">>> Embedding skipped due to keyword + message length.")
     except Exception as e:
-        logger.error(f"RAG Search Error: {e}")
+        logger.error(f"RAG Search Error: {e}", exc_info=True)
         extra_instruction = f" Answer politely. If data missing, ask to wait. {order_instruction}"
     return sheet_context, extra_instruction, query_vector
     
