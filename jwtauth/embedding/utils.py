@@ -77,7 +77,7 @@ def sync_spreadsheet_to_knowledge(user, grid_data, sheet_id):
         
     SpreadsheetKnowledge.objects.filter(
         user=user, 
-        spreadsheet_id=sheet_id 
+        row_id__startswith=f"sheet_{sheet_id}_", 
     ).exclude(row_id__in=current_row_ids).delete()
 
     updated_count = 0
@@ -91,8 +91,7 @@ def sync_spreadsheet_to_knowledge(user, grid_data, sheet_id):
         row_unique_id = f"sheet_{sheet_id}_row_{r_idx}"
         obj, created = SpreadsheetKnowledge.objects.get_or_create(
             user=user, 
-            spreadsheet_id=sheet_id,
-            row_id=row_unique_id, 
+            row_id=row_unique_id,
             defaults={'column_hashes': {}, 'content': ''}
         )
         

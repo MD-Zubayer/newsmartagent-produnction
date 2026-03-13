@@ -82,7 +82,7 @@ class SpreadsheetDetailView(APIView):
                 else:
                     # যদি কোনো ডেটা না থাকে, তবে নলেজ বেস থেকে ওই ইউজারের ডাটা ক্লিয়ার করে দেওয়া ভালো
                     from embedding.models import SpreadsheetKnowledge
-                    SpreadsheetKnowledge.objects.filter(user=request.user, spreadsheet_id=saved_sheet.id).delete()
+                    SpreadsheetKnowledge.objects.filter(user=request.user, row_id__startswith=f"sheet_{saved_sheet.id}_").delete()
                     print(f"Knowledge base cleared for Sheet {saved_sheet.id}.")
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -94,7 +94,7 @@ class SpreadsheetDetailView(APIView):
         
         # 🔥 FIX: শুধু এই নির্দিষ্ট স্প্রেডশিটের নলেজ ডিলিট করুন
         from embedding.models import SpreadsheetKnowledge
-        SpreadsheetKnowledge.objects.filter(user=request.user, spreadsheet_id=pk).delete()
+        SpreadsheetKnowledge.objects.filter(user=request.user, row_id__startswith=f"sheet_{pk}_").delete()
         
         sheet.delete()
         return Response({'message': 'Deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
