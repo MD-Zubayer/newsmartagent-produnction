@@ -44,7 +44,7 @@ class DocumentKnowledgeAdmin(admin.ModelAdmin):
 @admin.register(Document)
 class DocumentAdmin(admin.ModelAdmin):
     # এডমিন লিস্টে যা যা কলাম দেখাবে
-    list_display = ('id','title', 'user', 'created_at', 'updated_at')
+    list_display = ('id','title', 'user', 'full_content', 'created_at', 'updated_at')
     
     # ডানপাশে ফিল্টার করার অপশন (ইউজার এবং তারিখ অনুযায়ী)
     list_filter = ('user', 'created_at', 'updated_at')
