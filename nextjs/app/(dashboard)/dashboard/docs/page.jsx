@@ -1,3 +1,4 @@
+// /home/md-zubayer/newsmartagent/production/nextjs/app/(dashboard)/dashboard/docs/page.jsx
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
@@ -45,9 +46,9 @@ const FileMenu = ({ isOpen, onClose, currentId }) => {
   };
 
   const onCreateNew = () => {
-    router.push('/dashboard/docs?new=true');
-    onClose();
-  };
+  window.location.href = '/dashboard/docs?new=true';
+  onClose();
+};
 
   const deleteFile = async (id, title) => {
     if(!confirm(`Delete Document '${title}'? This will remove it from the AI's knowledge.`)) return;
@@ -108,18 +109,25 @@ export default function DocumentMain() {
 
   // --- AUTO REDIRECT TO FIRST DOC (UNLESS CREATING NEW) ---
   useEffect(() => {
-    // URL-এ যদি ?new=true থাকে তবে রিডাইরেক্ট করবে না
-    const isNew = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('new') === 'true';
-    if (isNew) return;
+  const params = new URLSearchParams(window.location.search);
+  const isNew = params.get('new') === 'true';
 
-    api.get('/embedding/documents/')
-       .then(res => {
-         if (res.data?.documents?.length > 0) {
-           router.push(`/dashboard/docs/${res.data.documents[0].id}`);
-         }
-       })
-       .catch(err => console.error("Initial load failed", err));
-  }, []);
+  if (isNew) {
+    // নতুন ডকুমেন্ট মোড: এখানে কোনো রিডাইরেক্ট হবে না
+    setDocTitle("Untitled Document");
+    if (editorRef.current) editorRef.current.innerHTML = "";
+    return; // এখানেই কাজ শেষ, নিচের api.get আর রান হবে না
+  }
+
+  // যদি নতুন ফাইল ক্রিয়েট করার কমান্ড না থাকে, তবেই পুরনো ফাইলে রিডাইরেক্ট হবে
+  api.get('/embedding/documents/')
+     .then(res => {
+       if (res.data?.documents?.length > 0) {
+         router.push(`/dashboard/docs/${res.data.documents[0].id}`);
+       }
+     })
+     .catch(err => console.error("Initial load failed", err));
+}, []); // রাউটার বা অন্য কিছুর ওপর ডিপেন্ডেন্সি দেবেন না
 
   const execCommand = (command, value = null) => {
     document.execCommand(command, false, value);
@@ -158,10 +166,11 @@ export default function DocumentMain() {
   return (
     <div className="flex flex-col h-[calc(100vh-80px)] bg-[#F3F2F1] text-gray-800 font-sans -m-4 relative">
       <FileMenu 
-         isOpen={showFileMenu} 
-         onClose={() => setShowFileMenu(false)}
-         currentId={null}
-      />
+   isOpen={showFileMenu} 
+   onClose={() => setShowFileMenu(false)}
+   onCreate={createNewDoc} // এটি নিশ্চিত করুন
+   currentId={null}
+/>
       <div className="bg-[#2B579A] text-white px-4 py-2 flex items-center justify-between shadow-md z-10">
         <div className="flex items-center gap-3">
           <button onClick={() => setShowFileMenu(true)} className="p-1.5 hover:bg-white/20 rounded-md transition-colors mr-1">

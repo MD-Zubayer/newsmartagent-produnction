@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from .utils import process_document_text
 from .models import DocumentKnowledge
-
+from django.db import transaction
 from .models import Document, DocumentKnowledge
 from .serializers import DocumentSerializer, DocumentDetailSerializer
 
@@ -18,23 +18,25 @@ class DocumentListCreateView(APIView):
 
     def post(self, request):
         text = request.data.get('text')
-        title = request.data.get('doc_title', 'Untitled Document')
+        title = request.data.get('doc_title') or 'Untitled Document'
 
         if not text:
             return Response({"error": "Text content is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            document = Document.objects.create(user=request.user, title=title)
-            chunks_saved = process_document_text(request.user, text, document)
-            
-            return Response({
-                "message": "Document created and processed successfully.",
-                "id": document.id,
-                "title": document.title,
-                "chunks_saved": chunks_saved
-            }, status=status.HTTP_201_CREATED)
+            with transaction.atomic(): # ট্রানজ্যাকশন শুরু
+                document = Document.objects.create(user=request.user, title=title)
+                chunks_saved = process_document_text(request.user, text, document)
+                
+                return Response({
+                    "message": "Document created and processed successfully.",
+                    "id": document.id,
+                    "title": document.title,
+                    "chunks_saved": chunks_saved
+                }, status=status.HTTP_201_CREATED)
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            print(f"Post Error: {str(e)}") # ডকার লগ চেক করার জন্য
+            return Response({"error": "Failed to create document."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class DocumentDetailView(APIView):

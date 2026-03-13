@@ -1,3 +1,4 @@
+// /home/md-zubayer/newsmartagent/production/nextjs/app/(dashboard)/dashboard/docs/[id]/page.jsx
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
@@ -163,16 +164,17 @@ export default function DocumentPage() {
   };
 
   const createNewDoc = () => {
-    router.push('/dashboard/docs');
-  };
+  window.location.href = '/dashboard/docs?new=true';
+};
 
   return (
     <div className="flex flex-col h-[calc(100vh-80px)] bg-[#F3F2F1] text-gray-800 font-sans -m-4 relative">
       <FileMenu 
-         isOpen={showFileMenu} 
-         onClose={() => setShowFileMenu(false)}
-         currentId={docId}
-      />
+   isOpen={showFileMenu} 
+   onClose={() => setShowFileMenu(false)}
+   onCreate={createNewDoc} // এটি নিশ্চিত করুন
+   currentId={docId}
+/>
       <div className="bg-[#2B579A] text-white px-4 py-2 flex items-center justify-between shadow-md z-10">
         <div className="flex items-center gap-3">
           <button onClick={() => setShowFileMenu(true)} className="p-1.5 hover:bg-white/20 rounded-md transition-colors mr-1">
