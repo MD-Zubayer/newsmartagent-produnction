@@ -121,7 +121,7 @@ export default function DocumentPage() {
       const res = await api.get(`/embedding/documents/${id}/`);
       setDocTitle(res.data.title);
       if (editorRef.current) {
-          editorRef.current.innerText = res.data.full_text; 
+          editorRef.current.innerText = res.data.full_content || ""; 
       }
       toast.success("Document loaded");
     } catch (err) {
@@ -236,24 +236,32 @@ export default function DocumentPage() {
 
       <div className="flex-1 overflow-auto bg-[#F3F2F1] p-8 flex justify-center">
         <div 
-          className="bg-white w-full max-w-[816px] min-h-[1056px] shadow-lg border border-gray-200 p-12 text-gray-900 outline-none editor-canvas"
-          style={{boxShadow: "0 4px 12px 0 rgba(0,0,0,0.1)", fontFamily: "Calibri, Arial, sans-serif", fontSize: "15px", lineHeight: "1.6"}}
-          contentEditable
-          suppressContentEditableWarning
-          ref={editorRef}
-          onPaste={(e) => {
-            e.preventDefault();
-            const text = e.clipboardData.getData("text/plain");
-            document.execCommand("insertText", false, text);
-          }}
-        >
-        </div>
+  className="bg-white w-full max-w-[816px] min-h-[1056px] shadow-lg border border-gray-200 p-12 text-gray-900 outline-none editor-canvas"
+  style={{
+    boxShadow: "0 4px 12px 0 rgba(0,0,0,0.1)", 
+    fontFamily: "Calibri, Arial, sans-serif", 
+    fontSize: "15px", 
+    lineHeight: "1.6",
+    whiteSpace: "pre-wrap", // এটি আপনার নিউ লাইন এবং প্যারাগ্রাফ ঠিক রাখবে
+    overflowWrap: "break-word"
+  }}
+  contentEditable
+  suppressContentEditableWarning
+  ref={editorRef}
+  onPaste={(e) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData("text/plain");
+    document.execCommand("insertText", false, text);
+  }}
+>
+</div>
       </div>
 
       <style jsx global>{`
         .editor-canvas:empty:before {
           content: 'Start drafting your AI Knowledge Document here...';
           color: #9ca3af;
+          white-space: pre-wrap;
           pointer-events: none;
           display: block;
         }

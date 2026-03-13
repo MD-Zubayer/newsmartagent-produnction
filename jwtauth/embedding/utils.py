@@ -163,13 +163,18 @@ def process_document_text(user, text, document):
     """
     print(f"\n--- [DEBUG] Processing Document '{document.title}' for {user.email} ---")
     
+    
+    document.full_content = text 
+    document.save()
+    
     # ১. টেক্সট ক্লিন করা
-    text = re.sub(r'\s+', ' ', text).strip()
-    if not text:
+    clean_text = re.sub(r'\s+', ' ', text).strip()
+    if not clean_text:
+        document.chunks.all().delete()
         return 0
         
     # ২. চাঙ্ক বানানো
-    chunks = chunk_text(text, max_words=150, overlap=30)
+    chunks = chunk_text(clean_text, max_words=150, overlap=30)
     
     # ৩. ডাটাবেসে বর্তমানে কী কী চাঙ্ক আছে তার একটা লিস্ট নেওয়া
     existing_chunks = DocumentKnowledge.objects.filter(document=document)
