@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils.text import slugify
 from django.contrib.auth import get_user_model
+from ckeditor.fields import RichTextField
 
 User = get_user_model()
 
@@ -33,7 +34,7 @@ class BlogPost(models.Model):
     author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='blog_posts')
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='posts')
     thumbnail = models.ImageField(upload_to='blog/thumbnails/', null=True, blank=True)
-    content = models.TextField()
+    content = RichTextField()
     meta_description = models.CharField(max_length=160, help_text="Used for SEO meta description tag.")
     is_published = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
