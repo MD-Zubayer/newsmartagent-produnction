@@ -105,136 +105,93 @@ export default function UserDashboard() {
           </div>
         </div>
 
-        {/* Subscription & Token Balance Info */}
-        <div className="space-y-6">
-          {currentSub && (
-            <div className="bg-gradient-to-r from-slate-900 to-slate-800 py-8 px-5 rounded-[2.5rem] shadow-2xl text-white relative overflow-hidden">
-               <div className="absolute top-0 right-0 w-64 h-64 bg-pink-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-               
-               <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8 relative z-10">
-                  <div className="flex items-center gap-5">
-                     <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
-                        <Zap size={32} className="text-yellow-400 fill-yellow-400" />
-                     </div>
-                     <div >
-                        <p className="text-[11px] md:text-xs font-black text-slate-400 uppercase tracking-widest md:mb-1 mb-0">Total Available Balance</p>
-                        <h2 className="text-3xl md:text-4xl font-black tracking-tight">
-                          {user?.profile?.word_balance?.toLocaleString() || 0} <span className="text-[15px] md:text-lg text-slate-500 font-bold">Tokens</span>
-                        </h2>
-                     </div>
-                  </div>
-
-                  <div className="h-12 w-[1px] bg-white/10 hidden lg:block"></div>
-
-                  <div className="flex gap-8">
-                     <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <Calendar size={14} className="text-blue-400"/>
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Global Start</p>
-                        </div>
-                        <p className="text-[16px] md:text-lg font-bold">{formatDateTime(currentSub.start_date).date}</p>
-                     </div>
-                     <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <CreditCard size={14} className="text-pink-400"/>
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Global End</p>
-                        </div>
-                        <p className="text-[16px] md:text-lg font-bold">{formatDateTime(currentSub.end_date).date}</p>
-                     </div>
-                  </div>
-
-                  <div className="h-12 w-[1px] bg-white/10 hidden lg:block"></div>
-
-                  <div className="flex items-center gap-4 bg-white/5 px-2 md:px-6 py-3 rounded-2xl border border-white/10">
-                     <Hourglass size={24} className="text-emerald-400 animate-pulse"/>
-                     <div>
-                        <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Time Remaining</p>
-                        <p className="text-xl font-black">{calculateTimeLeft(currentSub.end_date)}</p>
-                     </div>
-                  </div>
-               </div>
-            </div>
-          )}
-
-          {/* Active Subscription Details List */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {subscriptions?.filter(s => s.is_active).map((sub) => (
-              <div key={sub.id} className="bg-white p-6 rounded-3xl shadow-lg border border-gray-100 items-center justify-between">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center">
-                    <Zap size={20} className="text-pink-500" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-sm font-black text-gray-800 uppercase tracking-tight truncate">{sub.offer.name}</h4>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {sub.offer.allowed_models?.map(model => (
-                        <span key={model.id} className="text-[7px] font-black bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded uppercase tracking-tighter">
-                          {model.model_name}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between items-end mb-1">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{sub.remaining_tokens.toLocaleString()} Tokens Left</p>
-                    <span className="text-[9px] font-black text-pink-500 bg-pink-50 px-2 py-0.5 rounded-lg">{Math.round((sub.remaining_tokens / sub.offer.tokens) * 100)}%</span>
-                  </div>
-                  <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-pink-500 rounded-full transition-all duration-1000" 
-                      style={{ width: `${Math.min(100, (sub.remaining_tokens / sub.offer.tokens) * 100)}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-[9px] font-black text-gray-400 uppercase tracking-widest mt-2">
-                    <span className="flex items-center gap-1"><Calendar size={10}/> Exp: {formatDateTime(sub.end_date).date}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <StatCard title="Total Tokens" value={summary.total_tokens.toLocaleString()} icon={<Zap />} color="blue" subValue={`In: ${summary.input_tokens.toLocaleString()} | Out: ${summary.output_tokens.toLocaleString()}`} />
-          <StatCard title="Total Requests" value={summary.total_messages} icon={<MessageSquare />} color="purple" />
-          <StatCard title="Avg Latency" value={`${summary.avg_response_ms || 0}ms`} icon={<Activity />} color="orange" />
-          <StatCard title="Total Failed" value={summary.failed_count} icon={<Info />} color="red" />
-        </div>
-
-        {/* Chart & Engine Usage */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-           <div className="lg:col-span-2 bg-white px-2 py-8 rounded-[2.5rem] shadow-2xl border border-gray-100">
-              <h3 className="text-lg md:text-xl font-black text-gray-800 mb-8 flex items-center gap-2 italic uppercase">
-                <TrendingUp size={24} className="text-pink-500"/> Token Usage Trend
-              </h3>
-              <AnalyticsCharts trendData={charts.usage_trend} />
-           </div>
-
-           <div className="bg-white py-8 px-6 rounded-[2.5rem] shadow-2xl border border-gray-100">
-              <h3 className="text-[16px]  md:text-xl font-black text-gray-800 mb-8 flex items-center gap-2 italic uppercase">
-                <Cpu size={24} className="text-purple-600"/> Engine Distribution
-              </h3>
-              <div className="space-y-6">
-                {charts.model_distribution.map((m, idx) => (
-                  <div key={idx}>
-                    <div className="flex justify-between mb-2">
-                      <span className="text-[10px] font-black text-gray-400 uppercase">{m.model_name}</span>
-                      <span className="text-xs font-black text-gray-700">{m.count} Req</span>
-                    </div>
-                    <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-purple-500 to-blue-500" style={{ width: `${(m.count / summary.total_messages) * 100}%` }}></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-           </div>
-        </div>
-
         {/* Platform Analytics */}
         <div className="bg-white py-8 px-5 rounded-[2.5rem] shadow-xl border border-gray-100">
           <PlatformTokenChart recentLogs={recent_logs} />
+        </div>
+
+        {/* --- Detailed Subscription Breakdown (Moved & Redesigned) --- */}
+        <div className="space-y-6">
+          <div className="flex items-center justify-between border-l-8 border-indigo-600 pl-6 h-12">
+            <div>
+              <h3 className="text-xl md:text-2xl font-black text-gray-800 tracking-tight italic uppercase">Active Passports</h3>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Active Subscriptions & Model Access</p>
+            </div>
+            <div className="bg-indigo-50 px-4 py-2 rounded-xl">
+               <p className="text-[10px] font-black text-indigo-600 uppercase">Active Slots: {subscriptions?.filter(s => s.is_active).length}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
+            {subscriptions?.filter(s => s.is_active).map((sub) => {
+              const percent = Math.round((sub.remaining_tokens / sub.offer.tokens) * 100);
+              const isLow = percent < 15;
+              
+              return (
+                <div key={sub.id} className="relative bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 hover:shadow-2xl transition-all group overflow-hidden">
+                  {/* Decorative Background */}
+                  <div className={`absolute top-0 right-0 w-32 h-32 ${isLow ? 'bg-rose-500/5' : 'bg-indigo-500/5'} rounded-full blur-3xl pointer-events-none`} />
+                  
+                  <div className="flex flex-col gap-6 relative z-10">
+                    {/* Top Row: Icon & Name */}
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg ${isLow ? 'bg-rose-600' : 'bg-indigo-600'}`}>
+                          <Zap size={24} className="text-white fill-current" />
+                        </div>
+                        <div>
+                          <h4 className="text-lg font-black text-slate-800 uppercase tracking-tighter">{sub.offer.name}</h4>
+                          <div className="flex flex-wrap gap-1.5 mt-1.5">
+                            {sub.offer.allowed_models?.map(model => (
+                              <span key={model.id} className="text-[8px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded-lg uppercase tracking-tight border border-slate-200/50">
+                                {model.model_name}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Status</p>
+                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter ${isLow ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                          {isLow ? 'Low Fuel' : 'Optimal'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Middle Row: Token Stats */}
+                    <div className="grid grid-cols-2 gap-4 bg-slate-50 p-5 rounded-3xl border border-slate-100">
+                      <div>
+                        <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">Remaining</p>
+                        <p className={`text-xl font-black ${isLow ? 'text-rose-600' : 'text-slate-800'}`}>{sub.remaining_tokens.toLocaleString()}</p>
+                      </div>
+                      <div className="border-l border-slate-200 pl-4">
+                        <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">Total Limit</p>
+                        <p className="text-xl font-black text-slate-500">{sub.offer.tokens.toLocaleString()}</p>
+                      </div>
+                    </div>
+
+                    {/* Bottom Row: Progress & Expiry */}
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
+                        <span className="text-slate-400 transition-colors group-hover:text-indigo-600">Usage Meter</span>
+                        <span className={isLow ? 'text-rose-500' : 'text-indigo-600'}>{percent}% Left</span>
+                      </div>
+                      <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200">
+                        <div 
+                          className={`h-full rounded-full transition-all duration-1000 ease-out shadow-sm ${isLow ? 'bg-gradient-to-r from-rose-500 to-rose-400' : 'bg-gradient-to-r from-indigo-600 to-blue-500'}`}
+                          style={{ width: `${percent}%` }}
+                        />
+                      </div>
+                      <div className="flex items-center gap-1.5 text-slate-400">
+                        <Calendar size={12}/>
+                        <span className="text-[9px] font-bold uppercase tracking-widest">Valid Until: {formatDateTime(sub.end_date).date}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* Live Activity Stream */}
