@@ -159,10 +159,10 @@ const [submitting, setSubmitting] = useState(false);
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
-                    <BankDetailItem label="Bank Name" value="City Bank PLC" />
-                    <BankDetailItem label="Account Holder" value="Md Zubayer" />
-                    <BankDetailItem label="Account Number" value="2103456789001" isCopyable />
-                    <BankDetailItem label="Card Number" value="4321 0000 1111 2222" isCopyable />
+                    <BankDetailItem label="Bank Name" value="DDBL BANK LIMITED" isCopyable />
+                    <BankDetailItem label="Account Holder" value="MD JONAYED" isCopyable />
+                    <BankDetailItem label="Account Number" value="1811580389470" isCopyable />
+                    <BankDetailItem label="Card Number" value="4840 6100 2281 7706" isCopyable />
                   </div>
                 </div>
               </div>
@@ -206,7 +206,7 @@ const [submitting, setSubmitting] = useState(false);
                 <a href="https://wa.me/8801727358743" target="_blank" className="flex-1 flex items-center justify-center gap-3 p-5 bg-[#25D366] text-white rounded-[1.8rem] font-black text-[10px] uppercase tracking-widest hover:scale-[1.02] transition-all shadow-lg shadow-emerald-100">
                   <FaWhatsapp size={20}/> WhatsApp support
                 </a>
-                <a href="https://m.me/your_messenger_id" target="_blank" className="flex-1 flex items-center justify-center gap-3 p-5 bg-[#0084FF] text-white rounded-[1.8rem] font-black text-[10px] uppercase tracking-widest hover:scale-[1.02] transition-all shadow-lg shadow-blue-100">
+                <a href="https://www.messenger.com/t/947204378476536/" target="_blank" className="flex-1 flex items-center justify-center gap-3 p-5 bg-[#0084FF] text-white rounded-[1.8rem] font-black text-[10px] uppercase tracking-widest hover:scale-[1.02] transition-all shadow-lg shadow-blue-100">
                   <FaFacebookMessenger size={20}/> Messenger support
                 </a>
               </div>
