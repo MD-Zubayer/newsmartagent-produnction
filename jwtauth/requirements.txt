@@ -86,3 +86,4 @@ pytz
 rapidfuzz
 django-unfold
 django-ckeditor
+pillow
