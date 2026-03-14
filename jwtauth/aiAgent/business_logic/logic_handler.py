@@ -163,7 +163,23 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
         logger.error(f"RAG Search Error: {e}", exc_info=True)
         extra_instruction = f" Answer politely. If data missing, ask to wait. {order_instruction}"
     return sheet_context, extra_instruction, query_vector
+
+def check_token_availability(user_profile, ai_model_name):
+    """
+    Checks if user has any active subscription that allows the given model
+    and has remaining tokens.
+    """
+    from users.models import Subscription
+    from django.utils import timezone
     
+    return Subscription.objects.filter(
+        profile=user_profile,
+        is_active=True,
+        end_date__gt=timezone.now(),
+        remaining_tokens__gt=0,
+        offer__allowed_models__model_id=ai_model_name
+    ).exists()
+
 def deduct_user_tokens(user_profile, total_tokens, ai_model_name):
     if total_tokens > 0:
         try:
@@ -187,11 +203,10 @@ def deduct_user_tokens(user_profile, total_tokens, ai_model_name):
                     active_sub.remaining_tokens = new_balance
                 active_sub.save()
                 logger.info(f"Deducted {total_tokens} tokens from Sub {active_sub.id}. Remaining: {active_sub.remaining_tokens}")
+                # Sync global balance
+                user_profile.sync_word_balance()
             else:
-                user_profile.word_balance = F('word_balance') - total_tokens
-                user_profile.save(update_fields=['word_balance'])
-                user_profile.refresh_from_db()
-                logger.info(f"Deducted {total_tokens} global tokens. Remaining: {user_profile.word_balance}")
+                logger.warning(f"No tokens available for model {ai_model_name} for user {user_profile.user.email}")
         except Exception as e:
             logger.error(f"Token Deduction Error: {e}")
 

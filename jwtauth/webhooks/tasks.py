@@ -16,7 +16,8 @@ from chat.utils import get_smart_post_context
 from aiAgent.business_logic.logic_handler import (
     is_duplicate_or_outdated, acquire_user_lock, get_order_instructions,
     perform_rag_search, build_ai_context, get_ai_response,
-    log_token_usage, deduct_user_tokens, deliver_reply_to_n8n, handle_public_comment_logic
+    log_token_usage, deduct_user_tokens, deliver_reply_to_n8n, handle_public_comment_logic,
+    check_token_availability
 )
 from aiAgent.cache.redis_vector import (
     save_vector_embedding,
@@ -199,8 +200,10 @@ def process_ai_reply_task(self, data):
             incr_counter(page_id, 'cache_miss')
 
             # ৭. জেনারেশন ফ্লো (ক্যাশ মিস হলে)
-            if user_profile.word_balance <= 0:
-                logger.info(f">>> User {user_profile.user.email} has 0 tokens. Aborting.")
+            effective_model = agent_config.selected_model.model_id if agent_config.selected_model else agent_config.ai_model
+            
+            if not check_token_availability(user_profile, effective_model):
+                logger.info(f">>> User {user_profile.user.email} has no tokens for model {effective_model}. Aborting.")
                 return
             
             # কন্টেন্ট তৈরি

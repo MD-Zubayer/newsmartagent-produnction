@@ -221,8 +221,10 @@ class Payment(models.Model):
                         payment=self,
                         start_date=timezone.now(),
                         end_date=timezone.now() + timedelta(days=offer.duration_days),
-                        is_active=True
+                        is_active=True,
+                        remaining_tokens=offer.tokens
                     )
+                    profile.sync_word_balance()
                     if not notif_msg:
                         notif_msg = f"Payment Successful! {offer.price} plan activated. {offer.tokens} words added."
 
