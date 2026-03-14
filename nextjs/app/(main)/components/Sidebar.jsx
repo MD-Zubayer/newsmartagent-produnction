@@ -92,18 +92,13 @@ export default function Sidebar({ viewMode, isDesktopMode }) {
       } p-3`}>
         
         {/* Logo Section */}
-        <div className="flex items-center mb-6 mt-12 px-1">
+        <div className="flex items-center mb-6 mt-12  md:mt-16 px-1">
           <img
             src="/new-smart-agent.png"
             alt="Logo"
             className="w-[75px] h-[75px] object-contain rounded-lg"
           />
-          <div className="hidden md:flex flex-col pl-3 overflow-hidden">
-            <h3 className="font-black text-gray-800 truncate text-[12px]">New Smart Agent</h3>
-            <span className={`text-[9px] font-bold uppercase tracking-widest ${viewMode === 'agent' ? 'text-amber-600' : 'text-blue-600'}`}>
-              {viewMode} Mode
-            </span>
-          </div>
+          
         </div>
 
         {/* Dynamic Top Links */}
