@@ -1,9 +1,11 @@
 import React from 'react';
 import axios from 'axios';
-import { HiOutlineArrowLeft, HiOutlineCalendar, HiOutlineUser, HiOutlineTag, HiOutlineShare } from 'react-icons/hi';
+import { HiOutlineArrowLeft, HiOutlineCalendar, HiOutlineUser, HiOutlineTag, HiOutlineShare, HiOutlineEye } from 'react-icons/hi';
+import { FaFacebookF, FaWhatsapp, FaLinkedinIn, FaLink } from 'react-icons/fa';
 import Link from 'next/link';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://newsmartagent.com/api';
+const DOMAIN = 'https://newsmartagent.com';
 
 async function getPost(slug) {
   try {
@@ -27,6 +29,8 @@ export async function generateMetadata({ params }) {
       title: post.title,
       description: post.meta_description,
       images: post.thumbnail ? [post.thumbnail] : [],
+      type: 'article',
+      url: `${DOMAIN}/blog/${post.slug}`,
     },
   };
 }
@@ -39,8 +43,8 @@ export default async function BlogPostPage({ params }) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#fafafa]">
         <div className="text-center space-y-6">
-          <h1 className="text-4xl font-black text-slate-900 tracking-tighter">Module Not Found.</h1>
-          <Link href="/blog" className="inline-block px-8 py-4 bg-slate-950 text-white rounded-full font-black text-xs uppercase tracking-widest">
+          <h1 className="text-4xl font-black text-slate-900 tracking-tighter uppercase">Module Not Found.</h1>
+          <Link href="/blog" className="inline-block px-8 py-4 bg-slate-950 text-white rounded-full font-black text-xs uppercase tracking-widest hover:bg-purple-600 transition-colors">
             Back to Hub
           </Link>
         </div>
@@ -48,96 +52,185 @@ export default async function BlogPostPage({ params }) {
     );
   }
 
+  const shareUrl = `${DOMAIN}/blog/${post.slug}`;
+  const shareTitle = encodeURIComponent(post.title);
+
+  const socialLinks = [
+    { name: 'Facebook', icon: <FaFacebookF />, url: `https://www.facebook.com/sharer/sharer.php?u=${shareUrl}`, color: 'bg-[#1877F2]' },
+    { name: 'WhatsApp', icon: <FaWhatsapp />, url: `https://api.whatsapp.com/send?text=${shareTitle}%20${shareUrl}`, color: 'bg-[#25D366]' },
+    { name: 'LinkedIn', icon: <FaLinkedinIn />, url: `https://www.linkedin.com/sharing/share-offsite/?url=${shareUrl}`, color: 'bg-[#0A66C2]' },
+  ];
+
   return (
-    <div className="min-h-screen bg-[#fafafa] font-sans text-slate-600 selection:bg-indigo-100 selection:text-indigo-600">
+    <div className="min-h-screen bg-[#fafafa] font-sans text-slate-700 selection:bg-purple-100 selection:text-purple-600">
       
-      {/* Dynamic Background Decorations */}
+      {/* Premium Background Decorations */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-100/30 rounded-full blur-[120px]"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[30%] h-[30%] bg-indigo-100/20 rounded-full blur-[100px]"></div>
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-purple-100/40 rounded-full blur-[140px] animate-pulse"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-100/30 rounded-full blur-[120px]"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.03]"></div>
       </div>
 
-      <div className="max-w-[900px] mx-auto px-6 py-20 relative z-10">
+      <div className="max-w-[1000px] mx-auto px-6 py-20 relative z-10">
         
-        {/* Navigation */}
-        <Link href="/blog" className="inline-flex items-center gap-4 text-xs font-black text-slate-400 uppercase tracking-[0.3em] hover:text-purple-600 transition-all mb-16 group">
-          <div className="w-10 h-10 bg-white border border-slate-100 rounded-full flex items-center justify-center shadow-sm group-hover:-translate-x-2 transition-transform">
-            <HiOutlineArrowLeft className="text-lg" />
+        {/* Breadcrumb Navigation */}
+        <Link href="/blog" className="inline-flex items-center gap-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] hover:text-purple-600 transition-all mb-16 group">
+          <div className="w-12 h-12 bg-white border border-slate-100 rounded-2xl flex items-center justify-center shadow-sm group-hover:-translate-x-2 transition-transform duration-500 bg-clip-padding backdrop-filter backdrop-blur-xl bg-opacity-60">
+            <HiOutlineArrowLeft className="text-xl" />
           </div>
-          Return to Hub
+          Return to Intelligence Hub
         </Link>
 
         {/* Article Header */}
-        <header className="space-y-8 mb-16">
-          <div className="flex flex-wrap items-center gap-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+        <header className="space-y-10 mb-20 text-center md:text-left">
+          <div className="flex flex-wrap justify-center md:justify-start items-center gap-6 text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">
             {post.category && (
-              <div className="px-4 py-1.5 bg-purple-600 text-white rounded-full">
+              <div className="px-6 py-2 bg-slate-900 text-white rounded-full shadow-xl shadow-slate-900/10">
                 {post.category.name}
               </div>
             )}
             <div className="flex items-center gap-2">
-              <HiOutlineCalendar className="text-lg" />
-              {new Date(post.created_at).toLocaleDateString()}
+              <HiOutlineCalendar className="text-lg text-purple-600" />
+              {new Date(post.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
             </div>
             <div className="hidden sm:block w-1.5 h-1.5 bg-slate-200 rounded-full"></div>
             <div className="flex items-center gap-2">
-              <HiOutlineUser className="text-lg" />
-              {post.author ? post.author.username : 'Admin'}
+              <HiOutlineEye className="text-lg text-purple-600" />
+              {post.views_count || 0} Readers
             </div>
           </div>
 
-          <h1 className="text-4xl md:text-7xl font-black text-slate-900 tracking-tighter leading-[0.9] italic">
+          <h1 className="text-5xl md:text-8xl font-black text-slate-950 tracking-tighter leading-[0.85] uppercase">
             {post.title}
           </h1>
+          
+          <div className="flex items-center justify-center md:justify-start gap-4">
+             <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white font-black shadow-lg">
+                {post.author ? post.author.username[0].toUpperCase() : 'A'}
+             </div>
+             <div className="text-left">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Authored by</p>
+                <p className="font-bold text-slate-900">{post.author ? (post.author.first_name + ' ' + (post.author.last_name || '')) : 'NewSmartAgent Team'}</p>
+             </div>
+          </div>
         </header>
 
         {/* Featured Image */}
         {post.thumbnail && (
-          <div className="relative h-[300px] md:h-[500px] rounded-[3rem] overflow-hidden shadow-2xl mb-20 border-8 border-white">
-            <img src={post.thumbnail} alt={post.title} className="w-full h-full object-cover" />
+          <div className="relative h-[400px] md:h-[650px] rounded-[4rem] overflow-hidden shadow-[0_80px_160px_-40px_rgba(0,0,0,0.15)] mb-28 border-[12px] border-white bg-white">
+            <img src={post.thumbnail} alt={post.title} className="w-full h-full object-cover scale-105 hover:scale-100 transition-transform duration-1000" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
           </div>
         )}
 
-        {/* Main Content Card */}
-        <div className="relative group">
-          <div className="absolute inset-0 bg-white shadow-[0_64px_128px_-32px_rgba(0,0,0,0.08)] rounded-[3rem] -z-10 group-hover:scale-[1.01] transition-transform duration-700"></div>
+        {/* Global Article Wrapper */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 relative">
           
-          <article className="p-8 md:p-20 prose prose-slate prose-lg max-w-none prose-headings:font-black prose-headings:tracking-tighter prose-headings:italic prose-a:text-purple-600 prose-strong:text-slate-900">
-            {/* The actual markdown/HTML content */}
-            <div dangerouslySetInnerHTML={{ __html: post.content }} />
-          </article>
-
-          {/* Share Section */}
-          <div className="p-8 md:p-12 border-t border-slate-50 flex flex-col md:flex-row items-center justify-between gap-8">
-            <div className="flex items-center gap-4 text-xs font-black text-slate-400 uppercase tracking-widest">
-              <HiOutlineShare className="text-xl text-purple-600" /> Share Insights
+          {/* Social Sticky Sidebar */}
+          <aside className="lg:col-span-1 hidden lg:block">
+            <div className="sticky top-32 flex flex-col gap-4">
+              {socialLinks.map((social) => (
+                <a 
+                  key={social.name}
+                  href={social.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`w-12 h-12 ${social.color} text-white rounded-2xl flex items-center justify-center text-lg hover:scale-110 hover:-translate-y-1 transition-all duration-300 shadow-lg`}
+                  title={`Share on ${social.name}`}
+                >
+                  {social.icon}
+                </a>
+              ))}
             </div>
-            <div className="flex gap-4">
-              <button className="px-6 py-3 bg-slate-50 hover:bg-purple-600 hover:text-white rounded-full text-[10px] font-black uppercase tracking-widest transition-all shadow-sm">
-                Facebook
-              </button>
-              <button className="px-6 py-3 bg-slate-50 hover:bg-purple-600 hover:text-white rounded-full text-[10px] font-black uppercase tracking-widest transition-all shadow-sm">
-                Twitter
-              </button>
-              <button className="px-6 py-3 bg-slate-50 hover:bg-purple-600 hover:text-white rounded-full text-[10px] font-black uppercase tracking-widest transition-all shadow-sm">
-                LinkedIn
-              </button>
+          </aside>
+
+          {/* Main Content Body */}
+          <div className="lg:col-span-11 bg-white p-10 md:p-24 rounded-[4rem] shadow-[0_100px_200px_-50px_rgba(0,0,0,0.06)] border border-slate-50 relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-12 opacity-[0.03] pointer-events-none">
+              <HiOutlineShare className="text-[200px] -rotate-12" />
+            </div>
+            
+            <article className="prose prose-slate prose-xl max-w-none prose-headings:font-black prose-headings:tracking-tighter prose-headings:uppercase prose-headings:text-slate-900 prose-p:leading-relaxed prose-a:text-purple-600 prose-strong:text-slate-950 prose-img:rounded-3xl prose-img:shadow-2xl">
+              <div dangerouslySetInnerHTML={{ __html: post.content }} />
+            </article>
+
+            {/* Mobile/Bottom Share Section */}
+            <div className="mt-24 pt-16 border-t border-slate-50 space-y-8">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-8">
+                <div className="flex items-center gap-4 text-xs font-black text-slate-400 uppercase tracking-[0.3em]">
+                  <HiOutlineShare className="text-2xl text-purple-600" /> Amplify the Insight
+                </div>
+                <div className="flex flex-wrap justify-center gap-3">
+                  {socialLinks.map((social) => (
+                    <a 
+                      key={social.name}
+                      href={social.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`flex items-center gap-3 px-6 py-3 ${social.color} text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all shadow-md`}
+                    >
+                      {social.icon} {social.name}
+                    </a>
+                  ))}
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(shareUrl);
+                      alert('Link copied to clipboard!');
+                    }}
+                    className="flex items-center gap-3 px-6 py-3 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-purple-600 transition-all shadow-md"
+                  >
+                    <FaLink /> Copy Link
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Footer Guarantee */}
-        <footer className="mt-32 pt-20 border-t border-slate-100 flex flex-col md:flex-row items-center justify-between gap-12 group/footer">
-          <div className="text-center md:text-left space-y-4">
-            <h3 className="text-3xl font-black text-slate-900 tracking-tighter italic">Transform your communication.</h3>
-            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Connect with NewSmartAgent today.</p>
+        {/* Author Bio/Footer Action */}
+        <section className="mt-40 p-12 md:p-20 bg-slate-950 rounded-[4rem] text-white flex flex-col md:flex-row items-center justify-between gap-12 relative overflow-hidden group">
+          <div className="absolute inset-0 bg-gradient-to-tr from-purple-900/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-1000"></div>
+          <div className="text-center md:text-left space-y-6 relative z-10">
+            <h3 className="text-4xl md:text-6xl font-black tracking-tighter uppercase leading-none">Ready to automate your future?</h3>
+            <p className="text-slate-400 text-sm md:text-base font-medium max-w-[500px]">Join 500+ businesses using NewSmartAgent to orchestrate their growth with AI accuracy.</p>
           </div>
-          <Link href="/dashboard/connect" className="px-12 py-6 bg-slate-950 text-white rounded-full font-black text-xs uppercase tracking-[0.3em] hover:bg-purple-600 hover:scale-105 transition-all shadow-2xl shadow-purple-900/10 active:scale-95">
-            Initialise Bot
+          <Link href="/dashboard/connect" className="relative z-10 px-14 py-7 bg-white text-slate-950 rounded-2xl font-black text-xs uppercase tracking-[0.4em] hover:bg-purple-600 hover:text-white hover:scale-105 transition-all duration-500 shadow-2xl active:scale-95 shadow-white/10">
+            Initialise Now
           </Link>
-        </footer>
+        </section>
 
       </div>
+      
+      <style jsx global>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        
+        body {
+          font-family: 'Inter', sans-serif;
+        }
+
+        .prose h1, .prose h2, .prose h3, .prose h4 {
+          margin-top: 2.5em;
+          margin-bottom: 0.8em;
+          color: #0f172a !important;
+        }
+
+        .prose p {
+          margin-bottom: 1.8em;
+          line-height: 1.8;
+          color: #334155;
+        }
+
+        .prose blockquote {
+          border-left: 8px solid #9333ea;
+          padding-left: 2rem;
+          font-style: italic;
+          color: #475569;
+          font-weight: 500;
+          background: #f8fafc;
+          padding: 2rem;
+          border-radius: 2rem;
+        }
+      `}</style>
     </div>
   );
 }
