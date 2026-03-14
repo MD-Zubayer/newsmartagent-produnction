@@ -4,8 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { 
-  FaMobileAlt, FaHashtag, FaCopy, FaCheckCircle, FaChevronLeft,
-  FaWallet, FaArrowRight, FaInfoCircle
+  FaWallet, FaArrowRight, FaInfoCircle, FaUniversity, FaFacebookMessenger 
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 import Link from "next/link";
@@ -123,6 +122,28 @@ export default function PaymentPage() {
         <div className="space-y-3 mb-10">
           <PaymentRow icon={<FaMobileAlt className="text-[#D12053]"/>} label="bKash (Personal)" val="01326277782" />
           <PaymentRow icon={<FaMobileAlt className="text-[#F7941D]"/>} label="Nagad (Personal)" val="01326277782" />
+
+          {/* 🏦 Premium Bank Card */}
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-[2.5rem] shadow-2xl relative overflow-hidden text-white border border-slate-700/50 mt-6">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full blur-3xl"></div>
+            
+            <div className="flex items-center gap-3 mb-6">
+               <div className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-xl flex items-center justify-center text-blue-400 border border-white/10 shadow-inner">
+                  <FaUniversity size={20}/>
+               </div>
+               <div>
+                  <h3 className="text-sm font-black uppercase tracking-tight italic">Bank Transfer</h3>
+                  <p className="text-[8px] font-black text-blue-300 uppercase tracking-widest leading-none">Premium Settlement</p>
+               </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 relative z-10">
+              <BankDetailItemMini label="Bank Name" value="City Bank PLC" />
+              <BankDetailItemMini label="Account Holder" value="Md Zubayer" />
+              <BankDetailItemMini label="Account Number" value="2103456789001" isCopyable />
+              <BankDetailItemMini label="Card Number" value="4321 0000 1111 2222" isCopyable />
+            </div>
+          </div>
         </div>
 
         {/* Manual Input Section */}
@@ -146,6 +167,28 @@ export default function PaymentPage() {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function BankDetailItemMini({ label, value, isCopyable }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <div className="bg-white/5 backdrop-blur-sm p-3 rounded-xl border border-white/5 group hover:bg-white/10 transition-all flex items-center justify-between">
+      <div>
+        <p className="text-[7px] font-black text-blue-300 uppercase tracking-widest mb-0.5 leading-none">{label}</p>
+        <p className="text-[11px] font-bold tracking-wider text-white truncate max-w-[150px]">{value}</p>
+      </div>
+      {isCopyable && (
+        <button onClick={handleCopy} className={`p-1.5 rounded-lg transition-colors ${copied ? 'text-emerald-400 bg-emerald-400/10' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}>
+          {copied ? <FaCheckCircle size={12}/> : <FaCopy size={12}/>}
+        </button>
+      )}
     </div>
   );
 }

@@ -6,7 +6,8 @@ import {
   FaMobileAlt, FaWhatsapp, FaHistory, FaCreditCard, 
   FaCopy, FaCheckCircle, FaArrowRight,
   FaExchangeAlt, FaUserShield, FaArrowUp, FaArrowDown,
-  FaLock, FaEnvelopeOpenText, FaShieldAlt // added for verification
+  FaLock, FaEnvelopeOpenText, FaShieldAlt, // added for verification
+  FaFacebookMessenger, FaUniversity, FaUser 
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 
@@ -141,6 +142,29 @@ const [submitting, setSubmitting] = useState(false);
               <div className="space-y-3">
                 <PaymentMethodCard icon={<FaMobileAlt className="text-pink-500"/>} name="bKash (Personal)" number="01326277782" />
                 <PaymentMethodCard icon={<FaMobileAlt className="text-orange-500"/>} name="Nagad (Personal)" number="01326277782" />
+                
+                {/* 🏦 Premium Bank Card */}
+                <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-8 rounded-[2.8rem] shadow-2xl relative overflow-hidden text-white border border-slate-700/50 my-6">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-3xl"></div>
+                  <div className="absolute bottom-0 left-0 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl"></div>
+                  
+                  <div className="flex items-center gap-4 mb-8">
+                     <div className="w-14 h-14 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center text-indigo-400 border border-white/10 shadow-inner">
+                        <FaUniversity size={28}/>
+                     </div>
+                     <div>
+                        <h3 className="text-xl font-black uppercase tracking-tight italic">Direct Bank Transfer</h3>
+                        <p className="text-[10px] font-black text-indigo-300 uppercase tracking-widest">Premium Settlement Channel</p>
+                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
+                    <BankDetailItem label="Bank Name" value="City Bank PLC" />
+                    <BankDetailItem label="Account Holder" value="Md Zubayer" />
+                    <BankDetailItem label="Account Number" value="2103456789001" isCopyable />
+                    <BankDetailItem label="Card Number" value="4321 0000 1111 2222" isCopyable />
+                  </div>
+                </div>
               </div>
 
               <div className="bg-white px-2 py-6 md:p-8 rounded-[2.5rem] border border-slate-100 shadow-xl space-y-5">
@@ -178,9 +202,12 @@ const [submitting, setSubmitting] = useState(false);
                 </button>
               </div>
 
-              <div className="flex gap-4">
-                <a href="https://wa.me/8801727358743" target="_blank" className="flex-1 flex items-center justify-center gap-3 p-5 bg-[#25D366] text-white rounded-[1.8rem] font-black text-[10px] uppercase tracking-widest hover:scale-[1.02] transition-all">
-                  <FaWhatsapp size={20}/> Send Screenshot
+              <div className="flex flex-col sm:flex-row gap-4">
+                <a href="https://wa.me/8801727358743" target="_blank" className="flex-1 flex items-center justify-center gap-3 p-5 bg-[#25D366] text-white rounded-[1.8rem] font-black text-[10px] uppercase tracking-widest hover:scale-[1.02] transition-all shadow-lg shadow-emerald-100">
+                  <FaWhatsapp size={20}/> WhatsApp support
+                </a>
+                <a href="https://m.me/your_messenger_id" target="_blank" className="flex-1 flex items-center justify-center gap-3 p-5 bg-[#0084FF] text-white rounded-[1.8rem] font-black text-[10px] uppercase tracking-widest hover:scale-[1.02] transition-all shadow-lg shadow-blue-100">
+                  <FaFacebookMessenger size={20}/> Messenger support
                 </a>
               </div>
             </div>
@@ -293,6 +320,28 @@ const [submitting, setSubmitting] = useState(false);
                 </div>
             </div>
           </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BankDetailItem({ label, value, isCopyable }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <div className="bg-white/5 backdrop-blur-sm p-4 rounded-2xl border border-white/5 group hover:bg-white/10 transition-all">
+      <p className="text-[9px] font-black text-indigo-300 uppercase tracking-widest mb-1 leading-none">{label}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-bold tracking-wider truncate">{value}</p>
+        {isCopyable && (
+          <button onClick={handleCopy} className={`p-2 rounded-lg transition-colors flex-shrink-0 ${copied ? 'text-emerald-400 bg-emerald-400/10' : 'text-slate-400 hover:text-white hover:bg-white/10'}`}>
+            {copied ? <FaCheckCircle size={14}/> : <FaCopy size={14}/>}
+          </button>
         )}
       </div>
     </div>
