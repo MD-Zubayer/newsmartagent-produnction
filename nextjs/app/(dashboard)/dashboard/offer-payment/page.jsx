@@ -139,10 +139,10 @@ export default function PaymentPage() {
             </div>
 
             <div className="grid grid-cols-1 gap-3 relative z-10">
-              <BankDetailItemMini label="Bank Name" value="City Bank PLC" />
-              <BankDetailItemMini label="Account Holder" value="Md Zubayer" />
-              <BankDetailItemMini label="Account Number" value="2103456789001" isCopyable />
-              <BankDetailItemMini label="Card Number" value="4321 0000 1111 2222" isCopyable />
+              <BankDetailItem label="Bank Name" value="DDBL BANK LIMITED" isCopyable />
+              <BankDetailItem label="Account Holder" value="MD JONAYED" isCopyable />
+              <BankDetailItem label="Account Number" value="1811580389470" isCopyable />
+              <BankDetailItem label="Card Number" value="4840 6100 2281 7706" isCopyable />
             </div>
           </div>
         </div>
