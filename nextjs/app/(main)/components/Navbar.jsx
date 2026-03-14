@@ -49,7 +49,7 @@ export default function Navbar() {
               <Image
                 width={65}
                 height={65}
-                src="/new-smart-agent.png"
+                src="/newsmartagent.png"
                 alt="Logo"
                 className="h-20w-20 object-contain rounded-lg"
               />

@@ -94,7 +94,7 @@ export default function Sidebar({ viewMode, isDesktopMode }) {
         {/* Logo Section */}
         <div className="flex justify-center items-center mb-6 mt-12  md:mt-16 px-1">
           <img
-            src="/new-smart-agent.png"
+            src="/newsmartagent.png"
             alt="Logo"
             className="w-[75px] h-[75px] object-contain rounded-lg"
           />
