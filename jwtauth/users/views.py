@@ -583,6 +583,15 @@ class SendPaymentOTPView(APIView):
         return super().dispatch(*args, **kwargs)
     def post(self, request):
         user = request.user
+        
+        otp = str(random.randint(100000, 999999)) 
+        
+        # ২. প্রোফাইলে OTP সেভ করুন (যাতে পরে ভেরিফাই করা যায়)
+        profile = user.profile
+        profile.otp_code = otp
+        profile.otp_created_at = timezone.now()
+        profile.save()
+    
         subject = "Payment Verification Code - New Smart Agent"
         message = f"Hello {getattr(user, 'name', '') or getattr(user, 'email', '')},\n\nYour OTP for payment verification is: {otp}.\n\nThis verify code will expire in 5 minutes.\n\nThank you,\nNew Smart Agent Team"
         
