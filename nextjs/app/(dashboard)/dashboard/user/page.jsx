@@ -105,6 +105,95 @@ export default function UserDashboard() {
           </div>
         </div>
 
+        {/* Subscription & Token Balance Info */}
+        <div className="space-y-6">
+          {currentSub && (
+            <div className="bg-gradient-to-r from-slate-900 to-slate-800 py-8 px-5 rounded-[2.5rem] shadow-2xl text-white relative overflow-hidden">
+               <div className="absolute top-0 right-0 w-64 h-64 bg-pink-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+               
+               <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8 relative z-10">
+                  <div className="flex items-center gap-5">
+                     <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
+                        <Zap size={32} className="text-yellow-400 fill-yellow-400" />
+                     </div>
+                     <div >
+                        <p className="text-[11px] md:text-xs font-black text-slate-400 uppercase tracking-widest md:mb-1 mb-0">Total Available Balance</p>
+                        <h2 className="text-3xl md:text-4xl font-black tracking-tight">
+                          {user?.profile?.word_balance?.toLocaleString() || 0} <span className="text-[15px] md:text-lg text-slate-500 font-bold">Tokens</span>
+                        </h2>
+                     </div>
+                  </div>
+
+                  <div className="h-12 w-[1px] bg-white/10 hidden lg:block"></div>
+
+                  <div className="flex gap-8">
+                     <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Calendar size={14} className="text-blue-400"/>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Global Start</p>
+                        </div>
+                        <p className="text-[16px] md:text-lg font-bold">{formatDateTime(currentSub.start_date).date}</p>
+                     </div>
+                     <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <CreditCard size={14} className="text-pink-400"/>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Global End</p>
+                        </div>
+                        <p className="text-[16px] md:text-lg font-bold">{formatDateTime(currentSub.end_date).date}</p>
+                     </div>
+                  </div>
+
+                  <div className="h-12 w-[1px] bg-white/10 hidden lg:block"></div>
+
+                  <div className="flex items-center gap-4 bg-white/5 px-2 md:px-6 py-3 rounded-2xl border border-white/10">
+                     <Hourglass size={24} className="text-emerald-400 animate-pulse"/>
+                     <div>
+                        <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Time Remaining</p>
+                        <p className="text-xl font-black">{calculateTimeLeft(currentSub.end_date)}</p>
+                     </div>
+                  </div>
+               </div>
+            </div>
+          )}
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard title="Total Tokens" value={summary.total_tokens.toLocaleString()} icon={<Zap />} color="blue" subValue={`In: ${summary.input_tokens.toLocaleString()} | Out: ${summary.output_tokens.toLocaleString()}`} />
+          <StatCard title="Total Requests" value={summary.total_messages} icon={<MessageSquare />} color="purple" />
+          <StatCard title="Avg Latency" value={`${summary.avg_response_ms || 0}ms`} icon={<Activity />} color="orange" />
+          <StatCard title="Total Failed" value={summary.failed_count} icon={<Info />} color="red" />
+        </div>
+
+        {/* Chart & Engine Usage */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+           <div className="lg:col-span-2 bg-white px-2 py-8 rounded-[2.5rem] shadow-2xl border border-gray-100">
+              <h3 className="text-lg md:text-xl font-black text-gray-800 mb-8 flex items-center gap-2 italic uppercase">
+                <TrendingUp size={24} className="text-pink-500"/> Token Usage Trend
+              </h3>
+              <AnalyticsCharts trendData={charts.usage_trend} />
+           </div>
+
+           <div className="bg-white py-8 px-6 rounded-[2.5rem] shadow-2xl border border-gray-100">
+              <h3 className="text-[16px]  md:text-xl font-black text-gray-800 mb-8 flex items-center gap-2 italic uppercase">
+                <Cpu size={24} className="text-purple-600"/> Engine Distribution
+              </h3>
+              <div className="space-y-6">
+                {charts.model_distribution.map((m, idx) => (
+                  <div key={idx}>
+                    <div className="flex justify-between mb-2">
+                      <span className="text-[10px] font-black text-gray-400 uppercase">{m.model_name}</span>
+                      <span className="text-xs font-black text-gray-700">{m.count} Req</span>
+                    </div>
+                    <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-purple-500 to-blue-500" style={{ width: `${(m.count / summary.total_messages) * 100}%` }}></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+           </div>
+        </div>
+
         {/* Platform Analytics */}
         <div className="bg-white py-8 px-5 rounded-[2.5rem] shadow-xl border border-gray-100">
           <PlatformTokenChart recentLogs={recent_logs} />
