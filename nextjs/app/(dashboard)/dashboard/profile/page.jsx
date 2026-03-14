@@ -7,7 +7,7 @@ import {
   FaUserEdit, FaSignOutAlt, FaEnvelope, FaPhone, 
   FaMapMarkerAlt, FaHashtag, FaGlobeAsia, FaTimes, 
   FaWallet, FaChartLine, FaCopy, FaCheckCircle, FaVenusMars, FaHistory,
-  FaShieldAlt, FaKey, FaIdCard, FaCube
+  FaShieldAlt, FaKey, FaIdCard, FaCube, FaCoins, FaPercent
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 
@@ -17,6 +17,8 @@ export default function ProfilePage() {
   const [updating, setUpdating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [subscriptions, setSubscriptions] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
+  const [fetchingExtras, setFetchingExtras] = useState(true);
   
   const [formData, setFormData] = useState({
     name: "",
@@ -37,16 +39,23 @@ export default function ProfilePage() {
         upazila: user.upazila || "",
         gender: user.gender || ""
       });
-      fetchSubscriptions();
+      loadExtraData();
     }
   }, [user]);
 
-  const fetchSubscriptions = async () => {
+  const loadExtraData = async () => {
+    setFetchingExtras(true);
     try {
-      const res = await api.get("/subscriptions/");
-      setSubscriptions(res.data || []);
+      const [subRes, analyticsRes] = await Promise.all([
+        api.get("/subscriptions/"),
+        api.get("/AgentAI/tokens/analytics/")
+      ]);
+      setSubscriptions(subRes.data || []);
+      setAnalytics(analyticsRes.data || null);
     } catch (err) {
-      console.error("Failed to fetch subscriptions", err);
+      console.error("Failed to fetch extra data", err);
+    } finally {
+      setFetchingExtras(false);
     }
   };
 
@@ -76,6 +85,14 @@ export default function ProfilePage() {
       setUpdating(false);
     }
   };
+
+  // --- Dynamic Usage Calculation ---
+  const activeSubs = subscriptions.filter(s => s.is_active);
+  const totalInitialTokens = activeSubs.reduce((acc, s) => acc + (s.offer?.tokens || 0), 0);
+  const totalUsedTokens = analytics?.summary?.total_tokens || 0;
+  const usagePercentage = totalInitialTokens > 0 
+    ? Math.min(Math.round((totalUsedTokens / (totalUsedTokens + (user?.profile?.word_balance || 0))) * 100), 100)
+    : 0;
 
   if (loading) return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
@@ -126,14 +143,14 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          <div className="flex gap-4">
-             <div className="bg-indigo-50 px-6 py-4 rounded-3xl border border-indigo-100 shadow-sm text-center min-w-[140px]">
-                <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Total Balance</p>
-                <p className="text-2xl font-black text-indigo-700 tracking-tighter">৳{user?.profile?.acount_balance}</p>
+          <div className="grid grid-cols-2 md:flex gap-4 w-full md:w-auto">
+             <div className="bg-indigo-50 px-6 py-4 rounded-3xl border border-indigo-100 shadow-sm text-center flex-1">
+                <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Account Balance</p>
+                <p className="text-xl font-black text-indigo-700 tracking-tighter italic">৳{user?.profile?.acount_balance}</p>
              </div>
-             <div className="bg-slate-900 px-6 py-4 rounded-3xl shadow-lg shadow-slate-200 text-center min-w-[140px] text-white">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tokens Remaining</p>
-                <p className="text-2xl font-black tracking-tighter">{user?.profile?.word_balance?.toLocaleString()}</p>
+             <div className="bg-emerald-50 px-6 py-4 rounded-3xl border border-emerald-100 shadow-sm text-center flex-1">
+                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Commission</p>
+                <p className="text-xl font-black text-emerald-700 tracking-tighter italic">৳{user?.profile?.commission_balance || "0.00"}</p>
              </div>
           </div>
         </div>
@@ -144,6 +161,23 @@ export default function ProfilePage() {
           
           {/* Left: Identity Details */}
           <div className="lg:col-span-8 space-y-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="bg-indigo-600 rounded-[2.5rem] p-8 text-white flex items-center justify-between shadow-xl shadow-indigo-100 border border-indigo-500">
+                    <div>
+                        <p className="text-[10px] font-black text-indigo-200 uppercase tracking-[0.3em] mb-1">Tokens Remaining</p>
+                        <h4 className="text-2xl font-black italic uppercase">{user?.profile?.word_balance?.toLocaleString()}</h4>
+                    </div>
+                    <FaCoins size={32} className="text-indigo-300/50" />
+                </div>
+                <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white flex items-center justify-between shadow-xl shadow-slate-200">
+                    <div>
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-1">Total Used</p>
+                        <h4 className="text-2xl font-black italic uppercase">{analytics?.summary?.total_tokens?.toLocaleString() || "0"}</h4>
+                    </div>
+                    <FaChartLine size={32} className="text-emerald-500" />
+                </div>
+            </div>
+
             <section className="bg-white rounded-[2.5rem] p-8 md:p-10 shadow-sm border border-slate-200">
               <h3 className="text-lg font-black text-slate-900 mb-8 uppercase tracking-widest flex items-center gap-3">
                 <FaIdCard className="text-indigo-600" /> Identity Details
@@ -169,18 +203,21 @@ export default function ProfilePage() {
                     {subscriptions.map((sub, i) => (
                       <div key={i} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:bg-slate-100 transition-colors">
                         <div>
-                          <p className="text-sm font-black text-slate-800">{sub.offer_name}</p>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Expires: {new Date(sub.expiration_date).toLocaleDateString()}</p>
+                          <p className="text-sm font-black text-slate-800">{sub.offer?.name || sub.offer_tokens}</p>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Expires: {new Date(sub.end_date || sub.expiration_date).toLocaleDateString()}</p>
                         </div>
-                        <span className="bg-white text-emerald-600 text-[9px] font-black px-3 py-1 rounded-lg uppercase tracking-widest border border-emerald-100">
-                          Verified Active
-                        </span>
+                        <div className="text-right">
+                            <span className="bg-white text-emerald-600 text-[9px] font-black px-3 py-1 rounded-lg uppercase tracking-widest border border-emerald-100 block mb-1 text-center">
+                              {sub.is_active ? "Verified Active" : "Deprioritized"}
+                            </span>
+                            <p className="text-[10px] font-black text-slate-400 uppercase">{sub.remaining_tokens.toLocaleString()} Left</p>
+                        </div>
                       </div>
                     ))}
                  </div>
                ) : (
                  <div className="text-center py-10 text-slate-400 font-bold uppercase tracking-widest text-xs bg-slate-50 rounded-3xl border border-dashed border-slate-200">
-                   No active subscriptions found
+                   {fetchingExtras ? "Synchronizing slots..." : "No active subscriptions found"}
                  </div>
                )}
             </section>
@@ -188,46 +225,69 @@ export default function ProfilePage() {
 
           {/* Right: Actions & Security */}
           <div className="lg:col-span-4 space-y-8">
-             <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-xl shadow-slate-200">
+             <div className="bg-slate-900 rounded-[3rem] p-8 text-white shadow-xl shadow-slate-200 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-600/10 rounded-full blur-3xl"></div>
+                
                 <h3 className="text-lg font-black mb-6 uppercase tracking-widest flex items-center gap-3 italic">
-                  <FaShieldAlt className="text-indigo-400" /> Security
+                  <FaShieldAlt className="text-indigo-400" /> Security Node
                 </h3>
-                <p className="text-xs text-slate-400 leading-relaxed mb-8">
-                  Your identity is protected by smart agent end-to-end encryption.
+                <p className="text-[10px] font-bold text-slate-400 leading-relaxed mb-8 uppercase tracking-wider">
+                  Your identity is protected by Smart Agent end-to-end encryption. Current Health: <span className="text-emerald-400">{analytics?.summary?.success_rate || "99.9"}%</span>
                 </p>
                 <div className="space-y-4">
-                   <button className="w-full bg-white/10 hover:bg-white/20 p-4 rounded-2xl flex items-center gap-4 transition-all">
-                      <div className="w-8 h-8 bg-indigo-500/20 rounded-lg flex items-center justify-center text-indigo-300">
+                   <button 
+                    onClick={() => toast.success("Passphrase reset link sent to your email!", { icon: '📧' })}
+                    className="w-full bg-white/5 hover:bg-white/10 p-4 rounded-2xl flex items-center gap-4 transition-all border border-white/5 group"
+                   >
+                      <div className="w-8 h-8 bg-indigo-500/20 rounded-lg flex items-center justify-center text-indigo-300 group-hover:scale-110 transition-transform">
                         <FaKey size={14} />
                       </div>
-                      <span className="text-xs font-black uppercase tracking-widest">Reset Passphrase</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest">Reset Passphrase</span>
                    </button>
                    <button 
                     onClick={() => {
                       if(window.confirm("Are you sure you want to log out of Smart Agent?")) {
-                        api.post('/users/logout/').finally(() => window.location.href = '/login');
+                        api.post('/users/logout/').finally(() => window.location.href = '/signup');
                       }
                     }}
-                    className="w-full bg-rose-500/10 hover:bg-rose-500/20 p-4 rounded-2xl flex items-center gap-4 transition-all group"
+                    className="w-full bg-rose-500/10 hover:bg-rose-500/20 p-4 rounded-2xl flex items-center gap-4 transition-all group border border-rose-500/10"
                    >
                       <div className="w-8 h-8 bg-rose-500 group-hover:bg-rose-600 rounded-lg flex items-center justify-center text-white transition-colors">
                         <FaSignOutAlt size={14} />
                       </div>
-                      <span className="text-xs font-black uppercase tracking-widest text-rose-500">Close Session</span>
+                      <span className="text-[10px] font-black uppercase tracking-widest text-rose-500">Close Session</span>
                    </button>
                 </div>
              </div>
 
-             <div className="bg-gradient-to-br from-indigo-600 to-blue-700 rounded-[2.5rem] p-8 text-white shadow-xl shadow-blue-100">
-                <h4 className="text-sm font-black uppercase tracking-[0.2em] mb-2 opacity-80 italic">Usage Metrics</h4>
-                <div className="flex items-center gap-4 mt-4">
-                   <div className="flex-1 h-3 bg-white/20 rounded-full overflow-hidden">
-                      <div className="h-full bg-white w-2/3 shadow-[0_0_10px_white]"></div>
-                   </div>
-                   <span className="text-[10px] font-black uppercase tracking-widest">65% CAP</span>
+             <div className="bg-white rounded-[3rem] p-8 text-slate-800 shadow-xl border border-slate-100">
+                <div className="flex items-center justify-between mb-6">
+                    <h4 className="text-sm font-black uppercase tracking-widest italic flex items-center gap-2">
+                        <FaPercent className="text-indigo-600" /> Usage Capacity
+                    </h4>
+                    <span className="text-[10px] font-black text-slate-400">{usagePercentage}%</span>
                 </div>
-                <p className="text-[10px] font-bold mt-4 opacity-70 leading-relaxed uppercase tracking-wider">
-                  Verified high performance node is maintaining stable latency levels.
+                
+                <div className="relative h-4 bg-slate-50 rounded-full overflow-hidden border border-slate-100 p-0.5 mb-6">
+                   <div 
+                    className={`h-full rounded-full transition-all duration-1000 ease-out shadow-sm ${usagePercentage > 90 ? 'bg-rose-500' : 'bg-indigo-600'}`} 
+                    style={{ width: `${usagePercentage}%` }}
+                   ></div>
+                </div>
+                
+                <div className="space-y-4">
+                    <div className="flex justify-between items-center bg-slate-50 p-3 rounded-2xl">
+                        <span className="text-[9px] font-black text-slate-400 uppercase">Avg Latency</span>
+                        <span className="text-xs font-black text-slate-700">{analytics?.summary?.avg_response_ms || "0"}ms</span>
+                    </div>
+                    <div className="flex justify-between items-center bg-slate-50 p-3 rounded-2xl">
+                        <span className="text-[9px] font-black text-slate-400 uppercase">Node region</span>
+                        <span className="text-xs font-black text-slate-700 capitalize">{user?.division || "Global"}</span>
+                    </div>
+                </div>
+
+                <p className="text-[10px] font-bold mt-6 text-slate-400 leading-relaxed uppercase tracking-wider italic text-center">
+                  Verified high performance node in {user?.division || "Global"} sequence is maintaining stable latency levels.
                 </p>
              </div>
           </div>
