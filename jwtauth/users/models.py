@@ -120,6 +120,29 @@ class Profile(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    def sync_word_balance(self):
+        """
+        লেটেস্ট একটিভ সাবস্ক্রিপশন থেকে প্রোফাইলের word_balance আপডেট করে।
+        """
+        from .models import Subscription
+        
+        # ১. ইউজারের সবচেয়ে লেটেস্ট একটিভ সাবস্ক্রিপশন খুঁজে বের করা
+        latest_sub = Subscription.objects.filter(
+            profile=self, 
+            is_active=True
+        ).order_by('-created_at').first()
+
+        if latest_sub:
+            # ২. সাবস্ক্রিপশনের remaining_tokens কে প্রোফাইলের word_balance এ সেট করা
+            self.word_balance = latest_sub.remaining_tokens
+            self.save()
+            print(f"✅ word_balance updated to {self.word_balance} from Subscription ID: {latest_sub.id}")
+        else:
+            # যদি কোনো একটিভ সাবস্ক্রিপশন না থাকে (ঐচ্ছিক: ব্যালেন্স ০ করে দিতে পারেন)
+            # self.word_balance = 0
+            # self.save()
+            print(f"⚠️ No active subscription found for {self.user.email}")
+            
     def __str__(self):
         return f"{self.user.email} | {self.id_type} | {self.unique_id}"
 
