@@ -106,7 +106,7 @@ def facebook_callback(request):
 
     # Redirect user back to the dashboard connect page (or return JSON if frontend handles popup)
     # Using window.opener to close the popup and refresh the parent if using popup flow.
-    frontend_url = getattr(settings, 'NEXT_PUBLIC_BASE_URL', 'http://localhost:3000')
+    frontend_url = getattr(settings, 'NEXT_PUBLIC_BASE_URL', 'http://newsmartagent.com')
     script = f'''
     <script>
         if (window.opener) {{
