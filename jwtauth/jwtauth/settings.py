@@ -71,6 +71,7 @@ INSTALLED_APPS = [
     'django_celery_beat',
     'pgvector',
     'embedding',
+    'blog',
     'django.contrib.postgres',
     'settings',
     'man_agent',

@@ -16,6 +16,7 @@ from datasheet import views as datasheet_views
 from man_agent.views import ManAgentConfigViewSet
 from man_agent.views import AgentDashboardStatsView
 from users import oauth_views
+from blog import views as blog_views
 
 
 router = DefaultRouter()
@@ -25,6 +26,8 @@ router.register(r'subscriptions', SubscriptionViewSet, basename='subscription')
 router.register(r'payments', PaymentViewSet, basename='payment')
 router.register(r'orders', OrderSubmitView, basename='order')
 router.register(r'man-agent-config', ManAgentConfigViewSet, basename='man-agent-config')
+router.register(r'blog/posts', blog_views.BlogPostViewSet, basename='blog-posts')
+router.register(r'blog/categories', blog_views.CategoryViewSet, basename='blog-categories')
 
 
 

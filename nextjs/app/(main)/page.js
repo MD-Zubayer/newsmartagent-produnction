@@ -519,7 +519,7 @@ export default function HomePage() {
                       <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Your Name</label>
                       <input 
                         type="text" name="name" required value={formData.name} onChange={handleChange}
-                        placeholder="যেমন: আবরার রহমান" 
+                        placeholder="Md hamid" 
                         className="w-full p-4 bg-gray-50/50 border border-gray-100 rounded-2xl outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 transition-all font-medium"
                       />
                     </div>
