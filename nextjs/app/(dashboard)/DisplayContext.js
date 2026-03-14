@@ -6,6 +6,7 @@ const DisplayContext = createContext();
 
 export function DisplayProvider({ children }) {
   const [isDesktopMode, setIsDesktopMode] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
@@ -18,10 +19,21 @@ export function DisplayProvider({ children }) {
     const newValue = !isDesktopMode;
     setIsDesktopMode(newValue);
     localStorage.setItem("dashboard_desktop_mode", newValue);
+    if (newValue) setIsSidebarOpen(false); // Close mobile drawer if switching to desktop mode
   };
 
+  const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
+  const closeSidebar = () => setIsSidebarOpen(false);
+
   return (
-    <DisplayContext.Provider value={{ isDesktopMode, toggleDesktopMode, isMounted }}>
+    <DisplayContext.Provider value={{ 
+      isDesktopMode, 
+      toggleDesktopMode, 
+      isSidebarOpen, 
+      toggleSidebar, 
+      closeSidebar,
+      isMounted 
+    }}>
       {children}
     </DisplayContext.Provider>
   );

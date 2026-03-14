@@ -1,18 +1,17 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { Globe, ChevronDown, Bell, Crown, RefreshCw, User, ShieldCheck, Sparkles } from "lucide-react";
+import { Globe, Bell, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-
-import { Monitor, Smartphone } from "lucide-react";
+import { Monitor, Smartphone, Menu, X } from "lucide-react";
 import { useDisplay } from "../../(dashboard)/DisplayContext";
 
 export default function Topbar({ viewMode, onSwitch }) {
   const { user, loading } = useAuth(); 
   const pathname = usePathname();
-  const { isDesktopMode, toggleDesktopMode } = useDisplay();
+  const { isDesktopMode, toggleDesktopMode, isSidebarOpen, toggleSidebar } = useDisplay();
 
   const initials = useMemo(() => {
     if (!user?.name) return "??";
@@ -28,11 +27,21 @@ export default function Topbar({ viewMode, onSwitch }) {
     <nav className="flex items-center justify-between px-8 py-3 bg-white/70 backdrop-blur-xl border-b border-gray-100 sticky top-0 z-50 w-full h-20 shadow-sm">
       
       {/* --- LEFT SIDE: Role & Status --- */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2">
+        {/* Mobile Menu Toggle */}
+        {!isDesktopMode && (
+          <button 
+            onClick={toggleSidebar}
+            className="p-2 md:hidden text-gray-600 hover:bg-gray-100 rounded-xl transition-all"
+          >
+            {isSidebarOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
+        )}
+
         {/* Toggle Desktop Mode Button */}
         <button 
           onClick={toggleDesktopMode}
-          className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 shadow-sm border ${
+          className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-2xl md:text-[11px] text-[10px] font-black uppercase tracking-widest transition-all duration-300 shadow-sm border ${
             isDesktopMode 
             ? 'bg-indigo-600 text-white border-indigo-700' 
             : 'bg-white text-gray-600 border-gray-100 hover:bg-gray-50'
