@@ -128,21 +128,24 @@ class TokenUsageAnalyticsView(APIView):
             total_reqs=Count('id'),
             failed_reqs=Count('id', filter=Q(success=False)),
             avg_resp=Avg('response_time'),
+            memory_tokens=Sum('total_tokens', filter=Q(request_type='memory_extraction'))
         )
 
         total = summary_stats['total_tokens'] or 0
         total_msgs = summary_stats['total_reqs'] or 0
         failed = summary_stats['failed_reqs'] or 0
+        memory_used = summary_stats['memory_tokens'] or 0
 
 
         summary = {
-            "total_tokens": summary_stats["total_tokens"] or 0,
+            "total_tokens": total,
             "input_tokens": summary_stats["input_tokens"] or 0,   
             "output_tokens": summary_stats["output_tokens"] or 0,
             "total_messages": total_msgs,
             "success_rate": round(((total - failed) / total * 100), 1) if total > 0 else 0,
             "avg_response_ms": round(summary_stats["avg_resp"] or 0),
-            "failed_count": failed
+            "failed_count": failed,
+            "memory_extraction_tokens": memory_used
         }
 
 

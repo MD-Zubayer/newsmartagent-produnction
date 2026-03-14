@@ -85,17 +85,41 @@ def extract_and_update_memory(ai_agent, sender_id, chat_history):
 
         print(f"🧠 Smart Extraction ({provider}): {sender_id} | Tokens: {total_tokens}")
 
-        # Save token usage for system accounting
+        # Save token usage for system accounting (Dashboard Analytics)
         try:
+            from aiAgent.models import TokenUsageLog
+            
+            # Find the platform from the most recent message for this sender (if any)
             from chat.models import Message, Conversation
             conv = Conversation.objects.filter(agentAi=ai_agent, contact_id=sender_id).first()
+            platform = 'background_sync'
             if conv:
+                last_msg = Message.objects.filter(conversation=conv).order_by('-timestamp').first()
+                if last_msg and hasattr(last_msg, 'platform'):
+                     platform = last_msg.platform
+                
+                # Also log detailed message in conversation
                 Message.objects.create(
                     conversation=conv,
                     role='assistant',
                     content=f'[System: Intelligence Synced ({provider}) for {sender_id}]',
                     tokens_used=total_tokens
                 )
+
+            TokenUsageLog.objects.create(
+                user=ai_agent.user,
+                ai_agent=ai_agent,
+                sender_id=sender_id,
+                platform=platform,
+                model_name=model_id,
+                input_tokens=response.usage.prompt_tokens if provider != 'gemini' else response.usage_metadata.prompt_token_count,
+                output_tokens=response.usage.completion_tokens if provider != 'gemini' else response.usage_metadata.candidates_token_count,
+                total_tokens=total_tokens,
+                request_type='memory_extraction',
+                success=True,
+                response_time=0 
+            )
+            
         except Exception as e:
             print(f"Failed to log extraction tokens: {e}")
 
