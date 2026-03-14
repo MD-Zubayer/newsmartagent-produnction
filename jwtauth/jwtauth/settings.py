@@ -79,8 +79,11 @@ INSTALLED_APPS = [
     'ckeditor',
     
 
-    
+    'ckeditor_uploader',
 ]
+
+CKEDITOR_UPLOAD_PATH = "uploads/"
+CKEDITOR_IMAGE_BACKEND = "pillow"
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
