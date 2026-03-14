@@ -92,7 +92,7 @@ export default function Sidebar({ viewMode, isDesktopMode }) {
       } p-3`}>
         
         {/* Logo Section */}
-        <div className="flex items-center mb-6 px-1">
+        <div className="flex items-center mb-6 mt-5 px-1">
           <img
             src="/new-smart-agent.png"
             alt="Logo"
