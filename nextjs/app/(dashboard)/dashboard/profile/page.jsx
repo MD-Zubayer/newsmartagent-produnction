@@ -1,33 +1,32 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAuth } from "app/context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
 import { 
   FaUserEdit, FaSignOutAlt, FaEnvelope, FaPhone, 
   FaMapMarkerAlt, FaHashtag, FaGlobeAsia, FaTimes, 
-  FaWallet, FaChartLine, FaCopy, FaCheckCircle, FaVenusMars, FaHistory
+  FaWallet, FaChartLine, FaCopy, FaCheckCircle, FaVenusMars, FaHistory,
+  FaShieldAlt, FaKey, FaIdCard, FaCube
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 
 export default function ProfilePage() {
-  
-  const { user, logout, loading } = useAuth();
+  const { user, loading, setUser } = useAuth();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [subscriptions, setSubscriptions] = useState([]);
   
-  // Edit Form States
   const [formData, setFormData] = useState({
-    name: user?.name || "",
-    phone_number: user?.phone_number || "",
-    division: user?.division || "",
-    district: user?.district || "",
-    upazila: user?.upazila || "",
-    gender: user?.gender || ""
+    name: "",
+    phone_number: "",
+    division: "",
+    district: "",
+    upazila: "",
+    gender: ""
   });
 
-  // ইউজার ডাটা চেঞ্জ হলে ফর্ম আপডেট করা
   useEffect(() => {
     if (user) {
       setFormData({
@@ -38,221 +37,250 @@ export default function ProfilePage() {
         upazila: user.upazila || "",
         gender: user.gender || ""
       });
+      fetchSubscriptions();
     }
   }, [user]);
 
-  // --- ১. ইউনিক আইডি কপি ফাংশন (Premium Toast) ---
+  const fetchSubscriptions = async () => {
+    try {
+      const res = await api.get("/subscriptions/");
+      setSubscriptions(res.data || []);
+    } catch (err) {
+      console.error("Failed to fetch subscriptions", err);
+    }
+  };
+
   const copyToClipboard = (text) => {
     if (!text) return;
     navigator.clipboard.writeText(text);
     setCopied(true);
-    toast.success("Unique ID copied!", {
-      icon: '📋',
-      style: { borderRadius: '12px' }
+    toast.success("ID Copied to Clipboard", {
+      style: { borderRadius: '10px', background: '#333', color: '#fff' }
     });
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // --- ২. প্রোফাইল আপডেট ফাংশন ---
   const handleUpdate = async (e) => {
     e.preventDefault();
     setUpdating(true);
-    const lt = toast.loading("Updating profile...");
+    const lt = toast.loading("Updating your identity...");
     
     try {
-      await api.patch("/users/update-me/", formData);
-      toast.success("Profile updated successfully!", { id: lt });
-      
+      const res = await api.patch("/users/update-me/", formData);
+      toast.success("Identity updated successfully!", { id: lt });
+      setUser(res.data);
       setIsEditModalOpen(false);
-      // রিলোড করার আগে ১.৫ সেকেন্ড সময় দিচ্ছি যাতে টোস্ট দেখা যায়
-      setTimeout(() => {
-        window.location.reload();
-      }, 1500);
     } catch (err) {
-      toast.error("Update failed. Please try again.", { id: lt });
+      toast.error("Update failed. Please check your connection.", { id: lt });
     } finally {
       setUpdating(false);
     }
   };
 
-  // --- ৩. লগআউট কনফার্মেশন ---
-  const handleLogout = () => {
-    toast((t) => (
-      <div className="flex flex-col gap-2">
-        <p className="text-sm font-bold">Do you want to log out?</p>
-        <div className="flex justify-end gap-2">
-          <button onClick={() => toast.dismiss(t.id)} className="px-3 py-1 text-xs bg-slate-100 rounded-lg">canceled</button>
-          <button 
-            onClick={() => {
-              toast.dismiss(t.id);
-              logout();
-            }}
-            className="px-3 py-1 text-xs bg-rose-600 text-white rounded-lg"
-          >
-          Yes, logout
-          </button>
-        </div>
-      </div>
-    ));
-  };
-
   if (loading) return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
-      <div className="h-12 bg-white rounded-2xl animate-pulse shadow-sm" />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="h-64 bg-white rounded-[2.5rem] animate-pulse" />
-        <div className="h-64 bg-white rounded-[2.5rem] animate-pulse" />
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+      <div className="w-full max-w-4xl animate-pulse space-y-8">
+        <div className="h-40 bg-white rounded-3xl shadow-sm"></div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div className="h-64 bg-white rounded-3xl"></div>
+          <div className="h-64 bg-white rounded-3xl"></div>
+        </div>
       </div>
     </div>
   );
 
-
-
-  
   return (
-    <div className="min-h-screen bg-[#f4f7fe] pb-20 font-sans">
-      {/* Top Stylish Header */}
-      <div className="h-72 bg-slate-900 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-purple-600/20 to-transparent"></div>
-        <div className="absolute -top-24 -left-24 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl"></div>
-      </div>
+    <div className="min-h-screen bg-[#F8FAFC] pb-24 font-sans text-slate-800">
+      {/* Header Section */}
+      <div className="bg-white border-b border-slate-200 py-10 px-6 mb-8 shadow-sm">
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-8">
+          <div className="relative group">
+            <div className="w-32 h-32 md:w-40 md:h-40 rounded-full bg-slate-100 flex items-center justify-center border-4 border-white shadow-xl overflow-hidden group-hover:bg-slate-200 transition-colors">
+              {user?.profile_image ? (
+                <img src={user.profile_image} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-5xl font-black text-slate-300 italic">{user?.name?.[0]?.toUpperCase() || "U"}</span>
+              )}
+            </div>
+            <button 
+              onClick={() => setIsEditModalOpen(true)}
+              className="absolute bottom-1 right-1 bg-indigo-600 text-white p-3 rounded-full shadow-lg hover:bg-slate-900 transition-all active:scale-90"
+            >
+              <FaUserEdit size={16} />
+            </button>
+          </div>
 
-      <div className="max-w-6xl mx-auto px-4 -mt-40 relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          
-          {/* Left: Profile Summary Card */}
-          <div className="lg:col-span-4">
-            <div className="bg-white rounded-[3.5rem] p-8 shadow-2xl shadow-blue-100 border border-white text-center">
-              <div className="relative inline-block mb-6">
-                <div className="w-40 h-40 rounded-[3rem] bg-gradient-to-tr from-blue-600 to-indigo-600 p-1.5 shadow-xl">
-                  <div className="w-full h-full rounded-[2.8rem] bg-white flex items-center justify-center text-6xl font-black text-blue-600 italic border-4 border-white uppercase">
-                    {user?.name?.[0] || "U"}
-                  </div>
-                </div>
-                <div className="absolute -bottom-2 -right-2 bg-emerald-500 w-10 h-10 rounded-2xl border-4 border-white flex items-center justify-center text-white" title="Active Account">
-                  <FaCheckCircle size={16} />
-                </div>
+          <div className="flex-1 text-center md:text-left">
+            <h1 className="text-3xl font-black tracking-tight text-slate-900 mb-2 uppercase italic">{user?.name}</h1>
+            <div className="flex flex-wrap justify-center md:justify-start gap-3 items-center">
+              <span className="bg-slate-900 text-white text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest shadow-sm">
+                Active Member
+              </span>
+              <div className="flex items-center gap-2 text-slate-400 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
+                <FaHashtag size={10} />
+                <span className="text-xs font-bold tracking-wider">{user?.profile?.unique_id}</span>
+                <button onClick={() => copyToClipboard(user?.profile?.unique_id)} className="hover:text-indigo-600">
+                  <FaCopy size={12} />
+                </button>
               </div>
-
-              <h1 className="text-2xl font-black text-slate-800 italic uppercase truncate px-2">{user?.name}</h1>
-              
-              {/* Unique ID with Copy Option */}
-              <div className="mt-4 flex items-center justify-center gap-2">
-                 <div className="bg-slate-50 px-4 py-2 rounded-2xl border border-slate-100 flex items-center gap-3">
-                    <FaHashtag className="text-blue-500 text-xs" />
-                    <span className="text-xs font-black text-slate-600 uppercase tracking-widest">{user?.profile?.unique_id}</span>
-                    <button 
-                      onClick={() => copyToClipboard(user?.profile?.unique_id)}
-                      className={`ml-2 transition-all ${copied ? 'text-emerald-500' : 'text-slate-400 hover:text-blue-600'}`}
-                    >
-                      {copied ? <FaCheckCircle /> : <FaCopy />}
-                    </button>
-                 </div>
-              </div>
-
-              {/* Balance Stats Area */}
-              <div className="grid grid-cols-2 gap-3 mt-8">
-                <div className="bg-blue-50 p-4 rounded-[2rem] border border-blue-100">
-                   <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-1">Account Balance</p>
-                   <p className="text-xl font-black text-blue-600 tracking-tighter italic">৳{user?.profile?.acount_balance}</p>
-                </div>
-                <div className="bg-purple-50 p-4 rounded-[2rem] border border-purple-100">
-                   <p className="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-1">Token Balance</p>
-                   <p className="text-xl font-black text-purple-600 tracking-tighter italic">{user?.profile?.word_balance?.toLocaleString()}</p>
-                </div>
-              </div>
-
-              <button 
-                onClick={() => setIsEditModalOpen(true)}
-                className="w-full mt-8 bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-blue-600 transition-all shadow-xl flex items-center justify-center gap-2"
-              >
-                <FaUserEdit /> Edit Profile
-              </button>
             </div>
           </div>
 
-          {/* Right: Detailed Info */}
-          <div className="lg:col-span-8 space-y-6">
-            <div className="bg-white/80 backdrop-blur-md rounded-[3.5rem] p-8 md:p-12 shadow-xl border border-white">
-              <h3 className="text-xl font-black text-slate-900 mb-10 italic uppercase flex items-center gap-3">
-                <span className="w-2 h-8 bg-blue-600 rounded-full"></span> Detailed Intelligence
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <InfoRow icon={<FaEnvelope />} label="Registered Email" value={user?.email} color="bg-blue-50 text-blue-600" />
-                <InfoRow icon={<FaPhone />} label="Phone Connection" value={user?.phone_number} color="bg-emerald-50 text-emerald-600" />
-                <InfoRow icon={<FaGlobeAsia />} label="Division" value={user?.division} color="bg-indigo-50 text-indigo-600" />
-                <InfoRow icon={<FaMapMarkerAlt />} label="Region (Upazila)" value={`${user?.upazila}, ${user?.district}`} color="bg-rose-50 text-rose-600" />
-                <InfoRow icon={<FaVenusMars />} label="Gender Identity" value={user?.gender || "Not Specified"} color="bg-purple-50 text-purple-600" />
-                <InfoRow icon={<FaHistory />} label="Last Activity" value={new Date(user?.profile?.updated_at).toLocaleDateString()} color="bg-orange-50 text-orange-600" />
-              </div>
-            </div>
-
-            {/* Account Metadata Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-               <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white flex items-center justify-between">
-                  <div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em] mb-1">Member Since</p>
-                    <h4 className="text-lg font-black italic uppercase">{new Date(user?.created_at).toLocaleDateString()}</h4>
-                  </div>
-                  <FaChartLine size={32} className="text-blue-500" />
-               </div>
-               <div onClick={logout} className="bg-rose-500 rounded-[2.5rem] p-8 text-white flex items-center justify-between cursor-pointer hover:bg-rose-600 transition-all shadow-xl shadow-rose-100">
-                  <div>
-                    <p className="text-[9px] font-black text-rose-200 uppercase tracking-[0.3em] mb-1">Security</p>
-                    <h4 className="text-lg font-black italic uppercase">Close Session</h4>
-                  </div>
-                  <FaSignOutAlt size={32} />
-               </div>
-            </div>
+          <div className="flex gap-4">
+             <div className="bg-indigo-50 px-6 py-4 rounded-3xl border border-indigo-100 shadow-sm text-center min-w-[140px]">
+                <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Total Balance</p>
+                <p className="text-2xl font-black text-indigo-700 tracking-tighter">৳{user?.profile?.acount_balance}</p>
+             </div>
+             <div className="bg-slate-900 px-6 py-4 rounded-3xl shadow-lg shadow-slate-200 text-center min-w-[140px] text-white">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tokens Remaining</p>
+                <p className="text-2xl font-black tracking-tighter">{user?.profile?.word_balance?.toLocaleString()}</p>
+             </div>
           </div>
-
         </div>
       </div>
 
-      {/* Edit Modal */}
+      <div className="max-w-6xl mx-auto px-4">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          
+          {/* Left: Identity Details */}
+          <div className="lg:col-span-8 space-y-8">
+            <section className="bg-white rounded-[2.5rem] p-8 md:p-10 shadow-sm border border-slate-200">
+              <h3 className="text-lg font-black text-slate-900 mb-8 uppercase tracking-widest flex items-center gap-3">
+                <FaIdCard className="text-indigo-600" /> Identity Details
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
+                <DetailItem icon={<FaEnvelope />} label="Registered Email" value={user?.email} />
+                <DetailItem icon={<FaPhone />} label="Primary Phone" value={user?.phone_number || "Not Linked"} />
+                <DetailItem icon={<FaVenusMars />} label="Gender Identity" value={user?.gender} />
+                <DetailItem icon={<FaGlobeAsia />} label="Division" value={user?.division} />
+                <DetailItem icon={<FaMapMarkerAlt />} label="Region (Upazila)" value={user?.upazila ? `${user.upazila}, ${user.district}` : null} />
+                <DetailItem icon={<FaHistory />} label="Joined Date" value={new Date(user?.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })} />
+              </div>
+            </section>
+
+            {/* Subscriptions Overview */}
+            <section className="bg-white rounded-[2.5rem] p-8 md:p-10 shadow-sm border border-slate-200">
+               <h3 className="text-lg font-black text-slate-900 mb-8 uppercase tracking-widest flex items-center gap-3">
+                <FaCube className="text-indigo-600" /> Active Infrastructure
+               </h3>
+               {subscriptions.length > 0 ? (
+                 <div className="space-y-4">
+                    {subscriptions.map((sub, i) => (
+                      <div key={i} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:bg-slate-100 transition-colors">
+                        <div>
+                          <p className="text-sm font-black text-slate-800">{sub.offer_name}</p>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Expires: {new Date(sub.expiration_date).toLocaleDateString()}</p>
+                        </div>
+                        <span className="bg-white text-emerald-600 text-[9px] font-black px-3 py-1 rounded-lg uppercase tracking-widest border border-emerald-100">
+                          Verified Active
+                        </span>
+                      </div>
+                    ))}
+                 </div>
+               ) : (
+                 <div className="text-center py-10 text-slate-400 font-bold uppercase tracking-widest text-xs bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+                   No active subscriptions found
+                 </div>
+               )}
+            </section>
+          </div>
+
+          {/* Right: Actions & Security */}
+          <div className="lg:col-span-4 space-y-8">
+             <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white shadow-xl shadow-slate-200">
+                <h3 className="text-lg font-black mb-6 uppercase tracking-widest flex items-center gap-3 italic">
+                  <FaShieldAlt className="text-indigo-400" /> Security
+                </h3>
+                <p className="text-xs text-slate-400 leading-relaxed mb-8">
+                  Your identity is protected by smart agent end-to-end encryption.
+                </p>
+                <div className="space-y-4">
+                   <button className="w-full bg-white/10 hover:bg-white/20 p-4 rounded-2xl flex items-center gap-4 transition-all">
+                      <div className="w-8 h-8 bg-indigo-500/20 rounded-lg flex items-center justify-center text-indigo-300">
+                        <FaKey size={14} />
+                      </div>
+                      <span className="text-xs font-black uppercase tracking-widest">Reset Passphrase</span>
+                   </button>
+                   <button 
+                    onClick={() => {
+                      if(window.confirm("Are you sure you want to log out of Smart Agent?")) {
+                        api.post('/users/logout/').finally(() => window.location.href = '/login');
+                      }
+                    }}
+                    className="w-full bg-rose-500/10 hover:bg-rose-500/20 p-4 rounded-2xl flex items-center gap-4 transition-all group"
+                   >
+                      <div className="w-8 h-8 bg-rose-500 group-hover:bg-rose-600 rounded-lg flex items-center justify-center text-white transition-colors">
+                        <FaSignOutAlt size={14} />
+                      </div>
+                      <span className="text-xs font-black uppercase tracking-widest text-rose-500">Close Session</span>
+                   </button>
+                </div>
+             </div>
+
+             <div className="bg-gradient-to-br from-indigo-600 to-blue-700 rounded-[2.5rem] p-8 text-white shadow-xl shadow-blue-100">
+                <h4 className="text-sm font-black uppercase tracking-[0.2em] mb-2 opacity-80 italic">Usage Metrics</h4>
+                <div className="flex items-center gap-4 mt-4">
+                   <div className="flex-1 h-3 bg-white/20 rounded-full overflow-hidden">
+                      <div className="h-full bg-white w-2/3 shadow-[0_0_10px_white]"></div>
+                   </div>
+                   <span className="text-[10px] font-black uppercase tracking-widest">65% CAP</span>
+                </div>
+                <p className="text-[10px] font-bold mt-4 opacity-70 leading-relaxed uppercase tracking-wider">
+                  Verified high performance node is maintaining stable latency levels.
+                </p>
+             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Standardized Edit Modal */}
       {isEditModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-md z-[999] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-xl rounded-[3.5rem] p-8 md:p-12 shadow-2xl relative animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
-            <button onClick={() => setIsEditModalOpen(false)} className="absolute top-8 right-8 text-slate-400 hover:text-rose-500">
-              <FaTimes size={24} />
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[999] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl rounded-[2.5rem] p-8 md:p-12 shadow-2xl relative animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
+            <button onClick={() => setIsEditModalOpen(false)} className="absolute top-8 right-8 text-slate-400 hover:text-rose-500 transition-colors">
+              <FaTimes size={20} />
             </button>
             
-            <h2 className="text-3xl font-black text-slate-900 italic uppercase mb-8">Edit Identity</h2>
+            <h2 className="text-2xl font-black text-slate-900 italic uppercase mb-8 flex items-center gap-3">
+              <FaIdCard className="text-indigo-600" /> Identity Correction
+            </h2>
             
-            <form onSubmit={handleUpdate} className="space-y-5">
-              <EditInput label="Full Name" value={formData.name} onChange={(v) => setFormData({...formData, name: v})} icon={<FaUserEdit/>} />
-              <EditInput label="Phone Number" value={formData.phone_number} onChange={(v) => setFormData({...formData, phone_number: v})} icon={<FaPhone/>} />
+            <form onSubmit={handleUpdate} className="space-y-6">
+              <ModalInput label="Full Name" value={formData.name} onChange={(v) => setFormData({...formData, name: v})} placeholder="Full legal name" />
+              <ModalInput label="Primary Phone" value={formData.phone_number} onChange={(v) => setFormData({...formData, phone_number: v})} placeholder="e.g. 01700000000" />
               
-              <div className="grid grid-cols-2 gap-4">
-                 <EditInput label="Division" value={formData.division} onChange={(v) => setFormData({...formData, division: v})} icon={<FaGlobeAsia/>} />
-                 <EditInput label="District" value={formData.district} onChange={(v) => setFormData({...formData, district: v})} icon={<FaMapMarkerAlt/>} />
+              <div className="grid grid-cols-2 gap-6">
+                 <ModalInput label="Division" value={formData.division} onChange={(v) => setFormData({...formData, division: v})} placeholder="State/Division" />
+                 <ModalInput label="District" value={formData.district} onChange={(v) => setFormData({...formData, district: v})} placeholder="City/District" />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                 <EditInput label="Upazila" value={formData.upazila} onChange={(v) => setFormData({...formData, upazila: v})} icon={<FaMapMarkerAlt/>} />
+              <div className="grid grid-cols-2 gap-6">
+                 <ModalInput label="Upazila" value={formData.upazila} onChange={(v) => setFormData({...formData, upazila: v})} placeholder="Region/Upazila" />
                  <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-2 block">Gender</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Gender Channel</label>
                     <select 
-                      className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-600 outline-none font-bold text-slate-800 transition-all appearance-none"
+                      className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 focus:border-indigo-600 outline-none font-bold text-slate-800 transition-all appearance-none text-sm"
                       value={formData.gender}
                       onChange={(e) => setFormData({...formData, gender: e.target.value})}
                     >
-                      <option value="">Select Gender</option>
+                      <option value="">Select identity</option>
                       <option value="male">Male</option>
                       <option value="female">Female</option>
-                      <option value="other">Other</option>
+                      <option value="other">Other Preference</option>
                     </select>
                  </div>
               </div>
 
-              <button 
-                type="submit" 
-                disabled={updating}
-                className="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black text-xs uppercase tracking-[0.3em] hover:bg-slate-900 transition-all shadow-xl shadow-blue-100"
-              >
-                {updating ? "Updating..." : "Save Changes"}
-              </button>
+              <div className="pt-4">
+                <button 
+                  type="submit" 
+                  disabled={updating}
+                  className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-[11px] uppercase tracking-[0.3em] hover:bg-indigo-600 transition-all shadow-xl disabled:opacity-50 active:scale-95"
+                >
+                  {updating ? "Processing identity..." : "Validate and Sync"}
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -261,35 +289,31 @@ export default function ProfilePage() {
   );
 }
 
-// Information Row Helper
-function InfoRow({ icon, label, value, color }) {
+function DetailItem({ icon, label, value }) {
   return (
-    <div className="flex items-center gap-4 p-5 bg-white border border-slate-50 rounded-3xl hover:shadow-lg transition-all group">
-      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-lg ${color} group-hover:scale-110 transition-transform`}>
+    <div className="flex items-start gap-4">
+      <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-indigo-500 border border-slate-100 flex-shrink-0">
         {icon}
       </div>
-      <div className="truncate">
-        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">{label}</p>
-        <p className="text-slate-800 font-black text-sm uppercase tracking-tight truncate">{value || "N/A"}</p>
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">{label}</p>
+        <p className="text-base font-bold text-slate-700 break-words leading-tight">{value || "Not synchronized"}</p>
       </div>
     </div>
   );
 }
 
-// Edit Input Helper
-function EditInput({ label, value, onChange, icon }) {
+function ModalInput({ label, value, onChange, placeholder }) {
   return (
-    <div className="relative">
-      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-2 block">{label}</label>
-      <div className="relative">
-         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300">{icon}</span>
-         <input 
-            type="text"
-            className="w-full p-4 pl-12 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-600 outline-none font-bold text-slate-800 transition-all"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-          />
-      </div>
+    <div>
+      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">{label}</label>
+      <input 
+        type="text"
+        className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-200 focus:border-indigo-600 outline-none font-bold text-slate-800 transition-all text-sm"
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+      />
     </div>
   );
 }
