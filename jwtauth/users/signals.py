@@ -1,9 +1,10 @@
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from users.models import Profile, OrderForm
+from users.models import Profile, OrderForm, FacebookPage
 from users.utils import assign_unique_id
 from django.contrib.auth import get_user_model
 from datasheet.models import Spreadsheet
+from aiAgent.models import AgentAI
 
 User = get_user_model()
 @receiver(post_save, sender=User)
@@ -34,6 +35,30 @@ def create_initial_spreadsheet(sender, instance, created, **kwargs):
         )
         
         
+@receiver(post_save, sender=FacebookPage)
+def sync_fb_page_to_agent(sender, instance, created, **kwargs):
+    """
+    Syncs FacebookPage data to AgentAI model.
+    If AgentAI exists for this page_id, updates it; otherwise creates a new one.
+    """
+    agent, agent_created = AgentAI.objects.get_or_create(
+        page_id=instance.page_id,
+        defaults={
+            'user': instance.user,
+            'name': instance.page_name,
+            'platform': 'messenger',
+            'access_token': instance.access_token,
+            'is_active': instance.is_active,
+            'system_prompt': "You are a helpful AI assistant."
+        }
+    )
+    
+    if not agent_created:
+        agent.user = instance.user
+        agent.name = instance.page_name
+        agent.access_token = instance.access_token
+        agent.is_active = instance.is_active
+        agent.save()
 @receiver(post_save, sender=User)
 def ensure_user_order_form(sender, instance, **kwargs):
     
