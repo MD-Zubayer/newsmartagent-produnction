@@ -10,31 +10,30 @@ import TopNav from "../../(main)/components/TopNav";
 import { useNotifications } from "@/hooks/useNotifications"; // 🔥 আমাদের সেই কাস্টম হুক
 import DashboardAI from "@/(main)/components/DashboardAI";
 
+import { useDisplay } from "../DisplayContext";
+
 function DashboardContent({ children }) {
   const { user } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [viewMode, setViewMode] = useState(null);
+  const { isDesktopMode, isMounted: isDisplayMounted } = useDisplay();
   
   // 🔥 লেআউটের সব লজিক এখন এই এক লাইনে!
   const { notifications, unreadCount, markAsRead } = useNotifications(user);
 
-  // --- View Mode Logic (সংশোধিত) ---
+  // --- View Mode Logic ---
   useEffect(() => {
     if (user) {
-      // ১. আগে চেক করি পাথ থেকে ভিউ মোড বের করা যায় কি না
       if (pathname.includes("/dashboard/agent")) {
         setViewMode("agent");
       } else if (pathname.includes("/dashboard/user")) {
         setViewMode("user");
       } 
-      // ২. যদি এমন কোনো পাথে থাকি যেটা সরাসরি agent/user না (যেমন manual-payment)
-      // কিন্তু viewMode এখনো সেট হয়নি (রিলোড এর কারণে), তখন শুধু স্টেট সেট হবে, রিডাইরেক্ট না
       else if (!viewMode) {
         const savedView = localStorage.getItem("active_view") || user.id_type || "user";
         setViewMode(savedView);
         
-        // ৩. গুরুত্বপূর্ণ: শুধুমাত্র যদি রুট ড্যাশবোর্ডে থাকে তবেই রিডাইরেক্ট করবে
         if (pathname === "/dashboard" || pathname === "/dashboard/") {
            router.push(`/dashboard/${savedView}`);
         }
@@ -49,16 +48,15 @@ function DashboardContent({ children }) {
     router.push(`/dashboard/${nextView}`);
   };
 
-  if (!viewMode) return <div className="h-screen flex items-center justify-center font-bold font-mono">Initializing...</div>;
+  if (!viewMode || !isDisplayMounted) return <div className="h-screen flex items-center justify-center font-bold font-mono">Initializing...</div>;
 
   return (
     <div 
-      className="flex h-screen bg-gray-100 overflow-x-auto" 
-      style={{ minWidth: "1024px" }} // 🔥 FORCE DESKTOP VIEW ON MOBILE
+      className={`flex h-screen bg-gray-100 ${isDesktopMode ? 'overflow-x-auto' : ''}`}
+      style={isDesktopMode ? { minWidth: "1024px" } : {}}
     >
-      <Sidebar viewMode={viewMode} />
+      <Sidebar viewMode={viewMode} isDesktopMode={isDesktopMode} />
       <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
-        {/* 🔥 TopNav এখন হুক থেকে আসা ফ্রেশ ডাটা পাবে */}
         <TopNav 
           viewMode={viewMode} 
           onSwitch={handleViewSwitch} 
@@ -66,10 +64,8 @@ function DashboardContent({ children }) {
           unreadCount={unreadCount}
           markAsRead={markAsRead}
         />
-        <main className="p-4 flex-1 ml-40 overflow-y-auto">
-          {/* চিল্ড্রেন পেজগুলোও (যেমন NotificationsPage) চাইলে viewMode পাবে */}
+        <main className={`p-4 flex-1 overflow-y-auto ${isDesktopMode ? 'ml-40' : 'ml-0 md:ml-40'}`}>
           {isValidElement(children) ? cloneElement(children, { viewMode }) : children}
-
           <DashboardAI />
         </main>
       </div>

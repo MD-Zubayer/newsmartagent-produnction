@@ -1,25 +1,37 @@
 "use client";
 import { useEffect } from "react";
+import { useDisplay } from "./DisplayContext";
 
 export default function ViewportFix() {
+  const { isDesktopMode, isMounted } = useDisplay();
+
   useEffect(() => {
-    const setZoom = () => {
-      // ফোনের আসল প্রস্থ কত তা বের করা
-      const screenWidth = window.screen.width;
-      if (screenWidth < 1024) {
-        const scale = screenWidth / 1024;
-        const meta = document.querySelector('meta[name="viewport"]');
-        if (meta) {
-          // একদম নিখুঁত স্কেল সেট করা যাতে স্লাইড করতে না হয়
-          meta.setAttribute("content", `width=1024, initial-scale=${scale}, minimum-scale=${scale}, maximum-scale=2.0, user-scalable=yes`);
-        }
+    if (!isMounted) return;
+
+    const setViewport = () => {
+      const meta = document.querySelector('meta[name="viewport"]');
+      if (!meta) return;
+
+      if (isDesktopMode) {
+        // Desktop Mode: Scale to fit 1024px
+        const screenWidth = window.screen.width;
+        const scale = screenWidth < 1024 ? screenWidth / 1024 : 1;
+        meta.setAttribute("content", `width=1024, initial-scale=${scale}, minimum-scale=${scale}, maximum-scale=2.0`);
+      } else {
+        // Mobile Mode: Use standard device-width
+        meta.setAttribute("content", "width=device-width, initial-scale=1");
       }
     };
 
-    setZoom();
-    // স্ক্রিন রোটেট করলে যেন আবার ঠিক হয়
-    window.addEventListener("orientationchange", () => setTimeout(setZoom, 200));
-  }, []);
+    setViewport();
+    window.addEventListener("orientationchange", () => setTimeout(setViewport, 200));
+    window.addEventListener("resize", setViewport);
+    
+    return () => {
+      window.removeEventListener("orientationchange", setViewport);
+      window.removeEventListener("resize", setViewport);
+    };
+  }, [isDesktopMode, isMounted]);
 
   return null;
 }

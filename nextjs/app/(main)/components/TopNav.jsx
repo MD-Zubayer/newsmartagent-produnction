@@ -6,9 +6,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 
+import { Monitor, Smartphone } from "lucide-react";
+import { useDisplay } from "../../(dashboard)/DisplayContext";
+
 export default function Topbar({ viewMode, onSwitch }) {
   const { user, loading } = useAuth(); 
   const pathname = usePathname();
+  const { isDesktopMode, toggleDesktopMode } = useDisplay();
 
   const initials = useMemo(() => {
     if (!user?.name) return "??";
@@ -25,20 +29,21 @@ export default function Topbar({ viewMode, onSwitch }) {
       
       {/* --- LEFT SIDE: Role & Status --- */}
       <div className="flex items-center gap-4">
-        {/* <div className="relative group">
-          <div className={`flex items-center gap-2.5 px-4 py-2 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-500 ${
-            viewMode === 'agent' 
-            ? 'bg-amber-50 text-amber-600 border border-amber-100 shadow-inner' 
-            : 'bg-indigo-50 text-indigo-600 border border-indigo-100 shadow-inner'
-          }`}>
-            <span className="relative flex h-2 w-2">
-              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${viewMode === 'agent' ? 'bg-amber-400' : 'bg-indigo-400'}`}></span>
-              <span className={`relative inline-flex rounded-full h-2 w-2 ${viewMode === 'agent' ? 'bg-amber-500' : 'bg-indigo-500'}`}></span>
-            </span>
-            {viewMode === 'agent' ? <ShieldCheck size={14} className="animate-bounce" /> : <User size={14} />}
-            {viewMode} Mode Active
-          </div>
-        </div> */}
+        {/* Toggle Desktop Mode Button */}
+        <button 
+          onClick={toggleDesktopMode}
+          className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all duration-300 shadow-sm border ${
+            isDesktopMode 
+            ? 'bg-indigo-600 text-white border-indigo-700' 
+            : 'bg-white text-gray-600 border-gray-100 hover:bg-gray-50'
+          }`}
+          title={isDesktopMode ? "Switch to Mobile View" : "Switch to Desktop View"}
+        >
+          {isDesktopMode ? <Monitor size={16} /> : <Smartphone size={16} />}
+          <span className="hidden sm:inline">
+            {isDesktopMode ? "Desktop UI" : "Mobile UI"}
+          </span>
+        </button>
       </div>
 
       {/* --- RIGHT SIDE: Actions & Profile --- */}

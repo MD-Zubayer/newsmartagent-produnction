@@ -1,14 +1,16 @@
 import ViewportFix from "./ViewportFix";
+import { DisplayProvider } from "./DisplayContext";
 
 export const viewport = {
-  width: 1024,
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function DashboardRootLayout({ children }) {
   return (
-    <>
+    <DisplayProvider>
       <ViewportFix />
       {children}
-    </>
+    </DisplayProvider>
   );
 }

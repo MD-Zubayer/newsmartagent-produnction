@@ -26,7 +26,7 @@ import { useAuth } from "@/context/AuthContext";
 import api from "../../lib/api";
 import { PiggyBank } from "lucide-react";
 // viewMode প্রপসটি রিসিভ করছি layout.jsx থেকে
-export default function Sidebar({ viewMode }) {
+export default function Sidebar({ viewMode, isDesktopMode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, setUser } = useAuth();
@@ -78,7 +78,11 @@ export default function Sidebar({ viewMode }) {
   };
 
   return (
-    <div className="fixed top-0 left-0 h-full flex flex-col bg-white shadow-md w-40 p-3 z-50">
+    <div className={`fixed top-0 left-0 h-full flex flex-col bg-white shadow-md z-50 transition-all duration-300 ${
+      isDesktopMode 
+      ? "w-40 translate-x-0" 
+      : "w-40 -translate-x-full md:translate-x-0 p-3"
+    } p-3`}>
       {/* Logo Section */}
       <div className="flex items-center mb-6 px-1">
         <Image
