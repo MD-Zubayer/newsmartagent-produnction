@@ -343,6 +343,7 @@ class EmailVerificationToken(models.Model):
         return timezone.now() <= expiry_time
 
 
+
 class NSATransfer(models.Model):
     sender = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="sent_transfers")
     receiver = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='received_transfers')
@@ -357,4 +358,16 @@ class NSATransfer(models.Model):
         except:
             return f"Transfer {self.id}"        
 
+
+class FacebookPage(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='facebook_pages')
+    page_id = models.CharField(max_length=255, unique=True)
+    page_name = models.CharField(max_length=255)
+    access_token = models.CharField(max_length=500)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.page_name} ({self.page_id}) - {self.user.email}"
 

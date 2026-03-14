@@ -15,6 +15,7 @@ from aiAgent import views as ai_views
 from datasheet import views as datasheet_views
 from man_agent.views import ManAgentConfigViewSet
 from man_agent.views import AgentDashboardStatsView
+from users import oauth_views
 
 
 router = DefaultRouter()
@@ -43,6 +44,13 @@ urlpatterns = [
     path('api/forgot-password/', ForgotPasswordView.as_view(), name='forgot_password'),
     path("api/reset-password/", ResetPasswordView.as_view(), name="reset-password"),
     path('api/transfer/', NSABalanceTransferView.as_view(), name='tarnsfer'),
+    
+    # Facebook Integration Endpoints
+    path('api/facebook/login/', oauth_views.facebook_login, name='facebook_login'),
+    path('api/facebook/callback/', oauth_views.facebook_callback, name='facebook_callback'),
+    path('api/facebook/pages/', oauth_views.get_connected_pages, name='facebook_pages'),
+    path('api/facebook/data-deletion/', oauth_views.facebook_data_deletion, name='facebook_data_deletion'),
+
     
     # অ্যাপ ভিত্তিক ইউআরএল
     path('api/webhooks/', include('webhooks.urls')),

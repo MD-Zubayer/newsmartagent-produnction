@@ -86,6 +86,12 @@ def process_ai_reply_task(self, data):
             logger.error(f'Error: No active agent found for page_id {page_id}')
             return
         user_profile = agent_config.user.profile
+
+        # Get token from FacebookPage if it exists
+        from users.models import FacebookPage
+        fb_page = FacebookPage.objects.filter(page_id=page_id, is_active=True).first()
+        effective_access_token = fb_page.access_token if fb_page else agent_config.access_token
+        
     except Exception as e:
         logger.error(f'Error: Agent not found for page_id {page_id} - {e}')
         return
@@ -112,7 +118,8 @@ def process_ai_reply_task(self, data):
 
         post_context = ""
         if request_type == 'facebook_comment':
-            post_context = get_smart_post_context(data.get('post_id'), agent_config.access_token)
+            post_context = get_smart_post_context(data.get('post_id'), effective_access_token)
+
 
         # ৬. ক্যাশ চেক
         cached_res = None
@@ -187,8 +194,9 @@ def process_ai_reply_task(self, data):
             # Deliver immediately
             clean_reply = reply.replace("\n", " ").replace("\r", " ").strip()
             delivered = deliver_reply_to_n8n(
-                data, clean_reply, page_id, agent_config.access_token
+                data, clean_reply, page_id, effective_access_token
             )
+
         
             if delivered and msg_id:
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)
@@ -247,7 +255,8 @@ def process_ai_reply_task(self, data):
             duration = int((time.time() - start_time) * 1000)
             log_token_usage(agent_config, sender_id, ai_data, duration, request_type)
             clean_reply = reply.replace("\n", " ").replace("\r", " ").strip()
-            delivered = deliver_reply_to_n8n(data, clean_reply, page_id, agent_config.access_token)
+            delivered = deliver_reply_to_n8n(data, clean_reply, page_id, effective_access_token)
+
             if delivered and msg_id:
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)
                 # Cleanup processing lock

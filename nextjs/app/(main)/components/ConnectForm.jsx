@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import axiosInstance from "@/lib/api";
 import { 
   FaFacebook, FaWhatsapp, FaInstagram, FaTelegram, 
   FaArrowLeft, FaLink, FaCopy, FaYoutube, FaCode, FaRobot, FaShieldAlt, FaExternalLinkAlt
@@ -9,6 +10,20 @@ import {
 
 export default function IntegrationManager({ webhookUrl = "" }) {
   const [selectedPlatform, setSelectedPlatform] = useState(null);
+  const [connectedPages, setConnectedPages] = useState([]);
+  const [isLoadingPages, setIsLoadingPages] = useState(false);
+
+  useEffect(() => {
+    if (selectedPlatform?.id === 'facebook') {
+      setIsLoadingPages(true);
+      axiosInstance.get("/facebook/pages/")
+        .then(res => {
+          setConnectedPages(res.data.pages || []);
+        })
+        .catch(err => console.error("Error fetching Facebook pages", err))
+        .finally(() => setIsLoadingPages(false));
+    }
+  }, [selectedPlatform]);
 
   const platformConfigs = {
     facebook: { 
@@ -143,6 +158,47 @@ export default function IntegrationManager({ webhookUrl = "" }) {
                     <FaShieldAlt className="text-emerald-500 shrink-0" /> Copy this URL and paste it into your developer console.
                   </p>
                 </div>
+                
+                {selectedPlatform.id === "facebook" && (
+                  <div className="pt-4 border-t border-gray-50 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                        <FaFacebook className="text-blue-600" /> Connected Pages
+                      </h3>
+                      <button 
+                        onClick={() => {
+                          const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://newsmartagent.com/api";
+                          window.location.href = `${apiUrl}/facebook/login/`;
+                        }}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider hover:bg-blue-700 transition"
+                      >
+                        Connect Facebook
+                      </button>
+                    </div>
+                    
+                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                      {isLoadingPages ? (
+                        <p className="text-sm text-gray-500 text-center py-2">Loading pages...</p>
+                      ) : connectedPages.length > 0 ? (
+                        <ul className="space-y-3">
+                          {connectedPages.map(page => (
+                            <li key={page.id} className="flex items-center justify-between bg-white p-3 rounded-lg shadow-sm border border-gray-100">
+                              <div>
+                                <p className="font-bold text-sm text-gray-800">{page.name}</p>
+                                <p className="text-xs text-gray-400">ID: {page.id}</p>
+                              </div>
+                              <span className="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-1 rounded-full">
+                                Active
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-gray-500 text-center py-4">No connected pages found. Click the button above to authorize your Facebook Pages.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <div className="pt-4 border-t border-gray-50">
                   <Link href='/dashboard/aiAgent'>
