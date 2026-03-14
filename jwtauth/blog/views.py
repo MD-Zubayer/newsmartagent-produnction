@@ -1,4 +1,6 @@
 from rest_framework import viewsets, permissions
+from rest_framework.decorators import action
+from rest_framework.response import Response
 from .models import BlogPost, Category
 from .serializers import BlogPostListSerializer, BlogPostDetailSerializer, CategorySerializer
 
@@ -20,8 +22,9 @@ class BlogPostViewSet(viewsets.ReadOnlyModelViewSet):
             return BlogPostDetailSerializer
         return BlogPostListSerializer
 
-    def retrieve(self, request, *args, **kwargs):
+    @action(detail=True, methods=['post'])
+    def increment_view(self, request, slug=None):
         instance = self.get_object()
         instance.views_count += 1
         instance.save(update_fields=['views_count'])
-        return super().retrieve(request, *args, **kwargs)
+        return Response({'status': 'success', 'views_count': instance.views_count})

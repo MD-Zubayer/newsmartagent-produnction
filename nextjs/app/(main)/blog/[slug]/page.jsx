@@ -73,21 +73,21 @@ export default async function BlogPostPage({ params }) {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.03]"></div>
       </div>
 
-      <div className="max-w-[1000px] mx-auto px-6 py-20 relative z-10">
+      <div className="max-w-[1000px] mx-auto px-4 sm:px-6 py-12 md:py-20 relative z-10">
         
         {/* Breadcrumb Navigation */}
-        <Link href="/blog" className="inline-flex items-center gap-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] hover:text-purple-600 transition-all mb-16 group">
-          <div className="w-12 h-12 bg-white border border-slate-100 rounded-2xl flex items-center justify-center shadow-sm group-hover:-translate-x-2 transition-transform duration-500 bg-clip-padding backdrop-filter backdrop-blur-xl bg-opacity-60">
+        <Link href="/blog" className="inline-flex items-center gap-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] hover:text-purple-600 transition-all mb-12 md:mb-16 group">
+          <div className="w-10 h-10 md:w-12 md:h-12 bg-white border border-slate-100 rounded-2xl flex items-center justify-center shadow-sm group-hover:-translate-x-2 transition-transform duration-500 bg-clip-padding backdrop-filter backdrop-blur-xl bg-opacity-60">
             <HiOutlineArrowLeft className="text-xl" />
           </div>
           Return to Intelligence Hub
         </Link>
 
         {/* Article Header */}
-        <header className="space-y-10 mb-20 text-center md:text-left">
-          <div className="flex flex-wrap justify-center md:justify-start items-center gap-6 text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">
+        <header className="space-y-8 md:space-y-10 mb-16 md:mb-20 text-center md:text-left">
+          <div className="flex flex-wrap justify-center md:justify-start items-center gap-4 md:gap-6 text-[10px] font-bold text-slate-500 uppercase tracking-[0.2em]">
             {post.category && (
-              <div className="px-6 py-2 bg-slate-900 text-white rounded-full shadow-xl shadow-slate-900/10">
+              <div className="px-4 md:px-6 py-2 bg-slate-900 text-white rounded-full shadow-xl shadow-slate-900/10">
                 {post.category.name}
               </div>
             )}
@@ -102,12 +102,12 @@ export default async function BlogPostPage({ params }) {
             </div>
           </div>
 
-          <h1 className="text-5xl md:text-8xl font-black text-slate-950 tracking-tighter leading-[0.85] uppercase">
+          <h1 className="text-4xl md:text-8xl font-black text-slate-950 tracking-tighter leading-[0.95] md:leading-[0.85] uppercase">
             {post.title}
           </h1>
           
           <div className="flex items-center justify-center md:justify-start gap-4">
-             <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white font-black shadow-lg">
+             <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white font-black shadow-lg">
                 {post.author && post.author.username ? post.author.username[0].toUpperCase() : 'A'}
              </div>
              <div className="text-left">
@@ -119,14 +119,14 @@ export default async function BlogPostPage({ params }) {
 
         {/* Featured Image */}
         {post.thumbnail && (
-          <div className="relative h-[400px] md:h-[650px] rounded-[4rem] overflow-hidden shadow-[0_80px_160px_-40px_rgba(0,0,0,0.15)] mb-28 border-[12px] border-white bg-white">
+          <div className="relative h-[250px] sm:h-[400px] md:h-[650px] rounded-[2rem] md:rounded-[4rem] overflow-hidden shadow-[0_80px_160px_-40px_rgba(0,0,0,0.15)] mb-16 md:mb-28 border-[8px] md:border-[12px] border-white bg-white">
             <img src={post.thumbnail} alt={post.title} className="w-full h-full object-cover scale-105 hover:scale-100 transition-transform duration-1000" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
           </div>
         )}
 
         {/* Global Article Wrapper */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 relative">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 md:gap-16 relative">
           
           {/* Social Sticky Sidebar */}
           <aside className="lg:col-span-1 hidden lg:block">
@@ -158,17 +158,18 @@ export default async function BlogPostPage({ params }) {
             shareUrl={shareUrl} 
             shareTitle={shareTitle} 
             socialLinks={socialLinks} 
+            postSlug={post.slug}
           />
         </div>
 
         {/* Author Bio/Footer Action */}
-        <section className="mt-40 p-12 md:p-20 bg-slate-950 rounded-[4rem] text-white flex flex-col md:flex-row items-center justify-between gap-12 relative overflow-hidden group">
+        <section className="mt-24 md:mt-40 p-8 sm:p-12 md:p-20 bg-slate-950 rounded-[2rem] md:rounded-[4rem] text-white flex flex-col md:flex-row items-center justify-between gap-8 md:gap-12 relative overflow-hidden group">
           <div className="absolute inset-0 bg-gradient-to-tr from-purple-900/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-1000"></div>
-          <div className="text-center md:text-left space-y-6 relative z-10">
-            <h3 className="text-4xl md:text-6xl font-black tracking-tighter uppercase leading-none">Ready to automate your future?</h3>
-            <p className="text-slate-400 text-sm md:text-base font-medium max-w-[500px]">Join 500+ businesses using NewSmartAgent to orchestrate their growth with AI accuracy.</p>
+          <div className="text-center md:text-left space-y-4 md:space-y-6 relative z-10">
+            <h3 className="text-3xl sm:text-4xl md:text-6xl font-black tracking-tighter uppercase leading-none">Ready to automate your future?</h3>
+            <p className="text-slate-400 text-xs sm:text-sm md:text-base font-medium max-w-[500px] mx-auto md:mx-0">Join 500+ businesses using NewSmartAgent to orchestrate their growth with AI accuracy.</p>
           </div>
-          <Link href="/dashboard/connect" className="relative z-10 px-14 py-7 bg-white text-slate-950 rounded-2xl font-black text-xs uppercase tracking-[0.4em] hover:bg-purple-600 hover:text-white hover:scale-105 transition-all duration-500 shadow-2xl active:scale-95 shadow-white/10">
+          <Link href="/dashboard/connect" className="relative z-10 px-8 sm:px-10 md:px-14 py-4 md:py-7 bg-white text-slate-950 rounded-2xl font-black text-[10px] md:text-xs uppercase tracking-[0.4em] hover:bg-purple-600 hover:text-white hover:scale-105 transition-all duration-500 shadow-2xl active:scale-95 shadow-white/10 text-center w-full md:w-auto">
             Initialise Now
           </Link>
         </section>
