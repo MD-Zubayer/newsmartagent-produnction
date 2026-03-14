@@ -58,9 +58,9 @@ export default async function BlogPostPage({ params }) {
   const shareTitle = encodeURIComponent(post.title);
 
   const socialLinks = [
-    { name: 'Facebook', icon: <FaFacebookF />, url: `https://www.facebook.com/sharer/sharer.php?u=${shareUrl}`, color: 'bg-[#1877F2]' },
-    { name: 'WhatsApp', icon: <FaWhatsapp />, url: `https://api.whatsapp.com/send?text=${shareTitle}%20${shareUrl}`, color: 'bg-[#25D366]' },
-    { name: 'LinkedIn', icon: <FaLinkedinIn />, url: `https://www.linkedin.com/sharing/share-offsite/?url=${shareUrl}`, color: 'bg-[#0A66C2]' },
+    { name: 'Facebook', url: `https://www.facebook.com/sharer/sharer.php?u=${shareUrl}`, color: 'bg-[#1877F2]' },
+    { name: 'WhatsApp', url: `https://api.whatsapp.com/send?text=${shareTitle}%20${shareUrl}`, color: 'bg-[#25D366]' },
+    { name: 'LinkedIn', url: `https://www.linkedin.com/sharing/share-offsite/?url=${shareUrl}`, color: 'bg-[#0A66C2]' },
   ];
 
   return (

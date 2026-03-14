@@ -4,6 +4,15 @@ import React from 'react';
 import { HiOutlineShare } from 'react-icons/hi';
 import { FaFacebookF, FaWhatsapp, FaLinkedinIn, FaLink } from 'react-icons/fa';
 
+const getIcon = (name) => {
+  switch (name) {
+    case 'Facebook': return <FaFacebookF />;
+    case 'WhatsApp': return <FaWhatsapp />;
+    case 'LinkedIn': return <FaLinkedinIn />;
+    default: return null;
+  }
+};
+
 export default function BlogContent({ content, shareUrl, shareTitle, socialLinks }) {
   return (
     <div className="lg:col-span-11 bg-white p-10 md:p-24 rounded-[4rem] shadow-[0_100px_200px_-50px_rgba(0,0,0,0.06)] border border-slate-50 relative overflow-hidden">
@@ -30,7 +39,7 @@ export default function BlogContent({ content, shareUrl, shareTitle, socialLinks
                 rel="noopener noreferrer"
                 className={`flex items-center gap-3 px-6 py-3 ${social.color} text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:brightness-110 active:scale-95 transition-all shadow-md`}
               >
-                {social.icon} {social.name}
+                {getIcon(social.name)} {social.name}
               </a>
             ))}
             <button 
