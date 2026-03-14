@@ -50,7 +50,7 @@ export default function Topbar({ viewMode, onSwitch }) {
         >
           {isDesktopMode ? <Monitor size={16} /> : <Smartphone size={16} />}
           <span className="hidden sm:inline">
-            {isDesktopMode ? "Desktop UI" : "Mobile UI"}
+            {isDesktopMode ? "Desktop" : "Mobile"}
           </span>
         </button>
       </div>
@@ -72,7 +72,7 @@ export default function Topbar({ viewMode, onSwitch }) {
             <span className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></span>
             
             <RefreshCw size={15} className="group-hover:rotate-180 transition-transform duration-700 ease-in-out" />
-            <span className="relative line-clamp-1">Switch to {viewMode === 'agent' ? 'User' : 'Agent'}</span>
+            <span className="relative line-clamp-1"> {viewMode === 'agent' ? 'User' : 'Agent'}</span>
             {/* <Sparkles size={14} className="animate-pulse" /> */}
           </button>
         </div>
@@ -85,14 +85,7 @@ export default function Topbar({ viewMode, onSwitch }) {
             </button>
           </Link>
 
-          <Link href="/dashboard/notifications">
-            <button className={`p-2 rounded-xl transition-all duration-300 relative ${
-              pathname.includes("notifications") ? "bg-white text-indigo-600 shadow-sm" : "text-gray-400 hover:bg-white hover:text-indigo-600"
-            }`}>
-              <Bell size={18} />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full border-2 border-white"></span>
-            </button>
-          </Link>
+ 
         </div>
 
         {/* Profile Section */}
