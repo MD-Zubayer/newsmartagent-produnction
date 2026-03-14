@@ -164,21 +164,30 @@ export default function UserDashboard() {
                   <div className="w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center">
                     <Zap size={20} className="text-pink-500" />
                   </div>
-                  <div>
-                    <h4 className="text-sm font-black text-gray-800 uppercase tracking-tight">{sub.offer.name}</h4>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{sub.remaining_tokens.toLocaleString()} Tokens Left</p>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-black text-gray-800 uppercase tracking-tight truncate">{sub.offer.name}</h4>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {sub.offer.allowed_models?.map(model => (
+                        <span key={model.id} className="text-[7px] font-black bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded uppercase tracking-tighter">
+                          {model.model_name}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </div>
                 <div className="space-y-2">
+                  <div className="flex justify-between items-end mb-1">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{sub.remaining_tokens.toLocaleString()} Tokens Left</p>
+                    <span className="text-[9px] font-black text-pink-500 bg-pink-50 px-2 py-0.5 rounded-lg">{Math.round((sub.remaining_tokens / sub.offer.tokens) * 100)}%</span>
+                  </div>
                   <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
                     <div 
-                      className="h-full bg-pink-500 rounded-full" 
+                      className="h-full bg-pink-500 rounded-full transition-all duration-1000" 
                       style={{ width: `${Math.min(100, (sub.remaining_tokens / sub.offer.tokens) * 100)}%` }}
                     />
                   </div>
-                  <div className="flex justify-between text-[9px] font-black text-gray-400 uppercase tracking-widest">
-                    <span>Exp: {formatDateTime(sub.end_date).date}</span>
-                    <span>{Math.round((sub.remaining_tokens / sub.offer.tokens) * 100)}% Left</span>
+                  <div className="flex justify-between text-[9px] font-black text-gray-400 uppercase tracking-widest mt-2">
+                    <span className="flex items-center gap-1"><Calendar size={10}/> Exp: {formatDateTime(sub.end_date).date}</span>
                   </div>
                 </div>
               </div>

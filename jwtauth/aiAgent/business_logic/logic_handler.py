@@ -211,6 +211,20 @@ def deduct_user_tokens(user_profile, total_tokens, ai_model_name):
                         logger.error(f"Exhausted Notification Error: {e}")
                 else:
                     active_sub.remaining_tokens = new_balance
+                    
+                    # Send low tokens notification (10% threshold)
+                    try:
+                        threshold = active_sub.offer.tokens * 0.1
+                        if new_balance <= threshold and (new_balance + total_tokens) > threshold:
+                            from chat.models import Notification
+                            Notification.objects.create(
+                                user=user_profile.user,
+                                message=f"Low tokens alert! Offer '{active_sub.offer.name}' has less than 10% tokens remaining.",
+                                type='low_tokens'
+                            )
+                    except Exception as e:
+                        logger.error(f"Low Tokens Notification Error: {e}")
+
                 active_sub.save()
                 logger.info(f"Deducted {total_tokens} tokens from Sub {active_sub.id}. Remaining: {active_sub.remaining_tokens}")
                 # Sync global balance
