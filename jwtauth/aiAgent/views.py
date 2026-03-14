@@ -122,7 +122,7 @@ class TokenUsageAnalyticsView(APIView):
         # <!------------- 3. Summary Stats ----------------!>
 
         summary_stats = user_logs.aggregate(
-            total_tokens=Sum('total_tokens'),
+            all_tokens=Sum('total_tokens'),
             input_tokens=Sum('input_tokens'),
             output_tokens=Sum('output_tokens'),
             total_reqs=Count('id'),
@@ -131,7 +131,7 @@ class TokenUsageAnalyticsView(APIView):
             memory_tokens=Sum('total_tokens', filter=Q(request_type='memory_extraction'))
         )
 
-        total = summary_stats['total_tokens'] or 0
+        total = summary_stats['all_tokens'] or 0
         total_msgs = summary_stats['total_reqs'] or 0
         failed = summary_stats['failed_reqs'] or 0
         memory_used = summary_stats['memory_tokens'] or 0
@@ -144,6 +144,7 @@ class TokenUsageAnalyticsView(APIView):
             "total_messages": total_msgs,
             "success_rate": round(((total - failed) / total * 100), 1) if total > 0 else 0,
             "avg_response_ms": round(summary_stats["avg_resp"] or 0),
+
             "failed_count": failed,
             "memory_extraction_tokens": memory_used
         }
