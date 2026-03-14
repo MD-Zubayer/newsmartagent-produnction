@@ -91,11 +91,11 @@ export default function AuthPage() {
     const checkUserStatus = async () => {
       try {
         await api.post("/token/verify/"); 
-        router.push("/dashboard");
+        window.location.href = "/dashboard";
       } catch (err) {}
     };
     checkUserStatus();
-  }, [router]);
+  }, []);
 
   // ================= আপনার অরিজিনাল ফাংশনগুলো =================
   const handleChange = (e) => {
@@ -118,7 +118,7 @@ export default function AuthPage() {
       const res = await api.post("/login/", { email, password });
       if (res.status === 200) {
         showAlert("Login Successful! Redirecting...", "success")
-        router.push("/dashboard");
+        window.location.href = "/dashboard";
       } 
     } catch (err) {
       const errorData = err.response?.data;

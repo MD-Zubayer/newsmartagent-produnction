@@ -83,11 +83,6 @@ icons: {
   },
 };
 
-export const viewport = {
-  width: 1024,
-};
-
-
 export default function RootLayout({ children }) {
  const structuredData =[ {
   "@context": "https://schema.org",
