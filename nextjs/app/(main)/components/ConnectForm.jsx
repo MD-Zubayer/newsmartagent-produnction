@@ -254,7 +254,7 @@ export default function IntegrationManager() {
                   >
                     <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity"></div>
                     <FaFacebook className="text-xl md:text-2xl group-hover:rotate-12 transition-transform duration-500" />
-                    Expand Network
+                    Connect to Facebook
                   </button>
                 </div>
                 
