@@ -28,11 +28,16 @@ export default function TermsOfService() {
       id: "description",
       title: "4. Service Description",
       icon: <FaRobot />,
-      fullText: `NewSmartAgent is a SaaS platform that allows users to:
-• Automate responses to messages and comments on connected Facebook Pages.
-• Create and manage AI-driven workflows via our dashboard.
-• Utilize our Django-based backend and n8n orchestration to streamline business communication.
-We provide the platform "as-is" and may update or modify features at our discretion.`
+      fullText: `4. Service Description
+NewSmartAgent is an AI-driven SaaS platform designed to enhance business efficiency. Our services include:
+
+Automated Engagement: Automating responses to messages and comments on connected Facebook Pages via official APIs.
+
+Workflow Orchestration: Creating and managing intelligent AI workflows through a centralized dashboard.
+
+Business Communication: Providing a secure infrastructure to streamline customer interactions and automate repetitive tasks.
+
+We provide the platform on an "as-is" and "as-available" basis. We reserve the right to update, modify, or discontinue features at our discretion to improve service quality.`
     },
     {
       id: "acceptable-use",
@@ -90,7 +95,7 @@ Effect: Upon termination, your stored Facebook tokens will be revoked, and acces
        title: "12. Contact Support",
        icon: <HiOutlineMail />,
        fullText: `For any questions regarding these Terms, please contact us at:
-Email: support@newsmartagent.com
+Email: newsmartagentbd@gmail.com
 Official Website: https://newsmartagent.com`
     }
   ];

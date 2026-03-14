@@ -24,8 +24,7 @@ export default function Navbar() {
     { name: 'Services', path: '/services' },
     { name: 'Contact', path: '/contact' },
     { name: 'About', path: '/about' },
-    { name: 'privacy-policy', path: '/privacy-policy' },
-    { name: 'terms-of-service', path: '/terms-of-service' },
+
 
 
 
