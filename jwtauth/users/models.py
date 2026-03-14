@@ -124,21 +124,26 @@ class Profile(models.Model):
         """
         সকল একটিভ সাবস্ক্রিপশনের অবশিষ্ট টোকেন যোগ করে প্রোফাইলের word_balance আপডেট করে।
         """
-        from .models import Subscription
+        from django.apps import apps
         from django.db.models import Sum
         from django.utils import timezone
         
-        # ১. সকল একটিভ এবং ভ্যালিড সাবস্ক্রিপশন খুঁজে বের করা এবং সেগুলোর remaining_tokens যোগ করা
-        total_remaining = Subscription.objects.filter(
+        Subscription = apps.get_model('users', 'Subscription')
+        
+        # একটিভ এবং মেয়াদের মধ্যে থাকা সকল সাবস্ক্রিপশনের টোকেন যোগ করা
+        active_subs = Subscription.objects.filter(
             profile=self, 
             is_active=True,
             end_date__gt=timezone.now()
-        ).aggregate(total=Sum('remaining_tokens'))['total'] or 0
+        )
+        
+        total_remaining = active_subs.aggregate(total=Sum('remaining_tokens'))['total'] or 0
 
-        # ২. প্রোফাইলের word_balance এ টোটাল অ্যামাউন্ট সেট করা
+        # প্রোফাইলের word_balance আপডেট
         self.word_balance = total_remaining
-        self.save()
-        print(f"✅ word_balance synced: {self.word_balance} for {self.user.email}")
+        self.save(update_fields=['word_balance'])
+        
+        print(f"✅ SYNC: {self.user.email} | Total Active Tokens Summed: {total_remaining} from {active_subs.count()} subs")
             
     def __str__(self):
         return f"{self.user.email} | {self.id_type} | {self.unique_id}"
