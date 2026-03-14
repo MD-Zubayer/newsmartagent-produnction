@@ -399,8 +399,13 @@ class CashoutRequest(models.Model):
         ('approved', 'Approved'),
         ('rejected', 'Rejected'),
     )
+    BALANCE_CHOICES = (
+        ('account', 'Account Balance'),
+        ('commission', 'Commission Balance'),
+    )
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='cashout_requests')
     withdraw_method = models.ForeignKey(WithdrawMethod, on_delete=models.SET_NULL, null=True)
+    balance_type = models.CharField(max_length=20, choices=BALANCE_CHOICES, default='commission')
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     transaction_id = models.CharField(max_length=100, blank=True, null=True)
@@ -409,5 +414,5 @@ class CashoutRequest(models.Model):
     processed_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
-        return f"{self.profile.unique_id} - {self.amount} BDT - {self.status}"
+        return f"{self.profile.unique_id} - {self.balance_type.upper()} - {self.amount} BDT - {self.status}"
 

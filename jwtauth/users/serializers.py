@@ -134,7 +134,6 @@ class UserSerializer(serializers.ModelSerializer[User]):
 
 
 
-
 class UserRegisterSerializer(serializers.ModelSerializer[User]):
     password = serializers.CharField(write_only=True)
 
@@ -266,26 +265,39 @@ class CashoutRequestSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = CashoutRequest
-        fields = ['id', 'withdraw_method', 'withdraw_method_details', 'amount', 'status', 'transaction_id', 'admin_note', 'requested_at', 'processed_at']
+        fields = ['id', 'withdraw_method', 'withdraw_method_details', 'balance_type', 'amount', 'status', 'transaction_id', 'admin_note', 'requested_at', 'processed_at']
         read_only_fields = ['id', 'status', 'transaction_id', 'admin_note', 'requested_at', 'processed_at']
 
-    def validate_amount(self, value):
-        if value < 500: # Example minimum withdrawal amount
-            raise serializers.ValidationError("Minimum withdrawal amount is 500 BDT.")
+    def validate(self, data):
+        amount = data.get('amount')
+        balance_type = data.get('balance_type', 'commission')
+        
+        if amount and amount < 500: # Example minimum withdrawal amount
+            raise serializers.ValidationError({"amount": "Minimum withdrawal amount is 500 BDT."})
         
         profile = self.context['request'].user.profile
-        if value > profile.commission_balance:
-            raise serializers.ValidationError("Insufficient commission balance.")
-        return value
+        
+        if balance_type == 'commission' and amount > profile.commission_balance:
+            raise serializers.ValidationError({"amount": "Insufficient commission balance."})
+        elif balance_type == 'account' and amount > profile.acount_balance:
+            raise serializers.ValidationError({"amount": "Insufficient account balance."})
+            
+        return data
 
     def create(self, validated_data):
         profile = self.context['request'].user.profile
         validated_data['profile'] = profile
+        balance_type = validated_data.get('balance_type', 'commission')
         
         # Deduct from profile balance immediately for pending request
         with transaction.atomic():
-            profile.commission_balance -= validated_data['amount']
-            profile.save(update_fields=['commission_balance'])
+            if balance_type == 'commission':
+                profile.commission_balance -= validated_data['amount']
+                profile.save(update_fields=['commission_balance'])
+            elif balance_type == 'account':
+                profile.acount_balance -= validated_data['amount']
+                profile.save(update_fields=['acount_balance'])
+                
             cashout_request = super().create(validated_data)
             
         return cashout_request

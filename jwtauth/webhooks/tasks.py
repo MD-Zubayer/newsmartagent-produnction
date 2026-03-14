@@ -51,7 +51,7 @@ r = get_redis_client(db=0)
              expires=180,
              autoretry_for=(requests.exceptions.RequestException,),
              retry_backoff=True,
-             max_retries=3,
+             max_retries=5,
              retry_jitter=True,
              time_limit=70,
              soft_time_limit=60

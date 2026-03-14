@@ -905,18 +905,33 @@ class FinancialSummaryView(APIView):
         
         from django.db.models import Sum
         
-        pending_requests = CashoutRequest.objects.filter(profile=profile, status='pending')
-        pending_amount = pending_requests.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        # Commission Balance Stats
+        comm_pending = CashoutRequest.objects.filter(profile=profile, balance_type='commission', status='pending')
+        comm_pending_amount = comm_pending.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
         
-        successful_requests = CashoutRequest.objects.filter(profile=profile, status='approved')
-        successful_amount = successful_requests.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        comm_success = CashoutRequest.objects.filter(profile=profile, balance_type='commission', status='approved')
+        comm_success_amount = comm_success.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
         
-        failed_requests = CashoutRequest.objects.filter(profile=profile, status='rejected')
-        failed_amount = failed_requests.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        comm_failed = CashoutRequest.objects.filter(profile=profile, balance_type='commission', status='rejected')
+        comm_failed_amount = comm_failed.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+
+        # Account Balance Stats
+        acc_pending = CashoutRequest.objects.filter(profile=profile, balance_type='account', status='pending')
+        acc_pending_amount = acc_pending.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        
+        acc_success = CashoutRequest.objects.filter(profile=profile, balance_type='account', status='approved')
+        acc_success_amount = acc_success.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        
+        acc_failed = CashoutRequest.objects.filter(profile=profile, balance_type='account', status='rejected')
+        acc_failed_amount = acc_failed.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
         
         return Response({
-            'total_available_balance': profile.commission_balance,
-            'total_successful_cashout': successful_amount,
-            'total_pending_cashout': pending_amount,
-            'total_failed_cashout': failed_amount,
+            'commission_balance': profile.commission_balance,
+            'commission_success': comm_success_amount,
+            'commission_pending': comm_pending_amount,
+            'commission_failed': comm_failed_amount,
+            'account_balance': profile.acount_balance,
+            'account_success': acc_success_amount,
+            'account_pending': acc_pending_amount,
+            'account_failed': acc_failed_amount,
         })

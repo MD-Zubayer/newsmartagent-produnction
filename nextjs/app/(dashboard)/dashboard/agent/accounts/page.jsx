@@ -5,7 +5,7 @@ import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { 
     Wallet, DollarSign, TrendingUp, TrendingDown,
-    Plus, Trash2, CheckCircle2, Clock, XCircle, CreditCard, MoveRight, Banknote
+    Plus, Trash2, CheckCircle2, Clock, XCircle, CreditCard, MoveRight, Banknote, Layers
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -15,10 +15,14 @@ export default function AgentFinancialDashboard() {
 
     // Data States
     const [summary, setSummary] = useState({
-        total_available_balance: "0.00",
-        total_successful_cashout: "0.00",
-        total_pending_cashout: "0.00",
-        total_failed_cashout: "0.00"
+        commission_balance: "0.00",
+        commission_success: "0.00",
+        commission_pending: "0.00",
+        commission_failed: "0.00",
+        account_balance: "0.00",
+        account_success: "0.00",
+        account_pending: "0.00",
+        account_failed: "0.00"
     });
     const [methods, setMethods] = useState([]);
     const [history, setHistory] = useState([]);
@@ -26,13 +30,14 @@ export default function AgentFinancialDashboard() {
     // UI States
     const [showAddMethod, setShowAddMethod] = useState(false);
     const [showCashout, setShowCashout] = useState(false);
+    const [activeTab, setActiveTab] = useState('commission'); // 'commission' or 'account'
     
     // Form States
     const [newMethod, setNewMethod] = useState({
         method: 'bkash', account_number: '', account_name: '', bank_name: '', branch_name: '', routing_number: ''
     });
     const [cashoutForm, setCashoutForm] = useState({
-        withdraw_method: '', amount: ''
+        withdraw_method: '', amount: '', balance_type: 'commission'
     });
 
     const [processing, setProcessing] = useState(false);
@@ -94,7 +99,7 @@ export default function AgentFinancialDashboard() {
             await api.post('cashout-requests/', cashoutForm);
             toast.success("Cashout request submitted!");
             setShowCashout(false);
-            setCashoutForm({ withdraw_method: '', amount: '' });
+            setCashoutForm({ withdraw_method: '', amount: '', balance_type: 'commission' });
             fetchDashboardData();
         } catch (error) {
             const errorMsg = error.response?.data?.non_field_errors?.[0] || error.response?.data?.amount?.[0] || "Failed to submit request";
@@ -113,6 +118,8 @@ export default function AgentFinancialDashboard() {
         </div>
     );
 
+    const currentBalanceMax = activeTab === 'commission' ? summary.commission_balance : summary.account_balance;
+
     return (
         <div className="p-4 md:p-8 lg:p-12 bg-[#f8fafc] min-h-screen font-sans text-slate-900">
             <div className="max-w-7xl mx-auto space-y-10">
@@ -124,7 +131,10 @@ export default function AgentFinancialDashboard() {
                         <p className="text-slate-500 text-sm mt-1 font-medium">Manage your earnings, cashouts, and payment methods</p>
                     </div>
                     <button 
-                        onClick={() => setShowCashout(true)}
+                        onClick={() => {
+                            setCashoutForm(prev => ({ ...prev, balance_type: activeTab }));
+                            setShowCashout(true);
+                        }}
                         className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl hover:bg-indigo-700 hover:shadow-lg hover:-translate-y-0.5 transition-all font-bold text-sm shadow-md"
                     >
                         <Banknote size={18} />
@@ -132,31 +142,59 @@ export default function AgentFinancialDashboard() {
                     </button>
                 </div>
 
+                {/* Balance Tabs Toggle */}
+                <div className="bg-white p-1.5 inline-flex rounded-2xl shadow-sm border border-slate-100">
+                    <button
+                        onClick={() => setActiveTab('commission')}
+                        className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all ${
+                            activeTab === 'commission' 
+                                ? 'bg-indigo-600 text-white shadow-md' 
+                                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                        }`}
+                    >
+                        <Layers size={16} /> Commission Balance
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('account')}
+                        className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all ${
+                            activeTab === 'account' 
+                                ? 'bg-indigo-600 text-white shadow-md' 
+                                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
+                        }`}
+                    >
+                        <Wallet size={16} /> Account Balance
+                    </button>
+                </div>
+
                 {/* Balance Cards Group */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <BalanceCard 
                         title="Available Balance" 
-                        amount={summary.total_available_balance} 
+                        amount={activeTab === 'commission' ? summary.commission_balance : summary.account_balance} 
                         icon={<Wallet size={24} />} 
                         color="indigo" 
+                        key={`avail-${activeTab}`}
                     />
                     <BalanceCard 
                         title="Success Cashout" 
-                        amount={summary.total_successful_cashout} 
+                        amount={activeTab === 'commission' ? summary.commission_success : summary.account_success} 
                         icon={<TrendingUp size={24} />} 
                         color="emerald" 
+                        key={`succ-${activeTab}`}
                     />
                     <BalanceCard 
                         title="Pending Cashout" 
-                        amount={summary.total_pending_cashout} 
+                        amount={activeTab === 'commission' ? summary.commission_pending : summary.account_pending} 
                         icon={<Clock size={24} />} 
                         color="amber" 
+                        key={`pend-${activeTab}`}
                     />
                     <BalanceCard 
                         title="Failed Cashout" 
-                        amount={summary.total_failed_cashout} 
+                        amount={activeTab === 'commission' ? summary.commission_failed : summary.account_failed} 
                         icon={<TrendingDown size={24} />} 
                         color="rose" 
+                        key={`fail-${activeTab}`}
                     />
                 </div>
 
@@ -304,7 +342,7 @@ export default function AgentFinancialDashboard() {
                                     <thead>
                                         <tr className="text-[10px] uppercase font-black text-slate-400 tracking-widest border-b border-slate-50 bg-slate-50/50">
                                             <th className="px-6 py-4">Date</th>
-                                            <th className="px-6 py-4">Method Details</th>
+                                            <th className="px-6 py-4">Method & Type</th>
                                             <th className="px-6 py-4 text-right">Amount (BDT)</th>
                                             <th className="px-6 py-4 text-center">Status</th>
                                         </tr>
@@ -332,6 +370,9 @@ export default function AgentFinancialDashboard() {
                                                         ) : (
                                                             <p className="text-xs text-slate-400 italic">Method Removed</p>
                                                         )}
+                                                        <span className="inline-block mt-1 px-2 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] uppercase font-bold tracking-wider">
+                                                            {item.balance_type} Balance
+                                                        </span>
                                                     </td>
                                                     <td className="px-6 py-4 text-right">
                                                         <p className="text-sm font-mono font-black text-slate-900">{parseFloat(item.amount).toFixed(2)}</p>
@@ -362,6 +403,37 @@ export default function AgentFinancialDashboard() {
                             </div>
                             
                             <form onSubmit={handleCashoutRequest} className="space-y-6">
+                                
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Balance Source</label>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <button 
+                                            type="button"
+                                            onClick={() => setCashoutForm({...cashoutForm, balance_type: 'commission'})}
+                                            className={`p-3 rounded-2xl border text-sm font-bold flex flex-col items-center gap-1 transition-all ${
+                                                cashoutForm.balance_type === 'commission'
+                                                    ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                                                    : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                                            }`}
+                                        >
+                                            <Layers size={18} />
+                                            Commission
+                                        </button>
+                                        <button 
+                                            type="button"
+                                            onClick={() => setCashoutForm({...cashoutForm, balance_type: 'account'})}
+                                            className={`p-3 rounded-2xl border text-sm font-bold flex flex-col items-center gap-1 transition-all ${
+                                                cashoutForm.balance_type === 'account'
+                                                    ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                                                    : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                                            }`}
+                                        >
+                                            <Wallet size={18} />
+                                            Account
+                                        </button>
+                                    </div>
+                                </div>
+
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select Method</label>
                                     <select 
@@ -385,7 +457,9 @@ export default function AgentFinancialDashboard() {
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex justify-between">
                                         <span>Amount (BDT)</span>
-                                        <span className="text-indigo-600">Max: ৳{parseFloat(summary.total_available_balance).toFixed(2)}</span>
+                                        <span className="text-indigo-600">
+                                            Max: ৳{parseFloat(cashoutForm.balance_type === 'commission' ? summary.commission_balance : summary.account_balance).toFixed(2)}
+                                        </span>
                                     </label>
                                     <div className="relative">
                                         <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
@@ -396,7 +470,7 @@ export default function AgentFinancialDashboard() {
                                             type="number"
                                             min="500"
                                             step="0.01"
-                                            max={summary.total_available_balance}
+                                            max={cashoutForm.balance_type === 'commission' ? summary.commission_balance : summary.account_balance}
                                             value={cashoutForm.amount}
                                             onChange={e => setCashoutForm({...cashoutForm, amount: e.target.value})}
                                             className="w-full pl-10 pr-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-xl font-black text-slate-900 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all font-mono"
