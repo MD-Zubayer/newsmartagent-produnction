@@ -1,4 +1,5 @@
-from django.urls import path, include
+from django.contrib import admin
+from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -70,5 +71,5 @@ else:
     # Production এ যদি Nginx হ্যান্ডেল না করে, তবে Django দিয়ে ফোর্সলি সার্ভ করা (অস্থায়ী সলিউশন হিসেবে)
     from django.views.static import serve
     urlpatterns += [
-        path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
+        re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
     ]
