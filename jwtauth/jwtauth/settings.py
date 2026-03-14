@@ -76,6 +76,7 @@ INSTALLED_APPS = [
     'settings',
     'man_agent',
     "aiAgent.apps.AiagentConfig",
+    'ckeditor',
     
 
     

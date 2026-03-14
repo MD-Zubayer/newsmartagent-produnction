@@ -85,3 +85,4 @@ phonenumbers
 pytz
 rapidfuzz
 django-unfold
+django-ckeditor
