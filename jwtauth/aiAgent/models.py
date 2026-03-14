@@ -60,6 +60,14 @@ class AgentAI(models.Model):
         help_text="কমা দিয়ে কি-ওয়ার্ডগুলো লিখুন"
     )
     ai_model = models.CharField(max_length=50,default="gpt-4o-mini")
+    memory_extraction_model = models.ForeignKey(
+        AIProviderModel,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='agents_memory_extraction',
+        help_text="এজেন্ট মেমোরি এক্সট্রাকশনের জন্য কোন মডেল ব্যবহার হবে? (শুধুমাত্র অ্যাডমিন)"
+    )
     temperature = models.FloatField(default=0.7)
     max_tokens = models.IntegerField(default=200)
 
