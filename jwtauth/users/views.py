@@ -19,7 +19,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.views import TokenRefreshView
 from users.serializers import CookieTokenRefreshSerializer
 from rest_framework_simplejwt.serializers import TokenVerifySerializer
-from django.utils.timezone import now
+from django.utils import timezone
 from datasheet.models import Spreadsheet
 from users.models import CustomerOrder, OrderForm, EmailVerificationToken, NSATransfer
 from users.serializers import CustomerOrderSerializer
