@@ -378,19 +378,36 @@ class WithdrawMethod(models.Model):
         ('nagad', 'Nagad'),
         ('rocket', 'Rocket'),
         ('bank', 'Bank Transfer'),
+        ('card', 'Bank Card (Debit/Credit)'),
+    )
+    CARD_TYPE_CHOICES = (
+        ('visa', 'Visa'),
+        ('mastercard', 'Mastercard'),
+        ('amex', 'American Express'),
+        ('other', 'Other'),
+    )
+    ACCOUNT_TYPE_CHOICES = (
+        ('personal', 'Personal'),
+        ('agent', 'Agent'),
+        ('merchant', 'Merchant'),
     )
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='withdraw_methods')
     method = models.CharField(max_length=20, choices=METHOD_CHOICES)
-    account_number = models.CharField(max_length=50)
+    account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES, blank=True, null=True) # Applicable to bKash, Nagad, Rocket
+    account_number = models.CharField(max_length=50)  # For card: last 4 digits
     account_name = models.CharField(max_length=100, blank=True, null=True)
     bank_name = models.CharField(max_length=100, blank=True, null=True)
     branch_name = models.CharField(max_length=100, blank=True, null=True)
     routing_number = models.CharField(max_length=50, blank=True, null=True)
+    # Card-specific fields
+    card_holder_name = models.CharField(max_length=100, blank=True, null=True)
+    card_type = models.CharField(max_length=20, choices=CARD_TYPE_CHOICES, blank=True, null=True)
     is_default = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.method.upper()} - {self.account_number} ({self.profile.unique_id})"
+        type_str = f"({self.account_type.title()})" if self.account_type else ""
+        return f"{self.method.upper()} {type_str} - {self.account_number} ({self.profile.unique_id})"
 
 
 class CashoutRequest(models.Model):

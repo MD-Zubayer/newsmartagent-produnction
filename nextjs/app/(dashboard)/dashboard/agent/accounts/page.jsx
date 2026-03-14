@@ -5,7 +5,7 @@ import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { 
     Wallet, DollarSign, TrendingUp, TrendingDown,
-    Plus, Trash2, CheckCircle2, Clock, XCircle, CreditCard, MoveRight, Banknote, Layers
+    Plus, Trash2, CheckCircle2, Clock, XCircle, CreditCard, MoveRight, Banknote, Layers, Building
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -34,7 +34,7 @@ export default function AgentFinancialDashboard() {
     
     // Form States
     const [newMethod, setNewMethod] = useState({
-        method: 'bkash', account_number: '', account_name: '', bank_name: '', branch_name: '', routing_number: ''
+        method: 'bkash', account_type: 'personal', account_number: '', account_name: '', bank_name: '', branch_name: '', routing_number: '', card_holder_name: '', card_type: 'visa'
     });
     const [cashoutForm, setCashoutForm] = useState({
         withdraw_method: '', amount: '', balance_type: 'commission'
@@ -69,13 +69,37 @@ export default function AgentFinancialDashboard() {
         e.preventDefault();
         setProcessing(true);
         try {
-            await api.post('withdraw-methods/', newMethod);
+            // Clean up payload based on method type
+            const payload = { ...newMethod };
+            if (payload.method === 'bank') {
+                payload.account_type = null;
+                payload.card_holder_name = null;
+                payload.card_type = null;
+            } else if (payload.method === 'card') {
+                payload.account_type = null;
+                payload.bank_name = '';
+                payload.branch_name = '';
+                payload.routing_number = '';
+                payload.account_name = '';
+            } else {
+                // bkash, nagad, rocket
+                payload.bank_name = '';
+                payload.branch_name = '';
+                payload.routing_number = '';
+                payload.account_name = '';
+                payload.card_holder_name = null;
+                payload.card_type = null;
+            }
+
+            await api.post('withdraw-methods/', payload);
             toast.success("Withdraw method added successfully!");
             setShowAddMethod(false);
-            setNewMethod({ method: 'bkash', account_number: '', account_name: '', bank_name: '', branch_name: '', routing_number: '' });
+            setNewMethod({ method: 'bkash', account_type: 'personal', account_number: '', account_name: '', bank_name: '', branch_name: '', routing_number: '', card_holder_name: '', card_type: 'visa' });
             fetchDashboardData();
         } catch (error) {
-            toast.error(error.response?.data?.error || "Failed to add method");
+            const errData = error.response?.data;
+            const errMsg = errData?.account_type?.[0] || errData?.card_holder_name?.[0] || errData?.card_type?.[0] || errData?.error || "Failed to add method";
+            toast.error(errMsg);
         } finally {
             setProcessing(false);
         }
@@ -99,7 +123,7 @@ export default function AgentFinancialDashboard() {
             await api.post('cashout-requests/', cashoutForm);
             toast.success("Cashout request submitted!");
             setShowCashout(false);
-            setCashoutForm({ withdraw_method: '', amount: '', balance_type: 'commission' });
+            setCashoutForm({ withdraw_method: '', amount: '', balance_type: activeTab }); // Reset with current tab
             fetchDashboardData();
         } catch (error) {
             const errorMsg = error.response?.data?.non_field_errors?.[0] || error.response?.data?.amount?.[0] || "Failed to submit request";
@@ -118,24 +142,26 @@ export default function AgentFinancialDashboard() {
         </div>
     );
 
-    const currentBalanceMax = activeTab === 'commission' ? summary.commission_balance : summary.account_balance;
+    const isMobileBanking = ['bkash', 'nagad', 'rocket'].includes(newMethod.method);
+    const isCard = newMethod.method === 'card';
+    const isBank = newMethod.method === 'bank';
 
     return (
-        <div className="p-4 md:p-8 lg:p-12 bg-[#f8fafc] min-h-screen font-sans text-slate-900">
-            <div className="max-w-7xl mx-auto space-y-10">
+        <div className="p-4 md:p-6 lg:p-10 bg-[#f8fafc] min-h-screen font-sans text-slate-900 overflow-x-hidden">
+            <div className="max-w-7xl mx-auto space-y-6 md:space-y-10">
                 
                 {/* Header */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 md:pb-6 border-b border-slate-200">
                     <div>
                         <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight uppercase">Financial Hub</h1>
-                        <p className="text-slate-500 text-sm mt-1 font-medium">Manage your earnings, cashouts, and payment methods</p>
+                        <p className="text-slate-500 text-xs md:text-sm mt-1 font-medium">Manage your earnings, cashouts, and payment methods</p>
                     </div>
                     <button 
                         onClick={() => {
                             setCashoutForm(prev => ({ ...prev, balance_type: activeTab }));
                             setShowCashout(true);
                         }}
-                        className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-3 rounded-2xl hover:bg-indigo-700 hover:shadow-lg hover:-translate-y-0.5 transition-all font-bold text-sm shadow-md"
+                        className="flex items-center justify-center gap-2 bg-indigo-600 text-white px-5 py-3 md:px-6 rounded-2xl hover:bg-indigo-700 hover:shadow-lg hover:-translate-y-0.5 transition-all font-bold text-sm shadow-md w-full sm:w-auto"
                     >
                         <Banknote size={18} />
                         Request Cashout
@@ -143,10 +169,10 @@ export default function AgentFinancialDashboard() {
                 </div>
 
                 {/* Balance Tabs Toggle */}
-                <div className="bg-white p-1.5 inline-flex rounded-2xl shadow-sm border border-slate-100">
+                <div className="bg-white p-1.5 flex sm:inline-flex rounded-2xl shadow-sm border border-slate-100 overflow-x-auto w-full sm:w-auto">
                     <button
                         onClick={() => setActiveTab('commission')}
-                        className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all ${
+                        className={`flex-1 sm:flex-none px-4 md:px-6 py-2.5 outline-none rounded-xl text-xs md:text-sm font-bold flex justify-center items-center gap-2 transition-all whitespace-nowrap ${
                             activeTab === 'commission' 
                                 ? 'bg-indigo-600 text-white shadow-md' 
                                 : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
@@ -156,7 +182,7 @@ export default function AgentFinancialDashboard() {
                     </button>
                     <button
                         onClick={() => setActiveTab('account')}
-                        className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all ${
+                        className={`flex-1 sm:flex-none px-4 md:px-6 py-2.5 outline-none rounded-xl text-xs md:text-sm font-bold flex justify-center items-center gap-2 transition-all whitespace-nowrap ${
                             activeTab === 'account' 
                                 ? 'bg-indigo-600 text-white shadow-md' 
                                 : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
@@ -167,7 +193,7 @@ export default function AgentFinancialDashboard() {
                 </div>
 
                 {/* Balance Cards Group */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <BalanceCard 
                         title="Available Balance" 
                         amount={activeTab === 'commission' ? summary.commission_balance : summary.account_balance} 
@@ -199,21 +225,21 @@ export default function AgentFinancialDashboard() {
                 </div>
 
                 {/* Main Content Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 md:gap-8">
                     
                     {/* Left Column: Management */}
-                    <div className="lg:col-span-1 space-y-8">
+                    <div className="xl:col-span-1 space-y-6 md:space-y-8">
                         
                         {/* Withdraw Methods */}
-                        <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 relative overflow-hidden">
+                        <div className="bg-white rounded-3xl p-5 md:p-6 shadow-sm border border-slate-100 relative overflow-hidden">
                             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 to-purple-500"></div>
                             <div className="flex items-center justify-between mb-6">
-                                <h2 className="text-sm font-bold text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                                <h2 className="text-xs md:text-sm font-bold text-slate-800 uppercase tracking-widest flex items-center gap-2">
                                     <CreditCard size={18} className="text-indigo-500"/> Saved Methods
                                 </h2>
                                 <button 
                                     onClick={() => setShowAddMethod(!showAddMethod)}
-                                    className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors"
+                                    className="p-2 bg-indigo-50 text-indigo-600 rounded-xl outline-none hover:bg-indigo-100 transition-colors"
                                     title="Add New Method"
                                 >
                                     <Plus size={18} />
@@ -234,18 +260,52 @@ export default function AgentFinancialDashboard() {
                                             <option value="nagad">Nagad</option>
                                             <option value="rocket">Rocket</option>
                                             <option value="bank">Bank Transfer</option>
+                                            <option value="card">Bank Card (Debit/Credit)</option>
                                         </select>
                                     </div>
 
+                                    {isMobileBanking && (
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase">Account Type</label>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setNewMethod({...newMethod, account_type: 'personal'})}
+                                                    className={`p-2.5 text-xs font-bold rounded-xl border transition-all ${
+                                                        newMethod.account_type === 'personal'
+                                                        ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                                                        : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                                                    }`}
+                                                >
+                                                    Personal
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setNewMethod({...newMethod, account_type: 'agent'})}
+                                                    className={`p-2.5 text-xs font-bold rounded-xl border transition-all ${
+                                                        newMethod.account_type === 'agent'
+                                                        ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                                                        : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                                                    }`}
+                                                >
+                                                    Agent
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div className="space-y-1">
-                                        <label className="text-[10px] font-bold text-slate-500 uppercase">Account Number</label>
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase">
+                                            {isCard ? 'Last 4 Digits' : 'Account Number'}
+                                        </label>
                                         <input 
                                             required
                                             type="text"
                                             value={newMethod.account_number}
                                             onChange={e => setNewMethod({...newMethod, account_number: e.target.value})}
-                                            placeholder="e.g. 017xxxxxxxx"
-                                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all"
+                                            placeholder={isCard ? 'e.g. 1234 (last 4 digits)' : 'e.g. 017xxxxxxxx'}
+                                            maxLength={isCard ? 4 : undefined}
+                                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all font-mono"
                                         />
                                     </div>
 
@@ -258,7 +318,7 @@ export default function AgentFinancialDashboard() {
                                                     type="text"
                                                     value={newMethod.account_name}
                                                     onChange={e => setNewMethod({...newMethod, account_name: e.target.value})}
-                                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none"
+                                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                                                 />
                                             </div>
                                             <div className="space-y-1">
@@ -268,7 +328,7 @@ export default function AgentFinancialDashboard() {
                                                     type="text"
                                                     value={newMethod.bank_name}
                                                     onChange={e => setNewMethod({...newMethod, bank_name: e.target.value})}
-                                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none"
+                                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                                                 />
                                             </div>
                                             <div className="space-y-1">
@@ -277,7 +337,7 @@ export default function AgentFinancialDashboard() {
                                                     type="text"
                                                     value={newMethod.branch_name}
                                                     onChange={e => setNewMethod({...newMethod, branch_name: e.target.value})}
-                                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none"
+                                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-indigo-500"
                                                 />
                                             </div>
                                             <div className="space-y-1">
@@ -286,15 +346,60 @@ export default function AgentFinancialDashboard() {
                                                     type="text"
                                                     value={newMethod.routing_number}
                                                     onChange={e => setNewMethod({...newMethod, routing_number: e.target.value})}
-                                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none"
+                                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-indigo-500"
                                                 />
                                             </div>
                                         </>
                                     )}
 
-                                    <div className="flex gap-2 pt-2">
-                                        <button type="submit" disabled={processing} className="flex-1 bg-indigo-600 text-white rounded-xl py-3 text-sm font-bold shadow-md hover:bg-indigo-700 transition">Save Method</button>
-                                        <button type="button" onClick={() => setShowAddMethod(false)} className="px-4 bg-slate-100 text-slate-600 rounded-xl py-3 text-sm font-bold hover:bg-slate-200 transition">Cancel</button>
+                                    {isCard && (
+                                        <>
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase">Card Holder Name</label>
+                                                <input 
+                                                    required
+                                                    type="text"
+                                                    value={newMethod.card_holder_name}
+                                                    onChange={e => setNewMethod({...newMethod, card_holder_name: e.target.value})}
+                                                    placeholder="Name as on card"
+                                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase">Card Type</label>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    {['visa', 'mastercard', 'amex', 'other'].map(type => (
+                                                        <button
+                                                            key={type}
+                                                            type="button"
+                                                            onClick={() => setNewMethod({...newMethod, card_type: type})}
+                                                            className={`p-2.5 text-xs font-bold rounded-xl border capitalize transition-all ${
+                                                                newMethod.card_type === type
+                                                                ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                                                                : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
+                                                            }`}
+                                                        >
+                                                            {type === 'amex' ? 'Amex' : type.charAt(0).toUpperCase() + type.slice(1)}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase">Bank Name (Optional)</label>
+                                                <input 
+                                                    type="text"
+                                                    value={newMethod.bank_name}
+                                                    onChange={e => setNewMethod({...newMethod, bank_name: e.target.value})}
+                                                    placeholder="e.g. Dutch Bangla Bank"
+                                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-indigo-500"
+                                                />
+                                            </div>
+                                        </>
+                                    )}
+
+                                    <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                                        <button type="submit" disabled={processing} className="w-full sm:flex-1 bg-indigo-600 text-white rounded-xl py-3 text-sm font-bold shadow-md hover:bg-indigo-700 transition order-1 sm:order-none">Save Method</button>
+                                        <button type="button" onClick={() => setShowAddMethod(false)} className="w-full sm:w-auto px-4 bg-slate-100 text-slate-600 rounded-xl py-3 text-sm font-bold hover:bg-slate-200 transition order-2 sm:order-none">Cancel</button>
                                     </div>
                                 </form>
                             ) : (
@@ -305,18 +410,18 @@ export default function AgentFinancialDashboard() {
                                         </div>
                                     ) : (
                                         methods.map((m) => (
-                                            <div key={m.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-indigo-100 transition-colors group">
-                                                <div>
-                                                    <p className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                                            <div key={m.id} className="flex items-center justify-between p-3 sm:p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-indigo-100 transition-colors group">
+                                                <div className="flex-1 pr-2">
+                                                    <p className="text-xs font-black uppercase tracking-wider text-slate-800 flex flex-wrap items-center gap-2">
                                                         {m.method}
-                                                        {m.is_default && <span className="px-1.5 py-0.5 bg-indigo-100 text-indigo-600 rounded text-[9px]">DEFAULT</span>}
+                                                        {m.account_type && <span className="px-1.5 py-0.5 bg-slate-200 text-slate-600 rounded text-[9px]">{m.account_type}</span>}
                                                     </p>
-                                                    <p className="text-sm font-mono text-slate-500 mt-1">{m.account_number}</p>
-                                                    {m.method === 'bank' && <p className="text-[10px] text-slate-400 mt-0.5">{m.bank_name}</p>}
+                                                    <p className="text-[13px] sm:text-sm font-mono text-slate-500 mt-1 break-all">{m.account_number}</p>
+                                                    {m.method === 'bank' && <p className="text-[10px] text-slate-400 mt-0.5 truncate">{m.bank_name}</p>}
                                                 </div>
                                                 <button 
                                                     onClick={() => handleDeleteMethod(m.id)}
-                                                    className="text-slate-300 hover:text-rose-500 p-2 opacity-0 group-hover:opacity-100 transition-all rounded-lg hover:bg-rose-50"
+                                                    className="text-slate-300 hover:text-rose-500 p-2 sm:opacity-0 group-hover:opacity-100 transition-all rounded-lg hover:bg-rose-50"
                                                 >
                                                     <Trash2 size={16} />
                                                 </button>
@@ -329,57 +434,60 @@ export default function AgentFinancialDashboard() {
                     </div>
 
                     {/* Right Column: History */}
-                    <div className="lg:col-span-2">
-                        <div className="bg-white rounded-3xl pb-2 shadow-sm border border-slate-100 relative overflow-hidden h-full">
-                            <div className="p-6 md:p-8 flex items-center justify-between border-b border-slate-50">
-                                <h2 className="text-sm font-bold text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                    <div className="xl:col-span-2 overflow-hidden">
+                        <div className="bg-white rounded-3xl pb-2 shadow-sm border border-slate-100 relative h-full flex flex-col">
+                            <div className="p-5 md:p-6 lg:p-8 flex items-center justify-between border-b border-slate-50 flex-shrink-0">
+                                <h2 className="text-xs md:text-sm font-bold text-slate-800 uppercase tracking-widest flex items-center gap-2">
                                     <MoveRight size={18} className="text-indigo-500"/> Cashout History
                                 </h2>
                             </div>
                             
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left min-w-[600px]">
+                            <div className="overflow-x-auto flex-1">
+                                <table className="w-full text-left min-w-[500px]">
                                     <thead>
-                                        <tr className="text-[10px] uppercase font-black text-slate-400 tracking-widest border-b border-slate-50 bg-slate-50/50">
-                                            <th className="px-6 py-4">Date</th>
-                                            <th className="px-6 py-4">Method & Type</th>
-                                            <th className="px-6 py-4 text-right">Amount (BDT)</th>
-                                            <th className="px-6 py-4 text-center">Status</th>
+                                        <tr className="text-[9px] md:text-[10px] uppercase font-black text-slate-400 tracking-widest border-b border-slate-50 bg-slate-50/50">
+                                            <th className="px-4 py-3 md:px-6 md:py-4">Date</th>
+                                            <th className="px-4 py-3 md:px-6 md:py-4">Method & Type</th>
+                                            <th className="px-4 py-3 md:px-6 md:py-4 text-right">Amount (BDT)</th>
+                                            <th className="px-4 py-3 md:px-6 md:py-4 text-center">Status</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-50">
                                         {history.length === 0 ? (
                                             <tr>
-                                                <td colSpan="4" className="px-6 py-20 text-center text-slate-400 text-sm font-medium">
+                                                <td colSpan="4" className="px-4 py-16 md:px-6 md:py-20 text-center text-slate-400 text-sm font-medium">
                                                     No transactions found matching your criteria.
                                                 </td>
                                             </tr>
                                         ) : (
                                             history.map((item) => (
                                                 <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                                                    <td className="px-6 py-4">
-                                                        <p className="text-xs font-bold text-slate-700">{new Date(item.requested_at).toLocaleDateString()}</p>
-                                                        <p className="text-[10px] text-slate-400">{new Date(item.requested_at).toLocaleTimeString()}</p>
+                                                    <td className="px-4 py-3 md:px-6 md:py-4">
+                                                        <p className="text-[11px] md:text-xs font-bold text-slate-700 whitespace-nowrap">{new Date(item.requested_at).toLocaleDateString()}</p>
+                                                        <p className="text-[9px] md:text-[10px] text-slate-400 whitespace-nowrap">{new Date(item.requested_at).toLocaleTimeString()}</p>
                                                     </td>
-                                                    <td className="px-6 py-4">
+                                                    <td className="px-4 py-3 md:px-6 md:py-4">
                                                         {item.withdraw_method_details ? (
                                                             <>
-                                                                <p className="text-xs font-bold text-slate-700 uppercase">{item.withdraw_method_details.method}</p>
-                                                                <p className="text-[10px] font-mono text-slate-500">{item.withdraw_method_details.account_number}</p>
+                                                                <p className="text-[11px] md:text-xs font-bold text-slate-700 uppercase">
+                                                                    {item.withdraw_method_details.method}
+                                                                    {item.withdraw_method_details.account_type && <span className="ml-1 text-[9px] text-slate-400 lowercase italic">({item.withdraw_method_details.account_type})</span>}
+                                                                </p>
+                                                                <p className="text-[10px] font-mono text-slate-500 break-all">{item.withdraw_method_details.account_number}</p>
                                                             </>
                                                         ) : (
-                                                            <p className="text-xs text-slate-400 italic">Method Removed</p>
+                                                            <p className="text-[11px] md:text-xs text-slate-400 italic">Method Removed</p>
                                                         )}
-                                                        <span className="inline-block mt-1 px-2 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] uppercase font-bold tracking-wider">
-                                                            {item.balance_type} Balance
+                                                        <span className="inline-block mt-1 px-1.5 py-0.5 md:px-2 md:py-0.5 bg-slate-100 text-slate-500 rounded text-[8px] md:text-[9px] uppercase font-bold tracking-wider">
+                                                            {item.balance_type}
                                                         </span>
                                                     </td>
-                                                    <td className="px-6 py-4 text-right">
+                                                    <td className="px-4 py-3 md:px-6 md:py-4 text-right">
                                                         <p className="text-sm font-mono font-black text-slate-900">{parseFloat(item.amount).toFixed(2)}</p>
                                                     </td>
-                                                    <td className="px-6 py-4 text-center">
+                                                    <td className="px-4 py-3 md:px-6 md:py-4 text-center">
                                                         <StatusBadge status={item.status} />
-                                                        {item.admin_note && <p className="text-[10px] text-rose-500 mt-1 max-w-[150px] mx-auto truncate" title={item.admin_note}>Note: {item.admin_note}</p>}
+                                                        {item.admin_note && <p className="text-[9px] md:text-[10px] text-rose-500 mt-1 max-w-[120px] md:max-w-[150px] mx-auto truncate" title={item.admin_note}>Note: {item.admin_note}</p>}
                                                     </td>
                                                 </tr>
                                             ))
@@ -393,24 +501,24 @@ export default function AgentFinancialDashboard() {
 
                 {/* Cashout Modal */}
                 {showCashout && (
-                    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200">
-                            <div className="flex justify-between items-center mb-8">
-                                <h3 className="text-xl font-black text-slate-900 uppercase">Request Cashout</h3>
-                                <button onClick={() => setShowCashout(false)} className="text-slate-400 hover:text-slate-700 p-1 bg-slate-100 rounded-lg">
-                                    <XCircle size={24} />
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-3xl p-6 md:p-8 w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 overflow-y-auto max-h-[90vh]">
+                            <div className="flex justify-between items-center mb-6 md:mb-8">
+                                <h3 className="text-lg md:text-xl font-black text-slate-900 uppercase">Request Cashout</h3>
+                                <button onClick={() => setShowCashout(false)} className="text-slate-400 hover:text-slate-700 p-1 bg-slate-100 rounded-lg outline-none">
+                                    <XCircle size={20} className="md:w-6 md:h-6" />
                                 </button>
                             </div>
                             
-                            <form onSubmit={handleCashoutRequest} className="space-y-6">
+                            <form onSubmit={handleCashoutRequest} className="space-y-5 md:space-y-6">
                                 
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Balance Source</label>
+                                    <label className="text-[11px] md:text-xs font-bold text-slate-500 uppercase tracking-wider">Balance Source</label>
                                     <div className="grid grid-cols-2 gap-3">
                                         <button 
                                             type="button"
                                             onClick={() => setCashoutForm({...cashoutForm, balance_type: 'commission'})}
-                                            className={`p-3 rounded-2xl border text-sm font-bold flex flex-col items-center gap-1 transition-all ${
+                                            className={`p-3 rounded-2xl border text-xs md:text-sm font-bold flex flex-col items-center gap-1 transition-all outline-none ${
                                                 cashoutForm.balance_type === 'commission'
                                                     ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
                                                     : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
@@ -422,7 +530,7 @@ export default function AgentFinancialDashboard() {
                                         <button 
                                             type="button"
                                             onClick={() => setCashoutForm({...cashoutForm, balance_type: 'account'})}
-                                            className={`p-3 rounded-2xl border text-sm font-bold flex flex-col items-center gap-1 transition-all ${
+                                            className={`p-3 rounded-2xl border text-xs md:text-sm font-bold flex flex-col items-center gap-1 transition-all outline-none ${
                                                 cashoutForm.balance_type === 'account'
                                                     ? 'bg-indigo-50 border-indigo-200 text-indigo-700'
                                                     : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
@@ -435,17 +543,17 @@ export default function AgentFinancialDashboard() {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Select Method</label>
+                                    <label className="text-[11px] md:text-xs font-bold text-slate-500 uppercase tracking-wider">Select Method</label>
                                     <select 
                                         required
                                         value={cashoutForm.withdraw_method}
                                         onChange={e => setCashoutForm({...cashoutForm, withdraw_method: e.target.value})}
-                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all appearance-none"
+                                        className="w-full p-3 md:p-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all appearance-none"
                                     >
                                         <option value="" disabled>Choose a destination...</option>
                                         {methods.map(m => (
                                             <option key={m.id} value={m.id}>
-                                                {m.method.toUpperCase()} - {m.account_number}
+                                                {m.method.toUpperCase()} {m.account_type ? `(${m.account_type})` : ''} - {m.account_number}
                                             </option>
                                         ))}
                                     </select>
@@ -455,15 +563,15 @@ export default function AgentFinancialDashboard() {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex justify-between">
+                                    <label className="text-[11px] md:text-xs font-bold text-slate-500 uppercase tracking-wider flex justify-between">
                                         <span>Amount (BDT)</span>
                                         <span className="text-indigo-600">
                                             Max: ৳{parseFloat(cashoutForm.balance_type === 'commission' ? summary.commission_balance : summary.account_balance).toFixed(2)}
                                         </span>
                                     </label>
                                     <div className="relative">
-                                        <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
-                                            <span className="text-slate-400 font-bold text-xl leading-none">৳</span>
+                                        <div className="absolute inset-y-0 left-0 pl-4 md:pl-5 flex items-center pointer-events-none">
+                                            <span className="text-slate-400 font-bold text-lg md:text-xl leading-none">৳</span>
                                         </div>
                                         <input 
                                             required
@@ -473,17 +581,17 @@ export default function AgentFinancialDashboard() {
                                             max={cashoutForm.balance_type === 'commission' ? summary.commission_balance : summary.account_balance}
                                             value={cashoutForm.amount}
                                             onChange={e => setCashoutForm({...cashoutForm, amount: e.target.value})}
-                                            className="w-full pl-10 pr-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-xl font-black text-slate-900 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all font-mono"
+                                            className="w-full pl-9 md:pl-10 pr-4 md:pr-5 py-3 md:py-4 bg-slate-50 border border-slate-200 rounded-2xl text-lg md:text-xl font-black text-slate-900 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all font-mono"
                                             placeholder="0.00"
                                         />
                                     </div>
-                                    <p className="text-[10px] text-slate-400 font-medium">Minimum withdrawal limit: 500 BDT</p>
+                                    <p className="text-[9px] md:text-[10px] text-slate-400 font-medium">Minimum withdrawal limit: 500 BDT</p>
                                 </div>
 
                                 <button 
                                     type="submit" 
                                     disabled={processing || methods.length === 0} 
-                                    className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-sm shadow-xl shadow-slate-900/10 hover:bg-slate-800 hover:-translate-y-0.5 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none"
+                                    className="w-full py-3 md:py-4 bg-slate-900 text-white rounded-2xl font-black text-sm shadow-xl shadow-slate-900/10 hover:bg-slate-800 hover:-translate-y-0.5 active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none mt-2"
                                 >
                                     {processing ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <DollarSign size={18} />}
                                     {processing ? 'Processing...' : 'Confirm Cashout'}
@@ -507,18 +615,18 @@ const BalanceCard = ({ title, amount, icon, color }) => {
     };
 
     return (
-        <div className="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden group hover:shadow-xl transition-all duration-500 hover:-translate-y-1">
+        <div className="bg-white p-5 md:p-6 lg:p-8 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden group hover:shadow-xl transition-all duration-500 hover:-translate-y-1">
             <div className={`absolute -right-6 -top-6 p-8 rounded-full opacity-10 group-hover:scale-150 transition-transform duration-700 ${colorStyles[color].split(' ')[0]}`}>
                 {icon}
             </div>
             <div className="relative z-10">
-                <div className={`inline-flex p-3 rounded-2xl mb-6 ${colorStyles[color]} shadow-sm`}>
+                <div className={`inline-flex p-2.5 md:p-3 rounded-2xl mb-4 md:mb-6 ${colorStyles[color]} shadow-sm`}>
                     {icon}
                 </div>
-                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">{title}</h3>
+                <h3 className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest mb-1 md:mb-2">{title}</h3>
                 <div className="flex items-baseline gap-1">
-                    <span className="text-2xl font-bold text-slate-300">৳</span>
-                    <span className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter font-mono">
+                    <span className="text-lg md:text-2xl font-bold text-slate-300">৳</span>
+                    <span className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 tracking-tighter font-mono">
                         {parseFloat(amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                 </div>
@@ -529,15 +637,15 @@ const BalanceCard = ({ title, amount, icon, color }) => {
 
 const StatusBadge = ({ status }) => {
     const statusMap = {
-        pending: { icon: <Clock size={12} />, bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200' },
-        approved: { icon: <CheckCircle2 size={12} />, bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-200' },
-        rejected: { icon: <XCircle size={12} />, bg: 'bg-rose-100', text: 'text-rose-700', border: 'border-rose-200' },
+        pending: { icon: <Clock size={10} className="md:w-3 md:h-3" />, bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200' },
+        approved: { icon: <CheckCircle2 size={10} className="md:w-3 md:h-3" />, bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-200' },
+        rejected: { icon: <XCircle size={10} className="md:w-3 md:h-3" />, bg: 'bg-rose-100', text: 'text-rose-700', border: 'border-rose-200' },
     };
     
     const config = statusMap[status.toLowerCase()] || statusMap.pending;
 
     return (
-        <span className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${config.bg} ${config.text} ${config.border} mx-auto w-fit`}>
+        <span className={`inline-flex items-center justify-center gap-1 md:gap-1.5 px-2 py-1 md:px-3 md:py-1.5 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-wider border ${config.bg} ${config.text} ${config.border} mx-auto w-fit`}>
             {config.icon}
             {status}
         </span>

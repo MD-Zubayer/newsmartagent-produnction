@@ -244,20 +244,38 @@ class NSATransferSerializer(serializers.ModelSerializer):
 class WithdrawMethodSerializer(serializers.ModelSerializer):
     class Meta:
         model = WithdrawMethod
-        fields = ['id', 'method', 'account_number', 'account_name', 'bank_name', 'branch_name', 'routing_number', 'is_default', 'created_at']
-        read_only_fields = ['id', 'created_at']
+        fields = ['id', 'method', 'account_type', 'account_number', 'account_name', 'bank_name', 'branch_name', 'routing_number', 'card_holder_name', 'card_type', 'is_default', 'created_at']
+        read_only_fields = ['id', 'is_default', 'created_at']
+
+    def validate(self, data):
+        method = data.get('method')
+        account_type = data.get('account_type')
+        if method in ['bkash', 'nagad', 'rocket'] and not account_type:
+            raise serializers.ValidationError({"account_type": "Account type (Personal/Agent) is required for mobile banking."})
+        if method == 'card':
+            if not data.get('card_holder_name'):
+                raise serializers.ValidationError({"card_holder_name": "Card holder name is required."})
+            if not data.get('card_type'):
+                raise serializers.ValidationError({"card_type": "Card type (Visa/Mastercard) is required."})
+        return data
 
     def create(self, validated_data):
         profile = self.context['request'].user.profile
-        # If this is the first method, make it default automatically
+        validated_data['profile'] = profile
+        
+        # If this is the first method, make it default
         if not WithdrawMethod.objects.filter(profile=profile).exists():
             validated_data['is_default'] = True
-        elif validated_data.get('is_default', False):
-            # If user sets this as default, unset others
-            WithdrawMethod.objects.filter(profile=profile).update(is_default=False)
             
-        validated_data['profile'] = profile
         return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        # If setting this to default, unset others
+        is_default = validated_data.get('is_default', instance.is_default)
+        if is_default and not instance.is_default:
+            WithdrawMethod.objects.filter(profile=instance.profile).update(is_default=False)
+            
+        return super().update(instance, validated_data)
 
 
 class CashoutRequestSerializer(serializers.ModelSerializer):
