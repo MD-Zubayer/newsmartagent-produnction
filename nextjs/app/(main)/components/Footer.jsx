@@ -136,9 +136,8 @@ function Footer() {
             © {new Date().getFullYear()} NEW SMART AGENT. অল রাইটস রিজার্ভড।
           </p>
           <div className="flex gap-8 text-[11px] font-black uppercase tracking-widest text-gray-400">
-            <a href="#" className="hover:text-indigo-400 transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-indigo-400 transition-colors">Terms of Use</a>
-            <a href="#" className="hover:text-indigo-400 transition-colors">Refund Policy</a>
+            <a href="/privacy-policy" className="hover:text-indigo-400 transition-colors">Privacy Policy</a>
+            <a href="/terms-of-service" className="hover:text-indigo-400 transition-colors">Terms of Use</a>
           </div>
         </div>
       </div>
