@@ -106,54 +106,85 @@ export default function UserDashboard() {
         </div>
 
         {/* Subscription & Token Balance Info */}
-        {currentSub && (
-          <div className="bg-gradient-to-r from-slate-900 to-slate-800 py-8 px-5 rounded-[2.5rem] shadow-2xl text-white relative overflow-hidden">
-             <div className="absolute top-0 right-0 w-64 h-64 bg-pink-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-             
-             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8 relative z-10">
-                <div className="flex items-center gap-5">
-                   <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
-                      <Zap size={32} className="text-yellow-400 fill-yellow-400" />
-                   </div>
-                   <div >
-                      <p className="text-[11px] md:text-xs font-black text-slate-400 uppercase tracking-widest md:mb-1 mb-0">Available Balance</p>
-                      <h2 className="text-3xl md:text-4xl font-black tracking-tight">
-                        {user?.profile?.word_balance?.toLocaleString() || 0} <span className="text-[15px] md:text-lg text-slate-500 font-bold">Tokens</span>
-                      </h2>
-                   </div>
+        <div className="space-y-6">
+          {currentSub && (
+            <div className="bg-gradient-to-r from-slate-900 to-slate-800 py-8 px-5 rounded-[2.5rem] shadow-2xl text-white relative overflow-hidden">
+               <div className="absolute top-0 right-0 w-64 h-64 bg-pink-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+               
+               <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8 relative z-10">
+                  <div className="flex items-center gap-5">
+                     <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
+                        <Zap size={32} className="text-yellow-400 fill-yellow-400" />
+                     </div>
+                     <div >
+                        <p className="text-[11px] md:text-xs font-black text-slate-400 uppercase tracking-widest md:mb-1 mb-0">Total Available Balance</p>
+                        <h2 className="text-3xl md:text-4xl font-black tracking-tight">
+                          {user?.profile?.word_balance?.toLocaleString() || 0} <span className="text-[15px] md:text-lg text-slate-500 font-bold">Tokens</span>
+                        </h2>
+                     </div>
+                  </div>
+
+                  <div className="h-12 w-[1px] bg-white/10 hidden lg:block"></div>
+
+                  <div className="flex gap-8">
+                     <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Calendar size={14} className="text-blue-400"/>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Global Start</p>
+                        </div>
+                        <p className="text-[16px] md:text-lg font-bold">{formatDateTime(currentSub.start_date).date}</p>
+                     </div>
+                     <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <CreditCard size={14} className="text-pink-400"/>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Global End</p>
+                        </div>
+                        <p className="text-[16px] md:text-lg font-bold">{formatDateTime(currentSub.end_date).date}</p>
+                     </div>
+                  </div>
+
+                  <div className="h-12 w-[1px] bg-white/10 hidden lg:block"></div>
+
+                  <div className="flex items-center gap-4 bg-white/5 px-2 md:px-6 py-3 rounded-2xl border border-white/10">
+                     <Hourglass size={24} className="text-emerald-400 animate-pulse"/>
+                     <div>
+                        <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Time Remaining</p>
+                        <p className="text-xl font-black">{calculateTimeLeft(currentSub.end_date)}</p>
+                     </div>
+                  </div>
+               </div>
+            </div>
+          )}
+
+          {/* Active Subscription Details List */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {subscriptions?.filter(s => s.is_active).map((sub) => (
+              <div key={sub.id} className="bg-white p-6 rounded-3xl shadow-lg border border-gray-100 items-center justify-between">
+                <div className="flex items-center gap-4 mb-4">
+                  <div className="w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center">
+                    <Zap size={20} className="text-pink-500" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-gray-800 uppercase tracking-tight">{sub.offer.name}</h4>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{sub.remaining_tokens.toLocaleString()} Tokens Left</p>
+                  </div>
                 </div>
-
-                <div className="h-12 w-[1px] bg-white/10 hidden lg:block"></div>
-
-                <div className="flex gap-8">
-                   <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <Calendar size={14} className="text-blue-400"/>
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Start Date</p>
-                      </div>
-                      <p className="text-[16px] md:text-lg font-bold">{formatDateTime(currentSub.start_date).date}</p>
-                   </div>
-                   <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <CreditCard size={14} className="text-pink-400"/>
-                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">End Date</p>
-                      </div>
-                      <p className="text-[16px] md:text-lg font-bold">{formatDateTime(currentSub.end_date).date}</p>
-                   </div>
+                <div className="space-y-2">
+                  <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-pink-500 rounded-full" 
+                      style={{ width: `${Math.min(100, (sub.remaining_tokens / sub.offer.tokens) * 100)}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                    <span>Exp: {formatDateTime(sub.end_date).date}</span>
+                    <span>{Math.round((sub.remaining_tokens / sub.offer.tokens) * 100)}% Left</span>
+                  </div>
                 </div>
-
-                <div className="h-12 w-[1px] bg-white/10 hidden lg:block"></div>
-
-                <div className="flex items-center gap-4 bg-white/5 px-2 md:px-6 py-3 rounded-2xl border border-white/10">
-                   <Hourglass size={24} className="text-emerald-400 animate-pulse"/>
-                   <div>
-                      <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Subscription Valid For</p>
-                      <p className="text-xl font-black">{calculateTimeLeft(currentSub.end_date)}</p>
-                   </div>
-                </div>
-             </div>
+              </div>
+            ))}
           </div>
-        )}
+        </div>
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

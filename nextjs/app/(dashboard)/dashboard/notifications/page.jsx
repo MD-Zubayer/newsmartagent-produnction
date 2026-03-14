@@ -113,6 +113,7 @@ const handleDelete = async (id) => {
       paid:    { icon: <FaCheckCircle />, color: "text-emerald-600", bg: "bg-emerald-100" },
       payment: { icon: <FaCreditCard />,  color: "text-violet-600",  bg: "bg-violet-100" },
       warning: { icon: <FaExclamationTriangle />, color: "text-amber-600", bg: "bg-amber-100" },
+      tokens_exhausted: { icon: <FaBell />, color: "text-rose-600", bg: "bg-rose-100" },
       alert:   { icon: <FaBell />, color: "text-rose-600", bg: "bg-rose-100" },
       info:    { icon: <FaInfoCircle />,  color: "text-blue-600",    bg: "bg-blue-100" },
     };

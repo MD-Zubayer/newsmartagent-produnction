@@ -176,8 +176,8 @@ class SubscriptionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Subscription
-        fields = ["id", "profile", "offer", "offer_id", "start_date", "end_date", "is_active"]
-        read_only_fields = ["profile", "start_date", "end_date", "is_active"]
+        fields = ["id", "profile", "offer", "offer_id", "start_date", "end_date", "is_active", "remaining_tokens"]
+        read_only_fields = ["profile", "start_date", "end_date", "is_active", "remaining_tokens"]
     
     def create(self, validated_data):
         user_profile = self.context['request'].user.profile

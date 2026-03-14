@@ -127,7 +127,7 @@ class OfferAdmin(ModelAdmin):
 # Subscription Admin
 @admin.register(Subscription)
 class SubscriptionAdmin(ModelAdmin):
-    list_display = ('profile', 'offer', 'start_date', 'end_date', 'is_active', 'created_at')
+    list_display = ('profile', 'offer', 'remaining_tokens', 'start_date', 'end_date', 'is_active', 'created_at')
     list_filter = ('is_active',)
     search_fields = ('profile__user__email', 'offer__name')
 

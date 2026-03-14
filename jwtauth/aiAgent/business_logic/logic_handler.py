@@ -199,6 +199,16 @@ def deduct_user_tokens(user_profile, total_tokens, ai_model_name):
                 if new_balance <= 0:
                     active_sub.remaining_tokens = 0
                     active_sub.is_active = False
+                    # Send exhausted notification
+                    try:
+                        from chat.models import Notification
+                        Notification.objects.create(
+                            user=user_profile.user,
+                            message=f"Offer '{active_sub.offer.name}' tokens have been exhausted.",
+                            type='tokens_exhausted'
+                        )
+                    except Exception as e:
+                        logger.error(f"Exhausted Notification Error: {e}")
                 else:
                     active_sub.remaining_tokens = new_balance
                 active_sub.save()

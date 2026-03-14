@@ -209,8 +209,6 @@ class Payment(models.Model):
 
 
                 if offer:
-                    profile.word_balance += offer.tokens
-                    profile.save()
                     from .models import Subscription
                     #<!---------------------- If you have a previous active subscription, deactivate it (since the token has gone to the profile) ----------------!>
                     # Subscription.objects.filter(profile=profile, is_active=True).update(is_active=False)
