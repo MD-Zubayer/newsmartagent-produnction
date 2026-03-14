@@ -75,6 +75,14 @@ export default function PaymentPage() {
 
   if (loading) return <div className="p-20 text-center font-black animate-pulse text-slate-400 uppercase tracking-widest">Securing Connection...</div>;
 
+  if (!offer) return (
+    <div className="p-20 text-center">
+      <FaInfoCircle className="mx-auto text-slate-200 mb-4" size={50} />
+      <p className="font-black text-slate-400 uppercase tracking-widest leading-none">Checkout instance not found</p>
+      <Link href="/dashboard/offers" className="text-blue-600 text-[10px] font-black uppercase underline mt-8 block tracking-widest">Back to Offers</Link>
+    </div>
+  );
+
   return (
     <div className="py-12 px-4 max-w-lg mx-auto">
       <Link href="/dashboard/offers" className="inline-flex items-center gap-2 text-slate-400 font-black text-[10px] uppercase mb-8 hover:text-blue-600 transition-all">
@@ -172,7 +180,7 @@ export default function PaymentPage() {
   );
 }
 
-function BankDetailItemMini({ label, value, isCopyable }) {
+function BankDetailItem({ label, value, isCopyable }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = () => {
     navigator.clipboard.writeText(value);
