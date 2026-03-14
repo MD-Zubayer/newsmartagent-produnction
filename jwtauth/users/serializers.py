@@ -257,6 +257,11 @@ class WithdrawMethodSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({"card_holder_name": "Card holder name is required."})
             if not data.get('card_type'):
                 raise serializers.ValidationError({"card_type": "Card type (Visa/Mastercard) is required."})
+            # Validate 16-digit card number (strip spaces from frontend formatting)
+            card_num = data.get('account_number', '').replace(' ', '')
+            if not card_num.isdigit() or len(card_num) != 16:
+                raise serializers.ValidationError({"account_number": "Card number must be exactly 16 digits."})
+            data['account_number'] = card_num  # Store without spaces
         return data
 
     def create(self, validated_data):

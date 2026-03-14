@@ -394,7 +394,7 @@ class WithdrawMethod(models.Model):
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='withdraw_methods')
     method = models.CharField(max_length=20, choices=METHOD_CHOICES)
     account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPE_CHOICES, blank=True, null=True) # Applicable to bKash, Nagad, Rocket
-    account_number = models.CharField(max_length=50)  # For card: last 4 digits
+    account_number = models.CharField(max_length=50)
     account_name = models.CharField(max_length=100, blank=True, null=True)
     bank_name = models.CharField(max_length=100, blank=True, null=True)
     branch_name = models.CharField(max_length=100, blank=True, null=True)
