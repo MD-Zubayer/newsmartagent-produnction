@@ -9,7 +9,7 @@ services:
     # named volume
       - postgres_data:/var/lib/postgresql/data
     env_file:
-      - /home/ubuntu/smartagent.env
+      - .env
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
@@ -50,7 +50,7 @@ services:
       - media_volume:/app/media
     
     env_file:
-      - /home/ubuntu/smartagent.env
+      - .env
     environment:
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@newsmartagent-db:5432/${POSTGRES_DB}     
       - GEMINI_API_KEY=${GEMINI_API_KEY}
@@ -117,7 +117,7 @@ services:
     volumes:
       - ./jwtauth:/app
     env_file:
-      - /home/ubuntu/smartagent.env
+      - .env
     
     environment:
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@newsmartagent-db:5432/${POSTGRES_DB}
@@ -137,7 +137,7 @@ services:
     volumes:
       - ./jwtauth:/app
     env_file:
-      - /home/ubuntu/smartagent.env
+      - .env
     environment:
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@newsmartagent-db:5432/${POSTGRES_DB}
       - REDIS_URL=${REDIS_URL}
