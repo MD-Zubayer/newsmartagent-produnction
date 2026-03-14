@@ -127,91 +127,72 @@ export default function IntegrationManager({ webhookUrl = "" }) {
 
   return (
     <div className="w-full py-8 md:py-16 px-4 md:px-10 font-sans animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="max-w-[900px] mx-auto">
+      <div className="max-w-[1000px] mx-auto">
         
         <button 
           onClick={() => setSelectedPlatform(null)} 
-          className="group flex items-center gap-3 text-slate-400 hover:text-indigo-600 font-black text-[10px] md:text-xs mb-8 transition-all uppercase tracking-widest bg-white/50 backdrop-blur-sm px-4 py-2 rounded-full border border-slate-100 shadow-sm"
+          className="group flex items-center gap-3 text-slate-400 hover:text-indigo-600 font-bold text-[10px] md:text-sm mb-8 transition-all uppercase tracking-widest bg-white/80 backdrop-blur-md px-5 py-2.5 rounded-full border border-slate-100 shadow-sm"
         >
           <FaArrowLeft className="group-hover:-translate-x-1 transition-transform" /> 
-          Back to Channels
+          Back to Platforms
         </button>
 
-        <div className="bg-white rounded-[3rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.08)] border border-slate-100 overflow-hidden relative">
+        <div className="bg-white rounded-[2.5rem] md:rounded-[4rem] shadow-[0_40px_80px_-16px_rgba(0,0,0,0.06)] border border-slate-50 overflow-hidden relative">
           
-          {/* Header */}
-          <div className={`bg-gradient-to-br ${selectedPlatform.color} p-10 md:p-16 text-white relative`}>
-            {/* Background pattern */}
-            <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-white via-transparent to-transparent"></div>
+          {/* Hero Section */}
+          <div className={`bg-gradient-to-br ${selectedPlatform.color} p-12 md:p-20 text-white relative`}>
+            {/* Ambient Light Effect */}
+            <div className="absolute top-0 right-0 w-1/2 h-full bg-white opacity-[0.05] blur-3xl rounded-full translate-x-1/2 -translate-y-1/2"></div>
             
-            <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 text-center md:text-left">
-              <div className="p-6 bg-white/20 rounded-[2.5rem] backdrop-blur-2xl border border-white/30 shadow-[inset_0_0_20px_rgba(255,255,255,0.2)]">
-                <span className="text-5xl md:text-7xl drop-shadow-lg">{selectedPlatform.icon}</span>
+            <div className="relative z-10 flex flex-col md:flex-row items-center gap-10 text-center md:text-left">
+              <div className="p-8 bg-white/20 rounded-[3rem] backdrop-blur-2xl border border-white/30 shadow-[0_20px_40px_rgba(0,0,0,0.1)] group transition-transform hover:scale-105 duration-500">
+                <span className="text-6xl md:text-8xl drop-shadow-2xl">{selectedPlatform.icon}</span>
               </div>
-              <div className="space-y-1">
-                <p className="text-white/70 text-[10px] md:text-xs font-black uppercase tracking-[0.3em]">Configure API</p>
-                <h2 className="text-4xl md:text-6xl font-black tracking-tighter leading-none">
-                  Link <span className="italic">{selectedPlatform.name}</span>
+              <div className="space-y-3">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md border border-white/20 text-white text-[10px] font-black uppercase tracking-[0.2em]">
+                   Instant Sync Enabled
+                </div>
+                <h2 className="text-5xl md:text-7xl font-black tracking-tighter leading-none italic">
+                  {selectedPlatform.name}
                 </h2>
+                <p className="text-white/80 text-sm md:text-lg font-medium opacity-90 max-w-md mx-auto md:mx-0">
+                  {selectedPlatform.description}
+                </p>
               </div>
             </div>
           </div>
 
-          <div className="p-8 md:p-16 space-y-12">
+          <div className="p-8 md:p-20 space-y-16">
             
-            {/* Webhook Section */}
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center">
-                    <FaCode className="text-indigo-600 text-[10px]" />
+            {/* Simplified Connection Status */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+               <div className="space-y-4 text-center md:text-left">
+                  <h3 className="text-2xl font-black text-slate-900 tracking-tight">Ready to Connect?</h3>
+                  <p className="text-slate-500 font-medium leading-relaxed">
+                    Authorize your {selectedPlatform.name} account to begin using your AI workforce. Everything is handled securely.
+                  </p>
+               </div>
+               
+               <div className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 flex flex-col items-center justify-center text-center gap-4">
+                  <div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center text-indigo-600">
+                     <FaShieldAlt size={28} />
                   </div>
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Webhook Endpoint</label>
-                </div>
-                
-                {selectedPlatform.devLink && (
-                  <a 
-                    href={selectedPlatform.devLink} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-indigo-600 hover:text-indigo-700 font-bold text-xs transition-colors bg-indigo-50 px-4 py-2 rounded-xl"
-                  >
-                    {selectedPlatform.btnText} <FaExternalLinkAlt size={10} />
-                  </a>
-                )}
-              </div>
-              
-              <div className="group relative">
-                <div className="w-full px-8 py-7 bg-slate-50 border border-slate-100 rounded-[2rem] overflow-hidden transition-all group-hover:bg-slate-100/50">
-                   <p className="text-xs md:text-sm font-mono font-bold text-slate-600 break-all leading-relaxed">
-                     {webhookUrl || `https://api.site.com/wh/${selectedPlatform.id}`}
-                   </p>
-                </div>
-                <button 
-                  onClick={copyToClipboard}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 bg-slate-900 text-white p-4 rounded-2xl shadow-xl hover:bg-indigo-600 hover:scale-105 active:scale-95 transition-all"
-                >
-                  <FaCopy />
-                </button>
-              </div>
-              
-              <div className="flex items-start gap-3 bg-blue-50/50 p-4 rounded-2xl border border-blue-100/50">
-                <FaShieldAlt className="text-blue-500 mt-1 shrink-0" />
-                <p className="text-[11px] text-blue-700 font-medium leading-relaxed">
-                  Protect your endpoint. Only share this URL within the official {selectedPlatform.name} Developer Dashboard.
-                </p>
-              </div>
+                  <div>
+                    <p className="text-sm font-black text-slate-900 uppercase tracking-widest">Security First</p>
+                    <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest mt-1">Official OAuth 2.0</p>
+                  </div>
+               </div>
             </div>
 
             {/* Platform Specific: Facebook */}
             {selectedPlatform.id === "facebook" && (
-              <div className="pt-12 border-t border-slate-100 space-y-8">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                      Connected Pages
+              <div className="pt-16 border-t border-slate-100 space-y-10">
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-8">
+                  <div className="space-y-2">
+                    <h3 className="text-3xl font-black text-slate-900 tracking-tighter">
+                      Manage Connections
                     </h3>
-                    <p className="text-xs text-slate-400 font-medium tracking-wide">Manage your linked Facebook visibility</p>
+                    <p className="text-sm text-slate-400 font-semibold uppercase tracking-widest">Linked Facebook Pages</p>
                   </div>
                   
                   <button 
@@ -219,64 +200,90 @@ export default function IntegrationManager({ webhookUrl = "" }) {
                       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://newsmartagent.com/api";
                       window.location.href = `${apiUrl}/facebook/login/`;
                     }}
-                    className="flex items-center justify-center gap-3 bg-[#1877F2] text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-wider hover:bg-[#166fe5] transition-all shadow-lg hover:shadow-[#1877F244] active:scale-95"
+                    className="group relative flex items-center justify-center gap-4 bg-[#1877F2] text-white px-10 py-5 rounded-2xl text-xs font-black uppercase tracking-[0.1em] hover:bg-[#166fe5] transition-all shadow-[0_20px_40px_-10px_rgba(24,119,242,0.4)] active:scale-95 w-full md:w-auto overflow-hidden"
                   >
-                    <FaFacebook className="text-lg" />
+                    <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity"></div>
+                    <FaFacebook className="text-xl group-hover:rotate-12 transition-transform" />
                     Authorize New Page
                   </button>
                 </div>
                 
-                <div className="bg-slate-50/50 rounded-[2.5rem] p-6 border border-slate-100">
+                <div className="bg-slate-50/50 rounded-[3rem] p-8 md:p-12 border border-slate-100 relative overflow-hidden">
+                  {/* Subtle noise pattern */}
+                  <div className="absolute inset-0 opacity-[0.03] bg-[url('https://grainy-gradients.vercel.app/noise.svg')] pointer-events-none"></div>
+
                   {isLoadingPages ? (
-                    <div className="flex flex-col items-center justify-center py-12 gap-4">
-                      <div className="w-10 h-10 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
-                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Synchronizing...</p>
+                    <div className="flex flex-col items-center justify-center py-20 gap-6 relative z-10">
+                      <div className="relative">
+                        <div className="w-16 h-16 border-4 border-slate-100 border-t-indigo-600 rounded-full animate-spin"></div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                           <div className="w-8 h-8 bg-indigo-50 rounded-lg animate-pulse"></div>
+                        </div>
+                      </div>
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-[0.3em]">Synchronizing Data...</p>
                     </div>
                   ) : connectedPages.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
                       {connectedPages.map(page => (
-                        <div key={page.id} className="flex items-center justify-between bg-white p-5 rounded-3xl shadow-sm border border-slate-100 hover:border-indigo-100 transition-colors group">
-                          <div className="flex items-center gap-4">
-                             <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-                                <FaFacebook className="text-xl" />
+                        <div key={page.id} className="flex items-center justify-between bg-white p-6 rounded-[2rem] shadow-[0_10px_30px_-10px_rgba(0,0,0,0.04)] border border-slate-50 hover:border-indigo-100 hover:shadow-xl transition-all group">
+                          <div className="flex items-center gap-5">
+                             <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 group-hover:rotate-6 transition-transform">
+                                <FaFacebook className="text-2xl" />
                              </div>
-                             <div>
-                               <p className="font-black text-sm text-slate-800 tracking-tight">{page.name}</p>
-                               <p className="text-[10px] font-mono text-slate-400">ID: {page.id}</p>
+                             <div className="space-y-0.5">
+                               <p className="font-black text-base text-slate-800 tracking-tight">{page.name}</p>
+                               <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-50 rounded-lg border border-emerald-100 w-fit">
+                                  <div className="w-1 h-1 rounded-full bg-emerald-500"></div>
+                                  <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Active Connection</span>
+                               </div>
                              </div>
                           </div>
-                          <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 rounded-full">
-                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                            <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Linked</span>
+                          <div className="p-3 bg-slate-50 rounded-xl group-hover:bg-indigo-50 transition-colors">
+                             <span className="text-slate-300 group-hover:text-indigo-600 transform transition-transform group-hover:translate-x-1">→</span>
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center py-12 px-6 space-y-4">
-                      <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-300">
-                        <FaExclamationCircle size={32} />
+                    <div className="text-center py-20 px-8 space-y-6 relative z-10">
+                      <div className="w-24 h-24 bg-white rounded-3xl shadow-sm flex items-center justify-center mx-auto text-slate-100 border border-slate-50">
+                        <FaFacebook size={48} />
                       </div>
-                      <p className="text-sm text-slate-500 font-medium max-w-sm mx-auto">
-                        No connected pages found. Authorize your account to start managing your pages.
-                      </p>
+                      <div className="space-y-2">
+                        <h4 className="text-xl font-black text-slate-900 uppercase tracking-tight">No Pages Linked</h4>
+                        <p className="text-sm text-slate-400 font-medium max-w-xs mx-auto">
+                          Choose "Authorize New Page" to link your Facebook visibility and enable AI features.
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
             )}
 
-            {/* CTA */}
-            <div className="pt-12 border-t border-slate-100">
-              <Link href='/dashboard/aiAgent'>
-                <button className="relative w-full group overflow-hidden bg-indigo-600 text-white p-1 rounded-3xl shadow-2xl transition-all hover:scale-[1.01] active:scale-[0.99]">
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
-                  <div className="relative py-6 md:py-8 rounded-[1.4rem] border border-white/10 bg-indigo-600 flex items-center justify-center gap-4">
-                    <FaRobot className="text-2xl md:text-3xl group-hover:rotate-12 transition-transform" />
-                    <span className="text-base md:text-xl font-black uppercase tracking-[0.2em]">Deploy AI Workforce</span>
-                    <span className="text-2xl group-hover:translate-x-2 transition-transform">→</span>
+            {/* Massive Call to Action */}
+            <div className="pt-20 border-t border-slate-100">
+              <Link href='/dashboard/aiAgent' className="block group">
+                <div className="relative overflow-hidden bg-slate-900 p-1.5 rounded-[2.5rem] shadow-3xl transition-all hover:scale-[1.02] active:scale-[0.98]">
+                  {/* Glowing background */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 opacity-20 group-hover:opacity-40 blur-2xl transition-opacity"></div>
+                  
+                  <div className="relative px-8 py-10 md:py-14 rounded-[2rem] border border-white/5 bg-slate-900 flex flex-col md:flex-row items-center justify-between gap-10">
+                    <div className="flex items-center gap-6 text-center md:text-left">
+                      <div className="w-20 h-20 bg-indigo-600 rounded-3xl flex items-center justify-center text-white shadow-2xl group-hover:rotate-12 transition-transform duration-500">
+                        <FaRobot className="text-4xl" />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="text-2xl md:text-4xl font-black text-white italic tracking-tighter">Launch AI Agent</h4>
+                        <p className="text-slate-400 text-sm md:text-base font-medium opacity-80">Next Step: Deploy your intelligence workforce</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-center w-16 h-16 md:w-24 md:h-24 bg-white rounded-full group-hover:bg-indigo-600 group-hover:text-white transition-all duration-500 shadow-2xl overflow-hidden shrink-0">
+                       <span className="text-3xl md:text-5xl font-black transform group-hover:translate-x-2 transition-transform duration-500">→</span>
+                    </div>
                   </div>
-                </button>
+                </div>
               </Link>
             </div>
             
@@ -284,14 +291,13 @@ export default function IntegrationManager({ webhookUrl = "" }) {
         </div>
 
         {/* Support Section */}
-        <div className="mt-12 text-center">
-           <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Need Assistance?</p>
-           <div className="flex items-center justify-center gap-6">
-              <a href="#" className="text-[11px] font-black text-indigo-600 hover:text-indigo-700 transition-colors uppercase">Documentation</a>
-              <div className="w-1 h-1 rounded-full bg-slate-200"></div>
-              <a href="#" className="text-[11px] font-black text-indigo-600 hover:text-indigo-700 transition-colors uppercase">Community Support</a>
-              <div className="w-1 h-1 rounded-full bg-slate-200"></div>
-              <a href="#" className="text-[11px] font-black text-indigo-600 hover:text-indigo-700 transition-colors uppercase">Live Chat</a>
+        <div className="mt-20 text-center pb-20">
+           <div className="inline-flex items-center gap-8 bg-white/50 backdrop-blur-xl px-10 py-5 rounded-[2rem] border border-slate-100 shadow-sm">
+              <a href="#" className="text-xs font-black text-slate-400 hover:text-indigo-600 transition-colors uppercase tracking-[0.2em] decoration-2 underline-offset-8 decoration-indigo-200">Docs</a>
+              <div className="w-1.5 h-1.5 rounded-full bg-slate-200"></div>
+              <a href="#" className="text-xs font-black text-slate-400 hover:text-indigo-600 transition-colors uppercase tracking-[0.2em] decoration-2 underline-offset-8 decoration-indigo-200">Support</a>
+              <div className="w-1.5 h-1.5 rounded-full bg-slate-200"></div>
+              <a href="#" className="text-xs font-black text-slate-400 hover:text-indigo-600 transition-colors uppercase tracking-[0.2em] decoration-2 underline-offset-8 decoration-indigo-200">Pricing</a>
            </div>
         </div>
 
