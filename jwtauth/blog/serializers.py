@@ -21,7 +21,7 @@ class BlogPostListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BlogPost
-        fields = ['id', 'title', 'slug', 'thumbnail', 'category', 'author', 'created_at']
+        fields = ['id', 'title', 'slug', 'thumbnail', 'category', 'author', 'created_at', 'views_count']
 
 class BlogPostDetailSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
@@ -30,4 +30,4 @@ class BlogPostDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BlogPost
-        fields = ['id', 'title', 'slug', 'thumbnail', 'content', 'meta_description', 'category', 'author', 'created_at', 'updated_at']
+        fields = ['id', 'title', 'slug', 'thumbnail', 'content', 'meta_description', 'category', 'author', 'created_at', 'updated_at', 'views_count']

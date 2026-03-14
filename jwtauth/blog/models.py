@@ -35,6 +35,7 @@ class BlogPost(models.Model):
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='posts')
     thumbnail = models.ImageField(upload_to='blog/thumbnails/', null=True, blank=True)
     content = RichTextField()
+    views_count = models.PositiveIntegerField(default=0)
     meta_description = models.CharField(max_length=160, help_text="Used for SEO meta description tag.")
     is_published = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
