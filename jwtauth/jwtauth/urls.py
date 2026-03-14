@@ -1,5 +1,6 @@
-from django.contrib import admin
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework.routers import DefaultRouter
 
@@ -62,3 +63,12 @@ urlpatterns = [
     path('api/embedding/', include("embedding.urls")),
     path('api/agent-state/', AgentDashboardStatsView.as_view(), name='agent-stats')
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+else:
+    # Production এ যদি Nginx হ্যান্ডেল না করে, তবে Django দিয়ে ফোর্সলি সার্ভ করা (অস্থায়ী সলিউশন হিসেবে)
+    from django.views.static import serve
+    urlpatterns += [
+        path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
+    ]
