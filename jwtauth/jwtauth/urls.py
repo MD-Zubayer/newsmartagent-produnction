@@ -9,7 +9,8 @@ from rest_framework.routers import DefaultRouter
 from users.views import (
     UserViewSet, LoginView, LogoutView, ForgotPasswordView, 
     ResetPasswordView, OfferViewSet, SubscriptionViewSet, 
-    CookieTokenRefreshView, CookieTokenVerifyView, OrderSubmitView, NSABalanceTransferView, SendPaymentOTPView, SendTransferOTPView
+    CookieTokenRefreshView, CookieTokenVerifyView, OrderSubmitView, NSABalanceTransferView, SendPaymentOTPView, SendTransferOTPView,
+    WithdrawMethodViewSet, CashoutRequestViewSet, FinancialSummaryView
 )
 from payments.views import PaymentViewSet
 from webhooks import views as webhook_views
@@ -30,7 +31,8 @@ router.register(r'orders', OrderSubmitView, basename='order')
 router.register(r'man-agent-config', ManAgentConfigViewSet, basename='man-agent-config')
 router.register(r'blog/posts', blog_views.BlogPostViewSet, basename='blog-posts')
 router.register(r'blog/categories', blog_views.CategoryViewSet, basename='blog-categories')
-
+router.register(r'withdraw-methods', WithdrawMethodViewSet, basename='withdraw-methods')
+router.register(r'cashout-requests', CashoutRequestViewSet, basename='cashout-requests')
 
 
 urlpatterns = [
@@ -38,6 +40,7 @@ urlpatterns = [
     path('accounts/', include('allauth.urls')),
     path('api/send-payment-otp/', SendPaymentOTPView.as_view(), name='send-payment-otp'),
     path('api/send-transfer-otp/', SendTransferOTPView.as_view(), name='send-transfer-otp'),
+    path('api/financial-summary/', FinancialSummaryView.as_view(), name='financial-summary'),
     path('api/', include(router.urls)),
     path('api/', include('chat.urls')),
     path('api/', include('payments.urls')),

@@ -371,3 +371,43 @@ class FacebookPage(models.Model):
     def __str__(self):
         return f"{self.page_name} ({self.page_id}) - {self.user.email}"
 
+
+class WithdrawMethod(models.Model):
+    METHOD_CHOICES = (
+        ('bkash', 'bKash'),
+        ('nagad', 'Nagad'),
+        ('rocket', 'Rocket'),
+        ('bank', 'Bank Transfer'),
+    )
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='withdraw_methods')
+    method = models.CharField(max_length=20, choices=METHOD_CHOICES)
+    account_number = models.CharField(max_length=50)
+    account_name = models.CharField(max_length=100, blank=True, null=True)
+    bank_name = models.CharField(max_length=100, blank=True, null=True)
+    branch_name = models.CharField(max_length=100, blank=True, null=True)
+    routing_number = models.CharField(max_length=50, blank=True, null=True)
+    is_default = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.method.upper()} - {self.account_number} ({self.profile.unique_id})"
+
+
+class CashoutRequest(models.Model):
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    )
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='cashout_requests')
+    withdraw_method = models.ForeignKey(WithdrawMethod, on_delete=models.SET_NULL, null=True)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    transaction_id = models.CharField(max_length=100, blank=True, null=True)
+    admin_note = models.TextField(blank=True, null=True)
+    requested_at = models.DateTimeField(auto_now_add=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.profile.unique_id} - {self.amount} BDT - {self.status}"
+

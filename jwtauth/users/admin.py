@@ -7,7 +7,7 @@ from .models import FacebookPage
 from .models import OrderForm, CustomerOrder, EmailVerificationToken
 
 from users.forms import UserAdminChangeForm, UserAdminCreationForm
-from .models import User, Profile, Payment, Offer, Subscription, Platform, NSATransfer
+from .models import User, Profile, Payment, Offer, Subscription, Platform, NSATransfer, WithdrawMethod, CashoutRequest
 from unfold.admin import ModelAdmin
 # Force Django Admin to use allauth login if enabled
 if settings.DJANGO_ADMIN_FORCE_ALLAUTH:
@@ -244,3 +244,17 @@ class FacebookPageAdmin(admin.ModelAdmin):
         if 'access_token' in form.base_fields:
             form.base_fields['access_token'].widget.attrs['style'] = 'width: 600px;'
         return form
+
+@admin.register(WithdrawMethod)
+class WithdrawMethodAdmin(ModelAdmin):
+    list_display = ('profile', 'method', 'account_number', 'is_default', 'created_at')
+    list_filter = ('method', 'is_default')
+    search_fields = ('profile__unique_id', 'profile__user__email', 'account_number')
+
+@admin.register(CashoutRequest)
+class CashoutRequestAdmin(ModelAdmin):
+    list_display = ('profile', 'amount', 'status', 'requested_at', 'processed_at')
+    list_filter = ('status', 'requested_at')
+    search_fields = ('profile__unique_id', 'profile__user__email', 'transaction_id')
+    list_editable = ('status',)
+    readonly_fields = ('requested_at', 'processed_at')

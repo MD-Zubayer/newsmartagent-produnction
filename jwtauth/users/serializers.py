@@ -240,3 +240,52 @@ class NSATransferSerializer(serializers.ModelSerializer):
             return obj.receiver.profile.unique_id
         except:
             return "N/A"
+
+
+class WithdrawMethodSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WithdrawMethod
+        fields = ['id', 'method', 'account_number', 'account_name', 'bank_name', 'branch_name', 'routing_number', 'is_default', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+    def create(self, validated_data):
+        profile = self.context['request'].user.profile
+        # If this is the first method, make it default automatically
+        if not WithdrawMethod.objects.filter(profile=profile).exists():
+            validated_data['is_default'] = True
+        elif validated_data.get('is_default', False):
+            # If user sets this as default, unset others
+            WithdrawMethod.objects.filter(profile=profile).update(is_default=False)
+            
+        validated_data['profile'] = profile
+        return super().create(validated_data)
+
+
+class CashoutRequestSerializer(serializers.ModelSerializer):
+    withdraw_method_details = WithdrawMethodSerializer(source='withdraw_method', read_only=True)
+    
+    class Meta:
+        model = CashoutRequest
+        fields = ['id', 'withdraw_method', 'withdraw_method_details', 'amount', 'status', 'transaction_id', 'admin_note', 'requested_at', 'processed_at']
+        read_only_fields = ['id', 'status', 'transaction_id', 'admin_note', 'requested_at', 'processed_at']
+
+    def validate_amount(self, value):
+        if value < 500: # Example minimum withdrawal amount
+            raise serializers.ValidationError("Minimum withdrawal amount is 500 BDT.")
+        
+        profile = self.context['request'].user.profile
+        if value > profile.commission_balance:
+            raise serializers.ValidationError("Insufficient commission balance.")
+        return value
+
+    def create(self, validated_data):
+        profile = self.context['request'].user.profile
+        validated_data['profile'] = profile
+        
+        # Deduct from profile balance immediately for pending request
+        with transaction.atomic():
+            profile.commission_balance -= validated_data['amount']
+            profile.save(update_fields=['commission_balance'])
+            cashout_request = super().create(validated_data)
+            
+        return cashout_request

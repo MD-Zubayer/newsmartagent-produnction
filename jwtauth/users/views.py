@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from rest_framework import viewsets, permissions
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import User, Profile, Payment, Subscription, Offer
-from .serializers import UserSerializer, OfferSerializer, SubscriptionSerializer, NSATransferSerializer
+from .serializers import UserSerializer, OfferSerializer, SubscriptionSerializer, NSATransferSerializer, WithdrawMethodSerializer, CashoutRequestSerializer
 from rest_framework import status
 from django.contrib.auth import authenticate
 from rest_framework.views import APIView
@@ -22,7 +22,7 @@ from rest_framework_simplejwt.serializers import TokenVerifySerializer
 from django.utils import timezone
 from django.utils.timezone import now
 from datasheet.models import Spreadsheet
-from users.models import CustomerOrder, OrderForm, EmailVerificationToken, NSATransfer
+from users.models import CustomerOrder, OrderForm, EmailVerificationToken, NSATransfer, WithdrawMethod, CashoutRequest
 from users.serializers import CustomerOrderSerializer
 from man_agent.utils import distribute_agent_commission
 from django.db import transaction
@@ -876,3 +876,47 @@ class SendTransferOTPView(APIView):
             return Response({"message": "Transfer OTP sent successfully to your email."})
         except Exception as e:
             return Response({"error": "Failed to send email."}, status=500)
+
+
+class WithdrawMethodViewSet(viewsets.ModelViewSet):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+    serializer_class = WithdrawMethodSerializer
+
+    def get_queryset(self):
+        return WithdrawMethod.objects.filter(profile=self.request.user.profile).order_by('-is_default', '-created_at')
+
+
+class CashoutRequestViewSet(viewsets.ModelViewSet):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+    serializer_class = CashoutRequestSerializer
+
+    def get_queryset(self):
+        return CashoutRequest.objects.filter(profile=self.request.user.profile).order_by('-requested_at')
+
+
+class FinancialSummaryView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = request.user.profile
+        
+        from django.db.models import Sum
+        
+        pending_requests = CashoutRequest.objects.filter(profile=profile, status='pending')
+        pending_amount = pending_requests.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        
+        successful_requests = CashoutRequest.objects.filter(profile=profile, status='approved')
+        successful_amount = successful_requests.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        
+        failed_requests = CashoutRequest.objects.filter(profile=profile, status='rejected')
+        failed_amount = failed_requests.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        
+        return Response({
+            'total_available_balance': profile.commission_balance,
+            'total_successful_cashout': successful_amount,
+            'total_pending_cashout': pending_amount,
+            'total_failed_cashout': failed_amount,
+        })
