@@ -84,12 +84,16 @@ INSTALLED_APPS = [
 
 CKEDITOR_UPLOAD_PATH = "uploads/"
 CKEDITOR_IMAGE_BACKEND = "pillow"
+CKEDITOR_BASEPATH = "https://cdn.ckeditor.com/4.22.1/full-all/"
 
 CKEDITOR_CONFIGS = {
     'default': {
+        'skin': 'moono-lisa',
         'toolbar': 'full',
         'height': 300,
         'width': '100%',
+        'filebrowserWindowHeight': 725,
+        'filebrowserWindowWidth': 940,
     },
 }
 
