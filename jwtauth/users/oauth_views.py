@@ -39,10 +39,17 @@ def facebook_callback(request):
     Trades the code for an access token, then gets the user's pages.
     """
     code = request.GET.get("code")
-    user_id = request.GET.get("state") # We passed user.id as state
+    user_id = request.GET.get("state")
+    error = request.GET.get("error")
+    error_description = request.GET.get("error_description", "User cancelled or denied permissions.")
 
-    if not code or not user_id:
-        return JsonResponse({"error": "Missing code or state."}, status=400)
+    frontend_url = getattr(settings, 'NEXT_PUBLIC_BASE_URL', 'http://newsmartagent.com')
+
+    if error or not code:
+        return redirect(f"{frontend_url}/dashboard/connect?error=auth_failed&message={error_description}")
+
+    if not user_id:
+        return JsonResponse({"error": "Missing state parameter."}, status=400)
 
     fb_app_id = getattr(settings, 'FB_APP_ID', None)
     fb_app_secret = getattr(settings, 'FB_APP_SECRET', None)

@@ -27,6 +27,17 @@ export default function IntegrationManager() {
     }
   }, [selectedPlatform]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('error')) {
+      const message = params.get('message') || "Authentication failed or was cancelled.";
+      import("react-hot-toast").then(({ toast }) => toast.error(message));
+    }
+    if (params.get('success')) {
+      import("react-hot-toast").then(({ toast }) => toast.success("Pages connected successfully!"));
+    }
+  }, []);
+
   const platformConfigs = {
     facebook: { 
       id: "facebook", 
