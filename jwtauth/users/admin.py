@@ -3,7 +3,7 @@ from django.conf import settings
 from django.contrib import admin
 from django.contrib.auth import admin as auth_admin
 from django.utils.translation import gettext_lazy as _
-
+from .models import FacebookPage
 from .models import OrderForm, CustomerOrder, EmailVerificationToken
 
 from users.forms import UserAdminChangeForm, UserAdminCreationForm
@@ -207,3 +207,40 @@ class NSATransferAdmin(ModelAdmin):
     def get_receiver_id(self, obj):
         return obj.receiver.profile.unique_id
     get_receiver_id.short_description = 'Receiver ID'
+    
+
+
+
+@admin.register(FacebookPage)
+class FacebookPageAdmin(admin.ModelAdmin):
+    # অ্যাডমিন লিস্ট ভিউতে যা যা দেখাবে
+    list_display = ('page_name', 'page_id', 'user', 'is_active', 'created_at')
+    
+    # ফিল্টার করার অপশন
+    list_filter = ('is_active', 'created_at', 'user')
+    
+    # সার্চ বক্স (পেজ নাম, আইডি বা ইউজারের ইমেইল দিয়ে খোঁজা যাবে)
+    search_fields = ('page_name', 'page_id', 'user__email')
+    
+    # এটি দিলে অ্যাডমিন প্যানেল থেকে টোকেন এডিট করা যাবে না, শুধু দেখা যাবে (নিরাপত্তার জন্য)
+    readonly_fields = ('created_at', 'updated_at')
+    
+    # ডাটা এন্ট্রি করার সময় ফিল্ডগুলোর সাজানো রূপ
+    fieldsets = (
+        ('Owner Information', {
+            'fields': ('user',)
+        }),
+        ('Page Details', {
+            'fields': ('page_name', 'page_id', 'access_token')
+        }),
+        ('Status', {
+            'fields': ('is_active', 'created_at', 'updated_at')
+        }),
+    )
+
+    # টোকেন অনেক বড় হয়, তাই ইনপুট বক্সটি বড় দেখানোর জন্য (ঐচ্ছিক)
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        if 'access_token' in form.base_fields:
+            form.base_fields['access_token'].widget.attrs['style'] = 'width: 600px;'
+        return form
