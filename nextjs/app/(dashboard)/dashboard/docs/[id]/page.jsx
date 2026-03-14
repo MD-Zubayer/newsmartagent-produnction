@@ -168,7 +168,7 @@ export default function DocumentPage() {
 };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] md:h-[calc(100vh-80px)] bg-[#F3F2F1] text-gray-800 font-sans -m-4 relative text-xs md:text-base">
+    <div className="flex flex-col min-h-[calc(100vh-64px)] md:min-h-[calc(100vh-80px)] bg-[#F3F2F1] text-gray-800 font-sans -m-4 relative text-xs md:text-base">
       <FileMenu 
    isOpen={showFileMenu} 
    onClose={() => setShowFileMenu(false)}
@@ -234,9 +234,9 @@ export default function DocumentPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-[#F3F2F1] p-2 md:p-8 flex justify-center">
+      <div className="flex-1 bg-[#F3F2F1] p-2 md:p-8 flex justify-center pb-20">
         <div 
-  className="bg-white w-full max-w-[816px] min-h-[1056px] shadow-lg border border-gray-200 p-6 md:p-12 text-gray-900 outline-none editor-canvas"
+  className="bg-white w-full max-w-[816px] min-h-[300px] md:min-h-[500px] shadow-lg border border-gray-200 p-6 md:p-12 text-gray-900 outline-none editor-canvas"
   style={{
     boxShadow: "0 4px 12px 0 rgba(0,0,0,0.1)", 
     fontFamily: "Calibri, Arial, sans-serif", 
