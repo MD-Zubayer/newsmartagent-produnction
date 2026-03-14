@@ -66,7 +66,7 @@ function DashboardContent({ children }) {
           unreadCount={unreadCount}
           markAsRead={markAsRead}
         />
-        <main className="p-4 flex-1 ml-40 overflow-y-auto">
+        <main className="p-4 flex-1 ml-56 overflow-y-auto">
           {/* চিল্ড্রেন পেজগুলোও (যেমন NotificationsPage) চাইলে viewMode পাবে */}
           {isValidElement(children) ? cloneElement(children, { viewMode }) : children}
 

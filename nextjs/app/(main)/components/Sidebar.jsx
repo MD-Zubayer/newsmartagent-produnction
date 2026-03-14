@@ -88,7 +88,7 @@ export default function Sidebar({ viewMode }) {
           height={75}
           className="object-contain rounded-lg"
         />
-        <div className="flex flex-col pl-3 overflow-hidden">
+        <div className="hidden md:flex flex-col pl-3 overflow-hidden">
           <h3 className="font-black text-gray-800 truncate">New Smart Agent</h3>
           <span className={`text-[10px] font-bold uppercase tracking-widest ${viewMode === 'agent' ? 'text-amber-600' : 'text-blue-600'}`}>
             {viewMode} Dashboard
@@ -115,7 +115,7 @@ export default function Sidebar({ viewMode }) {
                 }`}
               >
                 <Icon className="h-5 w-5 shrink-0" />
-                <span className="inline pl-4 text-sm font-medium truncate">
+                <span className="hidden md:inline pl-4 text-sm font-medium truncate">
                   {link.name}
                 </span>
               </div>
@@ -137,7 +137,7 @@ export default function Sidebar({ viewMode }) {
               className="flex items-center md:justify-start justify-center w-full p-2.5 mb-1 rounded-lg transition-all cursor-pointer text-red-500 hover:bg-red-50"
             >
               <Icon className="h-5 w-5 shrink-0" />
-              <span className="inline pl-4 text-sm font-medium">Logout</span>
+              <span className="hidden md:inline pl-4 text-sm font-medium">Logout</span>
             </div>
           ) : (
             <Link key={link.name} href={link.href}>
@@ -147,7 +147,7 @@ export default function Sidebar({ viewMode }) {
                 }`}
               >
                 <Icon className="h-5 w-5 shrink-0" />
-                <span className="inline pl-4 text-sm font-medium">
+                <span className="hidden md:inline pl-4 text-sm font-medium">
                   {link.name === "Profile" && user ? user.name || "My Profile" : link.name}
                 </span>
               </div>
