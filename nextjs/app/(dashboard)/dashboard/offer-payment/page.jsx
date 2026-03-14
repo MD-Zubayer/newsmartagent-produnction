@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { 
+  FaMobileAlt, FaHashtag, FaCopy, FaCheckCircle, FaChevronLeft,
   FaWallet, FaArrowRight, FaInfoCircle, FaUniversity, FaFacebookMessenger 
 } from "react-icons/fa";
 import toast from "react-hot-toast";
