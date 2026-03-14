@@ -56,9 +56,9 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - REDIS_URL=${REDIS_URL}
-      - FB_APP_ID=${FB_APP_ID}
-      - FB_APP_SECRET=${FB_APP_SECRET}
-      - FB_REDIRECT_URI=${FB_REDIRECT_URI}
+      - FB_APP_ID=890689390590685
+      - FB_APP_SECRET=7c0693dacfc6211613d16437be2192b8
+      - FB_REDIRECT_URI=https://newsmartagent.com/api/facebook/callback/
     depends_on:
       - db
       - redis
