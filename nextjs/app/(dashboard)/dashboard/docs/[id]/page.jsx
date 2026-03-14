@@ -168,7 +168,7 @@ export default function DocumentPage() {
 };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-80px)] bg-[#F3F2F1] text-gray-800 font-sans -m-4 relative">
+    <div className="flex flex-col h-[calc(100vh-64px)] md:h-[calc(100vh-80px)] bg-[#F3F2F1] text-gray-800 font-sans -m-4 relative text-xs md:text-base">
       <FileMenu 
    isOpen={showFileMenu} 
    onClose={() => setShowFileMenu(false)}
@@ -187,12 +187,12 @@ export default function DocumentPage() {
             type="text"
             value={docTitle}
             onChange={(e) => setDocTitle(e.target.value)}
-            className="bg-transparent border-b border-transparent hover:border-white/50 focus:border-white outline-none text-lg font-medium px-1 placeholder-white/70 w-64 transition-colors text-white"
+            className="bg-transparent border-b border-transparent hover:border-white/50 focus:border-white outline-none text-sm md:text-lg font-medium px-1 placeholder-white/70 w-32 md:w-64 transition-colors text-white"
             placeholder="Document Title"
           />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-white/80 mr-4">AI Knowledge Base Document</span>
+          <span className="hidden sm:inline text-xs text-white/80 mr-4">AI Knowledge Base Document</span>
           <button
             onClick={handleSave}
             disabled={loading}
@@ -204,7 +204,7 @@ export default function DocumentPage() {
         </div>
       </div>
 
-      <div className="bg-white border-b border-gray-200 px-4 py-2 flex items-center gap-4 shadow-sm z-0">
+      <div className="bg-white border-b border-gray-200 px-2 md:px-4 py-2 flex flex-wrap items-center gap-2 md:gap-4 shadow-sm z-0">
         <div className="flex items-center gap-1 border-r border-gray-200 pr-4">
           <ToolbarButton icon={<Undo size={16} />} onClick={() => execCommand('undo')} title="Undo" />
           <ToolbarButton icon={<Redo size={16} />} onClick={() => execCommand('redo')} title="Redo" />
@@ -234,9 +234,9 @@ export default function DocumentPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-[#F3F2F1] p-8 flex justify-center">
+      <div className="flex-1 overflow-auto bg-[#F3F2F1] p-2 md:p-8 flex justify-center">
         <div 
-  className="bg-white w-full max-w-[816px] min-h-[1056px] shadow-lg border border-gray-200 p-12 text-gray-900 outline-none editor-canvas"
+  className="bg-white w-full max-w-[816px] min-h-[1056px] shadow-lg border border-gray-200 p-6 md:p-12 text-gray-900 outline-none editor-canvas"
   style={{
     boxShadow: "0 4px 12px 0 rgba(0,0,0,0.1)", 
     fontFamily: "Calibri, Arial, sans-serif", 

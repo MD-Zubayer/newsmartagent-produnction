@@ -24,7 +24,7 @@ export default function Topbar({ viewMode, onSwitch }) {
   }, [user]);
 
   return (
-    <nav className="flex items-center justify-between px-8 py-3 bg-white/70 backdrop-blur-xl border-b border-gray-100 sticky top-0 z-50 w-full h-20 shadow-sm">
+    <nav className="flex items-center justify-between px-4 md:px-8 py-3 bg-white/70 backdrop-blur-xl border-b border-gray-100 sticky top-0 z-50 w-full h-16 md:h-20 shadow-sm">
       
       {/* --- LEFT SIDE: Role & Status --- */}
       <div className="flex items-center gap-2">
@@ -62,7 +62,7 @@ export default function Topbar({ viewMode, onSwitch }) {
         <div className="ml-4">
           <button 
             onClick={onSwitch}
-            className={`relative overflow-hidden flex items-center md:gap-3 gap-2 px-2 md:px-5  py-2.5 rounded-2xl md:text-[11px] text-[8px] font-black uppercase tracking-widest transition-all duration-500 active:scale-95 shadow-lg group ${
+            className={`relative overflow-hidden flex items-center md:gap-3 gap-2 px-3 md:px-5 py-2 md:py-2.5 rounded-2xl md:text-[11px] text-[8px] font-black uppercase tracking-widest transition-all duration-500 active:scale-95 shadow-lg group ${
               viewMode === 'agent'
               ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200'
               : 'bg-amber-500 text-white hover:bg-amber-600 shadow-amber-200'
