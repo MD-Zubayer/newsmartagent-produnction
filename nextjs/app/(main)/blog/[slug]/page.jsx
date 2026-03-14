@@ -16,7 +16,8 @@ async function getPost(slug) {
 }
 
 export async function generateMetadata({ params }) {
-  const post = await getPost(params.slug);
+  const resolvedParams = await params;
+  const post = await getPost(resolvedParams.slug);
   if (!post) return { title: 'Post Not Found' };
 
   return {
@@ -31,7 +32,8 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function BlogPostPage({ params }) {
-  const post = await getPost(params.slug);
+  const resolvedParams = await params;
+  const post = await getPost(resolvedParams.slug);
 
   if (!post) {
     return (
