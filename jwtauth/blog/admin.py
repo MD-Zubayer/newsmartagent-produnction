@@ -8,7 +8,7 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(BlogPost)
 class BlogPostAdmin(admin.ModelAdmin):
-    list_display = ('title', 'author', 'category', 'is_published', 'created_at')
+    list_display = ('id', 'title', 'author', 'category', 'thumbnail', 'is_published', 'created_at')
     list_filter = ('is_published', 'category', 'author')
     search_fields = ('title', 'content')
     prepopulated_fields = {'slug': ('title',)}

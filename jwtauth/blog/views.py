@@ -6,11 +6,13 @@ class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
     lookup_field = 'slug'
 
 class BlogPostViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = BlogPost.objects.filter(is_published=True)
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
     lookup_field = 'slug'
 
     def get_serializer_class(self):
