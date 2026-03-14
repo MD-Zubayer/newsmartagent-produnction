@@ -78,7 +78,7 @@ export default function Sidebar({ viewMode }) {
   };
 
   return (
-    <div className="fixed top-0 left-0 h-full flex flex-col bg-white shadow-md w-56 p-3 z-50">
+    <div className="fixed top-0 left-0 h-full flex flex-col bg-white shadow-md w-40 p-3 z-50">
       {/* Logo Section */}
       <div className="flex items-center mb-6 px-1">
         <Image
