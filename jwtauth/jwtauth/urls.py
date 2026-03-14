@@ -56,6 +56,9 @@ urlpatterns = [
     path('api/facebook/pages/', oauth_views.get_connected_pages, name='facebook_pages'),
     path('api/facebook/data-deletion/', oauth_views.facebook_data_deletion, name='facebook_data_deletion'),
 
+    # CKEditor
+    path('ckeditor/', include('ckeditor_uploader.urls')),
+
     
     # অ্যাপ ভিত্তিক ইউআরএল
     path('api/webhooks/', include('webhooks.urls')),
