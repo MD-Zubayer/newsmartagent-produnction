@@ -108,11 +108,11 @@ export default async function BlogPostPage({ params }) {
           
           <div className="flex items-center justify-center md:justify-start gap-4">
              <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-white font-black shadow-lg">
-                {post.author ? post.author.username[0].toUpperCase() : 'A'}
+                {post.author && post.author.username ? post.author.username[0].toUpperCase() : 'A'}
              </div>
              <div className="text-left">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Authored by</p>
-                <p className="font-bold text-slate-900">{post.author ? (post.author.first_name + ' ' + (post.author.last_name || '')) : 'NewSmartAgent Team'}</p>
+                <p className="font-bold text-slate-900">{post.author && post.author.first_name ? (post.author.first_name + ' ' + (post.author.last_name || '')) : 'NewSmartAgent Team'}</p>
              </div>
           </div>
         </header>
@@ -131,18 +131,24 @@ export default async function BlogPostPage({ params }) {
           {/* Social Sticky Sidebar */}
           <aside className="lg:col-span-1 hidden lg:block">
             <div className="sticky top-32 flex flex-col gap-4">
-              {socialLinks.map((social) => (
-                <a 
-                  key={social.name}
-                  href={social.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`w-12 h-12 ${social.color} text-white rounded-2xl flex items-center justify-center text-lg hover:scale-110 hover:-translate-y-1 transition-all duration-300 shadow-lg`}
-                  title={`Share on ${social.name}`}
-                >
-                  {social.icon}
-                </a>
-              ))}
+              {socialLinks.map((social) => {
+                let SocialIcon = null;
+                if (social.name === 'Facebook') SocialIcon = <FaFacebookF />;
+                if (social.name === 'WhatsApp') SocialIcon = <FaWhatsapp />;
+                if (social.name === 'LinkedIn') SocialIcon = <FaLinkedinIn />;
+                return (
+                  <a 
+                    key={social.name}
+                    href={social.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`w-12 h-12 ${social.color} text-white rounded-2xl flex items-center justify-center text-lg hover:scale-110 hover:-translate-y-1 transition-all duration-300 shadow-lg`}
+                    title={`Share on ${social.name}`}
+                  >
+                    {SocialIcon}
+                  </a>
+                );
+              })}
             </div>
           </aside>
 

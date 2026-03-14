@@ -120,10 +120,10 @@ export default function BlogIndex() {
                     <div className="flex items-center justify-between mb-8">
                        <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-[10px] font-black">
-                             {post.author ? post.author.username[0].toUpperCase() : 'A'}
+                             {post.author && post.author.username ? post.author.username[0].toUpperCase() : 'A'}
                           </div>
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">
-                             {post.author ? post.author.username : 'Systems'}
+                             {post.author && post.author.username ? post.author.username : 'Systems'}
                           </p>
                        </div>
                        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-300 uppercase tracking-widest">
