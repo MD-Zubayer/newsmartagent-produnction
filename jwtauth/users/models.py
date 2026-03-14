@@ -122,26 +122,23 @@ class Profile(models.Model):
 
     def sync_word_balance(self):
         """
-        লেটেস্ট একটিভ সাবস্ক্রিপশন থেকে প্রোফাইলের word_balance আপডেট করে।
+        সকল একটিভ সাবস্ক্রিপশনের অবশিষ্ট টোকেন যোগ করে প্রোফাইলের word_balance আপডেট করে।
         """
         from .models import Subscription
+        from django.db.models import Sum
+        from django.utils import timezone
         
-        # ১. ইউজারের সবচেয়ে লেটেস্ট একটিভ সাবস্ক্রিপশন খুঁজে বের করা
-        latest_sub = Subscription.objects.filter(
+        # ১. সকল একটিভ এবং ভ্যালিড সাবস্ক্রিপশন খুঁজে বের করা এবং সেগুলোর remaining_tokens যোগ করা
+        total_remaining = Subscription.objects.filter(
             profile=self, 
-            is_active=True
-        ).order_by('-created_at').first()
+            is_active=True,
+            end_date__gt=timezone.now()
+        ).aggregate(total=Sum('remaining_tokens'))['total'] or 0
 
-        if latest_sub:
-            # ২. সাবস্ক্রিপশনের remaining_tokens কে প্রোফাইলের word_balance এ সেট করা
-            self.word_balance = latest_sub.remaining_tokens
-            self.save()
-            print(f"✅ word_balance updated to {self.word_balance} from Subscription ID: {latest_sub.id}")
-        else:
-            # যদি কোনো একটিভ সাবস্ক্রিপশন না থাকে (ঐচ্ছিক: ব্যালেন্স ০ করে দিতে পারেন)
-            # self.word_balance = 0
-            # self.save()
-            print(f"⚠️ No active subscription found for {self.user.email}")
+        # ২. প্রোফাইলের word_balance এ টোটাল অ্যামাউন্ট সেট করা
+        self.word_balance = total_remaining
+        self.save()
+        print(f"✅ word_balance synced: {self.word_balance} for {self.user.email}")
             
     def __str__(self):
         return f"{self.user.email} | {self.id_type} | {self.unique_id}"

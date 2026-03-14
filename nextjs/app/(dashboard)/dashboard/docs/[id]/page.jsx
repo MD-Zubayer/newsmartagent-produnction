@@ -199,7 +199,7 @@ export default function DocumentPage() {
             className="flex items-center gap-2 bg-white text-[#2B579A] px-4 py-1.5 rounded-md text-sm font-semibold hover:bg-gray-100 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed"
           >
             <Save size={16} />
-            {loading ? "Saving..." : "Save to Smart Agent"}
+            {loading ? "Saving..." : "Save"}
           </button>
         </div>
       </div>
