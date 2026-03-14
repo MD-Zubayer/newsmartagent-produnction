@@ -93,12 +93,10 @@ export default function Sidebar({ viewMode, isDesktopMode }) {
         
         {/* Logo Section */}
         <div className="flex items-center mb-6 px-1">
-          <Image
+          <img
             src="/new-smart-agent.png"
             alt="Logo"
-            width={75}
-            height={75}
-            className="object-contain rounded-lg"
+            className="w-[75px] h-[75px] object-contain rounded-lg"
           />
           <div className="hidden md:flex flex-col pl-3 overflow-hidden">
             <h3 className="font-black text-gray-800 truncate text-[12px]">New Smart Agent</h3>
