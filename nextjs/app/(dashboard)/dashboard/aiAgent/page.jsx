@@ -15,8 +15,10 @@ import {
 } from "@heroicons/react/24/outline";
 import api from "@/lib/api";
 import { toast } from 'react-hot-toast';
+import { useAuth } from "@/context/AuthContext";
 
 export default function AIAgentPage() {
+  const { user: authUser } = useAuth();
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -99,7 +101,12 @@ const openModal = (agent = null) => {
       });
     } else {
       setEditingAgent(null);
-      setFormData(initialFormState);
+      // Pre-fill name from auth user
+      const defaultName = authUser?.name || authUser?.email?.split('@')[0] || "";
+      setFormData({
+        ...initialFormState,
+        name: defaultName
+      });
       // নতুন এজেন্ট হলে প্রথম এভেইলবল মডেলটি সেট করে দিন
       if (availableModels.length > 0) {
         setFormData(prev => ({ ...prev, selected_model: availableModels[0].id }));

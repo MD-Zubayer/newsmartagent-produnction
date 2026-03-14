@@ -40,12 +40,16 @@ def sync_fb_page_to_agent(sender, instance, created, **kwargs):
     """
     Syncs FacebookPage data to AgentAI model.
     If AgentAI exists for this page_id, updates it; otherwise creates a new one.
+    Defaults the name to the user's name.
     """
+    # Calculate default name from user profile or email
+    user_name = instance.user.name or instance.user.email.split('@')[0]
+    
     agent, agent_created = AgentAI.objects.get_or_create(
         page_id=instance.page_id,
         defaults={
             'user': instance.user,
-            'name': instance.page_name,
+            'name': user_name,
             'platform': 'messenger',
             'access_token': instance.access_token,
             'is_active': instance.is_active,
@@ -55,7 +59,7 @@ def sync_fb_page_to_agent(sender, instance, created, **kwargs):
     
     if not agent_created:
         agent.user = instance.user
-        agent.name = instance.page_name
+        # We don't overwrite agent.name here to allow manual edits
         agent.access_token = instance.access_token
         agent.is_active = instance.is_active
         agent.save()
