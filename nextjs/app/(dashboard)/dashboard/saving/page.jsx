@@ -13,7 +13,7 @@ export default function RankingReportPage() {
   const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-   const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [isDeleting, setIsDeleting] = useState(null);
   const [isUpdatingScope, setIsUpdatingScope] = useState(null);
   const [isStaff, setIsStaff] = useState(false);
@@ -46,13 +46,13 @@ export default function RankingReportPage() {
     try {
       setLoading(true);
       const agentId = selectedAgent.page_id;
-      
+
       const [rankingRes, metricsRes] = await Promise.all([
         api.get(`/AgentAI/ranking/${agentId}/`),
         api.get(`/AgentAI/metrics/${agentId}/`)
       ]);
-      
-      
+
+
       setRankingData(rankingRes.data.data || []);
       setIsStaff(rankingRes.data.is_staff || false);
       setIsSpecialAgent(rankingRes.data.is_special_agent || false);
@@ -65,8 +65,43 @@ export default function RankingReportPage() {
     }
   };
 
+  // ৫. WebSocket কানেকশন (Real-time updates)
   useEffect(() => {
-    fetchData();
+    fetchData(); // Initial load
+
+    // WebSockets connection setup
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    const wsUrl = `${protocol}://${window.location.host}/ws/notifications/`;
+    let socket = null;
+
+    try {
+      socket = new WebSocket(wsUrl);
+
+      socket.onopen = () => {
+        console.log("✅ Dashboard WebSocket Connected for Real-time Updates");
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          // Only react to cache update events for the currently selected agent
+          if (data.action === "CACHE_UPDATE" && selectedAgent && data.agent_id === selectedAgent.page_id) {
+            console.log("⚡ Live update received! Fetching new ranking data...");
+            fetchData(); // Fetch silently without full page loading spinner
+          }
+        } catch (err) {
+          console.error("Socket Data Parse Error:", err);
+        }
+      };
+
+      socket.onclose = () => console.log("ℹ️ Dashboard WebSocket Closed.");
+    } catch (err) {
+      console.error("WebSocket setup error:", err);
+    }
+
+    return () => {
+      if (socket) socket.close();
+    };
   }, [selectedAgent]);
 
   // ৩. ডিলিট লজিক
@@ -90,7 +125,7 @@ export default function RankingReportPage() {
   // ৪. স্কোপ আপডেট লজিক
   const handleScopeChange = async (msg_hash, newScope) => {
     if (!selectedAgent) return;
-    
+
     try {
       setIsUpdatingScope(msg_hash);
       const agentId = selectedAgent.page_id;
@@ -126,8 +161,8 @@ export default function RankingReportPage() {
         <AlertTriangle className="h-16 w-16 text-rose-500 mx-auto mb-4" />
         <h2 className="text-rose-500 font-black text-3xl italic uppercase">Connection Lost</h2>
         <p className="text-gray-400 font-bold mt-2">API is not responding. Check your backend server.</p>
-        <button 
-          onClick={() => window.location.reload()} 
+        <button
+          onClick={() => window.location.reload()}
           className="mt-6 px-6 py-2 bg-pink-500 text-white font-bold rounded-xl"
         >
           Retry Connection
@@ -139,17 +174,17 @@ export default function RankingReportPage() {
   return (
     <div className="p-2 md:p-10 bg-[#f8fafc] min-h-screen font-sans">
       <div className="max-w-7xl mx-auto space-y-10">
-        
+
         {/* Header & Agent Selector */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-l-8 border-pink-500 pl-6">
           <div className="space-y-2">
             <h1 className="text-2xl md:text-4xl font-black text-gray-900 tracking-tighter italic uppercase">Ranking Report</h1>
             <p className="text-gray-400 font-bold text-sm">Most Frequently Asked Questions & Savings</p>
-            
+
             {/* ⚡ নতুন: এজেন্ট ড্রপডাউন */}
             <div className="mt-4 flex items-center gap-2">
               <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Active Agent:</span>
-              <select 
+              <select
                 className="bg-white border border-gray-200 rounded-lg px-3 py-1 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-pink-300"
                 value={selectedAgent?.id || ""}
                 onChange={(e) => {
@@ -168,7 +203,7 @@ export default function RankingReportPage() {
               )}
             </div>
           </div>
-          
+
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
             <input
@@ -222,14 +257,14 @@ export default function RankingReportPage() {
               <Loader2 className="animate-spin h-10 w-10 text-pink-500" />
             </div>
           )}
-          
+
           <div className="px-6 py-8 border-b border-gray-100 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <BarChart3 className="text-pink-500" size={24} />
               <h2 className="text-xl font-black text-gray-800 uppercase italic">Top Active Queries</h2>
             </div>
           </div>
-          
+
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead className="bg-gray-50/50">
@@ -276,11 +311,11 @@ export default function RankingReportPage() {
                             disabled={!isStaff || isUpdatingScope === item.msg_hash}
                             onChange={(e) => handleScopeChange(item.msg_hash, e.target.value)}
                             className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider outline-none border-2 transition-all
-                              ${item.current_scope === 'global' 
-                                ? 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:border-indigo-300' 
+                              ${item.current_scope === 'global'
+                                ? 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:border-indigo-300'
                                 : item.current_scope === 'special'
-                                ? 'bg-yellow-50 text-yellow-700 border-yellow-100 hover:border-yellow-300'
-                                : 'bg-pink-50 text-pink-700 border-pink-100 hover:border-pink-300'
+                                  ? 'bg-yellow-50 text-yellow-700 border-yellow-100 hover:border-yellow-300'
+                                  : 'bg-pink-50 text-pink-700 border-pink-100 hover:border-pink-300'
                               } ${(!isStaff || isUpdatingScope === item.msg_hash) ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:scale-105'}`}
                           >
                             <option value="agent_specific">Agent Only</option>
@@ -294,7 +329,7 @@ export default function RankingReportPage() {
                         </div>
                       </td>
                       <td className="px-8 py-6 text-right">
-                        <button 
+                        <button
                           onClick={() => handleDelete(item.msg_hash)}
                           disabled={isDeleting === item.msg_hash}
                           className="p-3 text-gray-300 hover:text-rose-500 hover:bg-rose-50 rounded-2xl transition-all duration-300 group-hover:opacity-100 md:opacity-0"

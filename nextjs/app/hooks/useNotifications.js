@@ -70,6 +70,9 @@ export const useNotifications = (user, setOrders = null) => {
               id: `order-${data.order_data.id}`
             });
 
+        } else if (data.action === "CACHE_UPDATE") {
+           // Ignore CACHE_UPDATE here, dashboard handles it silently
+           console.log("CACHE_UPDATE received in background hook, ignoring audio/toast.");
         } else{
           if (audioRef.current) {
             audioRef.current.play().catch(err => console.log("Audio play blocked:", err));
