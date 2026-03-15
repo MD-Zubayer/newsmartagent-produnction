@@ -381,14 +381,13 @@ class UpdateCacheScopeAPIView(APIView):
                 r_db6.set(global_key, json.dumps(data), ex=30*24*60*60) # 30 days
                 r_db2.delete(agent_key)
             else:
-                # Global -> Agent (Note: Global delete করবেন না যদি অন্য এজেন্ট ইউজ করে, কিন্তু এখানে ইউজার তার এজেন্টের স্কোপ কমাচ্ছে)
+                # Global -> Agent
+                # ১. এজেন্টে সেভ করা
                 r_db2.set(agent_key, json.dumps(data), ex=14*24*60*60) # 14 days
-                # গ্লোবাল থেকে ডিলিট করা রিস্কি হতে পারে, তাই শুধু এজেন্ট লেভেলে কপি করাই যথেষ্ট?
-                # ইউজার রিকোয়েস্ট অনুযায়ী স্কোপ পাল্টানো মানে গ্লোবাল থেকে সরিয়ে শুধু নিজের এজেন্টে রাখা।
-                # তবে গ্লোবাল থেকে ডিলিট করা হলে অন্য এজেন্টদের ডাটা হারিয়ে যেতে পারে।
-                # ডিলিট না করে শুধু স্কোপ ট্যাগ আপডেট করে নিজের এজেন্টে রাখাই নিরাপদ।
-                pass
-            
+                
+                # ২. গ্লোবাল থেকে ডিলিট করা (যেহেতু স্টাফ বা এডমিন রিকোয়েস্ট করছেন, তারা সিস্টেম কন্ট্রোল করছেন)
+                r_db6.delete(global_key)
+                
             return Response({"status": "success", "message": f"Cache scope updated to {new_scope}"}, status=status.HTTP_200_OK)
             
         except Exception as e:

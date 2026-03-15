@@ -132,28 +132,28 @@ def process_ai_reply_task(self, data):
         cached_res = None
         cache_hit_scope = None  # কোন layer থেকে hit এলো সেটা track করার জন্য
 
-        # --- Layer 1: Global Exact ---
-        cached_res = get_global_cached_reply(page_id, text)
+        # --- Layer 1: Agent Exact ---
+        cached_res = get_cached_reply(page_id, msg_text=text)
         if cached_res:
-            cache_hit_scope = "global_exact"
+            cache_hit_scope = "agent_exact"
 
-        # --- Layer 2: Global Fuzzy ---
-        if not cached_res:
-            cached_res = global_fuzzy_match(page_id, text, threshold=92)
-            if cached_res:
-                cache_hit_scope = "global_fuzzy"
-
-        # --- Layer 3: Agent Exact ---
-        if not cached_res:
-            cached_res = get_cached_reply(page_id, msg_text=text)
-            if cached_res:
-                cache_hit_scope = "agent_exact"
-
-        # --- Layer 4: Agent Fuzzy ---
+        # --- Layer 2: Agent Fuzzy ---
         if not cached_res:
             cached_res = fuzzy_match(page_id, text, threshold=80)
             if cached_res:
                 cache_hit_scope = "agent_fuzzy"
+
+        # --- Layer 3: Global Exact ---
+        if not cached_res:
+            cached_res = get_global_cached_reply(page_id, text)
+            if cached_res:
+                cache_hit_scope = "global_exact"
+
+        # --- Layer 4: Global Fuzzy ---
+        if not cached_res:
+            cached_res = global_fuzzy_match(page_id, text, threshold=92)
+            if cached_res:
+                cache_hit_scope = "global_fuzzy"
 
         # --- Layer 5: Sender Exact ---
         if not cached_res:
