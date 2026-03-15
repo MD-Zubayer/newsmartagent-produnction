@@ -1,4 +1,4 @@
-```python
+
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from aiAgent.views import AgentAIViewSet, TokenUsageAnalyticsView, dashboard_chat_view, RankingAPIView, UserAvailableModelsView, AgentMetricsAPIView, DeleteRankingDataAPIView
@@ -20,4 +20,4 @@ urlpatterns = [
 
 
 ]
-```
+
