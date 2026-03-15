@@ -232,18 +232,22 @@ class RankingAPIView(APIView):
                 # DB 2 (Agent Cache) চেক করা
                 key = f"agent:{agent_id}:reply:{msg_hash}"
                 cached_data = redis_conn.get(key)
+                source = 'agent'
                 
                 # যদি DB 2-তে না থাকে তবে DB 6 (Global Cache) চেক করা
                 if not cached_data:
                     global_key = f"global:reply:{msg_hash}"
                     cached_data = r_grouped.get(global_key)
+                    source = 'global'
 
                 text = "Unknown Message"
                 total_token_savings = 0
+                current_scope = "agent_specific"
                 
                 if cached_data:
                     data = json.loads(cached_data)
                     text = data.get('original_normalized', data.get('original_text', 'Unknown Message')) 
+                    current_scope = data.get('cache_scope', 'agent_specific') if source == 'agent' else 'global'
                     
                     input_tokens = data.get('input_tokens', 0)
                     output_tokens = data.get('output_tokens', 0)
@@ -256,9 +260,13 @@ class RankingAPIView(APIView):
                     'frequency': int(frequency),
                     'token_savings': total_token_savings,
                     'msg_hash': msg_hash,
+                    'current_scope': current_scope,
                 })
 
-            return Response(api_data, status=status.HTTP_200_OK)
+            return Response({
+                "data": api_data,
+                "is_staff": request.user.is_staff or request.user.is_superuser
+            }, status=status.HTTP_200_OK)
             
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -326,6 +334,62 @@ class DeleteRankingDataAPIView(APIView):
                 r_grouped_db6.delete(key)
             
             return Response({"status": "success", "message": "Message deleted from agent cache layers"}, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class UpdateCacheScopeAPIView(APIView):
+    """
+    মেসেজের ক্যাশ গ্রুপ (Scope) পরিবর্তন করে (Agent Specific <-> Global)
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, agent_id, msg_hash):
+        new_scope = request.data.get('new_scope') # 'global' or 'agent_specific'
+        if new_scope not in ['global', 'agent_specific']:
+            return Response({"error": "Invalid scope. Use 'global' or 'agent_specific'"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # ১. পারমিশন চেক (শুধু স্টাফরা পারবে)
+        if not (request.user.is_staff or request.user.is_superuser):
+            return Response({"error": "Only staff members can change cache group."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            # ১. ওনারশিপ ভেরিফিকেশন
+            agent = AgentAI.objects.filter(page_id=agent_id, user=request.user).first()
+            if not agent:
+                return Response({"error": "Agent not found or unauthorized"}, status=status.HTTP_404_NOT_FOUND)
+            
+            # ২. সোর্স ডাটা চেক করা (উভয় ডিবিতে চেক করবে)
+            agent_key = f"agent:{agent_id}:reply:{msg_hash}"
+            global_key = f"global:reply:{msg_hash}"
+            
+            r_db2 = redis_conn # DB 2
+            r_db6 = get_redis_client(db=6) # DB 6
+            
+            raw_data = r_db2.get(agent_key) or r_db6.get(global_key)
+            if not raw_data:
+                return Response({"error": "Original cached message not found"}, status=status.HTTP_404_NOT_FOUND)
+            
+            data = json.loads(raw_data)
+            
+            # ৩. ডাটা আপডেট করা
+            data['cache_scope'] = new_scope
+            
+            # ৪. মুভ করা
+            if new_scope == 'global':
+                # Agent -> Global
+                r_db6.set(global_key, json.dumps(data), ex=30*24*60*60) # 30 days
+                r_db2.delete(agent_key)
+            else:
+                # Global -> Agent (Note: Global delete করবেন না যদি অন্য এজেন্ট ইউজ করে, কিন্তু এখানে ইউজার তার এজেন্টের স্কোপ কমাচ্ছে)
+                r_db2.set(agent_key, json.dumps(data), ex=14*24*60*60) # 14 days
+                # গ্লোবাল থেকে ডিলিট করা রিস্কি হতে পারে, তাই শুধু এজেন্ট লেভেলে কপি করাই যথেষ্ট?
+                # ইউজার রিকোয়েস্ট অনুযায়ী স্কোপ পাল্টানো মানে গ্লোবাল থেকে সরিয়ে শুধু নিজের এজেন্টে রাখা।
+                # তবে গ্লোবাল থেকে ডিলিট করা হলে অন্য এজেন্টদের ডাটা হারিয়ে যেতে পারে।
+                # ডিলিট না করে শুধু স্কোপ ট্যাগ আপডেট করে নিজের এজেন্টে রাখাই নিরাপদ।
+                pass
+            
+            return Response({"status": "success", "message": f"Cache scope updated to {new_scope}"}, status=status.HTTP_200_OK)
             
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

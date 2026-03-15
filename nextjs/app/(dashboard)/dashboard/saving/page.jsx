@@ -13,8 +13,10 @@ export default function RankingReportPage() {
   const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
+   const [searchTerm, setSearchTerm] = useState("");
   const [isDeleting, setIsDeleting] = useState(null);
+  const [isUpdatingScope, setIsUpdatingScope] = useState(null);
+  const [isStaff, setIsStaff] = useState(false);
 
   // ১. এজেন্ট লিস্ট লোড করা
   useEffect(() => {
@@ -49,7 +51,9 @@ export default function RankingReportPage() {
         api.get(`/AgentAI/metrics/${agentId}/`)
       ]);
       
-      setRankingData(rankingRes.data);
+      
+      setRankingData(rankingRes.data.data || []);
+      setIsStaff(rankingRes.data.is_staff || false);
       setMetrics(metricsRes.data);
     } catch (err) {
       console.error("Fetch Data Error:", err);
@@ -78,6 +82,26 @@ export default function RankingReportPage() {
       toast.error("Failed to delete message from cache");
     } finally {
       setIsDeleting(null);
+    }
+  };
+
+  // ৪. স্কোপ আপডেট লজিক
+  const handleScopeChange = async (msg_hash, newScope) => {
+    if (!selectedAgent) return;
+    
+    try {
+      setIsUpdatingScope(msg_hash);
+      const agentId = selectedAgent.page_id;
+      await api.post(`/AgentAI/ranking/update-scope/${agentId}/${msg_hash}/`, {
+        new_scope: newScope
+      });
+      toast.success(`Cache scope updated to ${newScope === 'global' ? 'Global' : 'Agent Specific'}`);
+      fetchData(); // Refresh data to show updated scope
+    } catch (err) {
+      console.error("Scope Update Error:", err);
+      toast.error("Failed to update cache scope");
+    } finally {
+      setIsUpdatingScope(null);
     }
   };
 
@@ -207,6 +231,7 @@ export default function RankingReportPage() {
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest">Message Content</th>
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest">Frequency</th>
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest">Token Savings</th>
+                  <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest">Cache Scope</th>
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
                 </tr>
               </thead>
@@ -235,6 +260,27 @@ export default function RankingReportPage() {
                           <PiggyBank className="text-green-500" size={18} />
                           <span className="text-2xl font-black text-green-700">{item.token_savings}</span>
                           <span className="text-sm font-bold text-gray-400">tokens</span>
+                        </div>
+                      </td>
+                      <td className="px-8 py-6">
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={item.current_scope}
+                            disabled={!isStaff || isUpdatingScope === item.msg_hash}
+                            onChange={(e) => handleScopeChange(item.msg_hash, e.target.value)}
+                            className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider outline-none border-2 transition-all
+                              ${item.current_scope === 'global' 
+                                ? 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:border-indigo-300' 
+                                : 'bg-pink-50 text-pink-700 border-pink-100 hover:border-pink-300'
+                              } ${(!isStaff || isUpdatingScope === item.msg_hash) ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:scale-105'}`}
+                          >
+                            <option value="agent_specific">Agent Only</option>
+                            <option value="global">Global</option>
+                          </select>
+                          {isUpdatingScope === item.msg_hash && <Loader2 size={12} className="animate-spin text-gray-400" />}
+                          {!isStaff && (
+                            <span className="text-[9px] font-bold text-gray-400 italic">Staff Only</span>
+                          )}
                         </div>
                       </td>
                       <td className="px-8 py-6 text-right">

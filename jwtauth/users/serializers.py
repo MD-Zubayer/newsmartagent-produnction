@@ -59,7 +59,8 @@ class UserSerializer(serializers.ModelSerializer[User]):
             "profile",#nested
             'man_agent_unique_id',
             'man_agent_otp_key',
-            
+            'is_staff',
+            'is_superuser',
         ]
 
 
