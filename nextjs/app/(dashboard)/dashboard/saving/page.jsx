@@ -17,6 +17,7 @@ export default function RankingReportPage() {
   const [isDeleting, setIsDeleting] = useState(null);
   const [isUpdatingScope, setIsUpdatingScope] = useState(null);
   const [isStaff, setIsStaff] = useState(false);
+  const [isSpecialAgent, setIsSpecialAgent] = useState(false);
 
   // ১. এজেন্ট লিস্ট লোড করা
   useEffect(() => {
@@ -54,6 +55,7 @@ export default function RankingReportPage() {
       
       setRankingData(rankingRes.data.data || []);
       setIsStaff(rankingRes.data.is_staff || false);
+      setIsSpecialAgent(rankingRes.data.is_special_agent || false);
       setMetrics(metricsRes.data);
     } catch (err) {
       console.error("Fetch Data Error:", err);
@@ -95,7 +97,7 @@ export default function RankingReportPage() {
       await api.post(`/AgentAI/ranking/update-scope/${agentId}/${msg_hash}/`, {
         new_scope: newScope
       });
-      toast.success(`Cache scope updated to ${newScope === 'global' ? 'Global' : 'Agent Specific'}`);
+      toast.success(`Cache scope updated to ${newScope.replace('_', ' ')}`);
       fetchData(); // Refresh data to show updated scope
     } catch (err) {
       console.error("Scope Update Error:", err);
@@ -159,6 +161,11 @@ export default function RankingReportPage() {
                   <option key={agent.id} value={agent.id}>{agent.name} ({agent.page_id})</option>
                 ))}
               </select>
+              {isSpecialAgent && (
+                <span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tighter shadow-sm border border-yellow-200 flex items-center gap-1">
+                  <Zap size={10} fill="currentColor" /> Special
+                </span>
+              )}
             </div>
           </div>
           
@@ -271,11 +278,14 @@ export default function RankingReportPage() {
                             className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider outline-none border-2 transition-all
                               ${item.current_scope === 'global' 
                                 ? 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:border-indigo-300' 
+                                : item.current_scope === 'special'
+                                ? 'bg-yellow-50 text-yellow-700 border-yellow-100 hover:border-yellow-300'
                                 : 'bg-pink-50 text-pink-700 border-pink-100 hover:border-pink-300'
                               } ${(!isStaff || isUpdatingScope === item.msg_hash) ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:scale-105'}`}
                           >
                             <option value="agent_specific">Agent Only</option>
                             <option value="global">Global</option>
+                            {isSpecialAgent && <option value="special">Special Agent</option>}
                           </select>
                           {isUpdatingScope === item.msg_hash && <Loader2 size={12} className="animate-spin text-gray-400" />}
                           {!isStaff && (

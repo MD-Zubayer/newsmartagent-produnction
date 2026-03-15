@@ -224,6 +224,8 @@ class RankingAPIView(APIView):
         try:
             # ১. র‍্যাঙ্কিং ডাটা আনা (db=4 থেকে)
             top_messages_raw = get_top_message(agent_id, top_n=10)
+            agent = AgentAI.objects.filter(page_id=agent_id).first()
+            is_special_agent = agent.is_special_agent if agent else False
             
             api_data = []
             
@@ -265,7 +267,8 @@ class RankingAPIView(APIView):
 
             return Response({
                 "data": api_data,
-                "is_staff": request.user.is_staff or request.user.is_superuser
+                "is_staff": request.user.is_staff or request.user.is_superuser,
+                "is_special_agent": is_special_agent
             }, status=status.HTTP_200_OK)
             
         except Exception as e:
@@ -347,7 +350,7 @@ class UpdateCacheScopeAPIView(APIView):
     def post(self, request, agent_id, msg_hash):
         new_scope = request.data.get('new_scope') # 'global' or 'agent_specific'
         if new_scope not in ['global', 'agent_specific']:
-            return Response({"error": "Invalid scope. Use 'global' or 'agent_specific'"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Invalid scope. Use 'global', 'agent_specific' or 'special'"}, status=status.HTTP_400_BAD_REQUEST)
 
         # ১. পারমিশন চেক (শুধু স্টাফরা পারবে)
         if not (request.user.is_staff or request.user.is_superuser):
@@ -380,12 +383,20 @@ class UpdateCacheScopeAPIView(APIView):
                 # Agent -> Global
                 r_db6.set(global_key, json.dumps(data), ex=30*24*60*60) # 30 days
                 r_db2.delete(agent_key)
+            elif new_scope == 'special':
+                # Special Scope (Requires agent to be special)
+                if not agent.is_special_agent:
+                    return Response({"error": "This agent is not enrolled in the Special Agent program."}, status=status.HTTP_403_FORBIDDEN)
+                
+                # DB 2 (same as agent) but 1 year TTL
+                r_db2.set(agent_key, json.dumps(data), ex=365*24*60*60) 
+                r_db6.delete(global_key)
             else:
                 # Global -> Agent
                 # ১. এজেন্টে সেভ করা
                 r_db2.set(agent_key, json.dumps(data), ex=14*24*60*60) # 14 days
                 
-                # ২. গ্লোবাল থেকে ডিলিট করা (যেহেতু স্টাফ বা এডমিন রিকোয়েস্ট করছেন, তারা সিস্টেম কন্ট্রোল করছেন)
+                # ২. গ্লোবাল থেকে ডিলিট করা
                 r_db6.delete(global_key)
                 
             return Response({"status": "success", "message": f"Cache scope updated to {new_scope}"}, status=status.HTTP_200_OK)

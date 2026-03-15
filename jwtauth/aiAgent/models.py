@@ -74,6 +74,7 @@ class AgentAI(models.Model):
     token_expires_at = models.DateTimeField(null=True, blank=True)
 
     is_active = models.BooleanField(default=True)
+    is_special_agent = models.BooleanField(default=False, help_text="বিশেষ এজেন্টদের ডাটা দীর্ঘক্ষণ (১ বছর) ক্যাশে থাকবে")
 
     created_at = models.DateTimeField(auto_now_add=True)
     

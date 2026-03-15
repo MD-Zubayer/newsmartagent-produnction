@@ -50,18 +50,23 @@ def get_cached_reply(agent_id, msg_text=None, msg_hash=None):
     return None
 
 
-def set_cached_reply(agent_id, msg_text, reply, model, input_tokens=0, output_tokens=0, ttl=86400):
+def set_cached_reply(agent_id, msg_text, reply, model, input_tokens=0, output_tokens=0, ttl=None, is_special=False):
     normalized = normalize_text(msg_text)
     msg_hash = hashlib.md5(normalized.encode()).hexdigest()
     key = f"agent:{agent_id}:reply:{msg_hash}"
+    
+    # TTL নির্ধারণ
+    if ttl is None:
+        ttl = SPECIAL_CACHE_TTL if is_special else AGENT_CACHE_TTL
 
     r.set(key, json.dumps({
         "reply": reply,
         "model": model,
         "original_text": msg_text,
         "original_normalized": normalized,
-        "input_tokens": input_tokens,    # ⚡ নতুন ডাটা
-        "output_tokens": output_tokens   # ⚡ নতুন ডাটা
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "cache_scope": "special" if is_special else "agent_specific"
     }), ex=ttl)
 
     incr_message_frequency(agent_id, msg_hash)
@@ -189,6 +194,7 @@ def find_best_cached_hash(agent_id, msg_text, threshold=70):
 GLOBAL_CACHE_TTL = 86400 * 30   # ৩০ দিন
 AGENT_CACHE_TTL  = 86400 * 14   # ১৪ দিন (agent-specific grouped)
 SENDER_CACHE_TTL = 86400 * 7    # ৭ দিন
+SPECIAL_CACHE_TTL = 86400 * 365  # ১ বছর (Special Agent)
 
 
 def get_global_cached_reply(agent_id, msg_text):

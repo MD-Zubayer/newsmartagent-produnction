@@ -331,6 +331,7 @@ def process_ai_reply_task(self, data):
                         page_id, text, reply, model=effective_model,
                         input_tokens=ai_data.get('input_tokens', 0),
                         output_tokens=ai_data.get('output_tokens', 0),
+                        is_special=agent_config.is_special_agent
                     )
                 else:
                     # no_cache বা অজানা type → save করা হবে না
