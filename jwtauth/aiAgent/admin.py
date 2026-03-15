@@ -45,8 +45,8 @@ class AIProviderModelAdmin(admin.ModelAdmin):
 
 @admin.register(AgentAI)
 class AgentAIAdmin(ModelAdmin):
-    list_display = [ 'id', 'name', 'user', 'platform', 'ai_agent_type', 'is_special_agent', 'is_active','custom_keywords', 'created_at']
-    list_filter = ['platform', 'is_active', 'is_special_agent', 'user', 'ai_agent_type',]
+    list_display = [ 'id', 'name', 'user', 'platform', 'ai_agent_type', 'special_agent_status', 'is_special_agent', 'is_active','custom_keywords', 'created_at']
+    list_filter = ['platform', 'special_agent_status', 'is_active', 'is_special_agent', 'user', 'ai_agent_type',]
     search_fields = ['name', 'page_id', 'user__username']
     # readonly_fields = ['create_at', 'access_token', 'webhook_secret']
 

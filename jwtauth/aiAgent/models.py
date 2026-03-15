@@ -76,6 +76,19 @@ class AgentAI(models.Model):
     is_active = models.BooleanField(default=True)
     is_special_agent = models.BooleanField(default=False, help_text="বিশেষ এজেন্টদের ডাটা দীর্ঘক্ষণ (১ বছর) ক্যাশে থাকবে")
 
+    SPECIAL_AGENT_STATUS_CHOICES = [
+        ('none', 'None'),
+        ('pending', 'Pending Approval'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+    special_agent_status = models.CharField(
+        max_length=20, 
+        choices=SPECIAL_AGENT_STATUS_CHOICES, 
+        default='none',
+        help_text="Status of the user's request for Special Agent features."
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     
 
@@ -83,6 +96,11 @@ class AgentAI(models.Model):
         # Sync legacy ai_model field with selected_model if present
         if self.selected_model:
             self.ai_model = self.selected_model.model_id
+        
+        # Auto-activate is_special_agent when approved
+        if self.special_agent_status == 'approved':
+            self.is_special_agent = True
+            
         super().save(*args, **kwargs)
 
     def is_token_valid(self):

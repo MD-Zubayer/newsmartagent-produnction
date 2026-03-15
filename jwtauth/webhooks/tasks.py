@@ -44,6 +44,23 @@ logger = logging.getLogger(__name__)
 
 r = get_redis_client(db=0)
 
+def send_cache_update_ws(user_id, agent_id):
+    try:
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"user_{user_id}",
+            {
+                "type": "send_notification",
+                "content": {
+                    "action": "CACHE_UPDATE",
+                    "agent_id": agent_id,
+                }
+            }
+        )
+    except Exception as e:
+        logger.error(f"WebSocket broadcast error: {e}")
 
 # -------------------- TASK -------------------- #
 
@@ -213,6 +230,7 @@ def process_ai_reply_task(self, data):
 
             incr_counter(page_id, "cache_hit")
             logger.info(f"⚡ CACHE HIT [{cache_hit_scope}] → '{text[:30]}'")
+            send_cache_update_ws(agent_config.user.id, page_id)
 
             save_message(agent_config, sender_id, text, 'user')
             save_message(agent_config, sender_id, reply, 'assistant', tokens=0)
@@ -319,6 +337,7 @@ def process_ai_reply_task(self, data):
                         input_tokens=ai_data.get('input_tokens', 0),
                         output_tokens=ai_data.get('output_tokens', 0),
                     )
+                    send_cache_update_ws(agent_config.user.id, page_id)
                 elif cache_type == 'sender_specific':
                     set_sender_cached_reply(
                         page_id, sender_id, text, reply, model=effective_model,
@@ -333,6 +352,7 @@ def process_ai_reply_task(self, data):
                         output_tokens=ai_data.get('output_tokens', 0),
                         is_special=agent_config.is_special_agent
                     )
+                    send_cache_update_ws(agent_config.user.id, page_id)
                 else:
                     # no_cache বা অজানা type → save করা হবে না
                     logger.info(f"🚫 Cache SKIPPED (no_cache) for: '{text[:30]}'")
