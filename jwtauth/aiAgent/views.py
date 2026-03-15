@@ -303,18 +303,29 @@ class DeleteRankingDataAPIView(APIView):
             if not agent:
                 return Response({"error": "Agent not found or unauthorized"}, status=status.HTTP_404_NOT_FOUND)
             
-            # ২. র‍্যাঙ্কিং (DB 4) থেকে রিমুভ করা
+            # ২. র‍্যাঙ্কিং ও ক্লাস্টার (DB 4) থেকে রিমুভ করা
             ranking_r = get_redis_client(db=4)
             ranking_key = f"agent:{agent_id}:ranking"
-            ranking_r.zrem(ranking_key, msg_hash)
+            cluster_key = f"agent:{agent_id}:clusters"
             
-            # ৩. ক্যাশ রিপ্লাই (DB 2) থেকে ডিলিট করা
+            pipe_db4 = ranking_r.pipeline()
+            pipe_db4.zrem(ranking_key, msg_hash)
+            pipe_db4.hdel(cluster_key, msg_hash)
+            pipe_db4.execute()
+            
+            # ৩. এজেন্ট ক্যাশ (DB 2) থেকে ডিলিট করা
             cache_key = f"agent:{agent_id}:reply:{msg_hash}"
             redis_conn.delete(cache_key)
             
-            # ৪. মেট্রিক্স রিডারবিলিটি বজায় রাখা (ঐচ্ছিক: ডিলিট হলে হিস্ট্রি থেকে কমানো কঠিন, তাই শুধু কী মুছে ফেলাই যথেষ্ট)
+            # ৪. সেন্ডার ক্যাশ (DB 6) থেকে ডিলিট করা (নির্দিষ্ট এজেন্টের জন্য)
+            r_grouped_db6 = get_redis_client(db=6)
             
-            return Response({"status": "success", "message": "Message deleted from cache"}, status=status.HTTP_200_OK)
+            # Sender-specific keys for this agent and this message hash
+            sender_pattern = f"agent:{agent_id}:sender:*:reply:{msg_hash}"
+            for key in r_grouped_db6.scan_iter(match=sender_pattern):
+                r_grouped_db6.delete(key)
+            
+            return Response({"status": "success", "message": "Message deleted from agent cache layers"}, status=status.HTTP_200_OK)
             
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
