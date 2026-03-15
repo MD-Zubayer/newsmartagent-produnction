@@ -23,7 +23,7 @@ def ensure_index_exists():
                 "page_id", "TAG",
                 "msg_hash", "TAG",      # ⚡ নতুন যোগ করা হয়েছে (লিঙ্কিং এর জন্য)
                 "text", "TEXT",
-                "embedding", "VECTOR", "HNSW", 8,
+                "embedding", "VECTOR", "HNSW", 12,
                 "TYPE", "FLOAT32",
                 "DIM", 768,
                 "DISTANCE_METRIC", "COSINE",
