@@ -133,13 +133,13 @@ def process_ai_reply_task(self, data):
         cache_hit_scope = None  # কোন layer থেকে hit এলো সেটা track করার জন্য
 
         # --- Layer 1: Global Exact ---
-        cached_res = get_global_cached_reply(text)
+        cached_res = get_global_cached_reply(page_id, text)
         if cached_res:
             cache_hit_scope = "global_exact"
 
         # --- Layer 2: Global Fuzzy ---
         if not cached_res:
-            cached_res = global_fuzzy_match(text, threshold=92)
+            cached_res = global_fuzzy_match(page_id, text, threshold=92)
             if cached_res:
                 cache_hit_scope = "global_fuzzy"
 
@@ -251,8 +251,8 @@ def process_ai_reply_task(self, data):
                 'Return ONLY a valid JSON object: {"reply": "...", "cache_type": "..."}. '
                 'Use "no_cache" for ambiguous pronouns (this/it/এটা/ঐটা) or context-dependent queries. '
                 'Use "sender_specific" for personal data (my/me/আমি/আমার/order) unique to the user. '
-                'Use "global" for universal greetings and small talk (hi/সালাম/ভাই/thanks/ok). '
                 'Use "agent_specific" for standalone business info like products, prices, and FAQs. '
+                'Use "global" for everything else, including universal greetings, small talk, and general responses.'
                 'STRICT: No markdown blocks, no preamble, and ensure JSON syntax is perfect.'
             )
             full_prompt = full_prompt + classify_instruction

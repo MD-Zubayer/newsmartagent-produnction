@@ -14,7 +14,8 @@ from aiAgent.gemini import generate_dashboard_help
 from rest_framework.decorators import api_view, permission_classes
 from django.http import JsonResponse
 from aiAgent.cache.ranking import get_top_message
-from aiAgent.cache.hybrid_similarity import r as redis_conn
+from aiAgent.cache.hybrid_similarity import r as redis_conn, r_grouped
+from aiAgent.cache.metrics import get_metrics
 import json
 from users.models import Subscription
 from .serializers import AIProviderModelSerializer
@@ -220,36 +221,69 @@ class RankingAPIView(APIView):
     """
     def get(self, request, agent_id, format=None):
         try:
-            # ১. র‍্যাঙ্কিং ডাটা আনা (db=6 থেকে)
+            # ১. র‍্যাঙ্কিং ডাটা আনা (db=4 থেকে)
             top_messages_raw = get_top_message(agent_id, top_n=10)
             
             api_data = []
             
-            # ২. hash থেকে মূল টেক্সট খুঁজে বের করা (db=2 থেকে)
+            # ২. hash থেকে মূল টেক্সট খুঁজে বের করা
             for msg_hash, frequency in top_messages_raw:
-                key = f"agent:{agent_id}:reply:{msg_hash.decode()}"
+                # DB 2 (Agent Cache) চেক করা
+                key = f"agent:{agent_id}:reply:{msg_hash}"
                 cached_data = redis_conn.get(key)
                 
+                # যদি DB 2-তে না থাকে তবে DB 6 (Global Cache) চেক করা
+                if not cached_data:
+                    global_key = f"global:reply:{msg_hash}"
+                    cached_data = r_grouped.get(global_key)
+
                 text = "Unknown Message"
-                total_token_savings = 0 # 👈 ভেরিয়েবলটি ইনিশিয়ালাইজ করুন
+                total_token_savings = 0
                 
                 if cached_data:
                     data = json.loads(cached_data)
-                    text = data.get('original_normalized', 'Unknown Message') 
+                    text = data.get('original_normalized', data.get('original_text', 'Unknown Message')) 
                     
                     input_tokens = data.get('input_tokens', 0)
                     output_tokens = data.get('output_tokens', 0)
-                    # ⚡ ক্যালকুলেশন ঠিক আছে
+                    # ⚡ ক্যালকুলেশন
                     total_token_savings = (int(input_tokens) + int(output_tokens)) * int(frequency)
-                    total_token_savings -= input_tokens + output_tokens
+                    total_token_savings -= (input_tokens + output_tokens)
 
                 api_data.append({
                     'text': text,
                     'frequency': int(frequency),
-                    'token_savings': total_token_savings, # 👈 এখানে ভেরিয়েবলের নাম ঠিক করুন
+                    'token_savings': total_token_savings,
                 })
 
             return Response(api_data, status=status.HTTP_200_OK)
             
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class AgentMetricsAPIView(APIView):
+    """
+    এজেন্টের পারফরম্যান্স মেট্রিক্স রিটার্ন করে (Cache Hit/Miss etc.)
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, agent_id):
+        try:
+            raw_metrics = get_metrics(agent_id)
+            # বাইটস থেকে ডিকোড করা
+            metrics = {k.decode(): v.decode() for k, v in raw_metrics.items()}
+            
+            # Hit Rate ক্যালকুলেশন
+            hits = int(metrics.get('cache_hit', 0))
+            misses = int(metrics.get('cache_miss', 0))
+            total = hits + misses
+            hit_rate = round((hits / total * 100), 2) if total > 0 else 0
+            
+            return Response({
+                "status": "success",
+                "metrics": metrics,
+                "hit_rate": hit_rate,
+                "total_queries": total
+            })
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

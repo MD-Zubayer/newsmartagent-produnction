@@ -191,7 +191,7 @@ AGENT_CACHE_TTL  = 86400 * 14   # ১৪ দিন (agent-specific grouped)
 SENDER_CACHE_TTL = 86400 * 7    # ৭ দিন
 
 
-def get_global_cached_reply(msg_text):
+def get_global_cached_reply(agent_id, msg_text):
     """Global cache থেকে exact match করে reply নিয়ে আসে।"""
     if not msg_text:
         return None
@@ -202,6 +202,8 @@ def get_global_cached_reply(msg_text):
         cached = r_grouped.get(key)
         if cached:
             logger.info(f"⚡ GLOBAL EXACT HIT: '{msg_text[:30]}'")
+            # র‍্যাঙ্কিং ট্র্যাকিং (Agent specific)
+            incr_message_frequency(agent_id, msg_hash)
             return json.loads(cached)
     except Exception as e:
         logger.error(f"Global Cache Get Error: {e}")
@@ -228,7 +230,7 @@ def set_global_cached_reply(msg_text, reply, model, input_tokens=0, output_token
         logger.error(f"Global Cache Set Error: {e}")
 
 
-def global_fuzzy_match(msg_text, threshold=92):
+def global_fuzzy_match(agent_id, msg_text, threshold=92):
     """
     Global cache-এ fuzzy search করে। Global entries সবার জন্য
     প্রযোজ্য তাই threshold বেশি রাখা হয়েছে (92)।
@@ -239,6 +241,7 @@ def global_fuzzy_match(msg_text, threshold=92):
     pattern = "global:reply:*"
     best_score = 0
     best_data = None
+    best_hash = None
     found_any = False
     try:
         for key in r_grouped.scan_iter(match=pattern, count=100):
@@ -252,6 +255,9 @@ def global_fuzzy_match(msg_text, threshold=92):
             if score > best_score and score >= threshold:
                 best_score = score
                 best_data = stored_data
+                # হাশ বের করা (ম্যাচ হাশ র‍্যাঙ্কিং বাড়াতে সুবিধা হবে)
+                key_str = key.decode() if isinstance(key, bytes) else key
+                best_hash = key_str.split(":")[-1]
     except Exception as e:
         logger.error(f"Global Fuzzy Match Error: {e}")
         return None
@@ -261,6 +267,8 @@ def global_fuzzy_match(msg_text, threshold=92):
         return None
     if best_data:
         logger.info(f"⚡ GLOBAL FUZZY HIT! Score: {best_score}% | '{msg_text[:20]}'")
+        if best_hash:
+            incr_message_frequency(agent_id, best_hash)
         return best_data
     return None
 
@@ -278,6 +286,8 @@ def get_sender_cached_reply(agent_id, sender_id, msg_text):
         cached = r_grouped.get(key)
         if cached:
             logger.info(f"⚡ SENDER EXACT HIT for sender {sender_id}: '{msg_text[:30]}'")
+            # র‍্যাঙ্কিং ট্র্যাকিং
+            incr_message_frequency(agent_id, msg_hash)
             return json.loads(cached)
     except Exception as e:
         logger.error(f"Sender Cache Get Error: {e}")

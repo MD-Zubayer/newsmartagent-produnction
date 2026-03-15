@@ -6,39 +6,71 @@ import { Table, Search, AlertTriangle, Zap, BarChart3, Loader2, PiggyBank } from
 import api from "@/lib/api";
 
 export default function RankingReportPage() {
+  const [agents, setAgents] = useState([]);
+  const [selectedAgent, setSelectedAgent] = useState(null);
   const [rankingData, setRankingData] = useState([]);
+  const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
+  // ১. এজেন্ট লিস্ট লোড করা
   useEffect(() => {
-    const fetchRankingData = async () => {
+    const fetchAgents = async () => {
+      try {
+        const response = await api.get("/AgentAI/agents/");
+        setAgents(response.data);
+        if (response.data.length > 0) {
+          setSelectedAgent(response.data[0]);
+        } else {
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("Fetch Agents Error:", err);
+        setError(true);
+        setLoading(false);
+      }
+    };
+    fetchAgents();
+  }, []);
+
+  // ২. সিলেক্টেড এজেন্ট অনুযায়ী ডাটা লোড করা
+  useEffect(() => {
+    if (!selectedAgent) return;
+
+    const fetchData = async () => {
       try {
         setLoading(true);
-        const agentId = "947204378476536";
-        const response = await api.get(`/AgentAI/ranking/${agentId}/`);
+        const agentId = selectedAgent.page_id;
         
-        setRankingData(response.data);
+        // র‍্যাঙ্কিং এবং মেট্রিক্স প্যারালাল আনা
+        const [rankingRes, metricsRes] = await Promise.all([
+          api.get(`/AgentAI/ranking/${agentId}/`),
+          api.get(`/AgentAI/metrics/${agentId}/`)
+        ]);
+        
+        setRankingData(rankingRes.data);
+        setMetrics(metricsRes.data);
       } catch (err) {
-        console.error("Fetch Error:", err);
+        console.error("Fetch Data Error:", err);
         setError(true);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchRankingData();
-  }, []);
+    fetchData();
+  }, [selectedAgent]);
 
   const filteredData = rankingData.filter((item) =>
     item.text.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (loading) {
+  if (loading && agents.length === 0) {
     return (
       <div className="p-20 text-center flex flex-col items-center justify-center">
         <Loader2 className="animate-spin h-12 w-12 text-pink-500 mb-4" />
-        <h2 className="text-gray-400 font-black text-xl uppercase italic">Loading Ranking Report...</h2>
+        <h2 className="text-gray-400 font-black text-xl uppercase italic">Loading Infrastructure...</h2>
       </div>
     );
   }
@@ -63,11 +95,28 @@ export default function RankingReportPage() {
     <div className="p-2 md:p-10 bg-[#f8fafc] min-h-screen font-sans">
       <div className="max-w-7xl mx-auto space-y-10">
         
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-l-8 border-pink-500 pl-6">
-          <div>
+        {/* Header & Agent Selector */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-l-8 border-pink-500 pl-6">
+          <div className="space-y-2">
             <h1 className="text-2xl md:text-4xl font-black text-gray-900 tracking-tighter italic uppercase">Ranking Report</h1>
             <p className="text-gray-400 font-bold text-sm">Most Frequently Asked Questions & Savings</p>
+            
+            {/* ⚡ নতুন: এজেন্ট ড্রপডাউন */}
+            <div className="mt-4 flex items-center gap-2">
+              <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Active Agent:</span>
+              <select 
+                className="bg-white border border-gray-200 rounded-lg px-3 py-1 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-pink-300"
+                value={selectedAgent?.id || ""}
+                onChange={(e) => {
+                  const agent = agents.find(a => a.id === parseInt(e.target.value));
+                  setSelectedAgent(agent);
+                }}
+              >
+                {agents.map(agent => (
+                  <option key={agent.id} value={agent.id}>{agent.name} ({agent.page_id})</option>
+                ))}
+              </select>
+            </div>
           </div>
           
           <div className="relative">
@@ -82,11 +131,53 @@ export default function RankingReportPage() {
           </div>
         </div>
 
+        {/* ⚡ নতুন: পারফরম্যান্স মেট্রিক্স কার্ডস */}
+        {metrics && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+              <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Cache Hit Rate</p>
+              <h3 className="text-3xl font-black text-pink-500 italic">{metrics.hit_rate}%</h3>
+              <div className="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-full bg-pink-500" style={{ width: `${metrics.hit_rate}%` }}></div>
+              </div>
+            </div>
+            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+              <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Total Hits</p>
+              <div className="flex items-center gap-2">
+                <Zap className="text-yellow-500" size={20} />
+                <h3 className="text-3xl font-black text-gray-800">{metrics.metrics.cache_hit || 0}</h3>
+              </div>
+            </div>
+            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+              <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">API Call Misses</p>
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="text-rose-500" size={20} />
+                <h3 className="text-3xl font-black text-gray-800">{metrics.metrics.cache_miss || 0}</h3>
+              </div>
+            </div>
+            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+              <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Total Queries</p>
+              <div className="flex items-center gap-2">
+                <BarChart3 className="text-blue-500" size={20} />
+                <h3 className="text-3xl font-black text-gray-800">{metrics.total_queries}</h3>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Ranking Table */}
-        <div className="bg-white rounded-[2.5rem] shadow-xl border border-gray-100 overflow-hidden">
-          <div className="px-6 py-8 border-b border-gray-100 flex items-center gap-3">
-            <BarChart3 className="text-pink-500" size={24} />
-            <h2 className="text-xl font-black text-gray-800 uppercase italic">Top Active Queries</h2>
+        <div className="bg-white rounded-[2.5rem] shadow-xl border border-gray-100 overflow-hidden relative">
+          {loading && (
+            <div className="absolute inset-0 bg-white/50 backdrop-blur-[2px] z-10 flex items-center justify-center">
+              <Loader2 className="animate-spin h-10 w-10 text-pink-500" />
+            </div>
+          )}
+          
+          <div className="px-6 py-8 border-b border-gray-100 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <BarChart3 className="text-pink-500" size={24} />
+              <h2 className="text-xl font-black text-gray-800 uppercase italic">Top Active Queries</h2>
+            </div>
           </div>
           
           <div className="overflow-x-auto">
@@ -96,7 +187,6 @@ export default function RankingReportPage() {
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest">Rank</th>
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest">Message Content</th>
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest">Frequency</th>
-                  {/* ⚡ নতুন কলাম: Token Savings */}
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest">Token Savings</th>
                 </tr>
               </thead>
@@ -120,7 +210,6 @@ export default function RankingReportPage() {
                           <span className="text-sm font-bold text-gray-400">times</span>
                         </div>
                       </td>
-                      {/* ⚡ নতুন ডাটা: Token Savings */}
                       <td className="px-8 py-6">
                         <div className="flex items-center gap-3">
                           <PiggyBank className="text-green-500" size={18} />
@@ -133,7 +222,7 @@ export default function RankingReportPage() {
                 ) : (
                   <tr>
                     <td colSpan="4" className="text-center py-20 text-gray-400 font-bold">
-                      No messages found matching your search.
+                      {loading ? "Loading data..." : "No messages found matching your search."}
                     </td>
                   </tr>
                 )}
