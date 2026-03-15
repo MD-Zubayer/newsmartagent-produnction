@@ -46,9 +46,13 @@ def generate_gemini_reply(prompt, history, agent_config):
     ]
 
     try:
-        max_token = int(agent_config.max_tokens) if agent_config.max_tokens else 500
+        base_max_token = int(agent_config.max_tokens) if agent_config.max_tokens else 500
+        # JSON wrapper overhead: {"reply":"...","cache_type":"agent_specific"} ≈ 20 tokens
+        # Extra safety buffer to prevent mid-JSON truncation
+        JSON_CACHE_BUFFER = 60
+        max_token = base_max_token + JSON_CACHE_BUFFER
     except:
-        max_token = 500
+        max_token = 560
 
     try:
         logger.info(f"Gemini History: {formatted_history}")

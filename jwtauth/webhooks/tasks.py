@@ -248,12 +248,12 @@ def process_ai_reply_task(self, data):
             # ---- Cache Classification Instruction (JSON suffix) ----
             # logic_handler.py-তে কোনো পরিবর্তন নেই। Prompt suffix এখানেই যোগ হয়।
             classify_instruction = (
-                '\n\n[CACHE RULE] Reply ONLY as JSON: {"reply":"...","cache_type":"..."}\n'
-                "cache_type:\n"
-                '- "no_cache" if msg has: এটা/ওটা/সেটা/এগুলো/this/that/it/which one/কোনটা\n'
-                '- "sender_specific" if msg has: আমার/আমি/my/me/mine + personal context\n'
-                '- "global" if msg is greeting/social: hi/hello/ভাই/আপু/সালাম/ধন্যবাদ/ok/bye\n'
-                '- "agent_specific" for everything else (products/price/FAQ/policy)\n'
+                'Return ONLY a valid JSON object: {"reply": "...", "cache_type": "..."}. '
+                'Use "no_cache" for ambiguous pronouns (this/it/এটা/ঐটা) or context-dependent queries. '
+                'Use "sender_specific" for personal data (my/me/আমি/আমার/order) unique to the user. '
+                'Use "global" for universal greetings and small talk (hi/সালাম/ভাই/thanks/ok). '
+                'Use "agent_specific" for standalone business info like products, prices, and FAQs. '
+                'STRICT: No markdown blocks, no preamble, and ensure JSON syntax is perfect.'
             )
             full_prompt = full_prompt + classify_instruction
 
@@ -264,22 +264,48 @@ def process_ai_reply_task(self, data):
             raw_ai_reply = ai_data.get('reply', '')
             cache_type = 'agent_specific'  # ডিফাল্ট
             parsed_reply = raw_ai_reply    # ডিফাল্ট: raw reply
+            json_parse_success = False
 
             json_match = re.search(r'\{.*\}', raw_ai_reply, re.DOTALL)
             if json_match:
                 try:
                     parsed = json.loads(json_match.group())
-                    parsed_reply = parsed.get('reply', raw_ai_reply).strip()
-                    cache_type = parsed.get('cache_type', 'agent_specific').strip().lower()
-                    logger.info(f"📋 AI cache_type classified as: '{cache_type}' for '{text[:30]}'")
+                    extracted_reply = parsed.get('reply', '').strip()
+                    if extracted_reply:  # শুধু non-empty reply গ্রহণ করা হবে
+                        parsed_reply = extracted_reply
+                        cache_type = parsed.get('cache_type', 'agent_specific').strip().lower()
+                        json_parse_success = True
+                        logger.info(f"📋 AI cache_type classified as: '{cache_type}' for '{text[:30]}'")
+                    else:
+                        logger.warning(f"⚠️ JSON parsed but reply field is empty. Using raw.")
                 except (json.JSONDecodeError, AttributeError) as e:
                     logger.warning(f"⚠️ JSON parse failed from AI reply, using raw. Error: {e}")
-                    parsed_reply = raw_ai_reply
-                    cache_type = 'agent_specific'
+
+            # 🛡️ Safety Guard: Broken/Truncated JSON Detection
+            # যদি json_match না পাওয়া যায় AND raw reply দেখতে JSON-এর মতো হয়
+            # (মানে AI শুরু করেছে কিন্তু token limit-এ কেটে গেছে)
+            # → user-এর কাছে broken JSON text পাঠানো যাবে না
+            if not json_parse_success:
+                stripped = raw_ai_reply.strip()
+                looks_like_broken_json = (
+                    stripped.startswith('{') or
+                    stripped.startswith('{"reply"') or
+                    stripped.startswith('```json')
+                )
+                if looks_like_broken_json:
+                    logger.error(
+                        f"🚨 BROKEN/TRUNCATED JSON detected (output_tokens={ai_data.get('output_tokens',0)}). "
+                        f"Raw: '{raw_ai_reply[:60]}'. Marking as failed — NOT sending to user."
+                    )
+                    ai_data['success'] = False
+                    ai_data['reply'] = ''
+                    parsed_reply = ''
+                # else: plain text response (no JSON at all) → use as-is, normal fallback
 
             # Update ai_data with the cleaned reply
             ai_data['reply'] = parsed_reply
             reply, success, total_tokens = ai_data['reply'], ai_data['success'], ai_data['total_tokens']
+
 
             if success:
                 effective_model = agent_config.selected_model.model_id if agent_config.selected_model else agent_config.ai_model
