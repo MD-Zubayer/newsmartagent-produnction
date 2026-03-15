@@ -15,7 +15,7 @@ from rest_framework.decorators import api_view, permission_classes
 from django.http import JsonResponse
 from aiAgent.cache.ranking import get_top_message
 from aiAgent.cache.hybrid_similarity import r as redis_conn, r_grouped
-from aiAgent.cache.metrics import get_metrics
+from aiAgent.cache.client import get_redis_client
 import json
 from users.models import Subscription
 from .serializers import AIProviderModelSerializer
@@ -254,6 +254,7 @@ class RankingAPIView(APIView):
                     'text': text,
                     'frequency': int(frequency),
                     'token_savings': total_token_savings,
+                    'msg_hash': msg_hash,
                 })
 
             return Response(api_data, status=status.HTTP_200_OK)
@@ -285,5 +286,34 @@ class AgentMetricsAPIView(APIView):
                 "hit_rate": hit_rate,
                 "total_queries": total
             })
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class DeleteRankingDataAPIView(APIView):
+    """
+    এজেন্টের নির্দিষ্ট মেসেজ ক্যাশ এবং র‍্যাঙ্কিং থেকে ডিলিট করে
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def delete(self, request, agent_id, msg_hash):
+        try:
+            # ১. ওনারশিপ ভেরিফিকেশন (নিরাপত্তার জন্য)
+            agent = AgentAI.objects.filter(id=agent_id, user=request.user).first()
+            if not agent:
+                return Response({"error": "Agent not found or unauthorized"}, status=status.HTTP_404_NOT_FOUND)
+            
+            # ২. র‍্যাঙ্কিং (DB 4) থেকে রিমুভ করা
+            ranking_r = get_redis_client(db=4)
+            ranking_key = f"agent:{agent_id}:ranking"
+            ranking_r.zrem(ranking_key, msg_hash)
+            
+            # ৩. ক্যাশ রিপ্লাই (DB 2) থেকে ডিলিট করা
+            cache_key = f"agent:{agent_id}:reply:{msg_hash}"
+            redis_conn.delete(cache_key)
+            
+            # ৪. মেট্রিক্স রিডারবিলিটি বজায় রাখা (ঐচ্ছিক: ডিলিট হলে হিস্ট্রি থেকে কমানো কঠিন, তাই শুধু কী মুছে ফেলাই যথেষ্ট)
+            
+            return Response({"status": "success", "message": "Message deleted from cache"}, status=status.HTTP_200_OK)
+            
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

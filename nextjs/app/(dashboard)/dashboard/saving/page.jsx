@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState } from "react";
 // ⚡ PiggyBank আইকন ইম্পোর্ট করা হলো
-import { Table, Search, AlertTriangle, Zap, BarChart3, Loader2, PiggyBank } from "lucide-react";
+import { Table, Search, AlertTriangle, Zap, BarChart3, Loader2, PiggyBank, Trash2 } from "lucide-react";
 import api from "@/lib/api";
+import { toast } from "react-hot-toast";
 
 export default function RankingReportPage() {
   const [agents, setAgents] = useState([]);
@@ -13,9 +14,11 @@ export default function RankingReportPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isDeleting, setIsDeleting] = useState(null);
 
   // ১. এজেন্ট লিস্ট লোড করা
   useEffect(() => {
+    // ... scope unchanged ...
     const fetchAgents = async () => {
       try {
         const response = await api.get("/AgentAI/agents/");
@@ -35,32 +38,48 @@ export default function RankingReportPage() {
   }, []);
 
   // ২. সিলেক্টেড এজেন্ট অনুযায়ী ডাটা লোড করা
-  useEffect(() => {
+  const fetchData = async () => {
     if (!selectedAgent) return;
+    try {
+      setLoading(true);
+      const agentId = selectedAgent.page_id;
+      
+      const [rankingRes, metricsRes] = await Promise.all([
+        api.get(`/AgentAI/ranking/${agentId}/`),
+        api.get(`/AgentAI/metrics/${agentId}/`)
+      ]);
+      
+      setRankingData(rankingRes.data);
+      setMetrics(metricsRes.data);
+    } catch (err) {
+      console.error("Fetch Data Error:", err);
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const agentId = selectedAgent.page_id;
-        
-        // র‍্যাঙ্কিং এবং মেট্রিক্স প্যারালাল আনা
-        const [rankingRes, metricsRes] = await Promise.all([
-          api.get(`/AgentAI/ranking/${agentId}/`),
-          api.get(`/AgentAI/metrics/${agentId}/`)
-        ]);
-        
-        setRankingData(rankingRes.data);
-        setMetrics(metricsRes.data);
-      } catch (err) {
-        console.error("Fetch Data Error:", err);
-        setError(true);
-      } finally {
-        setLoading(false);
-      }
-    };
-
+  useEffect(() => {
     fetchData();
   }, [selectedAgent]);
+
+  // ৩. ডিলিট লজিক
+  const handleDelete = async (msg_hash) => {
+    if (!selectedAgent || !confirm("Are you sure you want to delete this message from cache? The next time this message is sent, it will trigger a fresh AI response.")) return;
+
+    try {
+      setIsDeleting(msg_hash);
+      const agentId = selectedAgent.page_id;
+      await api.delete(`/AgentAI/ranking/delete/${agentId}/${msg_hash}/`);
+      toast.success("Message removed from cache successfully");
+      fetchData(); // Refresh list
+    } catch (err) {
+      console.error("Delete Error:", err);
+      toast.error("Failed to delete message from cache");
+    } finally {
+      setIsDeleting(null);
+    }
+  };
 
   const filteredData = rankingData.filter((item) =>
     item.text.toLowerCase().includes(searchTerm.toLowerCase())
@@ -188,19 +207,20 @@ export default function RankingReportPage() {
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest">Message Content</th>
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest">Frequency</th>
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest">Token Savings</th>
+                  <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filteredData.length > 0 ? (
                   filteredData.map((item, index) => (
-                    <tr key={index} className="hover:bg-gray-50 transition-colors">
+                    <tr key={index} className="hover:bg-gray-50 transition-colors group">
                       <td className="px-8 py-6">
                         <span className={`inline-flex items-center justify-center w-10 h-10 rounded-full font-black text-lg 
                           ${index < 3 ? 'bg-pink-100 text-pink-700' : 'bg-gray-100 text-gray-600'}`}>
                           {index + 1}
                         </span>
                       </td>
-                      <td className="px-8 py-6 font-bold text-gray-700 text-md">
+                      <td className="px-8 py-6 font-bold text-gray-700 text-md max-w-md break-words">
                         {item.text}
                       </td>
                       <td className="px-8 py-6">
@@ -216,6 +236,20 @@ export default function RankingReportPage() {
                           <span className="text-2xl font-black text-green-700">{item.token_savings}</span>
                           <span className="text-sm font-bold text-gray-400">tokens</span>
                         </div>
+                      </td>
+                      <td className="px-8 py-6 text-right">
+                        <button 
+                          onClick={() => handleDelete(item.msg_hash)}
+                          disabled={isDeleting === item.msg_hash}
+                          className="p-3 text-gray-300 hover:text-rose-500 hover:bg-rose-50 rounded-2xl transition-all duration-300 group-hover:opacity-100 md:opacity-0"
+                          title="Delete from Cache"
+                        >
+                          {isDeleting === item.msg_hash ? (
+                            <Loader2 className="animate-spin" size={20} />
+                          ) : (
+                            <Trash2 size={20} />
+                          )}
+                        </button>
                       </td>
                     </tr>
                   ))
