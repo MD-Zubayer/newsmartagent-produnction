@@ -192,7 +192,7 @@ def process_ai_reply_task(self, data):
             handle_smart_memory_update(agent_config, sender_id, text)
         
             # Deliver immediately
-            clean_reply = reply.replace("\n", " ").replace("\r", " ").strip()
+            clean_reply = reply.strip()
             delivered = deliver_reply_to_n8n(
                 data, clean_reply, page_id, effective_access_token
             )
@@ -254,7 +254,7 @@ def process_ai_reply_task(self, data):
 
             duration = int((time.time() - start_time) * 1000)
             log_token_usage(agent_config, sender_id, ai_data, duration, request_type)
-            clean_reply = reply.replace("\n", " ").replace("\r", " ").strip()
+            clean_reply = reply.strip()
             delivered = deliver_reply_to_n8n(data, clean_reply, page_id, effective_access_token)
 
             if delivered and msg_id:
