@@ -15,6 +15,7 @@ from rest_framework.decorators import api_view, permission_classes
 from django.http import JsonResponse
 from aiAgent.cache.ranking import get_top_message
 from aiAgent.cache.hybrid_similarity import r as redis_conn, r_grouped
+from aiAgent.cache.metrics import get_metrics
 from aiAgent.cache.client import get_redis_client
 import json
 from users.models import Subscription
@@ -297,8 +298,8 @@ class DeleteRankingDataAPIView(APIView):
     
     def delete(self, request, agent_id, msg_hash):
         try:
-            # ১. ওনারশিপ ভেরিফিকেশন (নিরাপত্তার জন্য)
-            agent = AgentAI.objects.filter(id=agent_id, user=request.user).first()
+            # ১. ওনারশিপ ভেরিফিকেশন (নিরাপত্তার জন্য - page_id ব্যবহার করছি কারণ ফ্রন্টএন্ড এটাই পাঠায়)
+            agent = AgentAI.objects.filter(page_id=agent_id, user=request.user).first()
             if not agent:
                 return Response({"error": "Agent not found or unauthorized"}, status=status.HTTP_404_NOT_FOUND)
             
