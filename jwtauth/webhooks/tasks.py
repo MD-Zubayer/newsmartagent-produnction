@@ -53,8 +53,8 @@ r = get_redis_client(db=0)
              retry_backoff=True,
              max_retries=5,
              retry_jitter=True,
-             time_limit=70,
-             soft_time_limit=60
+             time_limit=140,
+             soft_time_limit=130
              )
 def process_ai_reply_task(self, data):
 

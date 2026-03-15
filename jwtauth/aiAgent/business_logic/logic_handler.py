@@ -442,7 +442,7 @@ def acquire_user_lock(task_instance, redis_client, sender_id):
     is_locked = redis_client.set(lock_key, lock_value, nx=True, ex=150)
     if not is_locked:
         logger.info(f"User {sender_id} busy. Retrying...")
-        raise task_instance.retry(countdown=2)
+        raise task_instance.retry(countdown=5)
     return is_locked, lock_key, lock_value
 
 def is_duplicate_or_outdated(msg_id, incoming_ts, agent_config, sender_id, redis_client):
