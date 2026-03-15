@@ -348,8 +348,8 @@ class UpdateCacheScopeAPIView(APIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request, agent_id, msg_hash):
-        new_scope = request.data.get('new_scope') # 'global' or 'agent_specific'
-        if new_scope not in ['global', 'agent_specific']:
+        new_scope = request.data.get('new_scope') # 'global', 'agent_specific' or 'special'
+        if new_scope not in ['global', 'agent_specific', 'special']:
             return Response({"error": "Invalid scope. Use 'global', 'agent_specific' or 'special'"}, status=status.HTTP_400_BAD_REQUEST)
 
         # ১. পারমিশন চেক (শুধু স্টাফরা পারবে)
