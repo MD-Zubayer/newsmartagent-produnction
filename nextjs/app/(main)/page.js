@@ -252,9 +252,7 @@ export default function HomePage() {
             viewport={{ once: true }}
             className="relative"
           >
-            <div className="absolute top-0 right-0 w-48 h-48 -mr-10 -mt-10 opacity-10 pointer-events-none select-none">
-              <img src="/3d_imge/IMG_20260310_223341_710.png" alt="" className="w-full h-full object-contain" />
-            </div>
+ 
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {features.map((feature, index) => (
@@ -316,10 +314,7 @@ export default function HomePage() {
             viewport={{ once: true }}
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-10 relative"
           >
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full opacity-5 pointer-events-none hidden lg:flex justify-between items-center px-10">
-              <img src="/3d_imge/IMG_20260310_221431_617.png" alt="" className="w-40 h-auto" />
-              <img src="/3d_imge/IMG_20260310_221340_589.png" alt="" className="w-40 h-auto" />
-            </div>
+           
             {services.map((service, index) => (
               <motion.div 
                 key={index}
@@ -444,9 +439,7 @@ export default function HomePage() {
                 ))}
               </div>
               <div className="pt-4 relative">
-                <div className="absolute -right-10 -top-10 w-24 h-24 opacity-20 pointer-events-none hidden lg:block">
-                  <img src="/3d_imge/IMG_20260310_221231_508.png" alt="" className="w-full h-full object-contain" />
-                </div>
+                
                 <Link
                   href="/about"
                   className="group inline-flex items-center gap-3 px-10 py-4 bg-gray-900 text-white font-black rounded-2xl shadow-xl hover:bg-indigo-600 transition-all duration-300"
@@ -473,9 +466,7 @@ export default function HomePage() {
             <h3 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tight">
               যোগাযোগ করুন <span className="text-indigo-600">আমাদের সাথে</span>
             </h3>
-            <div className="absolute top-0 left-0 w-24 h-24 opacity-10 pointer-events-none hidden sm:block">
-              <img src="/3d_imge/IMG_20260310_215541_854.png" alt="" className="w-full h-full object-contain" />
-            </div>
+           
           </motion.div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
@@ -532,9 +523,7 @@ export default function HomePage() {
                       />
                     </div>
                   </div>
-                  <div className="absolute -bottom-10 -left-10 w-40 h-40 opacity-5 pointer-events-none hidden sm:block">
-                    <img src="/3d_imge/IMG_20260310_215834_398.png" alt="" className="w-full h-full object-contain" />
-                  </div>
+                 
                   <div className="space-y-2">
                     <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Subject</label>
                     <input 
