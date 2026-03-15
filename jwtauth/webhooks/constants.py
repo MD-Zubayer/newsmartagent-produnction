@@ -31,3 +31,5 @@ embedding_skip_keyword = [
     'valo achi', 'ami bhalo', 'ki khobor bro', 'thik achi', 'bhalo achi', 'assalamualaikum', 
     'shuvo din', 'shuvo sokal', 'shuvo ratri', 'valo laglo', 'dhonnobad bro', 'bhalo laglo', 'kemon aso bhai'
 ]
+
+history_skip_keyword = embedding_skip_keyword.copy()

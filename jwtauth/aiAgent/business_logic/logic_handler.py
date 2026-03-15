@@ -7,7 +7,7 @@ from chat.services import save_message
 from aiAgent.models import AgentAI, MissingRequirement, TokenUsageLog
 from aiAgent.memory_service import extract_and_update_memory
 from aiAgent.memory_handler import handle_smart_memory_update
-from webhooks.constants import TARGET_KEYWORDS, embedding_skip_keyword
+from webhooks.constants import TARGET_KEYWORDS, embedding_skip_keyword, history_skip_keyword
 from aiAgent.data_processor import processor_spreadsheet_data
 import json
 from django.http import JsonResponse
@@ -278,10 +278,26 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
     logger.info(f"\n======= FINAL PROMPT SENT TO AI =======\n{full_prompt}\n=======================================")
 
     raw_history = get_last_message(agent_config, sender_id, limit=3)
-    history = [
-        msg for msg in raw_history
-        if msg.get("content") and msg.get("content").strip()
-    ]
+    
+    # Keyword-based history skip logic
+    skip_margin = 10
+    skip_history = False
+    text_len = len(text)
+    
+    for kw in history_skip_keyword:
+        kw_len = len(kw)
+        if kw.lower() in text.lower() and abs(text_len - kw_len) <= skip_margin:
+            skip_history = True
+            logger.info(f"⏭️ Skipping history: Keyword '{kw}' found and message length within margin.")
+            break
+            
+    if skip_history:
+        history = []
+    else:
+        history = [
+            msg for msg in raw_history
+            if msg.get("content") and msg.get("content").strip()
+        ]
     return full_prompt, history
 
 def get_ai_response(agent_config, full_prompt, history):
