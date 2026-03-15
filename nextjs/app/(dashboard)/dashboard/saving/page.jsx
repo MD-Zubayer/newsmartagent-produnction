@@ -16,8 +16,10 @@ export default function RankingReportPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isDeleting, setIsDeleting] = useState(null);
   const [isUpdatingScope, setIsUpdatingScope] = useState(null);
+  const [isRequestingSpecial, setIsRequestingSpecial] = useState(false);
   const [isStaff, setIsStaff] = useState(false);
   const [isSpecialAgent, setIsSpecialAgent] = useState(false);
+  const [specialAgentStatus, setSpecialAgentStatus] = useState('none');
 
   // ১. এজেন্ট লিস্ট লোড করা
   useEffect(() => {
@@ -142,6 +144,34 @@ export default function RankingReportPage() {
     }
   };
 
+  // ৫. Special Agent রিকুয়েস্ট লজিক
+  const handleRequestSpecialAgent = async () => {
+    if (!selectedAgent) return;
+    try {
+      setIsRequestingSpecial(true);
+      const agentId = selectedAgent.page_id;
+      const res = await api.post(`/AgentAI/ranking/request-special/${agentId}/`);
+      
+      toast.success(res.data.message || "Request submitted successfully!");
+      setSpecialAgentStatus('pending'); // Optimistic update
+      
+      // Update the global agents list to reflect the new state
+      const updatedAgents = agents.map(agent => 
+        agent.page_id === agentId 
+          ? { ...agent, special_agent_status: 'pending' }
+          : agent
+      );
+      setAgents(updatedAgents);
+      setSelectedAgent(updatedAgents.find(a => a.page_id === agentId));
+
+    } catch (err) {
+      console.error("Request Special Agent Error:", err);
+      toast.error(err.response?.data?.error || "Failed to submit request.");
+    } finally {
+      setIsRequestingSpecial(false);
+    }
+  };
+
   const filteredData = rankingData.filter((item) =>
     item.text.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -196,23 +226,48 @@ export default function RankingReportPage() {
                   <option key={agent.id} value={agent.id}>{agent.name} ({agent.page_id})</option>
                 ))}
               </select>
-              {isSpecialAgent && (
-                <span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tighter shadow-sm border border-yellow-200 flex items-center gap-1">
-                  <Zap size={10} fill="currentColor" /> Special
-                </span>
-              )}
             </div>
           </div>
 
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-            <input
-              type="text"
-              placeholder="Search messages..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-12 pr-4 py-3 rounded-2xl border border-gray-200 focus:ring-2 focus:ring-pink-300 w-full md:w-80 outline-none shadow-sm"
-            />
+          <div className="flex flex-col md:flex-row items-end md:items-center gap-4">
+            <div className="flex items-center gap-3">
+              {isSpecialAgent ? (
+                <div className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-yellow-50 to-yellow-100 border border-yellow-200 rounded-full shadow-sm">
+                  <span className="text-yellow-600">🌟</span>
+                  <span className="text-[10px] font-black tracking-widest text-yellow-700 uppercase">Special Agent (1 Year Cache)</span>
+                </div>
+              ) : (
+                <>
+                  {specialAgentStatus === 'pending' ? (
+                     <div className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 border border-gray-200 text-gray-500 rounded-xl cursor-wait shadow-inner">
+                       <Clock size={16} className="animate-spin-slow" />
+                       <span className="text-sm font-bold">Request Pending...</span>
+                     </div>
+                  ) : specialAgentStatus === 'rejected' ? (
+                     <button onClick={handleRequestSpecialAgent} disabled={isRequestingSpecial} className="flex items-center justify-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 transition-all rounded-xl border border-red-200 font-bold group shadow-sm">
+                       <Zap size={18} className="group-hover:scale-110 transition-transform" />
+                       <span className="text-sm">Request Premium Cache Again</span>
+                     </button>
+                  ) : (
+                     <button onClick={handleRequestSpecialAgent} disabled={isRequestingSpecial} className="flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white transition-all rounded-xl shadow-md hover:shadow-lg font-black group">
+                       {isRequestingSpecial ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap size={18} className="group-hover:scale-110 transition-transform" />}
+                       <span className="text-sm">Request Premium Cache</span>
+                     </button>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+              <input
+                type="text"
+                placeholder="Search messages..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-12 pr-4 py-3 rounded-2xl border border-gray-200 focus:ring-2 focus:ring-pink-300 w-full md:w-80 outline-none shadow-sm"
+              />
+            </div>
           </div>
         </div>
 
@@ -234,7 +289,7 @@ export default function RankingReportPage() {
               </div>
             </div>
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-              <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">API Call Misses</p>
+              <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Cache Miss</p>
               <div className="flex items-center gap-2">
                 <AlertTriangle className="text-rose-500" size={20} />
                 <h3 className="text-3xl font-black text-gray-800">{metrics.metrics.cache_miss || 0}</h3>

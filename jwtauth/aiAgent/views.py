@@ -403,3 +403,30 @@ class UpdateCacheScopeAPIView(APIView):
             
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class RequestSpecialAgentAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, agent_id):
+        try:
+            agent = AgentAI.objects.filter(page_id=agent_id, user=request.user).first()
+            if not agent:
+                return Response({"error": "Agent not found or unauthorized"}, status=status.HTTP_404_NOT_FOUND)
+            
+            if agent.is_special_agent or agent.special_agent_status == 'approved':
+                return Response({"error": "This agent is already a Special Agent."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if agent.special_agent_status == 'pending':
+                return Response({"error": "Your request is already pending approval."}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Update the status to pending
+            agent.special_agent_status = 'pending'
+            agent.save()
+
+            return Response({
+                "status": "success", 
+                "message": "Special Agent request submitted successfully. Please wait for admin approval."
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

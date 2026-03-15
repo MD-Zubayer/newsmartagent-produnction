@@ -33,9 +33,10 @@ class AgentAIListSerializer(serializers.ModelSerializer):
             'is_active',
             'created_at',
             'access_token',
-            'is_special_agent'
+            'is_special_agent',
+            'special_agent_status'
         ]
-        read_only_fields = ['id', 'created_at', 'token_expires_at']
+        read_only_fields = ['id', 'created_at', 'token_expires_at', 'special_agent_status']
  
 
 
@@ -64,12 +65,14 @@ class AgentAISerializer(serializers.ModelSerializer):
             'token_expires_at',
             'is_active',
             'is_special_agent',
+            'special_agent_status'
         ]
         extra_kwargs = {
             'access_token': {'write_only': True},     # শুধু write করা যাবে, response-এ দেখাবে না
             'webhook_secret': {'write_only': True},
             'token_expires_at': {'required': False},
             'selected_model': {'required': False, 'allow_null': True},
+            'special_agent_status': {'read_only': True},
         }
 
        # set validation serializer 
