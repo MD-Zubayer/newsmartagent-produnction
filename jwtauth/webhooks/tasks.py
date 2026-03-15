@@ -249,10 +249,10 @@ def process_ai_reply_task(self, data):
             # logic_handler.py-তে কোনো পরিবর্তন নেই। Prompt suffix এখানেই যোগ হয়।
             classify_instruction = (
                 'Return ONLY a valid JSON object: {"reply": "...", "cache_type": "..."}. '
-                'Use "no_cache" for ambiguous pronouns (this/it/এটা/ঐটা) or context-dependent queries. '
-                'Use "sender_specific" for personal data (my/me/আমি/আমার/order) unique to the user. '
-                'Use "agent_specific" for standalone business info like products, prices, and FAQs. '
-                'Use "global" for everything else, including universal greetings, small talk, and general responses.'
+                'Use "no_cache" for context-dependent words (it/this/that/ঐটা/সেটা) or very specific conversation flow. '
+                'Use "sender_specific" for user-only info (my name/order/status/আমি/আমার/ব্যক্তিগত তথ্য). '
+                'Use "agent_specific" ONLY for information extracted from [KNOWLEDGE BASE DATA] or business-specific details like specific products/prices. '
+                'Use "global" for general knowledge, universal greetings (Salam/Hi), and any answer based on your pre-trained general intelligence rather than the provided knowledge base.'
                 'STRICT: No markdown blocks, no preamble, and ensure JSON syntax is perfect.'
             )
             full_prompt = full_prompt + classify_instruction
