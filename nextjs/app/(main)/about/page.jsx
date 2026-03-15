@@ -17,7 +17,7 @@ export default function AboutPage() {
     "@type": "Organization",
     name: "New Smart Agent",
     url: "https://newsmartagent.com",
-    logo: "https://newsmartagent.com/new-smart-agent.png",
+    logo: "https://newsmartagent.com/newsmartagent.png",
     description:
       "New Smart Agent is an AI automation platform for Facebook pages, messenger automation, and smart customer management.",
     sameAs: [

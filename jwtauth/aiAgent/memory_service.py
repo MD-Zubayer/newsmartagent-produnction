@@ -94,7 +94,7 @@ def extract_and_update_memory(ai_agent, sender_id, chat_history):
             conv = Conversation.objects.filter(agentAi=ai_agent, contact_id=sender_id).first()
             platform = 'background_sync'
             if conv:
-                last_msg = Message.objects.filter(conversation=conv).order_by('-timestamp').first()
+                last_msg = Message.objects.filter(conversation=conv).order_by('-sent_at').first()
                 if last_msg and hasattr(last_msg, 'platform'):
                      platform = last_msg.platform
                 
@@ -106,22 +106,33 @@ def extract_and_update_memory(ai_agent, sender_id, chat_history):
                     tokens_used=total_tokens
                 )
 
+            # Robust Token Extraction (provider-agnostic)
+            if provider == 'gemini':
+                i_tokens = response.usage_metadata.prompt_token_count
+                o_tokens = response.usage_metadata.candidates_token_count
+            else:
+                # OpenAI / Grok / OpenRouter
+                i_tokens = response.usage.prompt_tokens
+                o_tokens = response.usage.completion_tokens
+
             TokenUsageLog.objects.create(
                 user=ai_agent.user,
                 ai_agent=ai_agent,
                 sender_id=sender_id,
                 platform=platform,
                 model_name=model_id,
-                input_tokens=response.usage.prompt_tokens if provider != 'gemini' else response.usage_metadata.prompt_token_count,
-                output_tokens=response.usage.completion_tokens if provider != 'gemini' else response.usage_metadata.candidates_token_count,
+                input_tokens=i_tokens,
+                output_tokens=o_tokens,
                 total_tokens=total_tokens,
                 request_type='memory_extraction',
                 success=True,
-                response_time=0 
+                response_time=0
             )
             
         except Exception as e:
-            print(f"Failed to log extraction tokens: {e}")
+            import traceback
+            print(f"Failed to log extraction tokens: {type(e).__name__}: {e}")
+            print(traceback.format_exc())
 
         # Database update & Smart Merge
         from aiAgent.models import UserMemory

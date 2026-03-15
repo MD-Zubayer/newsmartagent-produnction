@@ -5,9 +5,60 @@ import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { 
     Wallet, DollarSign, TrendingUp, TrendingDown,
-    Plus, Trash2, CheckCircle2, Clock, XCircle, CreditCard, MoveRight, Banknote, Layers, Building
+    Plus, Trash2, CheckCircle2, Clock, XCircle, CreditCard, MoveRight, Banknote, Layers, Building, AlertCircle, Info
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+
+// ─── Beautiful Custom Toast Helper ─────────────────────────────────────────────
+const toastNotify = (type, message) => {
+    const config = {
+        success: {
+            icon: <CheckCircle2 size={18} />,
+            bg: 'from-emerald-500 to-green-600',
+            border: 'border-emerald-400/30',
+        },
+        error: {
+            icon: <XCircle size={18} />,
+            bg: 'from-rose-500 to-red-600',
+            border: 'border-rose-400/30',
+        },
+        info: {
+            icon: <Info size={18} />,
+            bg: 'from-indigo-500 to-blue-600',
+            border: 'border-indigo-400/30',
+        },
+        warning: {
+            icon: <AlertCircle size={18} />,
+            bg: 'from-amber-500 to-orange-600',
+            border: 'border-amber-400/30',
+        },
+    };
+    const c = config[type] || config.info;
+    toast.custom(
+        (t) => (
+            <div
+                className={`${
+                    t.visible ? 'animate-in slide-in-from-top-4 fade-in' : 'animate-out slide-out-to-top-4 fade-out'
+                } flex items-center gap-3 px-4 py-3.5 rounded-2xl shadow-2xl border ${
+                    c.border
+                } bg-gradient-to-r ${c.bg} text-white font-semibold text-sm max-w-xs w-full pointer-events-auto`}
+                style={{ minWidth: 240 }}
+            >
+                <span className="shrink-0 bg-white/20 rounded-xl p-1.5">{c.icon}</span>
+                <span className="flex-1 leading-snug">{message}</span>
+                <button
+                    onClick={() => toast.dismiss(t.id)}
+                    className="shrink-0 opacity-60 hover:opacity-100 transition"
+                >
+                    <XCircle size={14} />
+                </button>
+            </div>
+        ),
+        { duration: 3500, position: 'top-center' }
+    );
+};
+// ───────────────────────────────────────────────────────────────────────────────
+
 
 export default function AgentFinancialDashboard() {
     const { user } = useAuth();
@@ -59,7 +110,7 @@ export default function AgentFinancialDashboard() {
             setHistory(historyRes.data);
         } catch (error) {
             console.error("Dashboard Error:", error);
-            toast.error("Failed to load financial data");
+            toastNotify('error', 'Failed to load financial data');
         } finally {
             setLoading(false);
         }
@@ -92,14 +143,14 @@ export default function AgentFinancialDashboard() {
             }
 
             await api.post('withdraw-methods/', payload);
-            toast.success("Withdraw method added successfully!");
+            toastNotify('success', 'Payment method added successfully!');
             setShowAddMethod(false);
             setNewMethod({ method: 'bkash', account_type: 'personal', account_number: '', account_name: '', bank_name: '', branch_name: '', routing_number: '', card_holder_name: '', card_type: 'visa' });
             fetchDashboardData();
         } catch (error) {
             const errData = error.response?.data;
             const errMsg = errData?.account_type?.[0] || errData?.card_holder_name?.[0] || errData?.card_type?.[0] || errData?.error || "Failed to add method";
-            toast.error(errMsg);
+            toastNotify('error', errMsg);
         } finally {
             setProcessing(false);
         }
@@ -109,10 +160,10 @@ export default function AgentFinancialDashboard() {
         if (!window.confirm("Are you sure you want to delete this payment method?")) return;
         try {
             await api.delete(`withdraw-methods/${id}/`);
-            toast.success("Method removed");
+            toastNotify('success', 'Payment method removed successfully');
             fetchDashboardData();
         } catch (error) {
-            toast.error("Failed to remove method");
+            toastNotify('error', 'Failed to remove payment method');
         }
     };
 
@@ -121,13 +172,13 @@ export default function AgentFinancialDashboard() {
         setProcessing(true);
         try {
             await api.post('cashout-requests/', cashoutForm);
-            toast.success("Cashout request submitted!");
+            toastNotify('success', 'Cashout request submitted successfully!');
             setShowCashout(false);
-            setCashoutForm({ withdraw_method: '', amount: '', balance_type: activeTab }); // Reset with current tab
+            setCashoutForm({ withdraw_method: '', amount: '', balance_type: activeTab });
             fetchDashboardData();
         } catch (error) {
             const errorMsg = error.response?.data?.non_field_errors?.[0] || error.response?.data?.amount?.[0] || "Failed to submit request";
-            toast.error(errorMsg);
+            toastNotify('error', errorMsg);
         } finally {
             setProcessing(false);
         }
@@ -295,18 +346,34 @@ export default function AgentFinancialDashboard() {
                                     )}
 
                                     <div className="space-y-1">
-                                        <label className="text-[10px] font-bold text-slate-500 uppercase">
-                                            {isCard ? 'Last 4 Digits' : 'Account Number'}
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
+                                            {isCard ? <CreditCard size={11} /> : null}
+                                            {isCard ? 'Card Number (16 Digits)' : 'Account Number'}
                                         </label>
                                         <input 
                                             required
                                             type="text"
+                                            inputMode="numeric"
                                             value={newMethod.account_number}
-                                            onChange={e => setNewMethod({...newMethod, account_number: e.target.value})}
-                                            placeholder={isCard ? 'e.g. 1234 (last 4 digits)' : 'e.g. 017xxxxxxxx'}
-                                            maxLength={isCard ? 4 : undefined}
-                                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all font-mono"
+                                            onChange={e => {
+                                                if (isCard) {
+                                                    // Format as XXXX XXXX XXXX XXXX
+                                                    const raw = e.target.value.replace(/\D/g, '').slice(0, 16);
+                                                    const formatted = raw.match(/.{1,4}/g)?.join(' ') || raw;
+                                                    setNewMethod({...newMethod, account_number: formatted});
+                                                } else {
+                                                    setNewMethod({...newMethod, account_number: e.target.value});
+                                                }
+                                            }}
+                                            placeholder={isCard ? 'XXXX XXXX XXXX XXXX' : 'e.g. 017xxxxxxxx'}
+                                            maxLength={isCard ? 19 : undefined} // 16 digits + 3 spaces
+                                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all font-mono tracking-widest"
                                         />
+                                        {isCard && newMethod.account_number.replace(/\s/g,'').length > 0 && newMethod.account_number.replace(/\s/g,'').length < 16 && (
+                                            <p className="text-[10px] text-amber-500 font-medium flex items-center gap-1">
+                                                <AlertCircle size={10} /> {16 - newMethod.account_number.replace(/\s/g,'').length} more digits needed
+                                            </p>
+                                        )}
                                     </div>
 
                                     {newMethod.method === 'bank' && (

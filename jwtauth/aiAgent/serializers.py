@@ -32,7 +32,8 @@ class AgentAIListSerializer(serializers.ModelSerializer):
             'token_expires_at',
             'is_active',
             'created_at',
-            'access_token'
+            'access_token',
+            'is_special_agent'
         ]
         read_only_fields = ['id', 'created_at', 'token_expires_at']
  
@@ -62,6 +63,7 @@ class AgentAISerializer(serializers.ModelSerializer):
             'max_tokens',
             'token_expires_at',
             'is_active',
+            'is_special_agent',
         ]
         extra_kwargs = {
             'access_token': {'write_only': True},     # শুধু write করা যাবে, response-এ দেখাবে না

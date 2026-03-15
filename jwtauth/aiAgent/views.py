@@ -14,7 +14,9 @@ from aiAgent.gemini import generate_dashboard_help
 from rest_framework.decorators import api_view, permission_classes
 from django.http import JsonResponse
 from aiAgent.cache.ranking import get_top_message
-from aiAgent.cache.hybrid_similarity import r as redis_conn
+from aiAgent.cache.hybrid_similarity import r as redis_conn, r_grouped
+from aiAgent.cache.metrics import get_metrics
+from aiAgent.cache.client import get_redis_client
 import json
 from users.models import Subscription
 from .serializers import AIProviderModelSerializer
@@ -220,36 +222,184 @@ class RankingAPIView(APIView):
     """
     def get(self, request, agent_id, format=None):
         try:
-            # ১. র‍্যাঙ্কিং ডাটা আনা (db=6 থেকে)
+            # ১. র‍্যাঙ্কিং ডাটা আনা (db=4 থেকে)
             top_messages_raw = get_top_message(agent_id, top_n=10)
+            agent = AgentAI.objects.filter(page_id=agent_id).first()
+            is_special_agent = agent.is_special_agent if agent else False
             
             api_data = []
             
-            # ২. hash থেকে মূল টেক্সট খুঁজে বের করা (db=2 থেকে)
+            # ২. hash থেকে মূল টেক্সট খুঁজে বের করা
             for msg_hash, frequency in top_messages_raw:
-                key = f"agent:{agent_id}:reply:{msg_hash.decode()}"
+                # DB 2 (Agent Cache) চেক করা
+                key = f"agent:{agent_id}:reply:{msg_hash}"
                 cached_data = redis_conn.get(key)
+                source = 'agent'
                 
+                # যদি DB 2-তে না থাকে তবে DB 6 (Global Cache) চেক করা
+                if not cached_data:
+                    global_key = f"global:reply:{msg_hash}"
+                    cached_data = r_grouped.get(global_key)
+                    source = 'global'
+
                 text = "Unknown Message"
-                total_token_savings = 0 # 👈 ভেরিয়েবলটি ইনিশিয়ালাইজ করুন
+                total_token_savings = 0
+                current_scope = "agent_specific"
                 
                 if cached_data:
                     data = json.loads(cached_data)
-                    text = data.get('original_normalized', 'Unknown Message') 
+                    text = data.get('original_normalized', data.get('original_text', 'Unknown Message')) 
+                    current_scope = data.get('cache_scope', 'agent_specific') if source == 'agent' else 'global'
                     
                     input_tokens = data.get('input_tokens', 0)
                     output_tokens = data.get('output_tokens', 0)
-                    # ⚡ ক্যালকুলেশন ঠিক আছে
+                    # ⚡ ক্যালকুলেশন
                     total_token_savings = (int(input_tokens) + int(output_tokens)) * int(frequency)
-                    total_token_savings -= input_tokens + output_tokens
+                    total_token_savings -= (input_tokens + output_tokens)
 
                 api_data.append({
                     'text': text,
                     'frequency': int(frequency),
-                    'token_savings': total_token_savings, # 👈 এখানে ভেরিয়েবলের নাম ঠিক করুন
+                    'token_savings': total_token_savings,
+                    'msg_hash': msg_hash,
+                    'current_scope': current_scope,
                 })
 
-            return Response(api_data, status=status.HTTP_200_OK)
+            return Response({
+                "data": api_data,
+                "is_staff": request.user.is_staff or request.user.is_superuser,
+                "is_special_agent": is_special_agent
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class AgentMetricsAPIView(APIView):
+    """
+    এজেন্টের পারফরম্যান্স মেট্রিক্স রিটার্ন করে (Cache Hit/Miss etc.)
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, agent_id):
+        try:
+            raw_metrics = get_metrics(agent_id)
+            # বাইটস থেকে ডিকোড করা
+            metrics = {k.decode(): v.decode() for k, v in raw_metrics.items()}
+            
+            # Hit Rate ক্যালকুলেশন
+            hits = int(metrics.get('cache_hit', 0))
+            misses = int(metrics.get('cache_miss', 0))
+            total = hits + misses
+            hit_rate = round((hits / total * 100), 2) if total > 0 else 0
+            
+            return Response({
+                "status": "success",
+                "metrics": metrics,
+                "hit_rate": hit_rate,
+                "total_queries": total
+            })
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class DeleteRankingDataAPIView(APIView):
+    """
+    এজেন্টের নির্দিষ্ট মেসেজ ক্যাশ এবং র‍্যাঙ্কিং থেকে ডিলিট করে
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def delete(self, request, agent_id, msg_hash):
+        try:
+            # ১. ওনারশিপ ভেরিফিকেশন (নিরাপত্তার জন্য - page_id ব্যবহার করছি কারণ ফ্রন্টএন্ড এটাই পাঠায়)
+            agent = AgentAI.objects.filter(page_id=agent_id, user=request.user).first()
+            if not agent:
+                return Response({"error": "Agent not found or unauthorized"}, status=status.HTTP_404_NOT_FOUND)
+            
+            # ২. র‍্যাঙ্কিং ও ক্লাস্টার (DB 4) থেকে রিমুভ করা
+            ranking_r = get_redis_client(db=4)
+            ranking_key = f"agent:{agent_id}:ranking"
+            cluster_key = f"agent:{agent_id}:clusters"
+            
+            pipe_db4 = ranking_r.pipeline()
+            pipe_db4.zrem(ranking_key, msg_hash)
+            pipe_db4.hdel(cluster_key, msg_hash)
+            pipe_db4.execute()
+            
+            # ৩. এজেন্ট ক্যাশ (DB 2) থেকে ডিলিট করা
+            cache_key = f"agent:{agent_id}:reply:{msg_hash}"
+            redis_conn.delete(cache_key)
+            
+            # ৪. সেন্ডার ক্যাশ (DB 6) থেকে ডিলিট করা (নির্দিষ্ট এজেন্টের জন্য)
+            r_grouped_db6 = get_redis_client(db=6)
+            
+            # Sender-specific keys for this agent and this message hash
+            sender_pattern = f"agent:{agent_id}:sender:*:reply:{msg_hash}"
+            for key in r_grouped_db6.scan_iter(match=sender_pattern):
+                r_grouped_db6.delete(key)
+            
+            return Response({"status": "success", "message": "Message deleted from agent cache layers"}, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class UpdateCacheScopeAPIView(APIView):
+    """
+    মেসেজের ক্যাশ গ্রুপ (Scope) পরিবর্তন করে (Agent Specific <-> Global)
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, agent_id, msg_hash):
+        new_scope = request.data.get('new_scope') # 'global' or 'agent_specific'
+        if new_scope not in ['global', 'agent_specific']:
+            return Response({"error": "Invalid scope. Use 'global', 'agent_specific' or 'special'"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # ১. পারমিশন চেক (শুধু স্টাফরা পারবে)
+        if not (request.user.is_staff or request.user.is_superuser):
+            return Response({"error": "Only staff members can change cache group."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            # ১. ওনারশিপ ভেরিফিকেশন
+            agent = AgentAI.objects.filter(page_id=agent_id, user=request.user).first()
+            if not agent:
+                return Response({"error": "Agent not found or unauthorized"}, status=status.HTTP_404_NOT_FOUND)
+            
+            # ২. সোর্স ডাটা চেক করা (উভয় ডিবিতে চেক করবে)
+            agent_key = f"agent:{agent_id}:reply:{msg_hash}"
+            global_key = f"global:reply:{msg_hash}"
+            
+            r_db2 = redis_conn # DB 2
+            r_db6 = get_redis_client(db=6) # DB 6
+            
+            raw_data = r_db2.get(agent_key) or r_db6.get(global_key)
+            if not raw_data:
+                return Response({"error": "Original cached message not found"}, status=status.HTTP_404_NOT_FOUND)
+            
+            data = json.loads(raw_data)
+            
+            # ৩. ডাটা আপডেট করা
+            data['cache_scope'] = new_scope
+            
+            # ৪. মুভ করা
+            if new_scope == 'global':
+                # Agent -> Global
+                r_db6.set(global_key, json.dumps(data), ex=30*24*60*60) # 30 days
+                r_db2.delete(agent_key)
+            elif new_scope == 'special':
+                # Special Scope (Requires agent to be special)
+                if not agent.is_special_agent:
+                    return Response({"error": "This agent is not enrolled in the Special Agent program."}, status=status.HTTP_403_FORBIDDEN)
+                
+                # DB 2 (same as agent) but 1 year TTL
+                r_db2.set(agent_key, json.dumps(data), ex=365*24*60*60) 
+                r_db6.delete(global_key)
+            else:
+                # Global -> Agent
+                # ১. এজেন্টে সেভ করা
+                r_db2.set(agent_key, json.dumps(data), ex=14*24*60*60) # 14 days
+                
+                # ২. গ্লোবাল থেকে ডিলিট করা
+                r_db6.delete(global_key)
+                
+            return Response({"status": "success", "message": f"Cache scope updated to {new_scope}"}, status=status.HTTP_200_OK)
             
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

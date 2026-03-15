@@ -31,7 +31,7 @@ export const metadata = {
   description:
     "New Smart Agent is an AI automation platform that automatically replies to Facebook messages, comments, and manages customer orders 24/7.",
   icons: {
-    icon: "/new-smart-agent.png"
+    icon: "/newsmartagent.png"
   },
   keywords: [
     "AI Automation",
@@ -57,7 +57,7 @@ export const metadata = {
     type: "website",
     images: [
     {
-      url: "/new-smart-agent.png", // আপনার লোগো বা একটি ব্যানার ইমেজ
+      url: "/newsmartagent.png", // আপনার লোগো বা একটি ব্যানার ইমেজ
       width: 1200,
       height: 630,
       alt: "New Smart Agent - AI Automation Platform",
@@ -66,8 +66,8 @@ export const metadata = {
 },
 // favicon এবং অ্যাপল টাচ আইকন এর জন্য icons সেকশনটি এভাবে দিতে পারেন
 icons: {
-  icon: "/new-smart-agent.png",
-  apple: "/new-smart-agent.png",
+  icon: "/newsmartagent.png",
+  apple: "/newsmartagent.png",
   },
 
   twitter: {
@@ -113,7 +113,7 @@ export default function RootLayout({ children }) {
     "@type": "Organization",
     "name": "New Smart Agent",
     "url": "https://newsmartagent.com",
-    "logo": "https://newsmartagent.com/new-smart-agent.png",
+    "logo": "https://newsmartagent.com/newsmartagent.png",
     "sameAs": [
       "https://www.facebook.com/share/1G5CKXCgCk/", // আপনার ফেসবুক পেজ লিঙ্ক
       "http://www.youtube.com/@NewSmartAgent"
