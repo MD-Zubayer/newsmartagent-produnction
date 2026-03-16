@@ -346,6 +346,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'log_service.backup_db_to_drive',
         'schedule': crontab(hour=1, minute=0),  # প্রতিদিন রাত ১টায়
     },
+    'backup-redis-to-google-drive': {
+        'task': 'log_service.backup_redis_to_drive',
+        'schedule': crontab(hour=2, minute=0),  # প্রতিদিন রাত ২টায়
+    },
 }
 
 
