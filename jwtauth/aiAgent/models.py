@@ -200,7 +200,8 @@ class SmartKeyword(models.Model):
         ('skip', 'Skip Keyword (Greetings/Filler)'),
         ('target', 'Target Keyword (High Priority)'),
         ('intent', 'User Intent (Order/Price)'),
-        ('urgency', 'Urgency / Sentiment (Problem/Slow)'),
+        ('urgency', 'Urgency'),
+        ('number', 'Numeric Keyword'),
     ]
     
     text = models.CharField(max_length=255, unique=True, db_index=True)

@@ -223,7 +223,7 @@ class DashboardAILogAdmin(ModelAdmin):
 
 @admin.register(SmartKeyword)
 class SmartKeywordAdmin(ModelAdmin):
-    list_display = ('text', 'category', 'is_active', 'created_at')
+    list_display = ('id', 'text', 'category', 'is_active', 'created_at')
     list_filter = ('category', 'is_active')
     search_fields = ('text',)
     list_editable = ('is_active',)
@@ -251,9 +251,20 @@ class SmartKeywordAdmin(ModelAdmin):
                     extracted_keywords = []
 
                     def extract_strings(obj):
-                        """Recursively extract meaningful strings from JSON."""
+                        """Recursively extract meaningful strings from JSON, handling numbers based on category."""
                         if isinstance(obj, str):
-                            extracted_keywords.append(obj.strip())
+                            val = obj.strip()
+                            # If category is 'number', we allow pure digits.
+                            # Otherwise, we filter them out.
+                            if category == 'number':
+                                if val: extracted_keywords.append(val)
+                            else:
+                                if not val.isdigit() and val:
+                                    extracted_keywords.append(val)
+                        elif isinstance(obj, (int, float)):
+                            # If category is 'number', convert int/float to string
+                            if category == 'number':
+                                extracted_keywords.append(str(obj))
                         elif isinstance(obj, list):
                             for item in obj:
                                 extract_strings(item)
@@ -262,16 +273,24 @@ class SmartKeywordAdmin(ModelAdmin):
                             priority_keys = ['text', 'name', 'keyword', 'value', 'word']
                             found_priority = False
                             for key in priority_keys:
-                                if key in obj and isinstance(obj[key], str):
-                                    extracted_keywords.append(obj[key].strip())
-                                    found_priority = True
-                                    # Don't break, there might be multiple (though rare)
+                                if key in obj and (isinstance(obj[key], str) or isinstance(obj[key], (int, float))):
+                                    val = str(obj[key]).strip()
+                                    if category == 'number':
+                                        extracted_keywords.append(val)
+                                        found_priority = True
+                                    elif not val.isdigit():
+                                        extracted_keywords.append(val)
+                                        found_priority = True
                             
                             # If no priority keys found, check all values
                             if not found_priority:
                                 for value in obj.values():
                                     if isinstance(value, str):
-                                        extracted_keywords.append(value.strip())
+                                        val = value.strip()
+                                        if category == 'number' or not val.isdigit():
+                                            extracted_keywords.append(val)
+                                    elif isinstance(value, (int, float)) and category == 'number':
+                                        extracted_keywords.append(str(value))
                                     elif isinstance(value, (list, dict)):
                                         extract_strings(value)
 
