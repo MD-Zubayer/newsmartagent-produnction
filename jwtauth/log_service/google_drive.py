@@ -49,23 +49,16 @@ def _get_drive_service():
 
 
 def get_or_create_folder(folder_name: str, parent_folder_id: str = None) -> str:
-    """
-    Google Drive-এ folder খুঁজে বের করে, না থাকলে তৈরি করে।
-    folder_id return করে।
-    """
     service = _get_drive_service()
+    user_email = "newsmartagentbd@gmail.com" # আপনার ইমেইল
 
     query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
     if parent_folder_id:
         query += f" and '{parent_folder_id}' in parents"
 
-    results = service.files().list(
-        q=query,
-        spaces='drive',
-        fields='files(id, name)'
-    ).execute()
-
+    results = service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
     folders = results.get('files', [])
+
     if folders:
         return folders[0]['id']
 
@@ -77,9 +70,22 @@ def get_or_create_folder(folder_name: str, parent_folder_id: str = None) -> str:
     if parent_folder_id:
         file_metadata['parents'] = [parent_folder_id]
 
-    folder = service.files().create(body=file_metadata, fields='id').execute()
-    logger.info(f"Google Drive-এ folder তৈরি হয়েছে: {folder_name} (id={folder['id']})")
-    return folder['id']
+    # ফোল্ডার তৈরির সময়ও supportsAllDrives=True দিন
+    folder = service.files().create(body=file_metadata, fields='id', supportsAllDrives=True).execute()
+    folder_id = folder['id']
+
+    # 🔥 ফোল্ডার তৈরির সাথে সাথেই ওনারশিপ আপনাকে দিয়ে দিন
+    try:
+        service.permissions().create(
+            fileId=folder_id,
+            body={'type': 'user', 'role': 'owner', 'emailAddress': user_email},
+            transferOwnership=True,
+            fields='id'
+        ).execute()
+    except Exception as e:
+        logger.warning(f"Folder ownership transfer failed: {e}")
+
+    return folder_id
 
 
 def upload_or_update_file(local_file_path: str, drive_file_name: str, folder_id: str) -> str:
