@@ -6,8 +6,8 @@ from aiAgent.models import AgentAI
 from chat.services import save_message
 from aiAgent.models import AgentAI, MissingRequirement, TokenUsageLog
 from aiAgent.memory_service import extract_and_update_memory
-from aiAgent.memory_handler import handle_smart_memory_update
-from webhooks.constants import TARGET_KEYWORDS, embedding_skip_keyword, history_skip_keyword
+from aiAgent.memory_handler import handle_smart_memory_update, get_keywords_by_category
+from webhooks.constants import TARGET_KEYWORDS
 from aiAgent.data_processor import processor_spreadsheet_data
 import json
 from django.http import JsonResponse
@@ -75,6 +75,7 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
             skip_embedding = False
             text_len = len(text)
 
+            embedding_skip_keyword = get_keywords_by_category('embedding_skip')
             for kw in embedding_skip_keyword:
                 kw_len = len(kw)
                 if kw.lower() in text.lower() and abs(text_len - kw_len) <= skip_margin:
@@ -284,11 +285,12 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
     skip_history = False
     text_len = len(text)
     
+    history_skip_keyword = get_keywords_by_category('history_skip')
     for kw in history_skip_keyword:
         kw_len = len(kw)
         if kw.lower() in text.lower() and abs(text_len - kw_len) <= skip_margin:
             skip_history = True
-            logger.info(f"⏭️ Skipping history: Keyword '{kw}' found and message length within margin.")
+            logger.info(f"⏭️ Skipping history: DB Keyword '{kw}' found.")
             break
             
     if skip_history:

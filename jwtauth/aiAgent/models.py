@@ -198,6 +198,8 @@ class SmartKeyword(models.Model):
     CATEGORY_CHOICES = [
         ('location', 'Location / Geography'),
         ('skip', 'Skip Keyword (Greetings/Filler)'),
+        ('history_skip', 'History Skip (No History in AI)'),
+        ('embedding_skip', 'Embedding Skip (No RAG Search)'),
         ('target', 'Target Keyword (High Priority)'),
         ('intent', 'User Intent (Order/Price)'),
         ('urgency', 'Urgency'),
