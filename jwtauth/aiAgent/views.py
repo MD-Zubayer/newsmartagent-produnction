@@ -189,13 +189,25 @@ def dashboard_chat_view(request):
     if not message:
         return Response({'reply': 'মেসেজ খালি পাঠানো যাবে না।'}, status=400)
 
-    # ১. পাথ অনুযায়ী সঠিক কনটেক্সট খুঁজে বের করা
-    context = PAGE_DOCS.get(path, PAGE_DOCS["default"])
+    # ১. ইউজার ডাটা এবং পাথ অনুযায়ী সঠিক কনটেক্সট খুঁজে বের করা
+    user_agents = AgentAI.objects.filter(user=user).count()
+    active_subscription = Subscription.objects.filter(profile__user=user, is_active=True).first()
+    
+    user_context = f"- ইউজারের নাম: {user.username or 'সম্মানিত ইউজার'}\n"
+    user_context += f"- বর্তমান এজেন্ট সংখ্যা: {user_agents}\n"
+    if active_subscription:
+        user_context += f"- বর্তমান প্ল্যান: {active_subscription.offer_id}\n"
+        user_context += f"- সাবস্ক্রিপশন শেষ হবে: {active_subscription.end_date if hasattr(active_subscription, 'end_date') else 'N/A'}\n"
+    else:
+        user_context += "- কোনো একটিভ সাবস্ক্রিপশন নেই।\n"
+
+    page_docs = PAGE_DOCS.get(path, PAGE_DOCS["default"])
+    full_context = f"ইউজারের প্রোফাইল তথ্য:\n{user_context}\n\nবর্তমান পেজের তথ্য: {page_docs}"
 
     # ২. আপনার gemini.py এর ফাংশনটি কল করা
     ai_response = generate_dashboard_help(
         user_query=message,
-        page_context=context,
+        page_context=full_context,
         chat_history=[] # আপনি চাইলে ডাটাবেস থেকে লাস্ট ৫টি চ্যাট এখানে পাঠাতে পারেন
     )
 
