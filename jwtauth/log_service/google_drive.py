@@ -13,7 +13,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 from googleapiclient.errors import HttpError
 from django.conf import settings
-
+from googleapiclient.http import MediaFileUpload
 logger = logging.getLogger(__name__)
 
 # Google Drive API scope
@@ -106,19 +106,18 @@ def upload_or_update_file(local_file_path: str, drive_file_name: str, folder_id:
         logger.warning(f"Log file পাওয়া যায়নি: {local_file_path}")
         return None
 
-    media = MediaIoBaseUpload(
-        io.BytesIO(content),
+    media = MediaFileUpload(
+        local_file_path,
         mimetype='text/plain',
-        resumable=False
+        resumable=True # বড় ফাইলের জন্য এটি অনেক বেশি স্টেবল
     )
 
     if files:
-        # Update existing file (এক্ষেত্রে ওনারশিপ অলরেডি আপনার কাছে আছে)
         file_id = files[0]['id']
         service.files().update(
             fileId=file_id,
             media_body=media,
-            supportsAllDrives=True  # Quota management এর জন্য ভালো
+            supportsAllDrives=True
         ).execute()
         logger.debug(f"Drive file updated: {drive_file_name} (id={file_id})")
     else:
