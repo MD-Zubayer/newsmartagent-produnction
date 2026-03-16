@@ -205,6 +205,19 @@ def dashboard_chat_view(request):
         }
     )
 
+    from settings.models import GlobalSettings
+    global_settings = GlobalSettings.get_settings()
+    
+    if global_settings.dashboard_ai_model:
+        model_changed = False
+        if agent_config.selected_model_id != global_settings.dashboard_ai_model_id:
+            agent_config.selected_model = global_settings.dashboard_ai_model
+            agent_config.ai_model = global_settings.dashboard_ai_model.model_id
+            model_changed = True
+        
+        if model_changed or created:
+            agent_config.save()
+
     import uuid
     import time
     from webhooks.tasks import process_ai_reply_task

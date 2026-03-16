@@ -11,3 +11,34 @@ class AgentSettings(models.Model):
     
     def __str__(self):
         return f"Settings for {self.user.name}"
+
+
+class GlobalSettings(models.Model):
+    """
+    Singleton model to hold system-wide settings that apply globally,
+    such as the default AI model for the Dashboard Assistant.
+    """
+    dashboard_ai_model = models.ForeignKey(
+        'aiAgent.AIProviderModel', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        help_text="Select the AI model that will be used globally for the Dashboard Assistant (New Smart Agent)."
+    )
+    
+    class Meta:
+        verbose_name = "Global Setting"
+        verbose_name_plural = "Global Settings"
+
+    def save(self, *args, **kwargs):
+        # Ensure only one instance exists.
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def get_settings(cls):
+        obj, created = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def __str__(self):
+        return "System Global Settings"

@@ -118,22 +118,33 @@ export default function DashboardAI() {
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0, opacity: 0 }}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
             onClick={() => setIsOpen(true)}
-            className="fixed bottom-8 right-8 z-[1000] cursor-pointer"
+            className="fixed bottom-6 right-6 z-[1000] cursor-pointer"
           >
-            <div className="relative">
-              <div className="w-16 h-16 bg-gradient-to-tr from-[#0084FF] to-[#00C6FF] rounded-full flex items-center justify-center shadow-[0_10px_30px_rgba(0,132,255,0.4)] border-2 border-white overflow-hidden">
-                <Image 
-                   src="/newsmartagent_ai_logo.jpeg" 
-                   alt="AI Logo" 
-                   fill
-                   style={{ objectFit: 'cover' }}
-                   className="shadow-inner"
-                />
+            <div className="relative group">
+              {/* Animated Glow Effect */}
+              <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500 to-cyan-400 rounded-full blur-lg opacity-40 group-hover:opacity-70 transition-opacity duration-300"></div>
+              
+              {/* Main Button Container */}
+              <div className="w-16 h-16 sm:w-18 sm:h-18 md:w-20 md:h-20 bg-gradient-to-tr from-[#E0E7FF] to-[#F3E8FF] rounded-full flex items-center justify-center shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-[3px] border-white overflow-hidden relative z-10 p-0.5">
+                <div className="relative w-full h-full rounded-full overflow-hidden shadow-inner bg-white">
+                  <Image 
+                     src="/newsmartagent_ai_logo.jpeg" 
+                     alt="New Smart Agent AI" 
+                     fill
+                     sizes="(max-width: 768px) 64px, 80px"
+                     style={{ objectFit: 'cover' }}
+                     className="hover:scale-110 transition-transform duration-500 ease-out"
+                  />
+                </div>
               </div>
-              <div className="absolute top-0 right-0 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
+
+              {/* Online Indicator Badge */}
+              <div className="absolute bottom-1 right-1 w-4 h-4 md:w-5 md:h-5 bg-emerald-500 border-2 border-white rounded-full z-20 shadow-sm flex items-center justify-center">
+                <div className="w-2 h-2 rounded-full bg-white opacity-80 animate-pulse"></div>
+              </div>
             </div>
           </motion.div>
         )}
@@ -144,38 +155,41 @@ export default function DashboardAI() {
         {isOpen && (
           <motion.div
             key="chat-window"
-            initial={{ y: 100, opacity: 0, scale: 0.9 }}
+            initial={{ y: 100, opacity: 0, scale: 0.95 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 100, opacity: 0, scale: 0.9 }}
+            exit={{ y: 20, opacity: 0, scale: 0.95 }}
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="fixed bottom-8 right-8 z-[1001] w-full max-w-[380px] h-full max-h-[600px] bg-white rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] flex flex-col overflow-hidden border border-gray-100"
+            className="fixed bottom-0 right-0 sm:bottom-8 sm:right-8 z-[1001] w-full sm:w-[380px] h-[100dvh] sm:h-full sm:max-h-[600px] bg-white sm:rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] flex flex-col overflow-hidden border border-gray-100"
           >
             {/* Messenger Header */}
-            <div className="bg-white border-b px-4 py-3 flex items-center justify-between shadow-sm">
+            <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 px-4 py-4 flex items-center justify-between shadow-md relative z-10">
               <div className="flex items-center gap-3">
                 <div className="relative">
-                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center overflow-hidden border border-blue-50 relative">
-                    <Image 
-                       src="/newsmartagent_ai_logo.jpeg" 
-                       alt="AI Logo" 
-                       fill
-                       style={{ objectFit: 'cover' }}
-                    />
+                  <div className="w-10 h-10 md:w-11 md:h-11 rounded-full bg-white flex items-center justify-center overflow-hidden border-2 border-white/20 shadow-sm relative p-0.5">
+                    <div className="relative w-full h-full rounded-full overflow-hidden">
+                      <Image 
+                         src="/newsmartagent_ai_logo.jpeg" 
+                         alt="AI Logo" 
+                         fill
+                         sizes="44px"
+                         style={{ objectFit: 'cover' }}
+                      />
+                    </div>
                   </div>
-                  <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+                  <div className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-400 border-2 border-indigo-700 rounded-full"></div>
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-gray-800">Smart Agent AI</h3>
-                  <p className="text-[10px] text-green-500 font-medium font-sans">Active Now</p>
+                  <h3 className="text-sm font-bold text-white leading-tight">New Smart Agent AI</h3>
+                  <p className="text-[10px] text-indigo-100 font-medium font-sans flex items-center gap-1">
+                    <span className="w-1 h-1 bg-emerald-400 rounded-full animate-pulse"></span>
+                    সবসময় আপনার পাশে
+                  </p>
                 </div>
               </div>
-              <div className="flex items-center gap-1 text-blue-500">
-                <button className="hover:bg-gray-100 p-2 rounded-full transition-colors">
-                  <MoreHorizontal size={20} />
-                </button>
+              <div className="flex items-center gap-1 text-white/80">
                 <button 
                   onClick={() => setIsOpen(false)} 
-                  className="hover:bg-red-50 hover:text-red-500 p-2 rounded-full transition-colors"
+                  className="hover:bg-white/10 p-2 rounded-full transition-colors"
                 >
                   <X size={20} />
                 </button>
@@ -184,18 +198,21 @@ export default function DashboardAI() {
 
             {/* Chat Messages Area */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#f0f2f5]/30 scrollbar-hide">
-              <div className="flex flex-col items-center py-6">
-                <div className="relative w-16 h-16 mb-2">
-                   <Image 
-                      src="/newsmartagent_ai_logo.jpeg" 
-                      alt="AI Logo" 
-                      fill
-                      style={{ objectFit: 'cover' }}
-                      className="rounded-full shadow-md"
-                   />
+              <div className="flex flex-col items-center py-8">
+                <div className="relative w-20 h-20 mb-3 p-1 bg-white rounded-full shadow-md border border-gray-100">
+                   <div className="relative w-full h-full rounded-full overflow-hidden">
+                      <Image 
+                         src="/newsmartagent_ai_logo.jpeg" 
+                         alt="New Smart Agent AI" 
+                         fill
+                         sizes="80px"
+                         style={{ objectFit: 'cover' }}
+                         className="rounded-full"
+                      />
+                   </div>
                 </div>
-                <h4 className="text-xs font-bold text-gray-700">Smart Agent Support</h4>
-                <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">Powered by AI</p>
+                <h4 className="text-sm font-bold text-gray-800">New Smart Agent AI</h4>
+                <p className="text-[10px] text-gray-400 uppercase tracking-widest font-black mt-1">সবসময় আপনার পাশে</p>
               </div>
 
               {messages.map((m, i) => (
@@ -206,8 +223,16 @@ export default function DashboardAI() {
                   className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
                 >
                   {m.role === "bot" && (
-                    <div className="w-6 h-6 rounded-full overflow-hidden mr-2 mt-auto border border-gray-100 flex-shrink-0">
-                      <Image src="/newsmartagent_ai_logo.jpeg" alt="Bot" width={24} height={24} />
+                    <div className="w-7 h-7 rounded-full overflow-hidden mr-2 mt-auto border border-gray-100 flex-shrink-0 p-0.5 bg-white shadow-xs">
+                      <div className="relative w-full h-full rounded-full overflow-hidden">
+                        <Image 
+                          src="/newsmartagent_ai_logo.jpeg" 
+                          alt="Bot" 
+                          fill
+                          sizes="28px"
+                          style={{ objectFit: 'cover' }}
+                        />
+                      </div>
                     </div>
                   )}
                   <div className={`flex flex-col max-w-[80%] ${m.role === "user" ? "items-end" : "items-start"}`}>
@@ -228,8 +253,16 @@ export default function DashboardAI() {
                   animate={{ opacity: 1 }}
                   className="flex justify-start"
                 >
-                  <div className="w-6 h-6 rounded-full overflow-hidden mr-2 mt-auto border border-gray-100 flex-shrink-0">
-                    <Image src="/newsmartagent_ai_logo.jpeg" alt="Bot" width={24} height={24} />
+                  <div className="w-7 h-7 rounded-full overflow-hidden mr-2 mt-auto border border-gray-100 flex-shrink-0 p-0.5 bg-white shadow-xs">
+                    <div className="relative w-full h-full rounded-full overflow-hidden">
+                      <Image 
+                        src="/newsmartagent_ai_logo.jpeg" 
+                        alt="Bot" 
+                        fill
+                        sizes="28px"
+                        style={{ objectFit: 'cover' }}
+                      />
+                    </div>
                   </div>
                   <div className="bg-white border border-gray-100 px-4 py-3 rounded-[1.25rem] rounded-tl-[0.25rem] flex gap-1.5 items-center shadow-sm">
                     <span className="w-1.5 h-1.5 bg-gray-300 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
