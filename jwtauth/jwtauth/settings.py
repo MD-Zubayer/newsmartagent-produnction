@@ -331,7 +331,7 @@ GOOGLE_DRIVE_LOG_FOLDER_ID = os.environ.get('GOOGLE_DRIVE_LOG_FOLDER_ID', '')
 GOOGLE_DRIVE_LOG_SUBFOLDER = os.environ.get('GOOGLE_DRIVE_LOG_SUBFOLDER', 'newsmartagent-logs')
 GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE = os.environ.get(
     'GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE',
-    os.path.join(BASE_DIR, 'service_account.json')
+    '/app/service_account.json'  # BASE_DIR সরিয়ে সরাসরি এই পাথটি দিন
 )
 # ─────────────────────────────────────────────────────────────────────────────
 
