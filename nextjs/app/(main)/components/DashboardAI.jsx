@@ -323,7 +323,7 @@ export default function DashboardAI() {
                 />
                 <motion.button 
                   whileActive={{ scale: 0.9 }}
-                  onClick={handleSend} 
+                  onClick={() => handleSend()} 
                   disabled={!input.trim() || isTyping}
                   className={`${input.trim() ? "text-indigo-600" : "text-gray-300"} transition-all duration-300`}
                 >
