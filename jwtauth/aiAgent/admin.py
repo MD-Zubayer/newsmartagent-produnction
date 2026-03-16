@@ -14,6 +14,7 @@ from django.urls import path
 from django.shortcuts import render, redirect
 from django.contrib import messages
 import json
+import re
 
 class KeywordUploadForm(forms.Form):
     category = forms.ChoiceField(choices=SmartKeyword.CATEGORY_CHOICES)
@@ -277,7 +278,11 @@ class SmartKeywordAdmin(ModelAdmin):
                             for item in obj:
                                 extract_strings(item)
                         elif isinstance(obj, dict):
-                            priority_keys = ['text', 'name', 'keyword', 'value', 'word']
+                            # Prioritize common keys including location/village specific ones
+                            priority_keys = [
+                                'text', 'name', 'keyword', 'value', 'word', 
+                                'village_name_bn', 'village_name_en', 'village', 'city', 'district', 'thana'
+                            ]
                             found_priority = False
                             for key in priority_keys:
                                 if key in obj and (isinstance(obj[key], str) or isinstance(obj[key], (int, float))):
@@ -297,7 +302,32 @@ class SmartKeywordAdmin(ModelAdmin):
                                     elif isinstance(value, (list, dict)):
                                         extract_strings(value)
 
-                    extract_strings(data)
+                    if is_json:
+                        extract_strings(data)
+                    else:
+                        # Smarter Text Fallback: Try to clean lines that look like "key": "value"
+                        for line in data:
+                            line = line.strip()
+                            if not line or line in ['[', ']', '{', '}', '],', '},']:
+                                continue
+                            
+                            # Remove trailing commas
+                            line = line.rstrip(',')
+                            
+                            # If it looks like "something": "value"
+                            if ':' in line:
+                                parts = line.split(':', 1)
+                                val = parts[1].strip()
+                            else:
+                                val = line
+                            
+                            # Strip quotes
+                            val = val.strip('"').strip("'").strip()
+                            
+                            if category == 'number':
+                                if val: extracted_keywords.append(val)
+                            elif val and not val.isdigit():
+                                extracted_keywords.append(val)
                     
                     if not extracted_keywords:
                         messages.error(request, "Could not find any keywords in the file.")
