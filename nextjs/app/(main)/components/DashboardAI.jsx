@@ -301,22 +301,22 @@ export default function DashboardAI() {
             </div>
 
             {/* Messenger Style Input Area */}
-            <div className="p-3 bg-white border-t space-y-2">
-              <div className="flex items-center gap-1">
-                 <button className="text-blue-500 hover:bg-blue-50 p-2 rounded-full transition-colors tooltip" title="Quick Menu">
-                    <PlusCircle size={20} />
+            <div className="p-2 sm:p-3 bg-white border-t space-y-2 pb-safe">
+              <div className="flex items-center gap-1 px-1">
+                 <button className="text-indigo-500 hover:bg-indigo-50 p-1.5 sm:p-2 rounded-full transition-colors">
+                    <PlusCircle size={18} className="sm:w-5 sm:h-5" />
                  </button>
-                 <button className="text-blue-500 hover:bg-blue-50 p-2 rounded-full transition-colors">
-                    <ImageIcon size={20} />
+                 <button className="text-indigo-500 hover:bg-indigo-50 p-1.5 sm:p-2 rounded-full transition-colors">
+                    <ImageIcon size={18} className="sm:w-5 sm:h-5" />
                  </button>
-                 <button className="text-blue-500 hover:bg-blue-50 p-2 rounded-full transition-colors">
-                    <Smile size={20} />
+                 <button className="text-indigo-500 hover:bg-indigo-50 p-1.5 sm:p-2 rounded-full transition-colors">
+                    <Smile size={18} className="sm:w-5 sm:h-5" />
                  </button>
               </div>
-              <div className="flex gap-2 items-center bg-[#f0f2f5] px-4 py-2 rounded-[1.5rem] focus-within:ring-2 focus-within:ring-blue-100 transition-all">
+              <div className="flex gap-2 items-center bg-[#f0f2f5] px-3 sm:px-4 py-1.5 sm:py-2 rounded-[1.25rem] sm:rounded-[1.5rem] focus-within:ring-2 focus-within:ring-indigo-100 transition-all mx-1">
                 <input 
-                  className="flex-1 bg-transparent outline-none text-[13px] text-gray-700 placeholder:text-gray-500 font-medium"
-                  placeholder="Message..."
+                  className="flex-1 bg-transparent outline-none text-xs sm:text-[13px] text-gray-700 placeholder:text-gray-500 font-medium"
+                  placeholder="মেসেজ লিখুন..."
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSend()}
@@ -325,12 +325,12 @@ export default function DashboardAI() {
                   whileActive={{ scale: 0.9 }}
                   onClick={handleSend} 
                   disabled={!input.trim() || isTyping}
-                  className={`${input.trim() ? "text-[#0084FF]" : "text-gray-300"} transition-all duration-300`}
+                  className={`${input.trim() ? "text-indigo-600" : "text-gray-300"} transition-all duration-300`}
                 >
-                  <Send size={22} fill={input.trim() ? "currentColor" : "none"} strokeWidth={input.trim() ? 1.5 : 2} />
+                  <Send size={20} className="sm:w-[22px] sm:h-[22px]" fill={input.trim() ? "currentColor" : "none"} strokeWidth={input.trim() ? 1.5 : 2} />
                 </motion.button>
               </div>
-              <div className="text-[9px] text-center text-gray-400 font-bold uppercase tracking-widest pb-1 opacity-50">
+              <div className="text-[8px] sm:text-[9px] text-center text-gray-400 font-bold uppercase tracking-widest pb-1 opacity-50">
                 End-to-end encrypted
               </div>
             </div>
