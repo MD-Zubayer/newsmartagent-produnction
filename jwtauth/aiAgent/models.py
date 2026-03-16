@@ -116,7 +116,8 @@ class AgentAI(models.Model):
 class UserMemory(models.Model):
     ai_agent = models.ForeignKey(AgentAI, on_delete=models.CASCADE)
     sender_id = models.CharField(max_length=255)
-    data = models.JSONField(default=dict)
+    data = models.JSONField(default=dict, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -198,9 +199,12 @@ class SmartKeyword(models.Model):
     CATEGORY_CHOICES = [
         ('location', 'Location / Geography'),
         ('skip', 'Skip Keyword (Greetings/Filler)'),
+        ('history_skip', 'History Skip (No History in AI)'),
+        ('embedding_skip', 'Embedding Skip (No RAG Search)'),
         ('target', 'Target Keyword (High Priority)'),
         ('intent', 'User Intent (Order/Price)'),
-        ('urgency', 'Urgency / Sentiment (Problem/Slow)'),
+        ('urgency', 'Urgency'),
+        ('number', 'Numeric Keyword'),
     ]
     
     text = models.CharField(max_length=255, unique=True, db_index=True)

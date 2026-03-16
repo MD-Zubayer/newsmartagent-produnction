@@ -31,27 +31,49 @@ def calculate_context_score(text):
     """
     score = 0
     text_lower = text.lower()
+    matches = []
 
     # 1. Regex Patterns (Highest importance)
-    if re.search(r'\b01[3-9]\d{8}\b', text): score += 5
-    if re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', text): score += 4
+    if re.search(r'\b01[3-9]\d{8}\b', text): 
+        score += 5
+        matches.append("Phone Number (+5)")
+    if re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', text): 
+        score += 4
+        matches.append("Email (+4)")
     
     # 2. Location Check (from DB)
     locations = get_keywords_by_category('location')
-    if any(loc.lower() in text_lower for loc in locations): score += 4
+    for loc in locations:
+        if loc.lower() in text_lower:
+            score += 4
+            matches.append(f"Location: {loc} (+4)")
+            break
 
     # 3. Intent Check (from DB)
     intents = get_keywords_by_category('intent')
-    if any(intent.lower() in text_lower for intent in intents): score += 3
+    for intent in intents:
+        if intent.lower() in text_lower:
+            score += 3
+            matches.append(f"Intent: {intent} (+3)")
+            break
 
     # 4. Urgency/Sentiment Check (from DB)
     urgency = get_keywords_by_category('urgency')
-    if any(u.lower() in text_lower for u in urgency): score += 5
+    for u in urgency:
+        if u.lower() in text_lower:
+            score += 5
+            matches.append(f"Urgency: {u} (+5)")
+            break
 
     # 5. Complexity
-    if len(text) > 100: score += 4
-    elif len(text) > 40: score += 2
+    if len(text) > 100: 
+        score += 4
+        matches.append("High Complexity (+4)")
+    elif len(text) > 40: 
+        score += 2
+        matches.append("Medium Complexity (+2) ")
 
+    print(f"📊 Context Score for '{text[:30]}...': {score} | Matches: {matches}")
     return score
 
 def handle_smart_memory_update(agent_config, sender, current_text):
@@ -59,9 +81,14 @@ def handle_smart_memory_update(agent_config, sender, current_text):
     
     # --- Layer 1: Smart Skip Check (from DB) ---
     skip_keywords = get_keywords_by_category('skip')
+    history_skip = get_keywords_by_category('history_skip')
+    embedding_skip = get_keywords_by_category('embedding_skip')
+    
+    all_skip_keywords = skip_keywords + history_skip + embedding_skip
+    
     is_skip = False
     skip_margin = 2
-    for kw in skip_keywords:
+    for kw in all_skip_keywords:
         if kw.lower() in text_clean and abs(len(text_clean) - len(kw)) <= skip_margin:
             is_skip = True
             break

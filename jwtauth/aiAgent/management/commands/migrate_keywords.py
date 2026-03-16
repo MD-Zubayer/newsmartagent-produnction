@@ -14,7 +14,10 @@ class Command(BaseCommand):
             with open(skip_path, 'r', encoding='utf-8') as f:
                 keywords = json.load(f)
                 for kw in keywords:
-                    SmartKeyword.objects.get_or_create(text=kw, category='skip')
+                    if isinstance(kw, str):
+                        val = kw.strip()
+                        if not val.isdigit():
+                            SmartKeyword.objects.get_or_create(text=val, category='skip')
             self.stdout.write(self.style.SUCCESS('Successfully migrated initial skip keywords'))
 
         # 1.1 Migrate Embedding Skip Keywords
@@ -34,7 +37,10 @@ class Command(BaseCommand):
                 keywords = json.load(f)
                 for kw in keywords:
                     # Target keywords are also useful for context scoring
-                    SmartKeyword.objects.get_or_create(text=kw, category='target')
+                    if isinstance(kw, str):
+                        val = kw.strip()
+                        if not val.isdigit():
+                            SmartKeyword.objects.get_or_create(text=val, category='target')
             self.stdout.write(self.style.SUCCESS('Successfully migrated target keywords'))
 
         # 3. Migrate Hardcoded Locations

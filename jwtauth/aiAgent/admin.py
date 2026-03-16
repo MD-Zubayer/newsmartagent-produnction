@@ -14,6 +14,7 @@ from django.urls import path
 from django.shortcuts import render, redirect
 from django.contrib import messages
 import json
+import re
 
 class KeywordUploadForm(forms.Form):
     category = forms.ChoiceField(choices=SmartKeyword.CATEGORY_CHOICES)
@@ -223,7 +224,7 @@ class DashboardAILogAdmin(ModelAdmin):
 
 @admin.register(SmartKeyword)
 class SmartKeywordAdmin(ModelAdmin):
-    list_display = ('text', 'category', 'is_active', 'created_at')
+    list_display = ('id', 'text', 'category', 'is_active', 'created_at')
     list_filter = ('category', 'is_active')
     search_fields = ('text',)
     list_editable = ('is_active',)
@@ -247,38 +248,91 @@ class SmartKeywordAdmin(ModelAdmin):
                 json_file = request.FILES['json_file']
                 
                 try:
-                    data = json.load(json_file)
+                    # Read and decode the file as UTF-8
+                    file_content = json_file.read().decode('utf-8').strip()
+                    
                     extracted_keywords = []
+                    is_json = False
+                    
+                    try:
+                        data = json.loads(file_content)
+                        is_json = True
+                    except json.JSONDecodeError:
+                        # Fallback: Treat as raw text (one keyword per line)
+                        data = file_content.splitlines()
+                        is_json = False
 
                     def extract_strings(obj):
-                        """Recursively extract meaningful strings from JSON."""
+                        """Recursively extract meaningful strings, handling numbers based on category."""
                         if isinstance(obj, str):
-                            extracted_keywords.append(obj.strip())
+                            val = obj.strip()
+                            if category == 'number':
+                                if val: extracted_keywords.append(val)
+                            else:
+                                if not val.isdigit() and val:
+                                    extracted_keywords.append(val)
+                        elif isinstance(obj, (int, float)):
+                            if category == 'number':
+                                extracted_keywords.append(str(obj))
                         elif isinstance(obj, list):
                             for item in obj:
                                 extract_strings(item)
                         elif isinstance(obj, dict):
-                            # Prioritize common keys like 'text', 'name', 'keyword'
-                            priority_keys = ['text', 'name', 'keyword', 'value', 'word']
+                            # Prioritize common keys including geographic/village fields
+                            priority_keys = [
+                                'text', 'name', 'keyword', 'value', 'word', 
+                                'village_name_bn', 'village_name_en', 'village', 'city', 'district', 'thana',
+                                'bn_name', 'en_name', 'union_name', 'upazila_name', 'upazilla_name'
+                            ]
                             found_priority = False
                             for key in priority_keys:
-                                if key in obj and isinstance(obj[key], str):
-                                    extracted_keywords.append(obj[key].strip())
-                                    found_priority = True
-                                    # Don't break, there might be multiple (though rare)
+                                if key in obj and (isinstance(obj[key], str) or isinstance(obj[key], (int, float))):
+                                    val = str(obj[key]).strip()
+                                    if category == 'number' or not val.isdigit():
+                                        extracted_keywords.append(val)
+                                        found_priority = True
                             
-                            # If no priority keys found, check all values
-                            if not found_priority:
-                                for value in obj.values():
-                                    if isinstance(value, str):
-                                        extracted_keywords.append(value.strip())
-                                    elif isinstance(value, (list, dict)):
-                                        extract_strings(value)
+                            # ALWAYS check all values for nested structures (like "data": [...])
+                            # regardless of whether priority keys were found at this level.
+                            for value in obj.values():
+                                if not found_priority and isinstance(value, str):
+                                    val = value.strip()
+                                    if category == 'number' or not val.isdigit():
+                                        extracted_keywords.append(val)
+                                elif isinstance(value, (int, float)) and category == 'number' and not found_priority:
+                                    extracted_keywords.append(str(value))
+                                elif isinstance(value, (list, dict)):
+                                    extract_strings(value)
 
-                    extract_strings(data)
+                    if is_json:
+                        extract_strings(data)
+                    else:
+                        # Smarter Text Fallback: Try to clean lines that look like "key": "value"
+                        for line in data:
+                            line = line.strip()
+                            if not line or line in ['[', ']', '{', '}', '],', '},']:
+                                continue
+                            
+                            # Remove trailing commas
+                            line = line.rstrip(',')
+                            
+                            # If it looks like "something": "value"
+                            if ':' in line:
+                                parts = line.split(':', 1)
+                                val = parts[1].strip()
+                            else:
+                                val = line
+                            
+                            # Strip quotes
+                            val = val.strip('"').strip("'").strip()
+                            
+                            if category == 'number':
+                                if val: extracted_keywords.append(val)
+                            elif val and not val.isdigit():
+                                extracted_keywords.append(val)
                     
                     if not extracted_keywords:
-                        messages.error(request, "Could not find any keywords in the uploaded JSON.")
+                        messages.error(request, "Could not find any keywords in the file.")
                         return redirect("..")
                     
                     # Remove duplicates and empty strings
@@ -293,7 +347,8 @@ class SmartKeywordAdmin(ModelAdmin):
                         if created:
                             count += 1
                     
-                    messages.success(request, f"Successfully processed JSON. Added {count} new keywords (Total found: {len(extracted_keywords)}) to {category}.")
+                    source_type = "JSON" if is_json else "Plain Text"
+                    messages.success(request, f"Processed as {source_type}. Added {count} new keywords (Total: {len(extracted_keywords)}) to {category}.")
                     return redirect("admin:aiAgent_smartkeyword_changelist")
                 except Exception as e:
                     messages.error(request, f"Error processing file: {str(e)}")
