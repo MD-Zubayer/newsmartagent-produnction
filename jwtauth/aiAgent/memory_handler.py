@@ -116,6 +116,9 @@ def handle_smart_memory_update(agent_config, sender, current_text):
     # --- Layer 2 & 3: Accumulation & Triggering ---
     memory, _ = UserMemory.objects.get_or_create(ai_agent=agent_config, sender_id=sender)
     
+    if not isinstance(memory.data, dict):
+        memory.data = {}
+        
     if '_internal' not in memory.data:
         memory.data['_internal'] = {
             'accumulated_score': 0,
