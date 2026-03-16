@@ -48,6 +48,7 @@ services:
       - ./jwtauth:/app
       - static_volume:/app/static
       - media_volume:/app/media
+      - ./service_account.json:/app/service_account.json:ro
     
     env_file:
       - .env
@@ -119,6 +120,7 @@ services:
     command: celery -A jwtauth worker -Q chat_queue -c 8 --prefetch-multiplier 1 --max-tasks-per-child 1000 --loglevel=info
     volumes:
       - ./jwtauth:/app
+      - ./service_account.json:/app/service_account.json:ro
     env_file:
       - .env
     
@@ -142,6 +144,7 @@ services:
     command: celery -A jwtauth beat -l info
     volumes:
       - ./jwtauth:/app
+      - ./service_account.json:/app/service_account.json:ro
     env_file:
       - .env
     environment:
