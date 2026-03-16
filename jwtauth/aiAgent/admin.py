@@ -278,10 +278,11 @@ class SmartKeywordAdmin(ModelAdmin):
                             for item in obj:
                                 extract_strings(item)
                         elif isinstance(obj, dict):
-                            # Prioritize common keys including location/village specific ones
+                            # Prioritize common keys including geographic/village fields
                             priority_keys = [
                                 'text', 'name', 'keyword', 'value', 'word', 
-                                'village_name_bn', 'village_name_en', 'village', 'city', 'district', 'thana'
+                                'village_name_bn', 'village_name_en', 'village', 'city', 'district', 'thana',
+                                'bn_name', 'en_name', 'union_name', 'upazila_name', 'upazilla_name'
                             ]
                             found_priority = False
                             for key in priority_keys:
@@ -291,16 +292,17 @@ class SmartKeywordAdmin(ModelAdmin):
                                         extracted_keywords.append(val)
                                         found_priority = True
                             
-                            if not found_priority:
-                                for value in obj.values():
-                                    if isinstance(value, str):
-                                        val = value.strip()
-                                        if category == 'number' or not val.isdigit():
-                                            extracted_keywords.append(val)
-                                    elif isinstance(value, (int, float)) and category == 'number':
-                                        extracted_keywords.append(str(value))
-                                    elif isinstance(value, (list, dict)):
-                                        extract_strings(value)
+                            # ALWAYS check all values for nested structures (like "data": [...])
+                            # regardless of whether priority keys were found at this level.
+                            for value in obj.values():
+                                if not found_priority and isinstance(value, str):
+                                    val = value.strip()
+                                    if category == 'number' or not val.isdigit():
+                                        extracted_keywords.append(val)
+                                elif isinstance(value, (int, float)) and category == 'number' and not found_priority:
+                                    extracted_keywords.append(str(value))
+                                elif isinstance(value, (list, dict)):
+                                    extract_strings(value)
 
                     if is_json:
                         extract_strings(data)
