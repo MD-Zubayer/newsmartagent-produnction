@@ -8,9 +8,39 @@ from aiAgent.models import UserMemory, SmartKeyword
 from aiAgent.memory_service import extract_and_update_memory
 
 # --- Advanced Keyword Caching ---
+def extract_possible_keywords(text, max_n=5):
+    """
+    Generates all possible sub-phrases (n-grams) from the text.
+    Example: "dhaka jabo" -> ["dhaka", "jabo", "dhaka jabo"]
+    """
+    words = re.findall(r'\b\w+\b', text.lower())
+    ngrams = []
+    for n in range(1, max_n + 1):
+        for i in range(len(words) - n + 1):
+            ngrams.append(" ".join(words[i:i+n]))
+    return list(set(ngrams))
+
+def check_keyword_match(text, category):
+    """
+    Checks if any keyword from the given category exists in the text
+    using an optimized DB-indexed lookup.
+    """
+    if not text:
+        return []
+    
+    ngrams = extract_possible_keywords(text)
+    if not ngrams:
+        return []
+
+    return list(SmartKeyword.objects.filter(
+        category=category, 
+        is_active=True, 
+        text__in=ngrams
+    ).values_list('text', flat=True))
+
 def get_keywords_by_category(category):
     """
-    Fetches keywords from cache or DB.
+    (Deprecated) Fetches all keywords for a category. Use check_keyword_match for scale.
     """
     cache_key = f"smart_keywords_{category}"
     keywords = cache.get(cache_key)
@@ -18,9 +48,8 @@ def get_keywords_by_category(category):
     if keywords is None:
         try:
             keywords = list(SmartKeyword.objects.filter(category=category, is_active=True).values_list('text', flat=True))
-            cache.set(cache_key, keywords, 600) # Cache for 10 minutes
+            cache.set(cache_key, keywords, 600)
         except:
-            # Fallback for when migrations haven't run yet or DB error
             keywords = []
             
     return keywords
@@ -41,29 +70,23 @@ def calculate_context_score(text):
         score += 4
         matches.append("Email (+4)")
     
-    # 2. Location Check (from DB)
-    locations = get_keywords_by_category('location')
-    for loc in locations:
-        if loc.lower() in text_lower:
-            score += 4
-            matches.append(f"Location: {loc} (+4)")
-            break
+    # 2. Location Check (from DB - Optimized)
+    locations = check_keyword_match(text, 'location')
+    if locations:
+        score += 4
+        matches.append(f"Location: {locations[0]} (+4)")
 
-    # 3. Intent Check (from DB)
-    intents = get_keywords_by_category('intent')
-    for intent in intents:
-        if intent.lower() in text_lower:
-            score += 3
-            matches.append(f"Intent: {intent} (+3)")
-            break
+    # 3. Intent Check (from DB - Optimized)
+    intents = check_keyword_match(text, 'intent')
+    if intents:
+        score += 3
+        matches.append(f"Intent: {intents[0]} (+3)")
 
-    # 4. Urgency/Sentiment Check (from DB)
-    urgency = get_keywords_by_category('urgency')
-    for u in urgency:
-        if u.lower() in text_lower:
-            score += 5
-            matches.append(f"Urgency: {u} (+5)")
-            break
+    # 4. Urgency/Sentiment Check (from DB - Optimized)
+    urgency = check_keyword_match(text, 'urgency')
+    if urgency:
+        score += 5
+        matches.append(f"Urgency: {urgency[0]} (+5)")
 
     # 5. Complexity
     if len(text) > 100: 
@@ -79,17 +102,11 @@ def calculate_context_score(text):
 def handle_smart_memory_update(agent_config, sender, current_text):
     text_clean = current_text.lower().strip()
     
-    # --- Layer 1: Smart Skip Check (from DB) ---
-    skip_keywords = get_keywords_by_category('skip')
-    history_skip = get_keywords_by_category('history_skip')
-    embedding_skip = get_keywords_by_category('embedding_skip')
-    
-    all_skip_keywords = skip_keywords + history_skip + embedding_skip
-    
+    # --- Layer 1: Smart Skip Check (from DB - Optimized) ---
     is_skip = False
-    skip_margin = 2
-    for kw in all_skip_keywords:
-        if kw.lower() in text_clean and abs(len(text_clean) - len(kw)) <= skip_margin:
+    for cat in ['skip', 'history_skip', 'embedding_skip']:
+        matched = check_keyword_match(current_text, cat)
+        if matched:
             is_skip = True
             break
             

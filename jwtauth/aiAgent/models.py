@@ -207,7 +207,7 @@ class SmartKeyword(models.Model):
         ('number', 'Numeric Keyword'),
     ]
     
-    text = models.CharField(max_length=255, unique=True, db_index=True)
+    text = models.CharField(max_length=255, db_index=True)
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, db_index=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -218,3 +218,7 @@ class SmartKeyword(models.Model):
     class Meta:
         verbose_name = "Smart Keyword"
         verbose_name_plural = "Smart Keywords"
+        unique_together = ('text', 'category')
+        indexes = [
+            models.Index(fields=['category', 'text']),
+        ]

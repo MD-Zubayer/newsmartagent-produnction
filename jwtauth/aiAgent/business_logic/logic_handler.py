@@ -6,7 +6,11 @@ from aiAgent.models import AgentAI
 from chat.services import save_message
 from aiAgent.models import AgentAI, MissingRequirement, TokenUsageLog
 from aiAgent.memory_service import extract_and_update_memory
-from aiAgent.memory_handler import handle_smart_memory_update, get_keywords_by_category
+from aiAgent.memory_handler import (
+    handle_smart_memory_update, 
+    get_keywords_by_category, 
+    check_keyword_match
+)
 from webhooks.constants import TARGET_KEYWORDS
 from aiAgent.data_processor import processor_spreadsheet_data
 import json
@@ -71,21 +75,16 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                 logger.info(f"⏭️ Skipping embedding: User {agent_config.user.email} has no records in Knowledge bases.")
                 return "", "Answer naturally using your knowledge.", None
 
-            skip_margin = 10
             skip_embedding = False
-            text_len = len(text)
 
-            embedding_skip_keyword = get_keywords_by_category('embedding_skip')
-            for kw in embedding_skip_keyword:
-                kw_len = len(kw)
-                if kw.lower() in text.lower() and abs(text_len - kw_len) <= skip_margin:
+            if len(text) < 3:
+                skip_embedding = True
+                logger.info("embedding skipped due to length < 3.")
+            else:
+                matched_embedding_skips = check_keyword_match(text, 'embedding_skip')
+                if matched_embedding_skips:
                     skip_embedding = True
-                    logger.info(f"Keyword '{kw}' found and message length within margin. Skipping embedding.")
-                    break
-                if len(text) < 3:
-                    skip_embedding = True
-                    logger.info("embedding skipped due to length < 3.")
-                    break
+                    logger.info(f"Keyword '{matched_embedding_skips[0]}' found. Skipping embedding.")
         
             if not skip_embedding:
                 logger.info(f"Generating Gemini Embedding inside perform_rag_search for '{text[:20]}'")
@@ -280,18 +279,10 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
 
     raw_history = get_last_message(agent_config, sender_id, limit=3)
     
-    # Keyword-based history skip logic
-    skip_margin = 10
-    skip_history = False
-    text_len = len(text)
-    
-    history_skip_keyword = get_keywords_by_category('history_skip')
-    for kw in history_skip_keyword:
-        kw_len = len(kw)
-        if kw.lower() in text.lower() and abs(text_len - kw_len) <= skip_margin:
-            skip_history = True
-            logger.info(f"⏭️ Skipping history: DB Keyword '{kw}' found.")
-            break
+    matched_history_skips = check_keyword_match(text, 'history_skip')
+    if matched_history_skips:
+        skip_history = True
+        logger.info(f"⏭️ Skipping history: DB Keyword '{matched_history_skips[0]}' found.")
             
     if skip_history:
         history = []
