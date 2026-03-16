@@ -162,7 +162,7 @@ export default function DashboardAI() {
             className="fixed bottom-0 right-0 sm:bottom-8 sm:right-8 z-[1001] w-full sm:w-[380px] h-[100dvh] sm:h-full sm:max-h-[600px] bg-white sm:rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] flex flex-col overflow-hidden border border-gray-100"
           >
             {/* Messenger Header */}
-            <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 px-4 py-4 flex items-center justify-between shadow-md relative z-10">
+            <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 px-4 py-3 sm:py-4 flex items-center justify-between shadow-md relative z-10">
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <div className="w-10 h-10 md:w-11 md:h-11 rounded-full bg-white flex items-center justify-center overflow-hidden border-2 border-white/20 shadow-sm relative p-0.5">
@@ -198,8 +198,8 @@ export default function DashboardAI() {
 
             {/* Chat Messages Area */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#f0f2f5]/30 scrollbar-hide">
-              <div className="flex flex-col items-center py-8">
-                <div className="relative w-20 h-20 mb-3 p-1 bg-white rounded-full shadow-md border border-gray-100">
+              <div className="flex flex-col items-center py-6 sm:py-8">
+                <div className="relative w-16 h-16 sm:w-20 sm:h-20 mb-3 p-1 bg-white rounded-full shadow-md border border-gray-100">
                    <div className="relative w-full h-full rounded-full overflow-hidden">
                       <Image 
                          src="/newsmartagent_ai_logo.jpeg" 
@@ -236,9 +236,9 @@ export default function DashboardAI() {
                     </div>
                   )}
                   <div className={`flex flex-col max-w-[80%] ${m.role === "user" ? "items-end" : "items-start"}`}>
-                    <div className={`px-4 py-2.5 rounded-[1.25rem] text-[13px] font-medium leading-[1.4] shadow-sm ${
+                    <div className={`px-4 py-2 sm:py-2.5 rounded-[1.25rem] text-xs sm:text-[13px] font-medium leading-[1.4] shadow-sm ${
                       m.role === "user" 
-                        ? "bg-gradient-to-tr from-[#0084FF] to-[#00C6FF] text-white rounded-tr-[0.25rem]" 
+                        ? "bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white rounded-tr-[0.25rem]" 
                         : "bg-white border border-gray-100 text-gray-800 rounded-tl-[0.25rem]"
                     }`}>
                       {m.content}
