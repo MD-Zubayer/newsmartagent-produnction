@@ -268,7 +268,8 @@ class RankingAPIView(APIView):
             return Response({
                 "data": api_data,
                 "is_staff": request.user.is_staff or request.user.is_superuser,
-                "is_special_agent": is_special_agent
+                "is_special_agent": is_special_agent,
+                "special_agent_status": agent.special_agent_status if agent else "none"
             }, status=status.HTTP_200_OK)
             
         except Exception as e:

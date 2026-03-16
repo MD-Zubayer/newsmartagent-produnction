@@ -8,7 +8,16 @@ import json
 from django.db.models import Sum, Count, Avg
 from django.utils.html import format_html
 from .models import TokenUsageLog
-from .models import AIProviderModel
+from .models import AIProviderModel, SmartKeyword
+from django import forms
+from django.urls import path
+from django.shortcuts import render, redirect
+from django.contrib import messages
+import json
+
+class KeywordUploadForm(forms.Form):
+    category = forms.ChoiceField(choices=SmartKeyword.CATEGORY_CHOICES)
+    json_file = forms.FileField(label="Select JSON File")
 
     
 
@@ -211,3 +220,90 @@ class DashboardAILogAdmin(ModelAdmin):
     
     
     
+
+@admin.register(SmartKeyword)
+class SmartKeywordAdmin(ModelAdmin):
+    list_display = ('text', 'category', 'is_active', 'created_at')
+    list_filter = ('category', 'is_active')
+    search_fields = ('text',)
+    list_editable = ('is_active',)
+    ordering = ('category', 'text')
+    list_per_page = 50
+
+    change_list_template = "admin/aiAgent/smartkeyword/change_list.html"
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('upload-json/', self.admin_site.admin_view(self.upload_json), name='aiAgent_smartkeyword_upload_json'),
+        ]
+        return custom_urls + urls
+
+    def upload_json(self, request):
+        if request.method == "POST":
+            form = KeywordUploadForm(request.POST, request.FILES)
+            if form.is_valid():
+                category = form.cleaned_data['category']
+                json_file = request.FILES['json_file']
+                
+                try:
+                    data = json.load(json_file)
+                    extracted_keywords = []
+
+                    def extract_strings(obj):
+                        """Recursively extract meaningful strings from JSON."""
+                        if isinstance(obj, str):
+                            extracted_keywords.append(obj.strip())
+                        elif isinstance(obj, list):
+                            for item in obj:
+                                extract_strings(item)
+                        elif isinstance(obj, dict):
+                            # Prioritize common keys like 'text', 'name', 'keyword'
+                            priority_keys = ['text', 'name', 'keyword', 'value', 'word']
+                            found_priority = False
+                            for key in priority_keys:
+                                if key in obj and isinstance(obj[key], str):
+                                    extracted_keywords.append(obj[key].strip())
+                                    found_priority = True
+                                    # Don't break, there might be multiple (though rare)
+                            
+                            # If no priority keys found, check all values
+                            if not found_priority:
+                                for value in obj.values():
+                                    if isinstance(value, str):
+                                        extracted_keywords.append(value.strip())
+                                    elif isinstance(value, (list, dict)):
+                                        extract_strings(value)
+
+                    extract_strings(data)
+                    
+                    if not extracted_keywords:
+                        messages.error(request, "Could not find any keywords in the uploaded JSON.")
+                        return redirect("..")
+                    
+                    # Remove duplicates and empty strings
+                    extracted_keywords = list(set(kw for kw in extracted_keywords if kw))
+                    
+                    count = 0
+                    for item in extracted_keywords:
+                        _, created = SmartKeyword.objects.get_or_create(
+                            text=item,
+                            category=category
+                        )
+                        if created:
+                            count += 1
+                    
+                    messages.success(request, f"Successfully processed JSON. Added {count} new keywords (Total found: {len(extracted_keywords)}) to {category}.")
+                    return redirect("admin:aiAgent_smartkeyword_changelist")
+                except Exception as e:
+                    messages.error(request, f"Error processing file: {str(e)}")
+                    return redirect("..")
+        else:
+            form = KeywordUploadForm()
+        
+        context = {
+            **self.admin_site.each_context(request),
+            'form': form,
+            'opts': self.model._meta,
+        }
+        return render(request, "admin/aiAgent/smartkeyword/upload_json.html", context)

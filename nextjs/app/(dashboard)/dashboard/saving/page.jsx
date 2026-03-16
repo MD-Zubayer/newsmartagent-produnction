@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 // ⚡ PiggyBank আইকন ইম্পোর্ট করা হলো
-import { Table, Search, AlertTriangle, Zap, BarChart3, Loader2, PiggyBank, Trash2 } from "lucide-react";
+import { Table, Search, AlertTriangle, Zap, BarChart3, Loader2, PiggyBank, Trash2, Clock } from "lucide-react";
 import api from "@/lib/api";
 import { toast } from "react-hot-toast";
 
@@ -58,6 +58,7 @@ export default function RankingReportPage() {
       setRankingData(rankingRes.data.data || []);
       setIsStaff(rankingRes.data.is_staff || false);
       setIsSpecialAgent(rankingRes.data.is_special_agent || false);
+      setSpecialAgentStatus(rankingRes.data.special_agent_status || 'none');
       setMetrics(metricsRes.data);
     } catch (err) {
       console.error("Fetch Data Error:", err);
@@ -151,13 +152,13 @@ export default function RankingReportPage() {
       setIsRequestingSpecial(true);
       const agentId = selectedAgent.page_id;
       const res = await api.post(`/AgentAI/ranking/request-special/${agentId}/`);
-      
+
       toast.success(res.data.message || "Request submitted successfully!");
       setSpecialAgentStatus('pending'); // Optimistic update
-      
+
       // Update the global agents list to reflect the new state
-      const updatedAgents = agents.map(agent => 
-        agent.page_id === agentId 
+      const updatedAgents = agents.map(agent =>
+        agent.page_id === agentId
           ? { ...agent, special_agent_status: 'pending' }
           : agent
       );
@@ -220,6 +221,7 @@ export default function RankingReportPage() {
                 onChange={(e) => {
                   const agent = agents.find(a => a.id === parseInt(e.target.value));
                   setSelectedAgent(agent);
+                  setSpecialAgentStatus(agent?.special_agent_status || 'none');
                 }}
               >
                 {agents.map(agent => (
@@ -239,20 +241,20 @@ export default function RankingReportPage() {
               ) : (
                 <>
                   {specialAgentStatus === 'pending' ? (
-                     <div className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 border border-gray-200 text-gray-500 rounded-xl cursor-wait shadow-inner">
-                       <Clock size={16} className="animate-spin-slow" />
-                       <span className="text-sm font-bold">Request Pending...</span>
-                     </div>
+                    <div className="flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 border border-gray-200 text-gray-500 rounded-xl cursor-wait shadow-inner">
+                      <Clock size={16} className="animate-spin-slow" />
+                      <span className="text-sm font-bold">Request Pending...</span>
+                    </div>
                   ) : specialAgentStatus === 'rejected' ? (
-                     <button onClick={handleRequestSpecialAgent} disabled={isRequestingSpecial} className="flex items-center justify-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 transition-all rounded-xl border border-red-200 font-bold group shadow-sm">
-                       <Zap size={18} className="group-hover:scale-110 transition-transform" />
-                       <span className="text-sm">Request Premium Cache Again</span>
-                     </button>
+                    <button onClick={handleRequestSpecialAgent} disabled={isRequestingSpecial} className="flex items-center justify-center gap-2 px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 transition-all rounded-xl border border-red-200 font-bold group shadow-sm">
+                      <Zap size={18} className="group-hover:scale-110 transition-transform" />
+                      <span className="text-sm">Request Premium Cache Again</span>
+                    </button>
                   ) : (
-                     <button onClick={handleRequestSpecialAgent} disabled={isRequestingSpecial} className="flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white transition-all rounded-xl shadow-md hover:shadow-lg font-black group">
-                       {isRequestingSpecial ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap size={18} className="group-hover:scale-110 transition-transform" />}
-                       <span className="text-sm">Request Premium Cache</span>
-                     </button>
+                    <button onClick={handleRequestSpecialAgent} disabled={isRequestingSpecial} className="flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white transition-all rounded-xl shadow-md hover:shadow-lg font-black group">
+                      {isRequestingSpecial ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap size={18} className="group-hover:scale-110 transition-transform" />}
+                      <span className="text-sm">Request Premium Cache</span>
+                    </button>
                   )}
                 </>
               )}

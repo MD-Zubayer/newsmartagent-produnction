@@ -21,24 +21,16 @@ def extract_and_update_memory(ai_agent, sender_id, chat_history):
         provider = 'openai'
         model_id = 'gpt-4o-mini'
 
-    # Enhanced prompt for open-ended dynamic extraction
+    # Optimized prompt for concise extraction and token savings
     extract_prompt = f"""
-    You are an expert user-profiling AI. Analyze the provided chat history and extract ANY significant details about the user (Sender).
+    Analyze the chat history and extract significant user details. 
     
-    Think beyond static fields. Look for:
-    1. Personal Details (Name, Location, Job, Family)
-    2. Preferences (Likes, Dislikes, Preferred colors/sizes/modes)
-    3. Contextual Data (Previous issues, Business goals, Urgency)
-    4. Sentiment (Frustrated, Happy, Skeptical)
-    5. Key Requirements (What do they actually want?)
-
-    Rules:
-    - If information is already present but has changed (e.g., new address), update it.
-    - If information is new, add it.
-    - Return a "memory_summary" field that gists the current state of the relationship.
-    - Return ONLY a valid JSON object.
-
-    Current Extraction Goal for Agent Type ({ai_agent.ai_agent_type}): Identify everything "Gurotto Purno" (Important).
+    CRITICAL Rules:
+    - OMIT any field that would be null, empty string, or empty list. 
+    - Construct a compact JSON object containing ONLY the discovered data.
+    - Fields to look for (if available): name, location, job, preferences (likes/dislikes), contextual_data (goals/urgency), sentiment, and key_requirements.
+    - Include a "memory_summary" that briefly gists the relationship status.
+    - Return ONLY the JSON object. No preamble.
 
     Chat History:
     {chat_history}

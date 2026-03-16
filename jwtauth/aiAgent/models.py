@@ -193,3 +193,24 @@ class DashboardAILog(models.Model):
     def __str__(self):
         return f"{self.user.username} - {self.pathname} - {self.created_at}"
 
+
+class SmartKeyword(models.Model):
+    CATEGORY_CHOICES = [
+        ('location', 'Location / Geography'),
+        ('skip', 'Skip Keyword (Greetings/Filler)'),
+        ('target', 'Target Keyword (High Priority)'),
+        ('intent', 'User Intent (Order/Price)'),
+        ('urgency', 'Urgency / Sentiment (Problem/Slow)'),
+    ]
+    
+    text = models.CharField(max_length=255, unique=True, db_index=True)
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, db_index=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"[{self.get_category_display()}] {self.text}"
+
+    class Meta:
+        verbose_name = "Smart Keyword"
+        verbose_name_plural = "Smart Keywords"
