@@ -446,6 +446,35 @@ def deliver_reply_to_n8n(data, reply, page_id, access_token):
         logger.error(f"Webhook delivery critical failure: {e}")
         return False
 
+def deliver_dashboard_reply(user_id, reply_text, message_id):
+    """Deliver final reply to the dashboard via WebSocket and update the log"""
+    try:
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        from aiAgent.models import DashboardAILog
+
+        # Update log
+        DashboardAILog.objects.filter(message_id=message_id).update(answer=reply_text)
+
+        # Send via WebSocket
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"user_{user_id}",
+            {
+                "type": "send_notification",
+                "content": {
+                    "action": "DASHBOARD_AI_REPLY",
+                    "message_id": message_id,
+                    "reply": reply_text
+                }
+            }
+        )
+        logger.info(f"✅ Dashboard reply sent via WebSocket for user {user_id}")
+        return True
+    except Exception as e:
+        logger.error(f"Dashboard WebSocket delivery failure: {e}")
+        return False
+
 def log_token_usage(agent_config, sender_id, ai_data, duration, request_type):
     try:
         effective_model = agent_config.selected_model.model_id if agent_config.selected_model else agent_config.ai_model

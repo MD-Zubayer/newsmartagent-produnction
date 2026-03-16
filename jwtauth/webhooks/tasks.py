@@ -16,12 +16,11 @@ from aiAgent.cache.cluster import get_cluster_map
 from aiAgent.cache.utils import normalize_text
 from chat.utils import get_smart_post_context
 
-# logic_handler থেকে ফাংশনগুলো ইম্পোর্ট
 from aiAgent.business_logic.logic_handler import (
     is_duplicate_or_outdated, acquire_user_lock, get_order_instructions,
     perform_rag_search, build_ai_context, get_ai_response,
     log_token_usage, deduct_user_tokens, deliver_reply_to_n8n, handle_public_comment_logic,
-    check_token_availability
+    check_token_availability, deliver_dashboard_reply
 )
 from aiAgent.cache.redis_vector import (
     save_vector_embedding,
@@ -61,6 +60,36 @@ def send_cache_update_ws(user_id, agent_id):
         )
     except Exception as e:
         logger.error(f"WebSocket broadcast error: {e}")
+
+def deliver_dashboard_reply(user_id, reply, msg_id):
+    try:
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        from aiAgent.models import DashboardAILog
+        
+        # ১. লগ আপডেট করুন
+        log = DashboardAILog.objects.filter(user_id=user_id, message_id=msg_id).first()
+        if log:
+            log.answer = reply
+            log.save()
+
+        # ২. ওয়েব সকেটে পাঠাতে হবে
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"user_{user_id}",
+            {
+                "type": "send_notification",
+                "content": {
+                    "action": "DASHBOARD_AI_REPLY",
+                    "reply": reply,
+                    "message_id": msg_id
+                }
+            }
+        )
+        return True
+    except Exception as e:
+        logger.error(f"Dashboard delivery error: {e}")
+        return False
 
 # -------------------- TASK -------------------- #
 
@@ -237,7 +266,10 @@ def process_ai_reply_task(self, data):
             handle_smart_memory_update(agent_config, sender_id, text)
 
             clean_reply = reply.strip()
-            delivered = deliver_reply_to_n8n(data, clean_reply, page_id, effective_access_token)
+            if request_type == 'dashboard':
+                delivered = deliver_dashboard_reply(agent_config.user.id, clean_reply, msg_id)
+            else:
+                delivered = deliver_reply_to_n8n(data, clean_reply, page_id, effective_access_token)
 
             if delivered and msg_id:
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)
@@ -380,7 +412,11 @@ def process_ai_reply_task(self, data):
             duration = int((time.time() - start_time) * 1000)
             log_token_usage(agent_config, sender_id, ai_data, duration, request_type)
             clean_reply = reply.strip()
-            delivered = deliver_reply_to_n8n(data, clean_reply, page_id, effective_access_token)
+            
+            if request_type == 'dashboard':
+                delivered = deliver_dashboard_reply(agent_config.user.id, clean_reply, msg_id)
+            else:
+                delivered = deliver_reply_to_n8n(data, clean_reply, page_id, effective_access_token)
 
             if delivered and msg_id:
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)

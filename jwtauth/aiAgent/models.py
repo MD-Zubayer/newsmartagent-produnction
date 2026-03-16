@@ -180,6 +180,7 @@ class TokenUsageLog(models.Model):
 
 class DashboardAILog(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,related_name='dashboard_ai_logs')
+    message_id = models.CharField(max_length=255, null=True, blank=True, db_index=True)
     pathname = models.CharField(max_length=255)
     question = models.TextField()
     answer = models.TextField()

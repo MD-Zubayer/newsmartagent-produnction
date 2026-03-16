@@ -27,6 +27,42 @@ export default function DashboardAI() {
   // ড্যাশবোর্ডের বাইরে দেখাবে না
   if (!pathname || !pathname.startsWith("/dashboard")) return null;
 
+  // ১. ওয়েব সকেট কানেকশন
+  useEffect(() => {
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const host = window.location.host;
+    const socketUrl = `${protocol}://${host}/ws/notifications/`;
+    
+    let socket;
+    try {
+      socket = new WebSocket(socketUrl);
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.action === "DASHBOARD_AI_REPLY") {
+            setMessages((prev) => [...prev, { 
+              role: "bot", 
+              content: data.reply, 
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+            }]);
+            setIsTyping(false);
+          }
+        } catch (e) {
+          console.error("WS Parse Error:", e);
+        }
+      };
+
+      socket.onerror = (err) => console.error("WS Error:", err);
+    } catch (err) {
+      console.error("WS Connection Error:", err);
+    }
+
+    return () => {
+      if (socket) socket.close();
+    };
+  }, []);
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollIntoView({ behavior: "smooth" });
@@ -50,17 +86,15 @@ export default function DashboardAI() {
         path: pathname,
       });
 
-      if (response.data && response.data.reply) {
-        setMessages((prev) => [...prev, { 
-          role: "bot", 
-          content: response.data.reply, 
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
-        }]);
+      // সার্ভার মেসেজ রিসিভ করেছে, এখন ওয়েব সকেটের জন্য অপেক্ষা করব
+      if (response.data && response.data.status === 'success') {
+        console.log("Message queued:", response.data.message_id);
       } else {
-        throw new Error("Invalid response");
+        throw new Error("Queuing failed");
       }
     } catch (error) {
       console.error("AI Error:", error);
+      setIsTyping(false);
       let errorMsg = "দুঃখিত, বর্তমানে আমার সিস্টেমে সমস্যা হচ্ছে।";
       
       if (error.response?.status === 401) {
@@ -71,8 +105,6 @@ export default function DashboardAI() {
         ...prev,
         { role: "bot", content: errorMsg, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) },
       ]);
-    } finally {
-      setIsTyping(false);
     }
   };
 
