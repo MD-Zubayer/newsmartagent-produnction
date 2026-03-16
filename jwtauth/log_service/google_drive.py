@@ -85,7 +85,7 @@ def get_or_create_folder(folder_name: str, parent_folder_id: str = None) -> str:
 def upload_or_update_file(local_file_path: str, drive_file_name: str, folder_id: str) -> str:
     """
     local_file_path থেকে পড়ে Google Drive-এ upload বা update করে।
-    file_id return করে।
+    Ownership Transfer লজিক সহ যাতে Quota Error না আসে।
     """
     service = _get_drive_service()
 
@@ -113,11 +113,12 @@ def upload_or_update_file(local_file_path: str, drive_file_name: str, folder_id:
     )
 
     if files:
-        # Update existing file
+        # Update existing file (এক্ষেত্রে ওনারশিপ অলরেডি আপনার কাছে আছে)
         file_id = files[0]['id']
         service.files().update(
             fileId=file_id,
-            media_body=media
+            media_body=media,
+            supportsAllDrives=True  # Quota management এর জন্য ভালো
         ).execute()
         logger.debug(f"Drive file updated: {drive_file_name} (id={file_id})")
     else:
@@ -126,16 +127,37 @@ def upload_or_update_file(local_file_path: str, drive_file_name: str, folder_id:
             'name': drive_file_name,
             'parents': [folder_id]
         }
+        
+        # ফাইল তৈরি করার সময় supportsAllDrives ব্যবহার করুন
         created = service.files().create(
             body=file_metadata,
             media_body=media,
-            fields='id'
+            fields='id',
+            supportsAllDrives=True 
         ).execute()
         file_id = created['id']
+        
+        # 🔥 নতুন ফাইল তৈরির পর Ownership Transfer করুন আপনার মেইন ইমেইলে
+        try:
+            user_email = "newsmartagentbd@gmail.com" # আপনার মেইন ইমেইল
+            service.permissions().create(
+                fileId=file_id,
+                body={
+                    'type': 'user',
+                    'role': 'owner',
+                    'emailAddress': user_email
+                },
+                transferOwnership=True, # এটিই ম্যাজিক প্যারামিটার
+                fields='id'
+            ).execute()
+            logger.info(f"Ownership transferred to {user_email}")
+        except Exception as e:
+            # অনেক সময় পারমিশন আগে থেকে থাকলে বা ডোমেইন রেস্ট্রিকশন থাকলে এরর দিতে পারে
+            logger.warning(f"Ownership transfer failed (Expected if already shared): {e}")
+
         logger.info(f"Drive-এ নতুন file তৈরি হয়েছে: {drive_file_name} (id={file_id})")
 
     return file_id
-
 
 def append_to_drive_file(drive_file_id: str, new_content: str):
     """
