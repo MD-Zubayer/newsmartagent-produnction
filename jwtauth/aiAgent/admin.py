@@ -248,43 +248,44 @@ class SmartKeywordAdmin(ModelAdmin):
                 
                 try:
                     # Read and decode the file as UTF-8
-                    file_content = json_file.read().decode('utf-8')
-                    data = json.loads(file_content)
+                    file_content = json_file.read().decode('utf-8').strip()
+                    
                     extracted_keywords = []
+                    is_json = False
+                    
+                    try:
+                        data = json.loads(file_content)
+                        is_json = True
+                    except json.JSONDecodeError:
+                        # Fallback: Treat as raw text (one keyword per line)
+                        data = file_content.splitlines()
+                        is_json = False
 
                     def extract_strings(obj):
-                        """Recursively extract meaningful strings from JSON, handling numbers based on category."""
+                        """Recursively extract meaningful strings, handling numbers based on category."""
                         if isinstance(obj, str):
                             val = obj.strip()
-                            # If category is 'number', we allow pure digits.
-                            # Otherwise, we filter them out.
                             if category == 'number':
                                 if val: extracted_keywords.append(val)
                             else:
                                 if not val.isdigit() and val:
                                     extracted_keywords.append(val)
                         elif isinstance(obj, (int, float)):
-                            # If category is 'number', convert int/float to string
                             if category == 'number':
                                 extracted_keywords.append(str(obj))
                         elif isinstance(obj, list):
                             for item in obj:
                                 extract_strings(item)
                         elif isinstance(obj, dict):
-                            # Prioritize common keys like 'text', 'name', 'keyword'
                             priority_keys = ['text', 'name', 'keyword', 'value', 'word']
                             found_priority = False
                             for key in priority_keys:
                                 if key in obj and (isinstance(obj[key], str) or isinstance(obj[key], (int, float))):
                                     val = str(obj[key]).strip()
-                                    if category == 'number':
-                                        extracted_keywords.append(val)
-                                        found_priority = True
-                                    elif not val.isdigit():
+                                    if category == 'number' or not val.isdigit():
                                         extracted_keywords.append(val)
                                         found_priority = True
                             
-                            # If no priority keys found, check all values
                             if not found_priority:
                                 for value in obj.values():
                                     if isinstance(value, str):
@@ -299,7 +300,7 @@ class SmartKeywordAdmin(ModelAdmin):
                     extract_strings(data)
                     
                     if not extracted_keywords:
-                        messages.error(request, "Could not find any keywords in the uploaded JSON.")
+                        messages.error(request, "Could not find any keywords in the file.")
                         return redirect("..")
                     
                     # Remove duplicates and empty strings
@@ -314,7 +315,8 @@ class SmartKeywordAdmin(ModelAdmin):
                         if created:
                             count += 1
                     
-                    messages.success(request, f"Successfully processed JSON. Added {count} new keywords (Total found: {len(extracted_keywords)}) to {category}.")
+                    source_type = "JSON" if is_json else "Plain Text"
+                    messages.success(request, f"Processed as {source_type}. Added {count} new keywords (Total: {len(extracted_keywords)}) to {category}.")
                     return redirect("admin:aiAgent_smartkeyword_changelist")
                 except Exception as e:
                     messages.error(request, f"Error processing file: {str(e)}")
