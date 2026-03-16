@@ -59,7 +59,7 @@ export default function BlogContent({ content, shareUrl, shareTitle, socialLinks
     <div className="lg:col-span-11 bg-white p-6 md:p-12 lg:p-24 rounded-[2rem] md:rounded-[4rem] shadow-[0_100px_200px_-50px_rgba(0,0,0,0.06)] border border-slate-50 relative overflow-hidden">
       <Toaster />
       <div className="absolute top-0 right-0 p-12 opacity-[0.03] pointer-events-none hidden md:block">
-        <HiOutlineShare className="text-[200px] -rotate-12" />
+        <HiOutlineShare className="text-[120px] -rotate-12" />
       </div>
       
       <article className="prose prose-slate prose-lg md:prose-xl max-w-none prose-headings:font-black prose-headings:tracking-tighter prose-headings:uppercase prose-headings:text-slate-900 prose-p:leading-relaxed prose-a:text-purple-600 prose-strong:text-slate-950 prose-img:rounded-3xl prose-img:shadow-2xl overflow-x-hidden">

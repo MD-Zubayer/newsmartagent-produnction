@@ -253,15 +253,34 @@ def deduct_user_tokens(user_profile, total_tokens, ai_model_name):
 def build_ai_context(agent_config, sender_id, text, extra_instruction=None, sheet_context=None):
     from aiAgent.utils import get_memory_context
     from chat.services import get_last_message
+    from aiAgent.memory_handler import calculate_context_score, check_keyword_match
 
     lower_text = text.lower()
     memory_context = ""
-    memory_triggers = ['আমার অর্ডার', 'আমার নাম', 'নাম', 'অর্ডার', 'আগের', 'my', 'name', 'order', 'status']
+    
+    # 1. Fallback Static Triggers
+    static_triggers = ['আমার অর্ডার', 'আমার নাম', 'নাম', 'অর্ডার', 'আগের', 'my', 'name', 'order', 'status']
+    
+    # 2. Dynamic DB-backed Keyword Triggers 
+    matched_intents = check_keyword_match(text, 'intent')
+    matched_targets = check_keyword_match(text, 'target')
+    
+    # 3. Context Score checking (Phone, Email, Location, Urgency)
+    c_score = calculate_context_score(text)
+    
+    is_memory_needed = False
+    if any(word in lower_text for word in static_triggers):
+        is_memory_needed = True
+    elif matched_intents or matched_targets:
+        is_memory_needed = True
+    elif c_score >= 3:
+        is_memory_needed = True
 
-    if any(word in lower_text for word in memory_triggers):
+    if is_memory_needed:
         mem_data = get_memory_context(agent_config, sender_id)
         if mem_data:
-            memory_context = f"\nMemory Context:\n{mem_data}"
+            memory_context = f"\nUser Database Memory [Very Important]:\n{mem_data}"
+            logger.info(f"🧠 Injecting Memory Context for {sender_id}. Score: {c_score} | DB Triggers: {matched_intents or matched_targets}")
 
     prompt_parts = [
         f"Role: {agent_config.system_prompt}",
