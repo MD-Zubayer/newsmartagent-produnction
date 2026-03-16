@@ -247,7 +247,9 @@ class SmartKeywordAdmin(ModelAdmin):
                 json_file = request.FILES['json_file']
                 
                 try:
-                    data = json.load(json_file)
+                    # Read and decode the file as UTF-8
+                    file_content = json_file.read().decode('utf-8')
+                    data = json.loads(file_content)
                     extracted_keywords = []
 
                     def extract_strings(obj):
