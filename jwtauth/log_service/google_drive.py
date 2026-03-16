@@ -180,3 +180,69 @@ def append_to_drive_file(drive_file_id: str, new_content: str):
         resumable=False
     )
     service.files().update(fileId=drive_file_id, media_body=media).execute()
+
+
+def delete_old_files_from_folder(folder_id: str, days_to_keep: int = 7):
+    """
+    নির্দিষ্ট ফোল্ডার থেকে পুরনো ফাইল মুছে ফেলে।
+    days_to_keep এর চেয়ে পুরনো ফাইল ডিলিট হবে।
+    """
+    import datetime
+    service = _get_drive_service()
+
+    # Calculate the cutoff date
+    cutoff_date = datetime.datetime.now() - datetime.timedelta(days=days_to_keep)
+    cutoff_str = cutoff_date.isoformat() + 'Z'  # RFC 3339 format
+
+    query = f"'{folder_id}' in parents and createdTime < '{cutoff_str}' and trashed = false"
+    
+    results = service.files().list(
+        q=query,
+        spaces='drive',
+        fields='files(id, name, createdTime)'
+    ).execute()
+
+    files = results.get('files', [])
+    for f in files:
+        try:
+            service.files().delete(fileId=f['id']).execute()
+            logger.info(f"Deleted old backup from Drive: {f['name']} (created: {f['createdTime']})")
+        except Exception as e:
+            logger.error(f"Failed to delete old file {f['name']}: {e}")
+
+
+def get_latest_file_in_folder(folder_id: str, pattern: str = None) -> dict:
+    """
+    ফোল্ডার থেকে সবথেকে নতুন ফাইলটি খুঁজে বের করে (id এবং name)।
+    """
+    service = _get_drive_service()
+    query = f"'{folder_id}' in parents and trashed = false"
+    if pattern:
+        query += f" and name contains '{pattern}'"
+    
+    results = service.files().list(
+        q=query,
+        orderBy='createdTime desc',
+        pageSize=1,
+        fields='files(id, name, createdTime)'
+    ).execute()
+
+    files = results.get('files', [])
+    return files[0] if files else None
+
+
+def download_file_from_drive(file_id: str, local_path: str):
+    """
+    Google Drive থেকে ফাইল ডাউনলোড করে local_path-এ সেভ করে।
+    """
+    from googleapiclient.http import MediaIoBaseDownload
+    service = _get_drive_service()
+    request = service.files().get_media(fileId=file_id)
+    
+    fh = io.FileIO(local_path, 'wb')
+    downloader = MediaIoBaseDownload(fh, request)
+    done = False
+    while done is False:
+        status, done = downloader.next_chunk()
+        logger.debug(f"Download {int(status.progress() * 100)}%.")
+    return local_path

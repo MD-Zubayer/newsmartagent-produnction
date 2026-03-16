@@ -342,6 +342,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'log_service.sync_logs_to_drive',
         'schedule': crontab(minute='*/5'),  # প্রতি ৫ মিনিটে
     },
+    'backup-database-to-google-drive': {
+        'task': 'log_service.backup_db_to_drive',
+        'schedule': crontab(hour=1, minute=0),  # প্রতিদিন রাত ১টায়
+    },
 }
 
 

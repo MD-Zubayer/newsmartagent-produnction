@@ -6,6 +6,8 @@ Periodic task: প্রতি N মিনিটে log file গুলো Google
 
 import os
 import logging
+import subprocess
+import datetime
 from celery import shared_task
 from django.conf import settings
 
@@ -68,3 +70,83 @@ def sync_logs_to_drive(self):
         'synced': synced,
         'errors': errors
     }
+
+
+@shared_task(name='log_service.backup_db_to_drive')
+def backup_db_to_drive():
+    """
+    PostgreSQL database dump তৈরি করে, compress করে Google Drive-এ upload করে।
+    Storage বাঁচাতে ৭ দিন আগের ব্যাকআপ ডিলিট করে।
+    """
+    from log_service.google_drive import get_or_create_folder, upload_or_update_file, delete_old_files_from_folder
+
+    db_url = os.environ.get('DATABASE_URL', '')
+    if not db_url:
+        logger.error("DATABASE_URL পাওয়া যায়নি।")
+        return {'status': 'error', 'reason': 'no database url'}
+
+    # Temporary file path
+    timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    backup_filename = f"db_backup_{timestamp}.sql.gz" # compressed extension
+    backup_dir = os.path.join(settings.BASE_DIR, 'backups')
+    if not os.path.exists(backup_dir):
+        os.makedirs(backup_dir)
+    
+    local_backup_path = os.path.join(backup_dir, backup_filename)
+
+    try:
+        # pg_dump command piped to gzip
+        # -F p is plain format, then pipe to gzip or use pg_dump built-in if available (but pipe is common)
+        # Using subprocess with shell=True for the pipe
+        cmd = f"pg_dump {db_url} | gzip > {local_backup_path}"
+        
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+
+        if result.returncode != 0:
+            logger.error(f"pg_dump compression failed: {result.stderr}")
+            return {'status': 'error', 'reason': f"pg_dump compression failed: {result.stderr}"}
+
+        # Google Drive Integration
+        root_folder_id = getattr(settings, 'GOOGLE_DRIVE_LOG_FOLDER_ID', None)
+        if not root_folder_id:
+            logger.warning("GOOGLE_DRIVE_LOG_FOLDER_ID নেই। Backup upload সম্ভব নয়।")
+            return {'status': 'skipped', 'reason': 'no folder id'}
+
+        # Sub-folder: "database-backups"
+        try:
+            folder_id = get_or_create_folder(
+                folder_name='database-backups',
+                parent_folder_id=root_folder_id
+            )
+        except Exception as e:
+            logger.error(f"Drive folder তৈরি করতে সমস্যা: {e}")
+            return {'status': 'error', 'reason': str(e)}
+
+        # Upload to Drive
+        file_id = upload_or_update_file(
+            local_file_path=local_backup_path,
+            drive_file_name=backup_filename,
+            folder_id=folder_id
+        )
+
+        # Storage Optimization: Delete backups older than 7 days
+        try:
+            delete_old_files_from_folder(folder_id, days_to_keep=7)
+        except Exception as cleanup_err:
+            logger.warning(f"Old backup cleanup failed: {cleanup_err}")
+
+        # Remove local backup file after upload
+        if os.path.exists(local_backup_path):
+            os.remove(local_backup_path)
+
+        logger.info(f"✅ Database backup compressed & successful: {backup_filename}")
+        return {'status': 'done', 'file_id': file_id, 'filename': backup_filename}
+
+    except Exception as e:
+        logger.error(f"Database backup error: {e}", exc_info=True)
+        return {'status': 'error', 'reason': str(e)}
