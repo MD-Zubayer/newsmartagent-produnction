@@ -279,6 +279,7 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
 
     raw_history = get_last_message(agent_config, sender_id, limit=3)
     
+    skip_history = False
     matched_history_skips = check_keyword_match(text, 'history_skip')
     if matched_history_skips:
         skip_history = True
