@@ -48,7 +48,7 @@ services:
       - ./jwtauth:/app
       - static_volume:/app/static
       - media_volume:/app/media
-      - ./service_account.json:/app/service_account.json:ro
+      - /home/ubuntu/configs/service_account.json:/app/gdrive_key.json:ro
     
     env_file:
       - .env
@@ -62,7 +62,7 @@ services:
       - FB_REDIRECT_URI=https://newsmartagent.com/api/facebook/callback/
       - GOOGLE_DRIVE_LOG_FOLDER_ID=${GOOGLE_DRIVE_LOG_FOLDER_ID}
       - GOOGLE_DRIVE_LOG_SUBFOLDER=${GOOGLE_DRIVE_LOG_SUBFOLDER}
-      - GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE=/app/service_account.json
+      - GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE=/app/gdrive_key.json
     depends_on:
       - db
       - redis
@@ -120,7 +120,7 @@ services:
     command: celery -A jwtauth worker -Q chat_queue -c 8 --prefetch-multiplier 1 --max-tasks-per-child 1000 --loglevel=info
     volumes:
       - ./jwtauth:/app
-      - ./service_account.json:/app/service_account.json:ro
+      - /home/ubuntu/configs/service_account.json:/app/gdrive_key.json:ro
     env_file:
       - .env
     
@@ -129,7 +129,7 @@ services:
       - REDIS_URL=${REDIS_URL}
       - GOOGLE_DRIVE_LOG_FOLDER_ID=${GOOGLE_DRIVE_LOG_FOLDER_ID}
       - GOOGLE_DRIVE_LOG_SUBFOLDER=${GOOGLE_DRIVE_LOG_SUBFOLDER}
-      - GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE=/app/service_account.json
+      - GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE=/app/gdrive_key.json
 
     depends_on:
       - db
@@ -144,7 +144,7 @@ services:
     command: celery -A jwtauth beat -l info
     volumes:
       - ./jwtauth:/app
-      - ./service_account.json:/app/service_account.json:ro
+      - /home/ubuntu/configs/service_account.json:/app/gdrive_key.json:ro
     env_file:
       - .env
     environment:
@@ -152,7 +152,7 @@ services:
       - REDIS_URL=${REDIS_URL}
       - GOOGLE_DRIVE_LOG_FOLDER_ID=${GOOGLE_DRIVE_LOG_FOLDER_ID}
       - GOOGLE_DRIVE_LOG_SUBFOLDER=${GOOGLE_DRIVE_LOG_SUBFOLDER}
-      - GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE=/app/service_account.json
+      - GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE=/app/gdrive_key.json
     depends_on:
       - db
       - redis
