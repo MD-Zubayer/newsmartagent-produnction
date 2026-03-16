@@ -77,6 +77,7 @@ INSTALLED_APPS = [
     'man_agent',
     "aiAgent.apps.AiagentConfig",
     'ckeditor',
+    'log_service',
     
 
     'ckeditor_uploader',
@@ -322,6 +323,35 @@ CELERY_TIMEZONE = 'Asia/Dhaka'
 
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
+# ─── Google Drive Log Sync Config ────────────────────────────────────────────
+# .env ফাইলে এই variable গুলো set করুন:
+# GOOGLE_DRIVE_LOG_FOLDER_ID=<আপনার Google Drive folder id>
+# GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE=<path to service_account.json>
+GOOGLE_DRIVE_LOG_FOLDER_ID = os.environ.get('GOOGLE_DRIVE_LOG_FOLDER_ID', '')
+GOOGLE_DRIVE_LOG_SUBFOLDER = os.environ.get('GOOGLE_DRIVE_LOG_SUBFOLDER', 'newsmartagent-logs')
+GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE = os.environ.get(
+    'GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE',
+    '/app/service_account.json'  # BASE_DIR সরিয়ে সরাসরি এই পাথটি দিন
+)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Celery Beat: প্রতি ৫ মিনিটে Drive sync
+from celery.schedules import crontab
+CELERY_BEAT_SCHEDULE = {
+    'sync-logs-to-google-drive': {
+        'task': 'log_service.sync_logs_to_drive',
+        'schedule': crontab(minute='*/5'),  # প্রতি ৫ মিনিটে
+    },
+    'backup-database-to-google-drive': {
+        'task': 'log_service.backup_db_to_drive',
+        'schedule': crontab(hour=1, minute=0),  # প্রতিদিন রাত ১টায়
+    },
+    'backup-redis-to-google-drive': {
+        'task': 'log_service.backup_redis_to_drive',
+        'schedule': crontab(hour=2, minute=0),  # প্রতিদিন রাত ২টায়
+    },
+}
+
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -341,31 +371,53 @@ LOGGING = {
     "handlers": {
         "console": {
             "level": "INFO",
-            "class": "logging.StreamHandler", # কন্সোলে দেখানোর জন্য
+            "class": "logging.StreamHandler",
             "formatter": "verbose",
         },
+        # Django + AI Agent log → ai_agent.log
         "file": {
             "level": "INFO",
-            "class": "logging.FileHandler", # ফাইলে জমানোর জন্য
+            "class": "logging.handlers.RotatingFileHandler",
             "filename": os.path.join(LOG_DIR, "ai_agent.log"),
+            "maxBytes": 10 * 1024 * 1024,  # 10 MB
+            "backupCount": 5,
+            "formatter": "verbose",
+        },
+        # Celery log → আলাদা celery_worker.log
+        "celery_file": {
+            "level": "INFO",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": os.path.join(LOG_DIR, "celery_worker.log"),
+            "maxBytes": 10 * 1024 * 1024,  # 10 MB
+            "backupCount": 5,
             "formatter": "verbose",
         },
     },
     "loggers": {
         "django": {
-            "handlers": ["console", "file"], # দুই জায়গাতেই লগ যাবে
+            "handlers": ["console", "file"],
             "level": "INFO",
             "propagate": True,
         },
         "celery": {
-            "handlers": ["console", "file"],
+            "handlers": ["console", "celery_file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "celery.task": {
+            "handlers": ["console", "celery_file"],
             "level": "INFO",
             "propagate": False,
         },
         "aiAgent": {
             "handlers": ["console", "file"],
             "level": "INFO",
-            "propagate": True, # যাতে সাব-মডিউলের লগ মেইন লগারে পৌঁছায়
+            "propagate": True,
+        },
+        "log_service": {
+            "handlers": ["console", "file"],
+            "level": "INFO",
+            "propagate": False,
         },
     },
 }

@@ -48,6 +48,7 @@ services:
       - ./jwtauth:/app
       - static_volume:/app/static
       - media_volume:/app/media
+      - /home/ubuntu/configs/service_account.json:/app/gdrive_key.json:ro
     
     env_file:
       - .env
@@ -59,6 +60,9 @@ services:
       - FB_APP_ID=890689390590685
       - FB_APP_SECRET=7c0693dacfc6211613d16437be2192b8
       - FB_REDIRECT_URI=https://newsmartagent.com/api/facebook/callback/
+      - GOOGLE_DRIVE_LOG_FOLDER_ID=${GOOGLE_DRIVE_LOG_FOLDER_ID}
+      - GOOGLE_DRIVE_LOG_SUBFOLDER=${GOOGLE_DRIVE_LOG_SUBFOLDER}
+      - GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE=/app/gdrive_key.json
     depends_on:
       - db
       - redis
@@ -116,12 +120,16 @@ services:
     command: celery -A jwtauth worker -Q chat_queue -c 8 --prefetch-multiplier 1 --max-tasks-per-child 1000 --loglevel=info
     volumes:
       - ./jwtauth:/app
+      - /home/ubuntu/configs/service_account.json:/app/gdrive_key.json:ro
     env_file:
       - .env
     
     environment:
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@newsmartagent-db:5432/${POSTGRES_DB}
       - REDIS_URL=${REDIS_URL}
+      - GOOGLE_DRIVE_LOG_FOLDER_ID=${GOOGLE_DRIVE_LOG_FOLDER_ID}
+      - GOOGLE_DRIVE_LOG_SUBFOLDER=${GOOGLE_DRIVE_LOG_SUBFOLDER}
+      - GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE=/app/gdrive_key.json
 
     depends_on:
       - db
@@ -136,11 +144,15 @@ services:
     command: celery -A jwtauth beat -l info
     volumes:
       - ./jwtauth:/app
+      - /home/ubuntu/configs/service_account.json:/app/gdrive_key.json:ro
     env_file:
       - .env
     environment:
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@newsmartagent-db:5432/${POSTGRES_DB}
       - REDIS_URL=${REDIS_URL}
+      - GOOGLE_DRIVE_LOG_FOLDER_ID=${GOOGLE_DRIVE_LOG_FOLDER_ID}
+      - GOOGLE_DRIVE_LOG_SUBFOLDER=${GOOGLE_DRIVE_LOG_SUBFOLDER}
+      - GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE=/app/gdrive_key.json
     depends_on:
       - db
       - redis

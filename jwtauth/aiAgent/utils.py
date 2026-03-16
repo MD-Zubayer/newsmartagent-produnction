@@ -38,11 +38,14 @@ def get_memory_context(ai_agent, sender_id):
         memory = UserMemory.objects.get(ai_agent=ai_agent, sender_id=sender_id)
         info = memory.data
 
-        clean_info = {k: v for k, v in info.items() if v and str(v).lower() != 'unknown'}
+        clean_info = {k: v for k, v in info.items() if v and str(v).lower() != 'unknown' and not k.startswith('_')}
 
         if not clean_info:
             return ""
-        return "Mem: " + ", ".join(clean_info)
+        
+        # Format as Key: Value pairs for better AI understanding
+        formatted_mem = [f"{k.replace('_', ' ').title()}: {v}" for k, v in clean_info.items()]
+        return " | ".join(formatted_mem)
 
     except UserMemory.DoesNotExist:
         return ""

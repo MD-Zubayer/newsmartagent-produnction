@@ -235,7 +235,7 @@ export default function IntegrationManager() {
             {/* Platform Specific: Facebook */}
             {selectedPlatform.id === "facebook" && (
               <div className="pt-16 md:pt-24 border-t border-slate-100 space-y-12 md:space-y-16 animate-in slide-in-from-bottom-8 duration-1000">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 md:gap-12 text-center md:text-left">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 md:gap-12 text-center md:text-left">
                   <div className="space-y-2">
                     <h3 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter italic uppercase">
                       Active Nodes

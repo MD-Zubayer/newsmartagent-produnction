@@ -20,6 +20,8 @@ from aiAgent.cache.client import get_redis_client
 import json
 from users.models import Subscription
 from .serializers import AIProviderModelSerializer
+import uuid
+import time
 
 
 # Create your views here.
@@ -189,30 +191,50 @@ def dashboard_chat_view(request):
     if not message:
         return Response({'reply': 'মেসেজ খালি পাঠানো যাবে না।'}, status=400)
 
-    # ১. পাথ অনুযায়ী সঠিক কনটেক্সট খুঁজে বের করা
-    context = PAGE_DOCS.get(path, PAGE_DOCS["default"])
-
-    # ২. আপনার gemini.py এর ফাংশনটি কল করা
-    ai_response = generate_dashboard_help(
-        user_query=message,
-        page_context=context,
-        chat_history=[] # আপনি চাইলে ডাটাবেস থেকে লাস্ট ৫টি চ্যাট এখানে পাঠাতে পারেন
+    # ১. ড্যাশবোর্ড ইউজারের জন্য একটি ভার্চুয়াল এজেন্ট তৈরি বা ব্যবহার করা
+    dashboard_page_id = f"dashboard_{user.id}"
+    agent_config, created = AgentAI.objects.get_or_create(
+        user=user,
+        page_id=dashboard_page_id,
+        defaults={
+            'name': f"Dashboard AI - {user.username}",
+            'platform': 'messenger',
+            'system_prompt': "You are an expert dashboard assistant for New Smart Agent BD. Help users with their dashboard and account questions.",
+            'ai_model': 'models/gemini-1.5-flash',
+            'is_active': True
+        }
     )
 
-    if ai_response['status'] == 'success':
-        # ৩. ডাটাবেসে লগ সেভ করা
-        DashboardAILog.objects.create(
-            user=user,
-            pathname=path,
-            question=message,
-            answer=ai_response['reply'],
-            input_tokens=ai_response.get('input_tokens', 0),
-            output_tokens=ai_response.get('output_tokens', 0),
-            total_tokens=ai_response.get('total_tokens', 0)
-        )
-        return Response({'reply': ai_response['reply']})
+    import uuid
+    import time
+    from webhooks.tasks import process_ai_reply_task
+
+    msg_id = str(uuid.uuid4())
+    DashboardAILog.objects.create(
+        user=user,
+        message_id=msg_id,
+        pathname=path,
+        question=message,
+        answer="Processing...",
+    )
+
+    task_data = {
+        'sender_id': str(user.id),
+        'page_id': dashboard_page_id,
+        'message': message,
+        'message_id': msg_id,
+        'type': 'dashboard',
+        'path': path,
+        'timestamp': time.time() * 1000
+    }
     
-    return Response({'reply': 'দুঃখিত, এআই এই মুহূর্তে উত্তর দিতে পারছে না।'}, status=500)
+    process_ai_reply_task.delay(task_data)
+
+    return Response({
+        'status': 'success',
+        'message_id': msg_id,
+        'reply': 'processing'
+    })
 
 
 

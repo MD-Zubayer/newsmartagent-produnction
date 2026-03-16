@@ -253,15 +253,34 @@ def deduct_user_tokens(user_profile, total_tokens, ai_model_name):
 def build_ai_context(agent_config, sender_id, text, extra_instruction=None, sheet_context=None):
     from aiAgent.utils import get_memory_context
     from chat.services import get_last_message
+    from aiAgent.memory_handler import calculate_context_score, check_keyword_match
 
     lower_text = text.lower()
     memory_context = ""
-    memory_triggers = ['আমার অর্ডার', 'আমার নাম', 'নাম', 'অর্ডার', 'আগের', 'my', 'name', 'order', 'status']
+    
+    # 1. Fallback Static Triggers
+    static_triggers = ['আমার অর্ডার', 'আমার নাম', 'নাম', 'অর্ডার', 'আগের', 'my', 'name', 'order', 'status']
+    
+    # 2. Dynamic DB-backed Keyword Triggers 
+    matched_intents = check_keyword_match(text, 'intent')
+    matched_targets = check_keyword_match(text, 'target')
+    
+    # 3. Context Score checking (Phone, Email, Location, Urgency)
+    c_score = calculate_context_score(text)
+    
+    is_memory_needed = False
+    if any(word in lower_text for word in static_triggers):
+        is_memory_needed = True
+    elif matched_intents or matched_targets:
+        is_memory_needed = True
+    elif c_score >= 3:
+        is_memory_needed = True
 
-    if any(word in lower_text for word in memory_triggers):
+    if is_memory_needed:
         mem_data = get_memory_context(agent_config, sender_id)
         if mem_data:
-            memory_context = f"\nMemory Context:\n{mem_data}"
+            memory_context = f"\nUser Database Memory [Very Important]:\n{mem_data}"
+            logger.info(f"🧠 Injecting Memory Context for {sender_id}. Score: {c_score} | DB Triggers: {matched_intents or matched_targets}")
 
     prompt_parts = [
         f"Role: {agent_config.system_prompt}",
@@ -279,6 +298,7 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
 
     raw_history = get_last_message(agent_config, sender_id, limit=3)
     
+    skip_history = False
     matched_history_skips = check_keyword_match(text, 'history_skip')
     if matched_history_skips:
         skip_history = True
@@ -424,6 +444,35 @@ def deliver_reply_to_n8n(data, reply, page_id, access_token):
         return True
     except Exception as e:
         logger.error(f"Webhook delivery critical failure: {e}")
+        return False
+
+def deliver_dashboard_reply(user_id, reply_text, message_id):
+    """Deliver final reply to the dashboard via WebSocket and update the log"""
+    try:
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        from aiAgent.models import DashboardAILog
+
+        # Update log
+        DashboardAILog.objects.filter(message_id=message_id).update(answer=reply_text)
+
+        # Send via WebSocket
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"user_{user_id}",
+            {
+                "type": "send_notification",
+                "content": {
+                    "action": "DASHBOARD_AI_REPLY",
+                    "message_id": message_id,
+                    "reply": reply_text
+                }
+            }
+        )
+        logger.info(f"✅ Dashboard reply sent via WebSocket for user {user_id}")
+        return True
+    except Exception as e:
+        logger.error(f"Dashboard WebSocket delivery failure: {e}")
         return False
 
 def log_token_usage(agent_config, sender_id, ai_data, duration, request_type):

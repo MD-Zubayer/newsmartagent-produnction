@@ -116,6 +116,9 @@ def handle_smart_memory_update(agent_config, sender, current_text):
     # --- Layer 2 & 3: Accumulation & Triggering ---
     memory, _ = UserMemory.objects.get_or_create(ai_agent=agent_config, sender_id=sender)
     
+    if not isinstance(memory.data, dict):
+        memory.data = {}
+        
     if '_internal' not in memory.data:
         memory.data['_internal'] = {
             'accumulated_score': 0,
@@ -149,9 +152,14 @@ def handle_smart_memory_update(agent_config, sender, current_text):
             print(f"🚀 >>> Hybrid Extraction Triggered for {sender} ({reason})")
             extract_and_update_memory(agent_config, sender, chat_history)
             
+            # CRITICAL: Refresh from DB because extract_and_update_memory saved new keys
+            memory.refresh_from_db()
+            internal = memory.data.get('_internal', {})
+            
             internal['accumulated_score'] = 0
             internal['unskipped_count'] = 0
             internal['unskipped_buffer'] = []
+            memory.data['_internal'] = internal
         except Exception as e:
             print(f"Hybrid Intelligence sync failed: {str(e)}")
 
