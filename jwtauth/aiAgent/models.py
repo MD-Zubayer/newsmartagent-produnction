@@ -116,7 +116,8 @@ class AgentAI(models.Model):
 class UserMemory(models.Model):
     ai_agent = models.ForeignKey(AgentAI, on_delete=models.CASCADE)
     sender_id = models.CharField(max_length=255)
-    data = models.JSONField(default=dict)
+    data = models.JSONField(default=dict, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
