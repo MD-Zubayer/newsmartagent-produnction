@@ -73,6 +73,8 @@ def fetch_messenger_profile(sender_id, access_token):
         data = response.json()
 
         full_name = data.get('name') or f"{data.get('first_name', '')} {data.get('last_name', '')}".strip()
+        logger.info(f"fetching Messenger profile for  {full_name}")
+        print(f"fetching Messenger profile for {full_name}")
         return full_name if full_name else None
     except Exception as e:
         logger.error(f"Error fetching Messenger profile for {sender_id}: {e}")
