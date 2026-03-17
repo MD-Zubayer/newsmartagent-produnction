@@ -133,8 +133,11 @@ class WhatsAppSendView(APIView):
         # যদি নম্বরটি শুধু ডিজিট হয়, তবে ফরম্যাট ঠিক করে দেওয়া
         clean_to = str(to).split('@')[0]  # যদি আগে থেকেই @ থাকে তা পরিষ্কার করা
         formatted_to = f"{clean_to}@s.whatsapp.net"
+        logger.info(f"🔗 [View] Incoming data from n8n: {data}")
+        logger.info(f"🔗 [View] Target: {to}, Formatted: {formatted_to}, Session: {session_id}")
 
         try:
+            logger.info(f"📤 [View] Forwarding to Baileys: {settings.BAILEYS_API_URL}/send-message")
             response = requests.post(
                 f'{settings.BAILEYS_API_URL}/send-message',
                 json={
@@ -150,6 +153,7 @@ class WhatsAppSendView(APIView):
             )
             response.raise_for_status()
             res_data = response.json()
+            logger.info(f"📊 [View] Baileys response: {res_data}")
 
             # Message log করুন
             WhatsAppMessage.objects.create(

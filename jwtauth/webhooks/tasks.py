@@ -108,7 +108,13 @@ def process_ai_reply_task(self, data):
 
     start_time = time.time()
 
-    sender_id = data.get('sender_id')
+    # Extract sender_id: from (WhatsApp JID), phone (WA), or sender_id (FB)
+    logger.info(f"🔍 [Task] Raw data received: {data}")
+    sender_id = data.get('sender_id') or data.get('from') or data.get('phone')
+    if sender_id and isinstance(sender_id, str) and '@' in sender_id:
+        sender_id = sender_id.split('@')[0]
+    data['sender_id'] = sender_id  # Ensure it's available for delivery functions
+    logger.info(f"🔍 [Task] Extracted sender_id: {sender_id}")
     page_id = data.get('page_id')
     request_type = data.get('type') or data.get('platform')
     if not request_type:
@@ -185,8 +191,9 @@ def process_ai_reply_task(self, data):
                 pass
 
         if not agent_config:
-            logger.error(f'Error: No active agent found for identifiers {lookup_ids if lookup_ids else [page_id]}')
+            logger.error(f'❌ [Task] No active agent found for identifiers {lookup_ids if lookup_ids else [page_id]}. identifiers checked: {lookup_ids}')
             return
+        logger.info(f"✅ [Task] Agent found: ID {agent_config.id}, page_id {agent_config.page_id}, User {agent_config.user.email}")
         # Use matched agent page_id for downstream operations/cache keys
         page_id = agent_config.page_id
         user_profile = agent_config.user.profile

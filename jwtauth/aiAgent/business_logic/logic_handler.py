@@ -431,14 +431,15 @@ def deliver_whatsapp_reply(data, reply):
         "sessionId": str(data.get('sessionId', ''))
     }
     try:
-        logger.info(f"📲 Routing WhatsApp reply to n8n delivery: {payload}")
+        logger.info(f"🚀 [Logic] Routing WhatsApp reply to n8n delivery. Payload: {payload}")
         response = requests.post(webhook_url, json=payload, timeout=15)
+        logger.info(f"📥 [Logic] n8n Delivery response: Status {response.status_code}, Body: {response.text}")
         if response.status_code != 200:
-            logger.error(f"n8n WhatsApp delivery error: {response.status_code} - {response.text}")
+            logger.error(f"❌ [Logic] n8n WhatsApp delivery error: {response.status_code} - {response.text}")
             return False
         return True
     except Exception as e:
-        logger.error(f"n8n WhatsApp delivery critical failure: {e}")
+        logger.error(f"❌ [Logic] n8n WhatsApp delivery critical failure: {e}")
         return False
 
 def deliver_facebook_reply(data, reply, page_id, access_token):
