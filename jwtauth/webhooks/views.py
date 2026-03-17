@@ -58,12 +58,26 @@ def ai_webhook(request):
     data = dict(request.data)
     print(data)
     # first validation
+    logger.info(f"📥 [ai_webhook] Received raw data: {data}")
+    
+    # 1. Identify Request Type
+    request_type = data.get('type') or data.get('platform')
+    if not request_type:
+        if data.get('receiver') or data.get('sessionId') or data.get('phone'):
+            request_type = 'whatsapp'
+        else:
+            request_type = 'messenger'
+
+    # 2. Extract Sender ID (The recipient of our future reply)
+    # If it's WhatsApp, prioritize 'phone' or 'from' over a generic 'sender_id' if present
     sender_id = data.get('sender_id')
-    page_id = data.get('page_id')
-    request_type = data.get('type')
-    # Infer whatsapp if type missing but whatsapp markers exist
-    if not request_type and (data.get('receiver') or data.get('sessionId') or data.get('phone')):
-        request_type = 'whatsapp'
+    if request_type == 'whatsapp':
+        # WhatsApp specific: 'from' is often more accurate (contains @s.whatsapp.net)
+        wa_sender = data.get('from') or data.get('phone')
+        if wa_sender:
+            sender_id = str(wa_sender).split('@')[0]
+    
+    logger.info(f"🔍 [ai_webhook] Type: {request_type}, Extracted Sender: {sender_id}")
 
     # WhatsApp: normalize page_id to phone/session so agent lookup succeeds
     if request_type == 'whatsapp':
@@ -109,11 +123,16 @@ def ai_webhook(request):
 
     
     try:
+        # Ensure sender_id and page_id are in the payload sent to Celery
+        data['sender_id'] = sender_id
+        data['page_id'] = page_id
+        data['type'] = request_type
+        
+        logger.info(f"📦 [ai_webhook] Sending to Celery: sender={sender_id}, page={page_id}, type={request_type}")
         process_ai_reply_task.delay(data)
-        print(f">>> Task successfully sent to Celery for sender: {sender_id}")
         return Response({
              'status': 'accepted',
-              'message': 'Task is processing is background'
+              'message': 'Task is processing in background'
             }, status=202)
     except Exception as e:
         # যদি রেডিস কানেকশন বা সিরিয়ালাইজেশন এরর হয়

@@ -32,6 +32,7 @@ const jidNormalizedUser = getFromBaileys('jidNormalizedUser');
 // ─── GLOBAL SESSION STATE ─────────────────────────────────────────────────────
 const sessions = new Map();
 const cleanupPromises = new Map();
+const jidMap = new Map(); // Store LID -> Phone mappings
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 async function forwardToN8n(payload) {
@@ -131,6 +132,25 @@ async function initSession(sessionId) {
 
         sock.ev.on('creds.update', saveCreds);
 
+        sock.ev.on('contacts.upsert', (contacts) => {
+            contacts.forEach(c => {
+                if (c.id && c.id.includes('@')) {
+                    if (c.id.includes('@lid')) {
+                        jidMap.set(c.id, { lid: c.id, name: c.name || c.notify });
+                    }
+                }
+            });
+        });
+
+        sock.ev.on('contacts.update', (updates) => {
+            updates.forEach(u => {
+                if (u.id && (u.phoneNumber || u.id.includes('@s.whatsapp.net'))) {
+                    const realPhone = u.phoneNumber || u.id.split('@')[0];
+                    if (u.lid) jidMap.set(u.lid, { ...jidMap.get(u.lid), phone: realPhone });
+                }
+            });
+        });
+
         sock.ev.on('messages.upsert', async ({ messages, type }) => {
             if (type !== 'notify') return;
             for (const msg of messages) {
@@ -140,9 +160,17 @@ async function initSession(sessionId) {
                 const messageContent = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
                 if (!messageContent) continue;
 
+                // Try to resolve the "real number"
+                let resolvedPhone = from.split('@')[0];
+                const contact = jidMap.get(from);
+                if (contact && contact.phone) {
+                    resolvedPhone = contact.phone;
+                }
+
                 const payload = {
                     from,
-                    phone: from.split('@')[0],
+                    phone: resolvedPhone,
+                    raw_phone: from.split('@')[0],
                     receiver: sessionData.phone || sock.user?.id?.split(':')[0]?.split('@')[0],
                     sessionId: sessionId,
                     message: messageContent,

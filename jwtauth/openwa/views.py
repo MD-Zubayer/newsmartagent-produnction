@@ -129,10 +129,17 @@ class WhatsAppSendView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # ৩. গুরুত্বপূর্ণ: নম্বর ফরম্যাটিং (Baileys এর জন্য @s.whatsapp.net যোগ করা)
-        # যদি নম্বরটি শুধু ডিজিট হয়, তবে ফরম্যাট ঠিক করে দেওয়া
-        clean_to = str(to).split('@')[0]  # যদি আগে থেকেই @ থাকে তা পরিষ্কার করা
-        formatted_to = f"{clean_to}@s.whatsapp.net"
+        # ৩. গুরুত্বপূর্ণ: নম্বর ফরম্যাটিং
+        to_str = str(to).strip()
+        if '@' in to_str:
+            # যদি অলরেডি JID ফরম্যাটে থাকে (@s.whatsapp.net বা @lid)
+            formatted_to = to_str
+            clean_to = to_str.split('@')[0]
+        else:
+            # যদি শুধু নম্বর থাকে
+            clean_to = to_str
+            formatted_to = f"{clean_to}@s.whatsapp.net"
+        
         logger.info(f"🔗 [View] Incoming data from n8n: {data}")
         logger.info(f"🔗 [View] Target: {to}, Formatted: {formatted_to}, Session: {session_id}")
 
