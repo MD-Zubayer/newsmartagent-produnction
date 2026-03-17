@@ -63,7 +63,6 @@ async function initSession(sessionId) {
     if (sessions.has(sessionId)) {
         const existing = sessions.get(sessionId);
         if (existing.state === 'open') return existing;
-        // If closed or error, we might want to reinitting
         if (existing.sock) existing.sock.logout().catch(() => {});
     }
 
@@ -89,14 +88,13 @@ async function initSession(sessionId) {
             printQRInTerminal: false,
             auth: state,
             browser: ['NewsSmartAgent', 'Chrome', '120.0.0'],
-            syncFullHistory: false
+            syncFullHistory: true // কন্টাক্ট ম্যাপিং ভালো করার জন্য এটি true রাখা হয়েছে
         });
 
         sessionData.sock = sock;
 
         sock.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect, qr } = update;
-
             if (qr) {
                 sessionData.qr = qr;
                 sessionData.state = 'connecting';
@@ -108,13 +106,11 @@ async function initSession(sessionId) {
                 sessionData.qr = null;
                 sessionData.phone = null;
                 const statusCode = lastDisconnect?.error ? new Boom(lastDisconnect.error)?.output?.statusCode : 0;
-                
                 logger.info(`[Session: ${sessionId}] Closed (${statusCode})`);
                 
                 if (statusCode !== DisconnectReason.loggedOut) {
                     setTimeout(() => initSession(sessionId), 5000);
                 } else {
-                    // Logged out, clean up
                     await cleanupSession(sessionId, { removeFolder: true });
                 }
             }
@@ -124,20 +120,17 @@ async function initSession(sessionId) {
                 sessionData.qr = null;
                 sessionData.phone = jidNormalizedUser(sock.user?.id)?.split('@')[0];
                 logger.info(`[Session: ${sessionId}] ✅ Connected as ${sessionData.phone}`);
-
-                // Notify Django to sync AgentAI
                 await notifyDjangoSync(sessionId, sessionData.phone, sock.user?.name || '');
             }
         });
 
         sock.ev.on('creds.update', saveCreds);
 
+        // LID থেকে ফোন নম্বর ম্যাপিং হ্যান্ডলার
         sock.ev.on('contacts.upsert', (contacts) => {
             contacts.forEach(c => {
-                if (c.id && c.id.includes('@')) {
-                    if (c.id.includes('@lid')) {
-                        jidMap.set(c.id, { lid: c.id, name: c.name || c.notify });
-                    }
+                if (c.id && c.id.includes('@lid')) {
+                    jidMap.set(c.id, { lid: c.id, name: c.name || c.notify });
                 }
             });
         });
@@ -160,16 +153,20 @@ async function initSession(sessionId) {
                 const messageContent = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
                 if (!messageContent) continue;
 
-                // Try to resolve the "real number"
+                // LID হ্যান্ডলিং লজিক
                 let resolvedPhone = from.split('@')[0];
-                const contact = jidMap.get(from);
-                if (contact && contact.phone) {
-                    resolvedPhone = contact.phone;
+                if (from.includes('@lid')) {
+                    const mapped = jidMap.get(from);
+                    if (mapped && mapped.phone) {
+                        resolvedPhone = mapped.phone;
+                    } else if (msg.key.participant) {
+                        resolvedPhone = msg.key.participant.split('@')[0];
+                    }
                 }
 
                 const payload = {
                     from,
-                    phone: resolvedPhone,
+                    phone: resolvedPhone, // এটি n8n এ আসল নম্বর হিসেবে যাবে
                     raw_phone: from.split('@')[0],
                     receiver: sessionData.phone || sock.user?.id?.split(':')[0]?.split('@')[0],
                     sessionId: sessionId,
@@ -190,33 +187,19 @@ async function initSession(sessionId) {
 }
 
 async function cleanupSession(sessionId, { removeFolder = true } = {}) {
-    if (cleanupPromises.has(sessionId)) {
-        return cleanupPromises.get(sessionId);
-    }
-
+    if (cleanupPromises.has(sessionId)) return cleanupPromises.get(sessionId);
     const sessionFolder = path.join(AUTH_BASE_FOLDER, sessionId);
     const cleanup = (async () => {
         const existing = sessions.get(sessionId);
         if (existing?.sock) {
-            try {
-                await existing.sock.logout();
-            } catch (err) {
-                logger.warn(`[Session: ${sessionId}] logout during cleanup failed: ${err.message}`);
-            }
+            try { await existing.sock.logout(); } catch (err) {}
         }
-
         if (removeFolder) {
-            try {
-                fs.rmSync(sessionFolder, { recursive: true, force: true });
-            } catch (err) {
-                logger.warn(`[Session: ${sessionId}] auth folder cleanup failed: ${err.message}`);
-            }
+            try { fs.rmSync(sessionFolder, { recursive: true, force: true }); } catch (err) {}
         }
-
         sessions.delete(sessionId);
         cleanupPromises.delete(sessionId);
     })();
-
     cleanupPromises.set(sessionId, cleanup);
     return cleanup;
 }
@@ -225,7 +208,6 @@ async function cleanupSession(sessionId, { removeFolder = true } = {}) {
 const app = express();
 app.use(express.json());
 
-// Init a session (called by Dashboard)
 app.post('/init/:sessionId', async (req, res) => {
     const { sessionId } = req.params;
     try {
@@ -260,12 +242,11 @@ app.post('/send-message', async (req, res) => {
 
     try {
         let jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
-        logger.info(`✨ [Baileys] EXEC sendMessage | Session: ${sessionId} | To: ${jid} | Msg: ${message.substring(0, 50)}...`);
+        logger.info(`✨ [Baileys] Sending to ${jid}`);
         const sent = await session.sock.sendMessage(jid, { text: message });
-        logger.info(`📦 [Baileys] Baileys Internal Sent Status: ${JSON.stringify(sent)}`);
         res.json({ success: true, messageId: sent?.key?.id });
     } catch (err) {
-        logger.error(`❌ [Baileys] EXEC sendMessage FAILED | Session: ${sessionId} | Error: ${err.message}`);
+        logger.error(`❌ Send FAILED: ${err.message}`);
         res.status(500).json({ error: err.message });
     }
 });
@@ -274,30 +255,22 @@ app.delete('/session/:sessionId', async (req, res) => {
     const { sessionId } = req.params;
     const secret = req.headers['x-api-secret'];
     if (secret !== API_SECRET) return res.status(401).json({ error: 'Unauthorized' });
-
-    const existed = sessions.has(sessionId) || fs.existsSync(path.join(AUTH_BASE_FOLDER, sessionId));
-
-    try {
-        await cleanupSession(sessionId);
-        res.json({ success: true, existed });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+    await cleanupSession(sessionId);
+    res.json({ success: true });
 });
 
-// Auto-restart existing sessions on startup
 async function restoreSessions() {
     if (!fs.existsSync(AUTH_BASE_FOLDER)) return;
     const folders = fs.readdirSync(AUTH_BASE_FOLDER);
     for (const sessionId of folders) {
         if (fs.statSync(path.join(AUTH_BASE_FOLDER, sessionId)).isDirectory()) {
-            logger.info(`Restoring session: ${sessionId}`);
-            initSession(sessionId).catch(e => logger.error(`Failed to restore ${sessionId}: ${e.message}`));
+            logger.info(`Restoring: ${sessionId}`);
+            initSession(sessionId).catch(() => {});
         }
     }
 }
 
 app.listen(PORT, () => {
-    logger.info(`Baileys Multi-Session API on port ${PORT}`);
+    logger.info(`Server running on port ${PORT}`);
     restoreSessions();
 });
