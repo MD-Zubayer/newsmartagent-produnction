@@ -1,12 +1,15 @@
-const {
-  default: makeWASocket,
-  DisconnectReason,
-  useMultiFileAuthState,
-  fetchLatestBaileysVersion,
-  // makeInMemoryStore, <-- এখান থেকে এটি কেটে দিন
-  jidNormalizedUser,
-} = require('@whiskeysockets/baileys');
-const makeInMemoryStore = require('@whiskeysockets/baileys/lib/Store').makeInMemoryStore;
+const Baileys = require('@whiskeysockets/baileys');
+
+// Baileys অবজেক্ট থেকে ফাংশনগুলো বের করা
+const makeWASocket = Baileys.default || Baileys;
+const { 
+    DisconnectReason, 
+    useMultiFileAuthState, 
+    fetchLatestBaileysVersion, 
+    makeInMemoryStore, // <--- 
+    jidNormalizedUser 
+} = Baileys;
+// ২. বাকি ইমপোর্টগুলো আগের মতোই রাখুন
 const { Boom } = require('@hapi/boom');
 const express = require('express');
 const pino = require('pino');
