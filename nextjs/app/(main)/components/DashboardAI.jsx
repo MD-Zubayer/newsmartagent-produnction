@@ -17,6 +17,7 @@ import Image from "next/image";
 export default function DashboardAI() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const [isHidden, setIsHidden] = useState(false);
   const [messages, setMessages] = useState([
     { role: "bot", content: "আসসালামু আলাইকুম! আমি New Smart Agent AI। আমি আপনাকে কিভাবে সাহায্য করতে পারি?", time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
   ]);
@@ -112,23 +113,48 @@ export default function DashboardAI() {
     <>
       {/* Messenger Style Floating Trigger */}
       <AnimatePresence mode="wait">
-        {!isOpen && (
+        {!isOpen && !isHidden && (
           <motion.div
             key="trigger"
+            drag
+            dragConstraints={{ left: -1000, right: 1000, top: -1000, bottom: 1000 }}
+            dragElastic={0.1}
+            dragMomentum={false}
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0, opacity: 0 }}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={() => setIsOpen(true)}
-            className="fixed bottom-6 right-6 z-[1000] cursor-pointer"
+            dragTransition={{ power: 0.2, timeConstant: 200 }}
+            className="fixed bottom-6 right-6 z-[1000] p-3 touch-none"
+            style={{ cursor: 'grab' }}
           >
             <div className="relative group">
+               {/* Close Button (X) - Visible on hover (desktop) or active/tap (mobile) */}
+               <button 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsHidden(true);
+                  }}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="absolute -top-1 -right-1 w-8 h-8 bg-white rounded-full shadow-lg z-30 flex items-center justify-center border border-gray-100 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-200 hover:bg-gray-50 active:scale-90"
+               >
+                 <X size={14} className="text-gray-500" />
+               </button>
+
               {/* Animated Glow Effect */}
-              <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500 to-cyan-400 rounded-full blur-lg opacity-40 group-hover:opacity-70 transition-opacity duration-300"></div>
+              <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500 to-cyan-400 rounded-full blur-lg opacity-40 group-hover:opacity-70 transition-opacity duration-300 pointer-events-none"></div>
               
               {/* Main Button Container */}
-              <div className="w-16 h-16 sm:w-18 sm:h-18 md:w-20 md:h-20 bg-gradient-to-tr from-[#E0E7FF] to-[#F3E8FF] rounded-full flex items-center justify-center shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-[3px] border-white overflow-hidden relative z-10 p-0.5">
+              <div 
+                onClick={(e) => {
+                   // Only open if not dragging
+                   if (e.defaultPrevented) return;
+                   setIsOpen(true);
+                }}
+                className="w-16 h-16 sm:w-18 sm:h-18 md:w-20 md:h-20 bg-gradient-to-tr from-[#E0E7FF] to-[#F3E8FF] rounded-full flex items-center justify-center shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-[3px] border-white overflow-hidden relative z-10 p-0.5 cursor-pointer"
+              >
                 <div className="relative w-full h-full rounded-full overflow-hidden shadow-inner bg-white">
                   <Image 
                      src="/newsmartagent_ai_logo.jpeg" 
@@ -162,7 +188,7 @@ export default function DashboardAI() {
             className="fixed bottom-0 right-0 sm:bottom-8 sm:right-8 z-[1001] w-full sm:w-[380px] h-[100dvh] sm:h-full sm:max-h-[600px] bg-white sm:rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] flex flex-col overflow-hidden border border-gray-100"
           >
             {/* Messenger Header */}
-            <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 px-4 py-4 flex items-center justify-between shadow-md relative z-10">
+            <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 px-4 py-3 sm:py-4 flex items-center justify-between shadow-md relative z-10">
               <div className="flex items-center gap-3">
                 <div className="relative">
                   <div className="w-10 h-10 md:w-11 md:h-11 rounded-full bg-white flex items-center justify-center overflow-hidden border-2 border-white/20 shadow-sm relative p-0.5">
@@ -198,8 +224,8 @@ export default function DashboardAI() {
 
             {/* Chat Messages Area */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#f0f2f5]/30 scrollbar-hide">
-              <div className="flex flex-col items-center py-8">
-                <div className="relative w-20 h-20 mb-3 p-1 bg-white rounded-full shadow-md border border-gray-100">
+              <div className="flex flex-col items-center py-6 sm:py-8">
+                <div className="relative w-16 h-16 sm:w-20 sm:h-20 mb-3 p-1 bg-white rounded-full shadow-md border border-gray-100">
                    <div className="relative w-full h-full rounded-full overflow-hidden">
                       <Image 
                          src="/newsmartagent_ai_logo.jpeg" 
@@ -236,9 +262,9 @@ export default function DashboardAI() {
                     </div>
                   )}
                   <div className={`flex flex-col max-w-[80%] ${m.role === "user" ? "items-end" : "items-start"}`}>
-                    <div className={`px-4 py-2.5 rounded-[1.25rem] text-[13px] font-medium leading-[1.4] shadow-sm ${
+                    <div className={`px-4 py-2 sm:py-2.5 rounded-[1.25rem] text-xs sm:text-[13px] font-medium leading-[1.4] shadow-sm ${
                       m.role === "user" 
-                        ? "bg-gradient-to-tr from-[#0084FF] to-[#00C6FF] text-white rounded-tr-[0.25rem]" 
+                        ? "bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white rounded-tr-[0.25rem]" 
                         : "bg-white border border-gray-100 text-gray-800 rounded-tl-[0.25rem]"
                     }`}>
                       {m.content}
@@ -301,36 +327,36 @@ export default function DashboardAI() {
             </div>
 
             {/* Messenger Style Input Area */}
-            <div className="p-3 bg-white border-t space-y-2">
-              <div className="flex items-center gap-1">
-                 <button className="text-blue-500 hover:bg-blue-50 p-2 rounded-full transition-colors tooltip" title="Quick Menu">
-                    <PlusCircle size={20} />
+            <div className="p-2 sm:p-3 bg-white border-t space-y-2 pb-safe">
+              <div className="flex items-center gap-1 px-1">
+                 <button className="text-indigo-500 hover:bg-indigo-50 p-1.5 sm:p-2 rounded-full transition-colors">
+                    <PlusCircle size={18} className="sm:w-5 sm:h-5" />
                  </button>
-                 <button className="text-blue-500 hover:bg-blue-50 p-2 rounded-full transition-colors">
-                    <ImageIcon size={20} />
+                 <button className="text-indigo-500 hover:bg-indigo-50 p-1.5 sm:p-2 rounded-full transition-colors">
+                    <ImageIcon size={18} className="sm:w-5 sm:h-5" />
                  </button>
-                 <button className="text-blue-500 hover:bg-blue-50 p-2 rounded-full transition-colors">
-                    <Smile size={20} />
+                 <button className="text-indigo-500 hover:bg-indigo-50 p-1.5 sm:p-2 rounded-full transition-colors">
+                    <Smile size={18} className="sm:w-5 sm:h-5" />
                  </button>
               </div>
-              <div className="flex gap-2 items-center bg-[#f0f2f5] px-4 py-2 rounded-[1.5rem] focus-within:ring-2 focus-within:ring-blue-100 transition-all">
+              <div className="flex gap-2 items-center bg-[#f0f2f5] px-3 sm:px-4 py-1.5 sm:py-2 rounded-[1.25rem] sm:rounded-[1.5rem] focus-within:ring-2 focus-within:ring-indigo-100 transition-all mx-1">
                 <input 
-                  className="flex-1 bg-transparent outline-none text-[13px] text-gray-700 placeholder:text-gray-500 font-medium"
-                  placeholder="Message..."
+                  className="flex-1 bg-transparent outline-none text-xs sm:text-[13px] text-gray-700 placeholder:text-gray-500 font-medium"
+                  placeholder="মেসেজ লিখুন..."
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleSend()}
                 />
                 <motion.button 
                   whileActive={{ scale: 0.9 }}
-                  onClick={handleSend} 
+                  onClick={() => handleSend()} 
                   disabled={!input.trim() || isTyping}
-                  className={`${input.trim() ? "text-[#0084FF]" : "text-gray-300"} transition-all duration-300`}
+                  className={`${input.trim() ? "text-indigo-600" : "text-gray-300"} transition-all duration-300`}
                 >
-                  <Send size={22} fill={input.trim() ? "currentColor" : "none"} strokeWidth={input.trim() ? 1.5 : 2} />
+                  <Send size={20} className="sm:w-[22px] sm:h-[22px]" fill={input.trim() ? "currentColor" : "none"} strokeWidth={input.trim() ? 1.5 : 2} />
                 </motion.button>
               </div>
-              <div className="text-[9px] text-center text-gray-400 font-bold uppercase tracking-widest pb-1 opacity-50">
+              <div className="text-[8px] sm:text-[9px] text-center text-gray-400 font-bold uppercase tracking-widest pb-1 opacity-50">
                 End-to-end encrypted
               </div>
             </div>

@@ -54,7 +54,7 @@ class AgentAIViewSet(viewsets.ModelViewSet):
         Returning only the current user's agents
         This ensures that user 1 cannot see user 2's data.
         """
-        return AgentAI.objects.filter(user=self.request.user).order_by('-created_at')
+        return AgentAI.objects.filter(user=self.request.user).exclude(page_id__startswith='dashboard_').order_by('-created_at')
 
 
 class UserAvailableModelsView(APIView):
@@ -100,7 +100,7 @@ class TokenUsageAnalyticsView(APIView):
         user_logs = TokenUsageLog.objects.filter(
             user=request.user,
             created_at__date__gte=start_date
-        )
+        ).exclude(request_type='dashboard')
 
 
         #<!------------- 1. Daily Trend (Line Chart) --------------!>
