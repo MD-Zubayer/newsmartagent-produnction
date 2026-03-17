@@ -37,10 +37,10 @@ def stop_baileys_session_for_user(user_id: int) -> Optional[requests.Response]:
         return None
 
 
-def fetch_baileys_status(session_id: str) -> Tuple[Optional[str], Optional[str], Optional[int]]:
+def fetch_baileys_status(session_id: str) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[int]]:
     """
-    Returns (state, phone, status_code).
-    On transport error, returns (None, None, None) and logs a warning.
+    Returns (state, phone, pairing_code, status_code).
+    On transport error, returns (None, None, None, None) and logs a warning.
     """
     try:
         resp = requests.get(
@@ -48,11 +48,11 @@ def fetch_baileys_status(session_id: str) -> Tuple[Optional[str], Optional[str],
             timeout=5,
         )
         if resp.status_code == 404:
-            return 'close', None, resp.status_code
+            return 'close', None, None, resp.status_code
 
         resp.raise_for_status()
         data = resp.json()
-        return data.get('state'), data.get('phone'), resp.status_code
+        return data.get('state'), data.get('phone'), data.get('pairingCode'), resp.status_code
     except Exception as exc:  # requests.RequestException & JSON issues
         logger.warning("Baileys status check failed for %s: %s", session_id, exc)
-        return None, None, None
+        return None, None, None, None

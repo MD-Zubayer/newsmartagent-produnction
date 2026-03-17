@@ -59,17 +59,21 @@ async function notifyDjangoSync(sessionId, phone, pushName) {
 }
 
 // ─── SESSION CORE ─────────────────────────────────────────────────────────────
-async function initSession(sessionId) {
+async function initSession(sessionId, phoneNumber = null) {
     if (sessions.has(sessionId)) {
         const existing = sessions.get(sessionId);
         if (existing.state === 'open') return existing;
-        if (existing.sock) existing.sock.logout().catch(() => {});
+        if (existing.sock) {
+            existing.sock.ev.removeAllListeners();
+            existing.sock.logout().catch(() => {});
+        }
     }
 
     const sessionData = {
         sessionId,
         sock: null,
         qr: null,
+        pairingCode: null,
         state: 'close',
         phone: null
     };
@@ -88,10 +92,23 @@ async function initSession(sessionId) {
             printQRInTerminal: false,
             auth: state,
             browser: ['NewsSmartAgent', 'Chrome', '120.0.0'],
-            syncFullHistory: true // কন্টাক্ট ম্যাপিং ভালো করার জন্য এটি true রাখা হয়েছে
+            syncFullHistory: true
         });
 
         sessionData.sock = sock;
+
+        // --- PAIRING CODE LOGIC ---
+        if (phoneNumber && !state.creds.registered) {
+            setTimeout(async () => {
+                try {
+                    const code = await sock.requestPairingCode(phoneNumber);
+                    sessionData.pairingCode = code;
+                    logger.info(`[Session: ${sessionId}] Pairing Code generated: ${code}`);
+                } catch (err) {
+                    logger.error(`[Session: ${sessionId}] Pairing Code failed: ${err.message}`);
+                }
+            }, 3000); // Wait for socket to be ready
+        }
 
         sock.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect, qr } = update;
@@ -222,8 +239,9 @@ app.use(express.json());
 
 app.post('/init/:sessionId', async (req, res) => {
     const { sessionId } = req.params;
+    const { phone } = req.body; // Optional phone for pairing code
     try {
-        await initSession(sessionId);
+        await initSession(sessionId, phone);
         res.json({ success: true, message: 'Session initialization started' });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -233,7 +251,12 @@ app.post('/init/:sessionId', async (req, res) => {
 app.get('/status/:sessionId', (req, res) => {
     const session = sessions.get(req.params.sessionId);
     if (!session) return res.status(404).json({ error: 'Session not found' });
-    res.json({ state: session.state, phone: session.phone });
+    res.json({ 
+        state: session.state, 
+        phone: session.phone, 
+        qr: session.qr,
+        pairingCode: session.pairingCode 
+    });
 });
 
 app.get('/qr/:sessionId', (req, res) => {

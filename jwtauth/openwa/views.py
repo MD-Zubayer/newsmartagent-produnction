@@ -96,9 +96,10 @@ def whatsapp_init_session(request):
     baileys_url = settings.BAILEYS_API_URL
 
     try:
+        phone = request.data.get('phone')
         response = requests.post(
             f"{baileys_url}/init/{session_id}",
-            json={},
+            json={'phone': phone},
             timeout=10
         )
         return Response(response.json(), status=response.status_code)
@@ -215,6 +216,7 @@ class WhatsAppStatusView(APIView):
         response_payload = {
             'state': final_state,
             'phone': final_phone,
+            'pairingCode': pairing_code,
             'source': {
                 'database': db_state,
                 'baileys': baileys_state or ('unreachable' if baileys_status_code is None else baileys_state)
