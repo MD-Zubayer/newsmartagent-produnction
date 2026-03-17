@@ -68,7 +68,7 @@ urlpatterns = [
     path('api/AgentAI/', include('aiAgent.urls')),
     path('api/datasheet/', include("datasheet.urls")),
     path('api/embedding/', include("embedding.urls")),
-    path('api/', include('openwa.urls')),
+    path('api/whatsapp/', include('openwa.urls')),
     path('api/agent-state/', AgentDashboardStatsView.as_view(), name='agent-stats')
 ]
 
