@@ -195,7 +195,7 @@ class WhatsAppStatusView(APIView):
         db_state = db_instance.status if db_instance else 'close'
         db_phone = db_instance.phone_number if db_instance else None
 
-        baileys_state, baileys_phone, baileys_status_code = fetch_baileys_status(session_id)
+        baileys_state, baileys_phone, pairing_code, baileys_status_code = fetch_baileys_status(session_id)
 
         # Pick the best-known state, preferring live Baileys data when available
         final_state = baileys_state or db_state
