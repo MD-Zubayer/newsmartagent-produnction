@@ -333,6 +333,8 @@ GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE = os.environ.get(
     'GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE',
     '/app/service_account.json'  # BASE_DIR সরিয়ে সরাসরি এই পাথটি দিন
 )
+
+BAILEYS_API_URL = os.getenv('BAILEYS_API_URL', 'http://newsmartagent-baileys:3001')
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Celery Beat: প্রতি ৫ মিনিটে Drive sync
