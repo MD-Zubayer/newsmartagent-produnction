@@ -15,9 +15,10 @@ export default function WhatsAppConnector() {
   const fetchStatus = useCallback(async () => {
     try {
       const res = await axiosInstance.get("/whatsapp/status/");
-      setStatus(res.data.status);
+      const s = res.data.state || "close";
+      setStatus(s);
       setConnectedPhone(res.data.phone);
-      if (res.data.status === "open") {
+      if (s === "open") {
         setQrCode(null);
       }
     } catch (err) {
