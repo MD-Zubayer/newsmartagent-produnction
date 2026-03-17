@@ -109,73 +109,64 @@ def whatsapp_init_session(request):
 class WhatsAppSendView(APIView):
     """
     n8n থেকে AI reply receive করে Baileys-এ forward করে।
-
-    POST /api/whatsapp/send/
-    Body: { "to": "880XXXXXXXXX", "message": "AI reply..." }
-    Header: X-Api-Secret: <secret>  (optional অতিরিক্ত security layer)
     """
     permission_classes = [AllowAny] 
 
     def post(self, request):
-        to = request.data.get('to')
-        message = request.data.get('message')
-        session_id = request.data.get('sessionId')
+        data = request.data
+        # ১. n8n এবং manual body—উভয় ক্ষেত্র থেকে ডাটা রিসিভ করার ব্যবস্থা
+        to = data.get('to') or data.get('sender_id') or data.get('phone')
+        message = data.get('message') or data.get('reply')
+        session_id = data.get('sessionId')
 
-        # If sessionId not provided (e.g. from dashboard), use user's ID
+        # ২. সেশন আইডি না থাকলে রিকোয়েস্ট ইউজার থেকে নেওয়া (ড্যাশবোর্ড টেস্টের জন্য)
         if not session_id and request.user.is_authenticated:
             session_id = f"user_{request.user.id}"
 
         if not all([to, message, session_id]):
             return Response(
-                {'error': '`to`, `message`, and `sessionId` are required'},
+                {'error': '`to` (or sender_id), `message`, and `sessionId` are required'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        # ৩. গুরুত্বপূর্ণ: নম্বর ফরম্যাটিং (Baileys এর জন্য @s.whatsapp.net যোগ করা)
+        # যদি নম্বরটি শুধু ডিজিট হয়, তবে ফরম্যাট ঠিক করে দেওয়া
+        clean_to = str(to).split('@')[0]  # যদি আগে থেকেই @ থাকে তা পরিষ্কার করা
+        formatted_to = f"{clean_to}@s.whatsapp.net"
 
         try:
             response = requests.post(
                 f'{settings.BAILEYS_API_URL}/send-message',
                 json={
                     'sessionId': session_id,
-                    'to': to,
+                    'to': formatted_to, # ফরম্যাটেড নম্বর পাঠানো হচ্ছে
                     'message': message
                 },
                 headers={
                     'Content-Type': 'application/json',
                     'x-api-secret': settings.BAILEYS_API_SECRET,
                 },
-                timeout=10,
+                timeout=15, # টাইমআউট কিছুটা বাড়ানো হলো
             )
             response.raise_for_status()
-            data = response.json()
+            res_data = response.json()
 
             # Message log করুন
             WhatsAppMessage.objects.create(
                 direction='outgoing',
                 from_phone='bot',
-                to_phone=to,
+                to_phone=clean_to,
                 message_text=message,
                 ai_reply=message,
             )
 
-            logger.info(f'WhatsApp message sent to {to} (Session: {session_id})')
-            return Response(data, status=status.HTTP_200_OK)
+            logger.info(f'WhatsApp message successfully sent to {formatted_to} (Session: {session_id})')
+            return Response(res_data, status=status.HTTP_200_OK)
 
-        except requests.exceptions.ConnectionError:
-            logger.error('Baileys service not reachable')
+        except requests.exceptions.RequestException as e:
+            logger.error(f'Baileys API Error: {str(e)}')
             return Response(
-                {'error': 'Baileys service is not running'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-        except requests.exceptions.Timeout:
-            logger.error('Baileys service timeout')
-            return Response(
-                {'error': 'Baileys service timeout'},
-                status=status.HTTP_504_GATEWAY_TIMEOUT,
-            )
-        except requests.exceptions.HTTPError as e:
-            logger.error(f'Baileys error: {e}')
-            return Response(
-                {'error': str(e)},
+                {'error': 'Failed to communicate with Baileys service', 'details': str(e)},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
