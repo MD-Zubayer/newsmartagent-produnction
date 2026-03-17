@@ -1,20 +1,17 @@
-import pkg from '@whiskeysockets/baileys';
-const baileys = pkg.default || pkg;
-
-const makeWASocket = baileys.default || baileys;
-const { 
-  DisconnectReason, 
-  useMultiFileAuthState, 
-  fetchLatestBaileysVersion, 
-  makeInMemoryStore, 
-  jidNormalizedUser 
-} = baileys;
-import { Boom } from '@hapi/boom';
-import express from 'express';
-import pino from 'pino';
-import qrcode from 'qrcode-terminal';
-import fetch from 'node-fetch';
-import { writeFileSync } from 'fs';
+const {
+  default: makeWASocket,
+  DisconnectReason,
+  useMultiFileAuthState,
+  fetchLatestBaileysVersion,
+  makeInMemoryStore,
+  jidNormalizedUser,
+} = require('@whiskeysockets/baileys');
+const { Boom } = require('@hapi/boom');
+const express = require('express');
+const pino = require('pino');
+const qrcode = require('qrcode-terminal');
+const axios = require('axios');
+const { writeFileSync } = require('fs');
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3001;
@@ -47,14 +44,10 @@ async function forwardToN8n(payload) {
     return;
   }
   try {
-    const res = await fetch(N8N_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
+    const res = await axios.post(N8N_WEBHOOK_URL, payload);
     logger.info({ status: res.status }, 'Forwarded to n8n');
   } catch (err) {
-    logger.error({ err }, 'Failed to forward to n8n');
+    logger.error({ err: err.message }, 'Failed to forward to n8n');
   }
 }
 
@@ -202,7 +195,7 @@ app.get('/qr', (req, res) => {
 
 // ── POST /send-message - Send WhatsApp Message (called by n8n) ──
 app.post('/send-message', requireAuth, async (req, res) => {
-  const { to, message, type = 'text' } = req.body;
+  const { to, message } = req.body;
 
   if (!to || !message) {
     return res.status(400).json({ error: '`to` and `message` are required' });
@@ -229,7 +222,7 @@ app.post('/send-message', requireAuth, async (req, res) => {
     logger.info({ to: jid, message }, '✅ Message sent');
     res.json({ success: true, to: jid, message });
   } catch (err) {
-    logger.error({ err }, 'Failed to send message');
+    logger.error({ err: err.message }, 'Failed to send message');
     res.status(500).json({ error: err.message });
   }
 });
