@@ -161,6 +161,18 @@ async function initSession(sessionId) {
                         resolvedPhone = mapped.phone;
                     } else if (msg.key.participant) {
                         resolvedPhone = msg.key.participant.split('@')[0];
+                    } else {
+                        // Fallback: Use onWhatsApp to try and resolve the number
+                        try {
+                            const [result] = await sock.onWhatsApp(from);
+                            if (result && result.exists) {
+                                resolvedPhone = jidNormalizedUser(result.jid).split('@')[0];
+                                jidMap.set(from, { ...mapped, phone: resolvedPhone });
+                                logger.info(`🔍 [Baileys] Fallback resolved LID ${from} to phone ${resolvedPhone}`);
+                            }
+                        } catch (err) {
+                            logger.warn(`⚠️ [Baileys] Failed to resolve LID ${from}: ${err.message}`);
+                        }
                     }
                 }
 
