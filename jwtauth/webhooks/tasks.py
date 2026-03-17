@@ -149,7 +149,7 @@ def process_ai_reply_task(self, data):
                     from_phone=sender_id,
                     message_text=text,
                     message_id=msg_id or '',
-                    push_name=data.get('push_name', '')
+                    push_name=data.get('pushName', '')
                 )
             except Exception as e:
                 logger.error(f"WhatsApp Logging Error: {e}")

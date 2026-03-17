@@ -1,17 +1,95 @@
 import os
 import requests
 import logging
+from django.conf import settings
+from django.contrib.auth.models import User
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.decorators import api_view, permission_classes
 
 from .models import WhatsAppInstance, WhatsAppMessage
 
 logger = logging.getLogger('openwa')
 
-BAILEYS_API_URL = os.environ.get('BAILEYS_API_URL', 'http://newsmartagent-baileys:3001')
-BAILEYS_API_SECRET = os.environ.get('BAILEYS_API_SECRET', 'changeme123')
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def whatsapp_sync_agent(request):
+    """
+    Baileys সার্ভিস থেকে কল আসে যখন একটি সেশন কানেক্ট হয়।
+    এটি অটোমেটিক AgentAI তৈরি করে।
+    """
+    data = request.data
+    session_id = data.get('sessionId')
+    phone = data.get('phone')
+    secret = data.get('secret')
+
+    if secret != settings.BAILEYS_API_SECRET:
+        return Response({'error': 'Unauthorized'}, status=401)
+
+    if not all([session_id, phone]):
+        return Response({'error': 'Missing data'}, status=400)
+
+    try:
+        # sessionId ইউজার আইডি হিসেবে ব্যবহৃত হচ্ছে (user_123 format or direct ID)
+        user_id = session_id.replace('user_', '')
+        user = User.objects.get(id=user_id)
+        
+        from aiAgent.models import AgentAI
+        # Check if agent exists for this phone
+        agent, created = AgentAI.objects.get_or_create(
+            user=user,
+            platform='whatsapp',
+            page_id=phone,
+            defaults={
+                'name': f"WhatsApp Agent ({phone})",
+                'system_prompt': "You are an AI assistant for WhatsApp. Help users with their queries.",
+                'ai_model': 'gemini-1.5-flash',
+                'is_active': True
+            }
+        )
+        
+        # Update WhatsAppInstance status
+        instance, _ = WhatsAppInstance.objects.update_or_create(
+            user=user,
+            defaults={
+                'phone_number': phone,
+                'status': 'open',
+                'instance_name': data.get('pushName', 'default')
+            }
+        )
+
+        return Response({
+            'success': True, 
+            'agent_id': agent.id,
+            'created': created
+        })
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def whatsapp_init_session(request):
+    """
+    ড্যাশবোর্ড থেকে সেশন ইনিশিয়ালাইজ করতে।
+    """
+    user = request.user
+    session_id = f"user_{user.id}"
+    baileys_url = settings.BAILEYS_API_URL
+
+    try:
+        response = requests.post(
+            f"{baileys_url}/init/{session_id}",
+            json={},
+            timeout=10
+        )
+        return Response(response.json(), status=response.status_code)
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
 
 
 class WhatsAppSendView(APIView):
@@ -22,11 +100,13 @@ class WhatsAppSendView(APIView):
     Body: { "to": "880XXXXXXXXX", "message": "AI reply..." }
     Header: X-Api-Secret: <secret>  (optional অতিরিক্ত security layer)
     """
-    permission_classes = [AllowAny]  # n8n থেকে authenticated নয়, তাই AllowAny
+    permission_classes = [AllowAny] 
 
     def post(self, request):
-        to = request.data.get('to')
-        message = request.data.get('message')
+        # existing send logic with sessionId logic
+        data = request.data
+        to = data.get('to')
+        message = data.get('message')
 
         if not to or not message:
             return Response(
@@ -36,11 +116,11 @@ class WhatsAppSendView(APIView):
 
         try:
             response = requests.post(
-                f'{BAILEYS_API_URL}/send-message',
+                f'{settings.BAILEYS_API_URL}/send-message',
                 json={'to': to, 'message': message},
                 headers={
                     'Content-Type': 'application/json',
-                    'x-api-secret': BAILEYS_API_SECRET,
+                    'x-api-secret': settings.BAILEYS_API_SECRET,
                 },
                 timeout=10,
             )

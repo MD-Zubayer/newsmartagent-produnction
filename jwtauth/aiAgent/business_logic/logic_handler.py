@@ -429,7 +429,8 @@ def deliver_reply_to_n8n(data, reply, page_id, access_token):
             "sender_id": str(data.get('sender_id', '')),
             "reply": str(reply),
             "type": "whatsapp",
-            "message_id": str(data.get('message_id', ''))
+            "message_id": str(data.get('message_id', '')),
+            "sessionId": str(data.get('sessionId', ''))
         }
         try:
             logger.info(f"📲 Routing WhatsApp reply to n8n delivery: {payload}")
