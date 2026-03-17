@@ -50,6 +50,7 @@ export default function Sidebar({ viewMode, isDesktopMode }) {
 
     { name: "Payment", href: "/dashboard/payment", icon: CreditCardIcon, roles: ["user", "agent"] },
     { name: "Notifications", href: "/dashboard/notifications", icon: BellIcon, roles: ["user", "agent"] },
+    { name: "Contacts", href: "/dashboard/contacts", icon: UsersIcon, roles: ["user", "agent"] },
     { name: "AI Agent", href: "/dashboard/aiAgent", icon: CpuChipIcon, roles: ["user", "agent"], highlight: true },
   ];
 

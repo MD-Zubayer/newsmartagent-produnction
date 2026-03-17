@@ -225,3 +225,24 @@ class SmartKeyword(models.Model):
         indexes = [
             models.Index(fields=['category', 'text']),
         ]
+
+class Contact(models.Model):
+    PLATFORM_CHOICES = [
+        ('whatsapp', 'WhatsApp'),
+        ('messenger', 'Messenger'),
+    ]
+    agent = models.ForeignKey(AgentAI, on_delete=models.CASCADE, related_name='contacts')
+    identifier = models.CharField(max_length=255, db_index=True)  # Phone number or Messenger Sender ID
+    name = models.CharField(max_length=255, blank=True, null=True)
+    is_auto_reply_enabled = models.BooleanField(default=True)
+    platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('agent', 'identifier')
+        verbose_name = "Contact"
+        verbose_name_plural = "Contacts"
+
+    def __str__(self):
+        return f"{self.name or self.identifier} ({self.platform}) - Agent: {self.agent.id}"

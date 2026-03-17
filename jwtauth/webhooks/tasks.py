@@ -223,7 +223,26 @@ def process_ai_reply_task(self, data):
             except Exception as e:
                 logger.error(f"WhatsApp Logging Error: {e}")
 
-    except Exception as e:
+        # ── Contact Sync Logic (Auto-create or Update) ──
+        from aiAgent.models import Contact
+        contact_name = data.get('pushName') or data.get('name')
+        Contact.objects.update_or_create(
+            agent=agent_config,
+            identifier=sender_id,
+            platform=request_type if request_type in ['whatsapp', 'messenger'] else 'messenger',
+            defaults={
+                'name': contact_name if contact_name else None
+            }
+        )
+
+        # ── Auto-Reply Enable/Disable Check ──
+        contact = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
+        if contact and not contact.is_auto_reply_enabled:
+            logger.info(f"🚫 Auto-reply is DISABLED for contact {sender_id} (Agent: {agent_config.id}). Skipping AI response.")
+            if msg_id:
+                r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                r.delete(f'processing_msg:{msg_id}')
+            return
         logger.error(f'Error: Agent not found for page_id {page_id} - {e}')
         return
 

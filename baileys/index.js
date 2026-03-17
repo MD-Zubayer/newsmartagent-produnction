@@ -12,6 +12,7 @@ const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || '';
 const SYNC_AGENT_URL = process.env.SYNC_AGENT_URL || 'http://newsmartagent-django:8000/api/whatsapp/sync-agent/';
 const API_SECRET = process.env.BAILEYS_API_SECRET || 'nsa-baileys-secret-2024';
 const AUTH_BASE_FOLDER = './auth_info_baileys';
+const SYNC_CONTACT_URL = process.env.SYNC_CONTACT_URL || 'http://newsmartagent-django:8000/api/whatsapp/sync-contacts/';
 
 // ─── LOGGER ───────────────────────────────────────────────────────────────────
 const logger = pino({ name: 'baileys-multi-service', level: 'info' });
@@ -55,6 +56,19 @@ async function notifyDjangoSync(sessionId, phone, pushName) {
         logger.info(`Sync notification sent to Django for session: ${sessionId}`);
     } catch (err) {
         logger.error(`sync-agent notification failed: ${err.message}`);
+    }
+}
+
+async function notifyDjangoContactSync(sessionId, contacts) {
+    try {
+        await axios.post(SYNC_CONTACT_URL, {
+            sessionId,
+            contacts,
+            secret: API_SECRET
+        });
+        logger.info(`Contact sync sent to Django for session: ${sessionId}`);
+    } catch (err) {
+        logger.error(`contact-sync notification failed: ${err.message}`);
     }
 }
 
@@ -150,6 +164,7 @@ async function initSession(sessionId, phoneNumber = null) {
                     jidMap.set(c.id, { lid: c.id, name: c.name || c.notify });
                 }
             });
+            notifyDjangoContactSync(sessionId, contacts);
         });
 
         sock.ev.on('contacts.update', (updates) => {

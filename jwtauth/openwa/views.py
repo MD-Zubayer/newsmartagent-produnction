@@ -12,6 +12,7 @@ from rest_framework.decorators import api_view, permission_classes
 
 from .models import WhatsAppInstance, WhatsAppMessage
 from .services import fetch_baileys_status
+from aiAgent.models import Contact, AgentAI
 
 # সঠিক ইউজার মডেল পাওয়ার জন্য
 User = get_user_model()
@@ -82,8 +83,54 @@ def whatsapp_sync_agent(request):
     except Exception as e:
         return Response({'error': str(e)}, status=500)
 
-# বাকি ফাংশনগুলো (init_session, SendView, StatusView, QRView) 
-# আপনার দেওয়া কোড অনুযায়ী একদম ঠিক আছে। শুধু সেশন আইডি ইউআরএলগুলো ঠিকমতো পাস হচ্ছে কি না নিশ্চিত করুন।
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def whatsapp_sync_contacts(request):
+    """
+    Baileys সার্ভিস থেকে কন্টাক্ট লিস্ট রিসিভ করে এবং DB-তে সেভ করে।
+    """
+    data = request.data
+    session_id = data.get('sessionId')
+    contacts = data.get('contacts', [])
+    secret = data.get('secret')
+
+    if secret != settings.BAILEYS_API_SECRET:
+        return Response({'error': 'Unauthorized'}, status=401)
+
+    if not session_id:
+        return Response({'error': 'Missing sessionId'}, status=400)
+
+    try:
+        user_id = str(session_id).replace('user_', '')
+        
+        # এজেন্টের জন্য লুকআপ
+        # নোট: Baileys থেকে পাওয়া কন্টাক্টগুলো এই সেশনের ইউজারের সব এজেন্টের জন্য হতে পারে, 
+        # কিন্তু আমরা আপাতত প্রাইমারি WhatsApp এজেন্টের সাথে লিঙ্ক করবো।
+        agent = AgentAI.objects.filter(user_id=user_id, platform='whatsapp').first()
+        if not agent:
+             return Response({'error': 'Agent not found'}, status=404)
+
+        for c in contacts:
+            jid = c.get('id')
+            if not jid: continue
+            
+            identifier = jid.split('@')[0]
+            name = c.get('name') or c.get('notify') or c.get('verifiedName')
+            
+            Contact.objects.update_or_create(
+                agent=agent,
+                identifier=identifier,
+                platform='whatsapp',
+                defaults={
+                    'name': name,
+                }
+            )
+
+        return Response({'success': True, 'synced_count': len(contacts)})
+    except Exception as e:
+        logger.error(f"Contact sync error: {e}")
+        return Response({'error': str(e)}, status=500)
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
