@@ -159,7 +159,7 @@ export default function ContactsPage() {
                 </div>
 
                 <h3 className="text-xl font-black text-gray-900 mb-1 truncate">
-                  {contact.name || contact.push_name || "Unknown Name"}
+                  {contact.name || contact.push_name || contact.identifier}
                 </h3>
                 {contact.push_name && contact.name && contact.name !== contact.push_name && (
                   <p className="text-xs font-bold text-indigo-400 mb-1">@{contact.push_name}</p>
