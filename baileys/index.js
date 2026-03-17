@@ -232,9 +232,11 @@ app.post('/send-message', async (req, res) => {
 
     try {
         let jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
+        logger.info(`[Session: ${sessionId}] Sending message to ${jid}: ${message.substring(0, 50)}...`);
         await session.sock.sendMessage(jid, { text: message });
         res.json({ success: true });
     } catch (err) {
+        logger.error(`[Session: ${sessionId}] Send message failed: ${err.message}`);
         res.status(500).json({ error: err.message });
     }
 });

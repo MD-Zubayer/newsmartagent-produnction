@@ -424,6 +424,7 @@ def deliver_whatsapp_reply(data, reply):
         "to": str(data.get('sender_id', '')),
         "phone": str(data.get('sender_id', '')),
         "sender_id": str(data.get('sender_id', '')),
+        "message": str(reply),
         "reply": str(reply),
         "type": "whatsapp",
         "message_id": str(data.get('message_id', '')),
