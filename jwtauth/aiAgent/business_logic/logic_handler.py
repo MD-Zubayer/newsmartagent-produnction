@@ -419,7 +419,7 @@ def get_ai_response(agent_config, full_prompt, history):
 
 def deliver_whatsapp_reply(data, reply):
     """Deliver final reply for WhatsApp via n8n webhook"""
-    webhook_url = "https://n8n.newsmartagent.com/webhook/whatsapp-delivery"
+    webhook_url = "https://n8n.newsmartagent.com/webhook-test/whatsapp-delivery"
     payload = {
         "sender_id": str(data.get('sender_id', '')),
         "reply": str(reply),
