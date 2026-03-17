@@ -240,6 +240,7 @@ services:
       # n8n থেকে /send-message call করার সময় এই secret দিতে হবে
       - SYNC_AGENT_URL=http://backend:8000/api/whatsapp/sync-agent/
       - BAILEYS_API_SECRET=${BAILEYS_API_SECRET}
+      - BAILEYS_API_URL=http://newsmartagent-baileys:3001
       - LOG_LEVEL=info
     volumes:
       # WhatsApp session persistent করার জন্য (QR rescan এড়াতে)
