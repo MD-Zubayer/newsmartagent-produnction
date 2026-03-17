@@ -90,8 +90,8 @@ export default function UserDashboard() {
   const currentSub = subscriptions?.find(sub => sub.is_active) || subscriptions?.[subscriptions.length - 1];
 
   return (
-    <div className="p-2 md:p-10 bg-[#f8fafc] min-h-screen font-sans">
-      <div className="max-w-7xl mx-auto space-y-10">
+    <div className="p-3 md:p-10 bg-[#f8fafc] min-h-screen font-sans overflow-x-hidden">
+      <div className="max-w-7xl mx-auto space-y-6 md:space-y-10">
         
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-l-8 border-pink-500 pl-6">
@@ -157,7 +157,7 @@ export default function UserDashboard() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 md:gap-6">
           <StatCard title="Total Tokens" value={summary.total_tokens.toLocaleString()} icon={<Zap />} color="blue" subValue={`In: ${summary.input_tokens.toLocaleString()} | Out: ${summary.output_tokens.toLocaleString()}`} />
           <StatCard title="Total Requests" value={summary.total_messages} icon={<MessageSquare />} color="purple" />
           <StatCard title="Memory Costs" value={summary.memory_extraction_tokens?.toLocaleString() || '0'} icon={<Activity />} color="orange" subValue="Background Sync" />
@@ -308,26 +308,26 @@ export default function UserDashboard() {
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 md:gap-8">
                     
                     {/* Source Device/Account */}
-                    <div className="flex items-center gap-4 min-w-[180px]">
-                      <div className={`w-12 h-12 md:w-16 md:h-16 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-xl ${isMessenger ? 'bg-blue-600' : 'bg-pink-600'} group-hover:scale-110 transition-transform duration-500`}>
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className={`w-12 h-12 md:w-16 md:h-16 shrink-0 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-xl ${isMessenger ? 'bg-blue-600' : 'bg-pink-600'} group-hover:scale-110 transition-transform duration-500`}>
                         {log.platform[0].toUpperCase()}
                       </div>
-                      <div>
-                        <p className="text-sm md:text-base font-black text-slate-800 leading-tight">ID: {log.sender_id.slice(-8)}</p>
+                      <div className="min-w-0">
+                        <p className="text-sm md:text-base font-black text-slate-800 leading-tight truncate">ID: {log.sender_id.slice(-8)}</p>
                         <div className="flex items-center gap-2 mt-1">
-                          <span className={`w-1.5 h-1.5 rounded-full ${isMessenger ? 'bg-blue-400' : 'bg-pink-400'}`}></span>
-                          <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest">{log.platform.replace('_', ' ')}</p>
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isMessenger ? 'bg-blue-400' : 'bg-pink-400'}`}></span>
+                          <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest truncate">{log.platform.replace('_', ' ')}</p>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex-1 lg:border-l lg:border-slate-100 lg:pl-8">
+                    <div className="lg:border-l lg:border-slate-100 lg:pl-8">
                        <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1.5">Operation Type</p>
                        <p className="text-xs md:text-sm font-black text-slate-600 capitalize py-1.5 px-3 bg-slate-50 rounded-xl inline-block lg:bg-transparent lg:p-0">{log.request_type.replace('_', ' ')}</p>
                     </div>
 
-                    <div className="flex items-center justify-between md:justify-end gap-4 lg:gap-12">
-                      <div className="bg-slate-50/80 rounded-2xl px-4 md:px-8 py-3 flex items-center gap-6 md:gap-10 border border-slate-100 group-hover:bg-white group-hover:border-slate-200 transition-all flex-1 md:flex-initial">
+                    <div className="flex items-center justify-between md:justify-end gap-3 lg:gap-12">
+                      <div className="bg-slate-50/80 rounded-2xl px-3 md:px-8 py-3 flex items-center gap-4 md:gap-10 border border-slate-100 group-hover:bg-white group-hover:border-slate-200 transition-all flex-1 md:flex-initial">
                         <div className="text-center">
                           <p className="text-[8px] md:text-[9px] font-black text-blue-500 uppercase tracking-widest mb-1">Inbound</p>
                           <p className="text-base md:text-xl font-black text-slate-800 tabular-nums leading-none">{log.input_tokens}</p>
@@ -339,12 +339,12 @@ export default function UserDashboard() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-4 md:gap-8 min-w-[140px] md:min-w-[180px] justify-end border-l border-slate-100 pl-4 md:pl-0 lg:border-0 lg:p-0">
+                      <div className="flex items-center gap-3 md:gap-8 justify-end border-l border-slate-100 pl-3 md:pl-0 lg:border-0 lg:p-0">
                         <div className="text-right hidden sm:block">
                           <p className="text-sm font-black text-slate-800 tabular-nums leading-tight">{time}</p>
                           <p className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-tight">{date}</p>
                         </div>
-                        <div className={`px-4 md:px-6 py-2 md:py-3 rounded-xl md:rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-lg ${log.success ? "bg-emerald-500 text-white shadow-emerald-500/20" : "bg-rose-500 text-white shadow-rose-500/20"}`}>
+                        <div className={`px-3 md:px-6 py-2 md:py-3 rounded-xl md:rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-lg ${log.success ? "bg-emerald-500 text-white shadow-emerald-500/20" : "bg-rose-500 text-white shadow-rose-500/20"}`}>
                           {log.success ? "Verified" : "Bypass"}
                         </div>
                       </div>
