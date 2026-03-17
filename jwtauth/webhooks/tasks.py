@@ -112,7 +112,11 @@ def process_ai_reply_task(self, data):
     logger.info(f"🔍 [Task] Raw data received: {data}")
     sender_id = data.get('sender_id') or data.get('from') or data.get('phone')
     if sender_id and isinstance(sender_id, str) and '@' in sender_id:
-        sender_id = sender_id.split('@')[0]
+        if '@lid' in sender_id:
+            # Preserve LID
+            pass
+        else:
+            sender_id = sender_id.split('@')[0]
     data['sender_id'] = sender_id  # Ensure it's available for delivery functions
     logger.info(f"🔍 [Task] Extracted sender_id: {sender_id}")
     page_id = data.get('page_id')
