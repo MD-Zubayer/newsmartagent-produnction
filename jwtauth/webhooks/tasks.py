@@ -231,7 +231,8 @@ def process_ai_reply_task(self, data):
             identifier=sender_id,
             platform=request_type if request_type in ['whatsapp', 'messenger'] else 'messenger',
             defaults={
-                'name': contact_name if contact_name else None
+                'name': contact_name if contact_name else None,
+                'push_name': data.get('pushName') or None
             }
         )
 

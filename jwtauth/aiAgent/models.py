@@ -234,6 +234,7 @@ class Contact(models.Model):
     agent = models.ForeignKey(AgentAI, on_delete=models.CASCADE, related_name='contacts')
     identifier = models.CharField(max_length=255, db_index=True)  # Phone number or Messenger Sender ID
     name = models.CharField(max_length=255, blank=True, null=True)
+    push_name = models.CharField(max_length=255, blank=True, null=True)
     is_auto_reply_enabled = models.BooleanField(default=True)
     platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES)
     created_at = models.DateTimeField(auto_now_add=True)

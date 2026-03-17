@@ -16,6 +16,7 @@ class ContactListView(APIView):
                     "id": c.id,
                     "identifier": c.identifier,
                     "name": c.name,
+                    "push_name": c.push_name,
                     "is_auto_reply_enabled": c.is_auto_reply_enabled,
                     "platform": c.platform,
                     "updated_at": c.updated_at
