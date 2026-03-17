@@ -143,7 +143,7 @@ async function initSession(sessionId) {
                 const payload = {
                     from,
                     phone: from.split('@')[0],
-                    receiver: sessionData.phone,
+                    receiver: sessionData.phone || sock.user?.id?.split(':')[0]?.split('@')[0],
                     sessionId: sessionId,
                     message: messageContent,
                     pushName: msg.pushName || ''

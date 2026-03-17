@@ -110,7 +110,7 @@ def process_ai_reply_task(self, data):
 
     sender_id = data.get('sender_id')
     page_id = data.get('page_id')
-    request_type = data.get('type')
+    request_type = data.get('type') or data.get('platform')
     if not request_type:
         if data.get('receiver') or data.get('sessionId') or data.get('phone'):
             request_type = 'whatsapp'
@@ -149,28 +149,43 @@ def process_ai_reply_task(self, data):
 
     # ২. এজেন্ট ও প্রোফাইল লোড
     try:
-        lookup_ids = []
         if request_type == 'whatsapp':
-            lookup_ids = [
-                page_id,
+            # Priority: Bot's phone number, excluding sender or generic session strings
+            candidates = [
                 data.get('receiver'),
-                data.get('phone'),
-                data.get('from'),
-                data.get('sessionId'),
-                str(data.get('sessionId')).replace('user_', '') if data.get('sessionId') else None,
+                data.get('phone'), # but careful if this is sender phone
             ]
+            lookup_ids = [str(c).split('@')[0] for c in candidates if c and '@' in str(c)]
+            # Also add raw receiver if digit-only or valid phone format
+            for c in candidates:
+                val = str(c) if c else ""
+                if val.isdigit() and len(val) > 7:
+                    lookup_ids.append(val)
         else:
-            lookup_ids = [page_id]
+            lookup_ids = [str(page_id)]
 
-        lookup_ids = [str(i) for i in lookup_ids if i]
+        lookup_ids = list(set([i for i in lookup_ids if i]))
 
         agent_config = AgentAI.objects.filter(
             is_active=True,
             page_id__in=lookup_ids
         ).order_by('-id').first()
 
+        # Fallback for WhatsApp: Try lookup by user_id if we have it in sessionId
+        if not agent_config and request_type == 'whatsapp' and data.get('sessionId'):
+            try:
+                u_id = str(data.get('sessionId')).replace('user_', '')
+                if u_id.isdigit():
+                    agent_config = AgentAI.objects.filter(
+                        user_id=u_id,
+                        platform='whatsapp',
+                        is_active=True
+                    ).order_by('-id').first()
+            except:
+                pass
+
         if not agent_config:
-            logger.error(f'Error: No active agent found for identifiers {lookup_ids}')
+            logger.error(f'Error: No active agent found for identifiers {lookup_ids if lookup_ids else [page_id]}')
             return
         # Use matched agent page_id for downstream operations/cache keys
         page_id = agent_config.page_id
