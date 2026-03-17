@@ -236,7 +236,7 @@ services:
     environment:
       - PORT=3001
       # n8n webhook URL — incoming WhatsApp message এখানে forward হবে
-      - N8N_WEBHOOK_URL=${N8N_WHATSAPP_WEBHOOK_URL}
+      - N8N_WEBHOOK_URL=${N8N_WHATSAPP_WEBHOOK_TEST_URL}
       # n8n থেকে /send-message call করার সময় এই secret দিতে হবে
       - BAILEYS_API_SECRET=${BAILEYS_API_SECRET}
       - LOG_LEVEL=info
