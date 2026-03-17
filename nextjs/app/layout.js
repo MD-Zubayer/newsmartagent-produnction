@@ -23,6 +23,10 @@ const geistMono = Geist_Mono({
 
 
 
+export const viewport = {
+  themeColor: "#ffffff",
+};
+
 export const metadata = {
   title: {
     default: "New Smart Agent - AI Automation Platform",
@@ -80,6 +84,12 @@ icons: {
   robots: {
     index: true,
     follow: true,
+  },
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "New Smart Agent",
   },
 };
 

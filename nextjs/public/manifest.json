@@ -1,0 +1,21 @@
+{
+  "name": "New Smart Agent",
+  "short_name": "NewSmartAgent",
+  "description": "AI automation platform for Facebook pages and customer management.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/newsmartagent.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/newsmartagent.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
