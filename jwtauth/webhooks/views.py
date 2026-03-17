@@ -64,7 +64,11 @@ def ai_webhook(request):
     # comment or message
 
     request_type = data.get('type')
-    text = data.get('comment_text') if request_type == 'facebook_comment' else data.get('message')
+    if request_type == 'facebook_comment':
+        text = data.get('comment_text')
+    else:
+        # messenger or whatsapp
+        text = data.get('message')
 
     if not all([sender_id, text, page_id]):
         print(f"Missing data: sender={sender_id}, text={text}, page={page_id}")

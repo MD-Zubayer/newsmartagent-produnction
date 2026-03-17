@@ -422,33 +422,24 @@ def deliver_reply_to_n8n(data, reply, page_id, access_token):
     import os
     request_type = str(data.get('type', 'messenger'))
 
-    # ─── WhatsApp: সরাসরি Baileys-এ পাঠান ───────────────────────────────────
+    # ─── WhatsApp: n8n-এ পাঠান ──────────────────────────────────────────────
     if request_type == 'whatsapp':
-        baileys_url = os.environ.get('BAILEYS_API_URL', 'http://newsmartagent-baileys:3001')
-        baileys_secret = os.environ.get('BAILEYS_API_SECRET', 'changeme123')
-        sender_id = str(data.get('sender_id', ''))
-
-        # phone format: 880XXXXXXXXX → 880XXXXXXXXX@s.whatsapp.net
-        to = sender_id if '@' in sender_id else f"{sender_id}@s.whatsapp.net"
-
-        payload = {"to": to, "message": str(reply)}
+        webhook_url = "https://n8n.newsmartagent.com/webhook/whatsapp-delivery"
+        payload = {
+            "sender_id": str(data.get('sender_id', '')),
+            "reply": str(reply),
+            "type": "whatsapp",
+            "message_id": str(data.get('message_id', ''))
+        }
         try:
-            logger.info(f"📲 Sending WhatsApp reply to {to} via Baileys")
-            response = requests.post(
-                f"{baileys_url}/send-message",
-                json=payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "x-api-secret": baileys_secret,
-                },
-                timeout=15,
-            )
+            logger.info(f"📲 Routing WhatsApp reply to n8n delivery: {payload}")
+            response = requests.post(webhook_url, json=payload, timeout=15)
             if response.status_code != 200:
-                logger.error(f"Baileys error: {response.status_code} - {response.text}")
+                logger.error(f"n8n delivery error: {response.status_code} - {response.text}")
                 return False
             return True
         except Exception as e:
-            logger.error(f"Baileys delivery failure: {e}")
+            logger.error(f"n8n WhatsApp delivery critical failure: {e}")
             return False
 
     # ─── Facebook (Messenger / Comment): n8n-এ পাঠান ────────────────────────

@@ -110,10 +110,12 @@ def process_ai_reply_task(self, data):
 
     sender_id = data.get('sender_id')
     page_id = data.get('page_id')
-    request_type = data.get('type')
-    if not request_type:
-        request_type = 'messenger'
-    text = data.get('comment_text') if request_type == 'facebook_comment' else data.get('message')
+    request_type = data.get('type', 'messenger')
+    if request_type == 'facebook_comment':
+        text = data.get('comment_text')
+    else:
+        # messenger or whatsapp
+        text = data.get('message')
     msg_id = data.get('message_id')
     incoming_ts = data.get('timestamp')
 
@@ -134,6 +136,23 @@ def process_ai_reply_task(self, data):
         from users.models import FacebookPage
         fb_page = FacebookPage.objects.filter(page_id=page_id, is_active=True).first()
         effective_access_token = fb_page.access_token if fb_page else agent_config.access_token
+
+        # ── WhatsApp Message Logging (Incoming) ──
+        wa_msg_obj = None
+        if request_type == 'whatsapp':
+            try:
+                from openwa.models import WhatsAppInstance, WhatsAppMessage
+                wa_instance, _ = WhatsAppInstance.objects.get_or_create(user=agent_config.user)
+                wa_msg_obj = WhatsAppMessage.objects.create(
+                    instance=wa_instance,
+                    direction='incoming',
+                    from_phone=sender_id,
+                    message_text=text,
+                    message_id=msg_id or '',
+                    push_name=data.get('push_name', '')
+                )
+            except Exception as e:
+                logger.error(f"WhatsApp Logging Error: {e}")
 
     except Exception as e:
         logger.error(f'Error: Agent not found for page_id {page_id} - {e}')
@@ -275,6 +294,11 @@ def process_ai_reply_task(self, data):
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)
                 r.delete(f'processing_msg:{msg_id}')
 
+            # ── Update WhatsApp Log (Cache Hit) ──
+            if wa_msg_obj:
+                wa_msg_obj.ai_reply = reply
+                wa_msg_obj.save()
+
             return  # 🔥 HARD STOP — AI call skip
 
         # ========================================================
@@ -408,6 +432,11 @@ def process_ai_reply_task(self, data):
                 save_message(agent_config, sender_id, text, 'user')
                 save_message(agent_config, sender_id, reply, 'assistant', tokens=total_tokens)
                 handle_smart_memory_update(agent_config, sender_id, text)
+
+                # ── Update WhatsApp Log (AI Call) ──
+                if wa_msg_obj:
+                    wa_msg_obj.ai_reply = reply
+                    wa_msg_obj.save()
 
             duration = int((time.time() - start_time) * 1000)
             log_token_usage(agent_config, sender_id, ai_data, duration, request_type)
