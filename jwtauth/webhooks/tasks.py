@@ -243,6 +243,7 @@ def process_ai_reply_task(self, data):
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)
                 r.delete(f'processing_msg:{msg_id}')
             return
+    except Exception as e:
         logger.error(f'Error: Agent not found for page_id {page_id} - {e}')
         return
 
