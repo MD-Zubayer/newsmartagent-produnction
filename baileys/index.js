@@ -1,12 +1,14 @@
 import pkg from '@whiskeysockets/baileys';
+const baileys = pkg.default || pkg;
+
+const makeWASocket = baileys.default || baileys;
 const { 
-  default: makeWASocket, 
   DisconnectReason, 
   useMultiFileAuthState, 
   fetchLatestBaileysVersion, 
   makeInMemoryStore, 
   jidNormalizedUser 
-} = pkg;
+} = baileys;
 import { Boom } from '@hapi/boom';
 import express from 'express';
 import pino from 'pino';
