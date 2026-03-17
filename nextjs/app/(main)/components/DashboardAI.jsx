@@ -117,20 +117,12 @@ export default function DashboardAI() {
           <motion.div
             key="trigger"
             drag
-            dragConstraints={{ 
-              left: -(typeof window !== 'undefined' ? window.innerWidth : 1200) + 100, 
-              right: 0, 
-              top: -(typeof window !== 'undefined' ? window.innerHeight : 800) + 100, 
-              bottom: 0 
-            }}
+            dragConstraints={{ left: -1000, right: 1000, top: -1000, bottom: 1000 }}
             dragElastic={0.1}
-            dragMomentum={false}
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="fixed bottom-6 right-6 z-[1000] cursor-grab active:cursor-grabbing p-1"
+            whileDrag={{ scale: 1.1, cursor: "grabbing" }}
+            className="fixed bottom-6 right-6 z-[1000] cursor-grab p-1"
           >
             <div className="relative group">
                {/* Close Button (X) */}

@@ -21,20 +21,12 @@ export default function MessengerButton() {
       {!isHidden && (
         <motion.div
           drag
-          dragConstraints={{ 
-            left: 0, 
-            right: (typeof window !== 'undefined' ? window.innerWidth : 1200) - 80, 
-            top: 0, 
-            bottom: (typeof window !== 'undefined' ? window.innerHeight : 800) - 80 
-          }}
+          dragConstraints={{ left: -1000, right: 1000, top: -1000, bottom: 1000 }}
           dragElastic={0.1}
-          dragMomentum={false}
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0, opacity: 0 }}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          className="fixed bottom-8 left-8 z-[9999] group cursor-grab active:cursor-grabbing p-2"
+          whileDrag={{ scale: 1.1, cursor: "grabbing" }}
+          className="fixed bottom-8 left-8 z-[9999] group cursor-grab p-2"
         >
           {/* Close Button (X) */}
           <button 
