@@ -110,9 +110,12 @@ def process_ai_reply_task(self, data):
 
     sender_id = data.get('sender_id')
     page_id = data.get('page_id')
-    request_type = data.get('type', 'messenger')
-    if not request_type and (data.get('receiver') or data.get('sessionId') or data.get('phone')):
-        request_type = 'whatsapp'
+    request_type = data.get('type')
+    if not request_type:
+        if data.get('receiver') or data.get('sessionId') or data.get('phone'):
+            request_type = 'whatsapp'
+        else:
+            request_type = 'messenger'
 
     # WhatsApp: normalize page_id to phone/session for lookup
     if request_type == 'whatsapp':
@@ -325,6 +328,14 @@ def process_ai_reply_task(self, data):
             handle_smart_memory_update(agent_config, sender_id, text)
 
             clean_reply = reply.strip()
+            # Force platform-based routing: if agent is WhatsApp, send via WhatsApp delivery
+            if agent_config.platform == 'whatsapp':
+                request_type = 'whatsapp'
+
+            # Force platform-based routing: if agent is WhatsApp, send via WhatsApp delivery
+            if agent_config.platform == 'whatsapp':
+                request_type = 'whatsapp'
+
             if request_type == 'dashboard':
                 delivered = deliver_dashboard_reply(agent_config.user.id, clean_reply, msg_id)
             elif request_type == 'whatsapp':
