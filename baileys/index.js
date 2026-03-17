@@ -31,6 +31,7 @@ const jidNormalizedUser = getFromBaileys('jidNormalizedUser');
 
 // ─── GLOBAL SESSION STATE ─────────────────────────────────────────────────────
 const sessions = new Map();
+const cleanupPromises = new Map();
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 async function forwardToN8n(payload) {
@@ -113,8 +114,7 @@ async function initSession(sessionId) {
                     setTimeout(() => initSession(sessionId), 5000);
                 } else {
                     // Logged out, clean up
-                    fs.rmSync(sessionFolder, { recursive: true, force: true });
-                    sessions.delete(sessionId);
+                    await cleanupSession(sessionId, { removeFolder: true });
                 }
             }
 
@@ -160,6 +160,38 @@ async function initSession(sessionId) {
     }
 }
 
+async function cleanupSession(sessionId, { removeFolder = true } = {}) {
+    if (cleanupPromises.has(sessionId)) {
+        return cleanupPromises.get(sessionId);
+    }
+
+    const sessionFolder = path.join(AUTH_BASE_FOLDER, sessionId);
+    const cleanup = (async () => {
+        const existing = sessions.get(sessionId);
+        if (existing?.sock) {
+            try {
+                await existing.sock.logout();
+            } catch (err) {
+                logger.warn(`[Session: ${sessionId}] logout during cleanup failed: ${err.message}`);
+            }
+        }
+
+        if (removeFolder) {
+            try {
+                fs.rmSync(sessionFolder, { recursive: true, force: true });
+            } catch (err) {
+                logger.warn(`[Session: ${sessionId}] auth folder cleanup failed: ${err.message}`);
+            }
+        }
+
+        sessions.delete(sessionId);
+        cleanupPromises.delete(sessionId);
+    })();
+
+    cleanupPromises.set(sessionId, cleanup);
+    return cleanup;
+}
+
 // ─── EXPRESS API ──────────────────────────────────────────────────────────────
 const app = express();
 app.use(express.json());
@@ -201,6 +233,21 @@ app.post('/send-message', async (req, res) => {
         let jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
         await session.sock.sendMessage(jid, { text: message });
         res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/session/:sessionId', async (req, res) => {
+    const { sessionId } = req.params;
+    const secret = req.headers['x-api-secret'];
+    if (secret !== API_SECRET) return res.status(401).json({ error: 'Unauthorized' });
+
+    const existed = sessions.has(sessionId) || fs.existsSync(path.join(AUTH_BASE_FOLDER, sessionId));
+
+    try {
+        await cleanupSession(sessionId);
+        res.json({ success: true, existed });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

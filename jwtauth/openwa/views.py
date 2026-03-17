@@ -1,6 +1,6 @@
-import os
-import requests
 import logging
+import secrets
+import requests
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.views.decorators.csrf import csrf_exempt
@@ -11,6 +11,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes
 
 from .models import WhatsAppInstance, WhatsAppMessage
+from .services import fetch_baileys_status
 
 # সঠিক ইউজার মডেল পাওয়ার জন্য
 User = get_user_model()
@@ -52,7 +53,9 @@ def whatsapp_sync_agent(request):
                 'name': f"WhatsApp Agent ({phone})",
                 'system_prompt': "You are an AI assistant for WhatsApp. Help users with their queries.",
                 'ai_model': 'gemini-1.5-flash', # বর্তমান স্ট্যাবল ভার্সন
-                'is_active': True
+                'is_active': True,
+                # WhatsApp এজেন্টের জন্য dummy token রাখা হচ্ছে যাতে required field pass করে।
+                'access_token': f"whatsapp-auto-{secrets.token_urlsafe(8)}",
             }
         )
         
@@ -62,10 +65,12 @@ def whatsapp_sync_agent(request):
             defaults={
                 'phone_number': phone,
                 'status': 'open',
-                'instance_name': data.get('pushName', 'default')
+                'instance_name': data.get('pushName', 'default'),
+                'baileys_api_url': settings.BAILEYS_API_URL,
             }
         )
 
+        logger.info("WhatsApp sync successful for user %s (agent %s, created=%s)", user.id, agent.id, created)
         return Response({
             'success': True, 
             'agent_id': agent.id,
@@ -182,17 +187,43 @@ class WhatsAppStatusView(APIView):
 
     def get(self, request):
         session_id = f"user_{request.user.id}"
-        try:
-            response = requests.get(
-                f'{settings.BAILEYS_API_URL}/status/{session_id}',
-                timeout=5,
-            )
-            return Response(response.json(), status=response.status_code)
-        except Exception as e:
-            return Response(
-                {'status': 'unreachable', 'error': str(e)},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
+        db_instance = WhatsAppInstance.objects.filter(user=request.user).first()
+        db_state = db_instance.status if db_instance else 'close'
+        db_phone = db_instance.phone_number if db_instance else None
+
+        baileys_state, baileys_phone, baileys_status_code = fetch_baileys_status(session_id)
+
+        # Pick the best-known state, preferring live Baileys data when available
+        final_state = baileys_state or db_state
+        final_phone = baileys_phone or db_phone
+
+        if db_instance and (db_instance.status != final_state or (final_phone and db_instance.phone_number != final_phone)):
+            db_instance.status = final_state
+            if final_phone:
+                db_instance.phone_number = final_phone
+            db_instance.save(update_fields=['status', 'phone_number', 'updated_at'])
+
+        # If Baileys says the session is missing but DB thinks it's open, reset DB status
+        if baileys_status_code == 404 and db_instance and db_instance.status != 'close':
+            db_instance.status = 'close'
+            db_instance.save(update_fields=['status', 'updated_at'])
+            final_state = 'close'
+
+        response_payload = {
+            'state': final_state,
+            'phone': final_phone,
+            'source': {
+                'database': db_state,
+                'baileys': baileys_state or ('unreachable' if baileys_status_code is None else baileys_state)
+            }
+        }
+
+        if baileys_state is None and baileys_status_code is None:
+            # Baileys unreachable but return latest DB state so dashboard stays responsive.
+            response_payload['source']['baileys'] = 'unreachable'
+            return Response(response_payload, status=status.HTTP_200_OK)
+
+        return Response(response_payload, status=status.HTTP_200_OK)
 
 
 class WhatsAppQRView(APIView):
