@@ -20,7 +20,7 @@ from aiAgent.business_logic.logic_handler import (
     is_duplicate_or_outdated, acquire_user_lock, get_order_instructions,
     perform_rag_search, build_ai_context, get_ai_response,
     log_token_usage, deduct_user_tokens, deliver_whatsapp_reply, deliver_facebook_reply, handle_public_comment_logic,
-    check_token_availability, deliver_dashboard_reply
+    check_token_availability, deliver_dashboard_reply, fetch_messenger_profile
 )
 from aiAgent.cache.redis_vector import (
     save_vector_embedding,
@@ -229,6 +229,10 @@ def process_ai_reply_task(self, data):
         incoming_push_name = data.get('pushName') or data.get('push_name')
         contact_name = incoming_push_name or data.get('name')
         
+        # If Messenger and name is missing, try fetching it from Facebook Graph API
+        if not contact_name and request_type == 'messenger' and effective_access_token:
+            contact_name = fetch_messenger_profile(sender_id, effective_access_token)
+
         Contact.objects.update_or_create(
             agent=agent_config,
             identifier=sender_id,

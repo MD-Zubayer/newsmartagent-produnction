@@ -53,5 +53,27 @@ def set_message_cache(page_id, text, reply_data, timeout=3600):
     query_hash = hashlib.md5(clean_text.encode()).hexdigest()
     cache_key = f"ai_cache:{page_id}:{query_hash}"
     r.set(cache_key, json.dumps(reply_data), ex=timeout)
-    
-    
+
+
+def fetch_messenger_profile(sender_id, access_token):
+    """
+    Fetch user's first and last name from Facebook Graph API.
+    """
+    if not sender_id or not access_token:
+        return None
+
+    try:
+        url = f"https://graph.facebook.com/v21.0/{sender_id}"
+        params = {
+            'fields': 'first_name,last_name,name',
+            'access_token': access_token
+        }
+        response = requests.get(url, params=params, timeout=5)
+        response.raise_for_status()
+        data = response.json()
+
+        full_name = data.get('name') or f"{data.get('first_name', '')} {data.get('last_name', '')}".strip()
+        return full_name if full_name else None
+    except Exception as e:
+        logger.error(f"Error fetching Messenger profile for {sender_id}: {e}")
+        return None
