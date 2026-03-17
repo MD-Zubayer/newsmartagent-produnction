@@ -60,10 +60,14 @@ def ai_webhook(request):
     # first validation
     sender_id = data.get('sender_id')
     page_id = data.get('page_id')
+    request_type = data.get('type')
+
+    # WhatsApp: allow fallback to receiver/sessionId/phone when page_id absent
+    if request_type == 'whatsapp' and not page_id:
+        page_id = data.get('receiver') or data.get('sessionId') or data.get('phone')
 
     # comment or message
 
-    request_type = data.get('type')
     if request_type == 'facebook_comment':
         text = data.get('comment_text')
     else:

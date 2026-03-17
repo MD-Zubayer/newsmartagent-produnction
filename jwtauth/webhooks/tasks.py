@@ -111,6 +111,10 @@ def process_ai_reply_task(self, data):
     sender_id = data.get('sender_id')
     page_id = data.get('page_id')
     request_type = data.get('type', 'messenger')
+    # WhatsApp fallback: use receiver/sessionId/phone if page_id missing
+    if request_type == 'whatsapp' and not page_id:
+        page_id = data.get('receiver') or data.get('sessionId') or data.get('phone')
+
     if request_type == 'facebook_comment':
         text = data.get('comment_text')
     else:
