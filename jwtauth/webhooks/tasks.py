@@ -190,6 +190,12 @@ def process_ai_reply_task(self, data):
             except Exception as e:
                 logger.error(f'Fallback WhatsAppInstance lookup failed: {e}')
 
+        if not agent_config and request_type == 'whatsapp':
+            # Last-resort: if only one active WhatsApp agent exists in the system, use it
+            sole_agent = AgentAI.objects.filter(platform='whatsapp', is_active=True)
+            if sole_agent.count() == 1:
+                agent_config = sole_agent.first()
+
         if not agent_config:
             logger.error(f'Error: No active agent found for identifiers {lookup_ids}')
             return
