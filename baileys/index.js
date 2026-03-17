@@ -1,10 +1,12 @@
-import makeWASocket, {
-  DisconnectReason,
-  useMultiFileAuthState,
-  fetchLatestBaileysVersion,
-  makeInMemoryStore,
-  jidNormalizedUser,
-} from '@whiskeysockets/baileys';
+import pkg from '@whiskeysockets/baileys';
+const { 
+  default: makeWASocket, 
+  DisconnectReason, 
+  useMultiFileAuthState, 
+  fetchLatestBaileysVersion, 
+  makeInMemoryStore, 
+  jidNormalizedUser 
+} = pkg;
 import { Boom } from '@hapi/boom';
 import express from 'express';
 import pino from 'pino';
