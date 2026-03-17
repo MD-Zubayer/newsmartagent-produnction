@@ -1,24 +1,23 @@
 FROM node:20-alpine
 
-# Build dependencies (sharp, canvas, git dependencies ইত্যাদির জন্য)
+# Build dependencies
 RUN apk add --no-cache python3 make g++ cairo-dev pango-dev git
 
 WORKDIR /app
 
-# Dependencies আলাদা layer এ copy করুন (cache optimization)
 COPY package.json ./
-
 RUN npm install --production
 
-# Source code copy করুন
 COPY index.js ./
 
-# Auth folder তৈরি করুন
+# Auth folder তৈরি
 RUN mkdir -p auth_info_baileys
 
-# Non-root user
+# Non-root user setup
 RUN addgroup -S baileys && adduser -S baileys -G baileys
 RUN chown -R baileys:baileys /app
+
+# মাউন্ট করা ভলিউম যেন রাইট করতে পারে সেজন্য ইউজার সুইচ করার আগে এটি নিশ্চিত করুন
 USER baileys
 
 EXPOSE 3001
