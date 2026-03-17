@@ -20,8 +20,9 @@ from aiAgent.business_logic.logic_handler import (
     is_duplicate_or_outdated, acquire_user_lock, get_order_instructions,
     perform_rag_search, build_ai_context, get_ai_response,
     log_token_usage, deduct_user_tokens, deliver_whatsapp_reply, deliver_facebook_reply, handle_public_comment_logic,
-    check_token_availability, deliver_dashboard_reply, fetch_messenger_profile
+    check_token_availability, deliver_dashboard_reply
 )
+from webhooks.utils import fetch_messenger_profile
 from aiAgent.cache.redis_vector import (
     save_vector_embedding,
     search_similar_vectors
