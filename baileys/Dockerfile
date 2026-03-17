@@ -1,7 +1,7 @@
 FROM node:20-alpine
 
-# Build dependencies (sharp, canvas ইত্যাদির জন্য)
-RUN apk add --no-cache python3 make g++ cairo-dev pango-dev
+# Build dependencies (sharp, canvas, git dependencies ইত্যাদির জন্য)
+RUN apk add --no-cache python3 make g++ cairo-dev pango-dev git
 
 WORKDIR /app
 
