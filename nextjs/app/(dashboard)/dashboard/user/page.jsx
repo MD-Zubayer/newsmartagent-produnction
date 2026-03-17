@@ -305,10 +305,10 @@ export default function UserDashboard() {
                   <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${isMessenger ? 'bg-blue-500' : 'bg-pink-500'}`} />
                   
                   {/* Mobile View: Vertical Stack */}
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 md:gap-8">
+                  <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 md:gap-8 min-w-0">
                     
                     {/* Source Device/Account */}
-                    <div className="flex items-center gap-4 flex-1">
+                    <div className="flex items-center gap-4 flex-1 min-w-0">
                       <div className={`w-12 h-12 md:w-16 md:h-16 shrink-0 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-xl ${isMessenger ? 'bg-blue-600' : 'bg-pink-600'} group-hover:scale-110 transition-transform duration-500`}>
                         {log.platform[0].toUpperCase()}
                       </div>
@@ -321,13 +321,13 @@ export default function UserDashboard() {
                       </div>
                     </div>
 
-                    <div className="lg:border-l lg:border-slate-100 lg:pl-8">
+                    <div className="xl:border-l xl:border-slate-100 xl:pl-8">
                        <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1.5">Operation Type</p>
-                       <p className="text-xs md:text-sm font-black text-slate-600 capitalize py-1.5 px-3 bg-slate-50 rounded-xl inline-block lg:bg-transparent lg:p-0">{log.request_type.replace('_', ' ')}</p>
+                       <p className="text-xs md:text-sm font-black text-slate-600 capitalize py-1.5 px-3 bg-slate-50 rounded-xl inline-block xl:bg-transparent xl:p-0">{log.request_type.replace('_', ' ')}</p>
                     </div>
 
-                    <div className="flex items-center justify-between md:justify-end gap-3 lg:gap-12">
-                      <div className="bg-slate-50/80 rounded-2xl px-3 md:px-8 py-3 flex items-center gap-4 md:gap-10 border border-slate-100 group-hover:bg-white group-hover:border-slate-200 transition-all flex-1 md:flex-initial">
+                    <div className="flex items-center justify-between xl:justify-end gap-3 lg:gap-12 overflow-x-auto no-scrollbar">
+                      <div className="bg-slate-50/80 rounded-2xl px-3 md:px-8 py-3 flex items-center gap-4 md:gap-10 border border-slate-100 group-hover:bg-white group-hover:border-slate-200 transition-all shrink-0">
                         <div className="text-center">
                           <p className="text-[8px] md:text-[9px] font-black text-blue-500 uppercase tracking-widest mb-1">Inbound</p>
                           <p className="text-base md:text-xl font-black text-slate-800 tabular-nums leading-none">{log.input_tokens}</p>
@@ -339,13 +339,13 @@ export default function UserDashboard() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3 md:gap-8 justify-end border-l border-slate-100 pl-3 md:pl-0 lg:border-0 lg:p-0">
+                      <div className="flex items-center gap-3 md:gap-8 justify-end border-l border-slate-100 pl-3 md:pl-0 xl:border-0 xl:p-0">
                         <div className="text-right hidden sm:block">
                           <p className="text-sm font-black text-slate-800 tabular-nums leading-tight">{time}</p>
                           <p className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-tight">{date}</p>
                         </div>
-                        <div className={`px-3 md:px-6 py-2 md:py-3 rounded-xl md:rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-lg ${log.success ? "bg-emerald-500 text-white shadow-emerald-500/20" : "bg-rose-500 text-white shadow-rose-500/20"}`}>
-                          {log.success ? "Verified" : "Bypass"}
+                        <div className={`px-3 md:px-6 py-2 md:py-3 rounded-xl md:rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-lg shrink-0 ${log.success ? "bg-emerald-500 text-white shadow-emerald-500/20" : "bg-rose-500 text-white shadow-rose-500/20"}`}>
+                          {log.success ? "Success" : "Failed"}
                         </div>
                       </div>
                     </div>
