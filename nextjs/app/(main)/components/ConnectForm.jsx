@@ -168,24 +168,24 @@ export default function IntegrationManager() {
         <div className="bg-white rounded-[2.5rem] md:rounded-[4rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.08)] md:shadow-[0_100px_160px_-40px_rgba(0,0,0,0.08)] border border-slate-50 overflow-hidden relative group">
           
           {/* Stunning Interaction Hero */}
-          <div className={`bg-gradient-to-br ${selectedPlatform.color} p-8 md:p-16 lg:p-24 text-white relative overflow-hidden`}>
+          <div className={`bg-gradient-to-br ${selectedPlatform.color} p-6 md:p-12 lg:p-20 text-white relative overflow-hidden`}>
             {/* Animated Flare */}
             <div className="absolute top-0 right-0 w-[150%] h-[150%] bg-white/5 blur-[80px] md:blur-[120px] rounded-full translate-x-1/2 -translate-y-1/2 animate-pulse"></div>
             
-            <div className="relative z-10 flex flex-col md:flex-row items-center gap-6 md:gap-14 text-center md:text-left">
+            <div className="relative z-10 flex flex-col lg:flex-row items-center gap-6 lg:gap-14 text-center lg:text-left">
               <div className="p-5 md:p-10 bg-white/10 rounded-[2rem] md:rounded-[4rem] backdrop-blur-3xl border border-white/20 shadow-[inset_0_0_40px_rgba(255,255,255,0.2)] group-hover:scale-105 transition-transform duration-700 shrink-0">
-                <span className="text-4xl md:text-7xl lg:text-9xl drop-shadow-[0_20px_40px_rgba(0,0,0,0.2)]">{selectedPlatform.icon}</span>
+                <span className="text-4xl md:text-6xl lg:text-8xl drop-shadow-[0_20px_40px_rgba(0,0,0,0.2)]">{selectedPlatform.icon}</span>
               </div>
               <div className="space-y-3 md:space-y-6">
                 <div>
-                  <p className="text-white/60 text-[8px] md:text-[11px] font-black uppercase tracking-[0.3em] md:tracking-[0.4em] mb-2 md:mb-4 drop-shadow-sm flex items-center gap-3 justify-center md:justify-start">
+                  <p className="text-white/60 text-[8px] md:text-[10px] font-black uppercase tracking-[0.3em] md:tracking-[0.4em] mb-2 md:mb-4 drop-shadow-sm flex items-center gap-3 justify-center lg:justify-start">
                     <span className="w-1.5 bg-emerald-400 rounded-full animate-ping aspect-square"></span> Enterprise Connectivity
                   </p>
-                  <h2 className="text-3xl sm:text-5xl md:text-6xl lg:text-8xl font-black tracking-tighter leading-none italic uppercase">
+                  <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-7xl font-black tracking-tighter leading-none italic uppercase">
                     {selectedPlatform.name}
                   </h2>
                 </div>
-                <p className="text-white/80 text-sm md:text-xl lg:text-2xl font-light leading-relaxed max-w-xl opacity-90 drop-shadow-sm px-4 md:px-0">
+                <p className="text-white/80 text-sm md:text-lg lg:text-xl font-light leading-relaxed max-w-xl opacity-90 drop-shadow-sm px-4 lg:px-0">
                   Initialize high-performance agents for your {selectedPlatform.name} brand presence with one click.
                 </p>
               </div>
@@ -194,17 +194,17 @@ export default function IntegrationManager() {
 
           <div className="p-6 md:p-16 lg:p-24 bg-[radial-gradient(circle_at_bottom_right,_var(--tw-gradient-stops))] from-white via-white to-indigo-50/20">
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24 items-center mb-16 md:mb-24">
-               <div className="space-y-6 md:space-y-8 text-center md:text-left">
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-12 xl:gap-24 items-center mb-16 md:mb-24">
+               <div className="space-y-6 md:space-y-8 text-center xl:text-left">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-600 text-[8px] md:text-[9px] font-black uppercase tracking-widest border border-emerald-100">
                     <FaShieldAlt className="animate-pulse" /> Precision Security
                   </div>
-                  <h3 className="text-2xl md:text-3xl lg:text-5xl font-black text-slate-900 tracking-tighter leading-none italic uppercase">Authorized <br className="hidden md:block"/> Access</h3>
-                  <p className="text-slate-500 font-medium text-sm md:text-base lg:text-lg leading-relaxed max-w-md opacity-80 mx-auto md:mx-0">
+                  <h3 className="text-2xl md:text-3xl lg:text-4xl xl:text-5xl font-black text-slate-900 tracking-tighter leading-none italic uppercase">Authorized <br className="hidden xl:block"/> Access</h3>
+                  <p className="text-slate-500 font-medium text-sm md:text-base lg:text-lg leading-relaxed max-w-md opacity-80 mx-auto xl:mx-0">
                     Your account synchronization is managed via enterprise-grade encryption protocol. 
                     No technical configuration required.
                   </p>
-                  <div className="flex items-center justify-center md:justify-start gap-6 md:gap-8 opacity-40 grayscale grayscale-100">
+                  <div className="flex items-center justify-center xl:justify-start gap-6 md:gap-8 opacity-40 grayscale grayscale-100">
                      <div className="flex flex-col items-center gap-1">
                         <FaCode size={18} className="md:w-5 md:h-5" />
                         <span className="text-[7px] md:text-[8px] font-black uppercase tracking-widest">AES-256</span>
@@ -217,9 +217,9 @@ export default function IntegrationManager() {
                </div>
                
                <div className="bg-slate-50/50 p-1 rounded-[2rem] md:rounded-[3.5rem] border border-slate-100 shadow-xl md:shadow-2xl relative group-hover:-translate-y-2 transition-transform duration-1000">
-                  <div className="bg-white rounded-[1.9rem] md:rounded-[3.3rem] p-6 md:p-12 flex flex-col items-center justify-center text-center gap-6 md:gap-10">
-                    <div className="w-14 h-14 md:w-24 md:h-24 bg-indigo-50 rounded-[1.5rem] md:rounded-[2.5rem] shadow-inner flex items-center justify-center text-indigo-600">
-                       <FaRobot size={32} className="md:w-12 md:h-12 animate-bounce-slow" />
+                  <div className="bg-white rounded-[1.9rem] md:rounded-[3.3rem] p-6 md:p-10 lg:p-12 flex flex-col items-center justify-center text-center gap-6 md:gap-10">
+                    <div className="w-14 h-14 md:w-20 lg:w-24 md:h-20 lg:h-24 bg-indigo-50 rounded-[1.5rem] md:rounded-[2.5rem] shadow-inner flex items-center justify-center text-indigo-600">
+                       <FaRobot size={32} className="md:w-10 lg:w-12 animate-bounce-slow" />
                     </div>
                     <div className="space-y-1 md:space-y-1.5">
                       <p className="text-sm md:text-lg font-black text-slate-900 uppercase tracking-tight italic">AI Infrastructure Ready</p>
@@ -235,12 +235,12 @@ export default function IntegrationManager() {
             {/* Platform Specific: Facebook */}
             {selectedPlatform.id === "facebook" && (
               <div className="pt-16 md:pt-24 border-t border-slate-100 space-y-12 md:space-y-16 animate-in slide-in-from-bottom-8 duration-1000">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 md:gap-12 text-center md:text-left">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 lg:gap-12 text-center lg:text-left">
                   <div className="space-y-2">
                     <h3 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter italic uppercase">
                       Active Nodes
                     </h3>
-                    <p className="text-[10px] md:text-xs text-indigo-600 font-black uppercase tracking-[0.3em] md:tracking-[0.4em] opacity-70 flex items-center gap-2 justify-center md:justify-start">
+                    <p className="text-[10px] md:text-xs text-indigo-600 font-black uppercase tracking-[0.3em] md:tracking-[0.4em] opacity-70 flex items-center gap-2 justify-center lg:justify-start">
                       <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full shadow-[0_0_10px_rgba(79,70,229,0.5)]"></span> Real-time Management
                     </p>
                   </div>
@@ -250,7 +250,7 @@ export default function IntegrationManager() {
                       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://newsmartagent.com/api";
                       window.location.href = `${apiUrl}/facebook/login/`;
                     }}
-                    className="group relative flex items-center justify-center gap-4 md:gap-5 bg-[#1877F2] text-white px-8 md:px-12 py-5 md:py-7 rounded-[1.5rem] md:rounded-[2rem] text-[10px] md:text-[11px] font-black uppercase tracking-[0.15em] md:tracking-[0.2em] hover:bg-[#166fe5] transition-all shadow-[0_20px_40px_-10px_rgba(24,119,242,0.3)] md:shadow-[0_32px_64px_-16px_rgba(24,119,242,0.4)] active:scale-95 overflow-hidden w-full md:w-auto"
+                    className="group relative flex items-center justify-center gap-4 md:gap-5 bg-[#1877F2] text-white px-6 md:px-10 py-4 md:py-6 rounded-[1.5rem] md:rounded-[2rem] text-[10px] md:text-[11px] font-black uppercase tracking-[0.15em] md:tracking-[0.2em] hover:bg-[#166fe5] transition-all shadow-[0_20px_40px_-10px_rgba(24,119,242,0.3)] active:scale-95 overflow-hidden w-full lg:w-auto"
                   >
                     <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity"></div>
                     <FaFacebook className="text-xl md:text-2xl group-hover:rotate-12 transition-transform duration-500" />
@@ -273,22 +273,22 @@ export default function IntegrationManager() {
                       <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-[0.4em] md:tracking-[0.5em] animate-pulse">Fetching Assets...</p>
                     </div>
                   ) : connectedPages.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 relative z-10">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 relative z-10 w-full overflow-hidden">
                       {connectedPages.map(page => (
-                        <div key={page.id} className="flex items-center justify-between bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] shadow-[0_16px_32px_-12px_rgba(0,0,0,0.03)] border border-slate-50 hover:border-indigo-100 hover:shadow-[0_32px_64px_-16px_rgba(79,70,229,0.12)] transition-all duration-700 group/page hover:-translate-y-1">
-                          <div className="flex items-center gap-4 md:gap-6">
-                             <div className="w-12 h-12 md:w-16 md:h-16 bg-gradient-to-br from-indigo-50 to-white rounded-[1.2rem] md:rounded-[1.5rem] flex items-center justify-center text-[#1877F2] shadow-inner group-hover/page:scale-110 transition-transform duration-700">
+                        <div key={page.id} className="flex items-center justify-between bg-white p-5 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] shadow-[0_16px_32px_-12px_rgba(0,0,0,0.03)] border border-slate-50 hover:border-indigo-100 hover:shadow-[0_32px_64px_-16px_rgba(79,70,229,0.12)] transition-all duration-700 group/page hover:-translate-y-1 min-w-0">
+                          <div className="flex items-center gap-3 md:gap-6 min-w-0">
+                             <div className="w-12 h-12 md:w-16 md:h-16 shrink-0 bg-gradient-to-br from-indigo-50 to-white rounded-[1.2rem] md:rounded-[1.5rem] flex items-center justify-center text-[#1877F2] shadow-inner group-hover/page:scale-110 transition-transform duration-700">
                                 <FaFacebook className="text-2xl md:text-3xl" />
                              </div>
-                             <div className="space-y-1 md:space-y-1.5">
-                               <p className="font-black text-lg md:text-xl text-slate-900 tracking-tight italic">{page.name}</p>
-                               <div className="flex items-center gap-1.5 md:gap-2 px-2.5 md:px-3 py-1 bg-emerald-50 rounded-full border border-emerald-100 w-fit">
-                                  <div className="w-1 h-1 md:w-1.5 md:h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                                  <span className="text-[8px] md:text-[9px] font-black text-emerald-600 uppercase tracking-[0.15em] md:tracking-[0.2em]">Deployment Optimal</span>
-                               </div>
+                             <div className="space-y-1 min-w-0">
+                               <p className="font-black text-base md:text-xl text-slate-900 tracking-tight italic truncate">{page.name}</p>
+                               <div className="flex items-center gap-1.5 px-2 md:px-3 py-1 bg-emerald-50 rounded-full border border-emerald-100 w-fit">
+                                  <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
+                                  <span className="text-[8px] md:text-[9px] font-black text-emerald-600 uppercase tracking-widest truncate">Optimal</span>
+                                </div>
                              </div>
                           </div>
-                          <div className="w-8 h-8 md:w-10 md:h-10 bg-slate-50 rounded-[0.8rem] md:rounded-2xl flex items-center justify-center group-hover/page:bg-indigo-600 group-hover/page:text-white transition-all duration-500">
+                          <div className="w-8 h-8 md:w-10 md:h-10 shrink-0 bg-slate-50 rounded-[0.8rem] md:rounded-2xl flex items-center justify-center group-hover/page:bg-indigo-600 group-hover/page:text-white transition-all duration-500 ml-2">
                              <span className="transform transition-transform group-hover/page:translate-x-0.5 text-base md:text-xl">→</span>
                           </div>
                         </div>
@@ -318,26 +318,26 @@ export default function IntegrationManager() {
                   {/* Moving Aurora Effect */}
                   <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-purple-600 to-rose-500 opacity-20 group-hover:opacity-40 blur-[40px] md:blur-[80px] transition-opacity duration-1000 animate-pulse"></div>
                   
-                  <div className="relative px-6 md:px-12 py-10 md:py-20 lg:py-24 rounded-[2rem] md:rounded-[3rem] border border-white/10 bg-slate-950 flex flex-col lg:flex-row items-center justify-between gap-10 md:gap-16 overflow-hidden">
+                  <div className="relative px-5 md:px-12 py-8 md:py-20 xl:py-24 rounded-[2rem] md:rounded-[3rem] border border-white/10 bg-slate-950 flex flex-col xl:flex-row items-center justify-between gap-10 xl:gap-16 overflow-hidden">
                     {/* Inner texture */}
                     <div className="absolute inset-0 opacity-[0.05] bg-[url('https://grainy-gradients.vercel.app/noise.svg')]"></div>
 
-                    <div className="flex flex-col md:flex-row items-center gap-6 md:gap-10 text-center md:text-left relative z-10">
-                      <div className="w-20 h-20 md:w-28 md:h-28 bg-gradient-to-br from-indigo-600 to-violet-700 rounded-[1.8rem] md:rounded-[2.5rem] flex items-center justify-center text-white shadow-[0_20px_40px_rgba(0,0,0,0.4)] group-hover:rotate-12 group-hover:scale-110 transition-all duration-700 border border-white/10 shrink-0">
-                        <FaRobot className="text-4xl md:text-5xl" />
+                    <div className="flex flex-col lg:flex-row items-center gap-6 md:gap-10 text-center lg:text-left relative z-10 w-full xl:w-auto">
+                      <div className="w-16 h-16 md:w-28 md:h-28 bg-gradient-to-br from-indigo-600 to-violet-700 rounded-[1.5rem] md:rounded-[2.5rem] flex items-center justify-center text-white shadow-[0_20px_40px_rgba(0,0,0,0.4)] group-hover:rotate-12 group-hover:scale-110 transition-all duration-700 border border-white/10 shrink-0">
+                        <FaRobot className="text-3xl md:text-5xl" />
                       </div>
-                      <div className="space-y-2">
-                        <h4 className="text-3xl md:text-4xl lg:text-6xl font-black text-white italic tracking-tighter leading-none flex items-center gap-3 md:gap-4 justify-center md:justify-start">
-                          ENTER COMMAND <span className="w-3 md:w-4 h-6 md:h-8 bg-indigo-500 animate-cursor"></span>
+                      <div className="space-y-2 min-w-0">
+                        <h4 className="text-2xl md:text-4xl lg:text-5xl xl:text-6xl font-black text-white italic tracking-tighter leading-none flex items-center gap-3 md:gap-4 justify-center lg:justify-start">
+                          ENTER COMMAND <span className="w-3 md:w-4 h-6 md:h-8 bg-indigo-500 animate-cursor shrink-0"></span>
                         </h4>
-                        <p className="text-slate-400 text-sm md:text-xl lg:text-2xl font-light opacity-60 tracking-tight">Deploy your cognitive workforce across the connected ecosystem.</p>
+                        <p className="text-slate-400 text-sm md:text-xl xl:text-2xl font-light opacity-60 tracking-tight">Deploy your cognitive workforce across the connected ecosystem.</p>
                       </div>
                     </div>
                     
-                    <div className="relative group/btn z-10">
+                    <div className="relative group/btn z-10 shrink-0">
                       <div className="absolute -inset-6 bg-white/10 blur-[40px] rounded-full scale-0 group-hover:scale-100 transition-transform duration-700"></div>
-                      <div className="w-20 h-20 md:w-28 lg:w-36 md:h-28 lg:h-36 bg-white rounded-full flex items-center justify-center text-slate-950 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-700 shadow-[0_20px_40px_-10px_rgba(255,255,255,0.1)] md:shadow-[0_32px_64px_-16px_rgba(255,255,255,0.2)]">
-                         <span className="text-2xl md:text-4xl lg:text-6xl font-black transform group-hover:translate-x-3 transition-all duration-700 tracking-tighter italic uppercase text-center ml-1">GO</span>
+                      <div className="w-16 h-16 md:w-28 xl:w-36 md:h-16 xl:h-36 bg-white rounded-full flex items-center justify-center text-slate-950 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-700 shadow-[0_20px_40px_-10px_rgba(255,255,255,0.1)]">
+                         <span className="text-xl md:text-4xl xl:text-6xl font-black transform group-hover:translate-x-3 transition-all duration-700 tracking-tighter italic uppercase">GO</span>
                       </div>
                     </div>
                   </div>
