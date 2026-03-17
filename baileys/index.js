@@ -3,9 +3,10 @@ const {
   DisconnectReason,
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
-  makeInMemoryStore,
+  // makeInMemoryStore, <-- এখান থেকে এটি কেটে দিন
   jidNormalizedUser,
 } = require('@whiskeysockets/baileys');
+const makeInMemoryStore = require('@whiskeysockets/baileys/lib/Store').makeInMemoryStore;
 const { Boom } = require('@hapi/boom');
 const express = require('express');
 const pino = require('pino');
