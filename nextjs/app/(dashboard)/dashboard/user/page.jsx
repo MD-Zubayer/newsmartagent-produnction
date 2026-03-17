@@ -108,49 +108,48 @@ export default function UserDashboard() {
         {/* Subscription & Token Balance Info */}
         <div className="space-y-6">
           {currentSub && (
-            <div className="bg-gradient-to-r from-slate-900 to-slate-800 py-8 px-5 rounded-[2.5rem] shadow-2xl text-white relative overflow-hidden">
-               <div className="absolute top-0 right-0 w-64 h-64 bg-pink-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+            <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 p-6 md:p-10 rounded-[2rem] md:rounded-[3rem] shadow-2xl text-white relative overflow-hidden group">
+               <div className="absolute top-0 right-0 w-64 h-64 bg-pink-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none group-hover:bg-pink-500/20 transition-all duration-700"></div>
                
-               <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8 relative z-10">
-                  <div className="flex items-center gap-5">
-                     <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
+               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
+                  <div className="lg:col-span-5 flex items-center gap-4 md:gap-6">
+                     <div className="w-14 h-14 md:w-20 md:h-20 rounded-2xl md:rounded-3xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-xl group-hover:scale-110 transition-transform duration-500">
                         <Zap size={32} className="text-yellow-400 fill-yellow-400" />
                      </div>
-                     <div >
-                        <p className="text-[11px] md:text-xs font-black text-slate-400 uppercase tracking-widest md:mb-1 mb-0">Total Available Balance</p>
-                        <h2 className="text-3xl md:text-4xl font-black tracking-tight">
-                          {user?.profile?.word_balance?.toLocaleString() || 0} <span className="text-[15px] md:text-lg text-slate-500 font-bold">Tokens</span>
+                     <div>
+                        <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-1 md:mb-2">Total Available Balance</p>
+                        <h2 className="text-3xl md:text-5xl font-black tracking-tight flex items-baseline gap-2">
+                          {user?.profile?.word_balance?.toLocaleString() || 0} 
+                          <span className="text-sm md:text-xl text-slate-500 font-bold uppercase tracking-widest">Tokens</span>
                         </h2>
                      </div>
                   </div>
 
-                  <div className="h-12 w-[1px] bg-white/10 hidden lg:block"></div>
-
-                  <div className="flex gap-8">
-                     <div>
-                        <div className="flex items-center gap-2 mb-1">
+                  <div className="lg:col-span-4 flex justify-between lg:justify-center items-center gap-6 md:gap-12 px-2 lg:border-x lg:border-white/10">
+                     <div className="text-center lg:text-left">
+                        <div className="flex items-center gap-2 mb-2 justify-center lg:justify-start">
                           <Calendar size={14} className="text-blue-400"/>
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Global Start</p>
+                          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Global Start</p>
                         </div>
-                        <p className="text-[16px] md:text-lg font-bold">{formatDateTime(currentSub.start_date).date}</p>
+                        <p className="text-sm md:text-xl font-black">{formatDateTime(currentSub.start_date).date}</p>
                      </div>
-                     <div>
-                        <div className="flex items-center gap-2 mb-1">
+                     <div className="text-center lg:text-left">
+                        <div className="flex items-center gap-2 mb-2 justify-center lg:justify-start">
                           <CreditCard size={14} className="text-pink-400"/>
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Global End</p>
+                          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Global End</p>
                         </div>
-                        <p className="text-[16px] md:text-lg font-bold">{formatDateTime(currentSub.end_date).date}</p>
+                        <p className="text-sm md:text-xl font-black">{formatDateTime(currentSub.end_date).date}</p>
                      </div>
                   </div>
 
-                  <div className="h-12 w-[1px] bg-white/10 hidden lg:block"></div>
-
-                  <div className="flex items-center gap-4 bg-white/5 px-2 md:px-6 py-3 rounded-2xl border border-white/10">
-                     <Hourglass size={24} className="text-emerald-400 animate-pulse"/>
-                     <div>
-                        <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">Time Remaining</p>
-                        <p className="text-xl font-black">{calculateTimeLeft(currentSub.end_date)}</p>
-                     </div>
+                  <div className="lg:col-span-3">
+                    <div className="bg-white/5 backdrop-blur-sm px-6 py-4 rounded-2xl md:rounded-3xl border border-white/10 flex items-center gap-4 group/box hover:bg-white/10 transition-all duration-300">
+                       <Hourglass size={24} className="text-emerald-400 animate-pulse"/>
+                       <div>
+                          <p className="text-[9px] md:text-[10px] font-black text-emerald-400/70 uppercase tracking-widest mb-0.5">Time Remaining</p>
+                          <p className="text-lg md:text-2xl font-black tracking-tighter">{calculateTimeLeft(currentSub.end_date)}</p>
+                       </div>
+                    </div>
                   </div>
                </div>
             </div>
@@ -302,39 +301,52 @@ export default function UserDashboard() {
               const isMessenger = log.platform.includes('messenger');
               
               return (
-                <div key={log.id} className="group relative bg-white border border-slate-100 rounded-[2rem] p-5 hover:shadow-xl transition-all overflow-hidden hover:-translate-y-1">
+                <div key={log.id} className="group relative bg-white border border-slate-100 rounded-[1.5rem] md:rounded-[2.5rem] p-4 md:p-6 hover:shadow-2xl transition-all overflow-hidden hover:-translate-y-1">
                   <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${isMessenger ? 'bg-blue-500' : 'bg-pink-500'}`} />
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6">
-                    <div className="flex items-center gap-4 min-w-[220px]">
-                      <div className={`w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-lg ${isMessenger ? 'bg-blue-600' : 'bg-pink-600'}`}>
+                  
+                  {/* Mobile View: Vertical Stack */}
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 md:gap-8">
+                    
+                    {/* Source Device/Account */}
+                    <div className="flex items-center gap-4 min-w-[180px]">
+                      <div className={`w-12 h-12 md:w-16 md:h-16 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-xl ${isMessenger ? 'bg-blue-600' : 'bg-pink-600'} group-hover:scale-110 transition-transform duration-500`}>
                         {log.platform[0].toUpperCase()}
                       </div>
                       <div>
-                        <p className="text-sm font-black text-slate-800 leading-none mb-1">ID: {log.sender_id.slice(-6)}</p>
-                        <p className="text-[10px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest">{log.platform.replace('_', ' ')}</p>
+                        <p className="text-sm md:text-base font-black text-slate-800 leading-tight">ID: {log.sender_id.slice(-8)}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className={`w-1.5 h-1.5 rounded-full ${isMessenger ? 'bg-blue-400' : 'bg-pink-400'}`}></span>
+                          <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest">{log.platform.replace('_', ' ')}</p>
+                        </div>
                       </div>
                     </div>
-                    <div className="flex-1 border-l border-slate-100 pl-6 hidden lg:block">
-                       <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">Operation</p>
-                       <p className="text-xs font-black text-slate-600 capitalize">{log.request_type.replace('_', ' ')}</p>
+
+                    <div className="flex-1 lg:border-l lg:border-slate-100 lg:pl-8">
+                       <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1.5">Operation Type</p>
+                       <p className="text-xs md:text-sm font-black text-slate-600 capitalize py-1.5 px-3 bg-slate-50 rounded-xl inline-block lg:bg-transparent lg:p-0">{log.request_type.replace('_', ' ')}</p>
                     </div>
-                    <div className="bg-slate-50 rounded-2xl px-6 py-3 flex items-center gap-6 border border-slate-100 group-hover:bg-white">
-                      <div className="text-center">
-                        <p className="text-[9px] font-black text-blue-500 uppercase">Inbound</p>
-                        <p className="text-lg font-black text-slate-800 leading-none">{log.input_tokens}</p>
+
+                    <div className="flex items-center justify-between md:justify-end gap-4 lg:gap-12">
+                      <div className="bg-slate-50/80 rounded-2xl px-4 md:px-8 py-3 flex items-center gap-6 md:gap-10 border border-slate-100 group-hover:bg-white group-hover:border-slate-200 transition-all flex-1 md:flex-initial">
+                        <div className="text-center">
+                          <p className="text-[8px] md:text-[9px] font-black text-blue-500 uppercase tracking-widest mb-1">Inbound</p>
+                          <p className="text-base md:text-xl font-black text-slate-800 tabular-nums leading-none">{log.input_tokens}</p>
+                        </div>
+                        <div className="w-[1px] h-6 bg-slate-200"></div>
+                        <div className="text-center">
+                          <p className="text-[8px] md:text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-1">Outbound</p>
+                          <p className="text-base md:text-xl font-black text-slate-800 tabular-nums leading-none">{log.output_tokens}</p>
+                        </div>
                       </div>
-                      <div className="text-center">
-                        <p className="text-[9px] font-black text-emerald-500 uppercase">Outbound</p>
-                        <p className="text-lg font-black text-slate-800 leading-none">{log.output_tokens}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-6 min-w-[180px] justify-end text-right">
-                      <div>
-                        <p className="text-sm font-black text-slate-800">{time}</p>
-                        <p className="text-[10px] font-bold text-slate-400">{date}</p>
-                      </div>
-                      <div className={`px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-md ${log.success ? "bg-emerald-500 text-white" : "bg-rose-500 text-white"}`}>
-                        {log.success ? "Verified" : "Bypass"}
+
+                      <div className="flex items-center gap-4 md:gap-8 min-w-[140px] md:min-w-[180px] justify-end border-l border-slate-100 pl-4 md:pl-0 lg:border-0 lg:p-0">
+                        <div className="text-right hidden sm:block">
+                          <p className="text-sm font-black text-slate-800 tabular-nums leading-tight">{time}</p>
+                          <p className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-tight">{date}</p>
+                        </div>
+                        <div className={`px-4 md:px-6 py-2 md:py-3 rounded-xl md:rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-lg ${log.success ? "bg-emerald-500 text-white shadow-emerald-500/20" : "bg-rose-500 text-white shadow-rose-500/20"}`}>
+                          {log.success ? "Verified" : "Bypass"}
+                        </div>
                       </div>
                     </div>
                   </div>
