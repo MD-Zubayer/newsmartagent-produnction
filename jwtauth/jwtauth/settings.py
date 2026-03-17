@@ -335,6 +335,7 @@ GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE = os.environ.get(
 )
 
 BAILEYS_API_URL = os.getenv('BAILEYS_API_URL', 'http://newsmartagent-baileys:3001')
+BAILEYS_API_SECRET = os.getenv('BAILEYS_API_SECRET', 'nsa-baileys-secret-2024')
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Celery Beat: প্রতি ৫ মিনিটে Drive sync
