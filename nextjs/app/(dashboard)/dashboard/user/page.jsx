@@ -8,6 +8,7 @@ import {
 import AnalyticsCharts from "app/(main)/components/AnalyticsCharts";
 import PlatformTokenChart from "app/(main)/components/PlatformTokenChart"; 
 import api from "@/lib/api";
+import { motion, AnimatePresence } from "framer-motion";
 
 // --- হেল্পার ফাংশনসমূহ ---
 const formatDateTime = (dateStr) => {
@@ -29,6 +30,97 @@ const calculateTimeLeft = (endDate) => {
   const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
   return `${days} Days ${hours} Hours`;
 };
+
+// --- Skeleton Components ---
+const Skeleton = ({ className }) => (
+  <div className={`relative overflow-hidden bg-gray-200 rounded-xl ${className}`}>
+    <motion.div
+      className="absolute inset-0 bg-gradient-to-r from-transparent via-white/50 to-transparent"
+      animate={{ x: ["-100%", "100%"] }}
+      transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
+    />
+  </div>
+);
+
+const DashboardSkeleton = () => (
+  <div className="p-3 md:p-10 bg-[#f8fafc] min-h-screen font-sans">
+    <div className="max-w-7xl mx-auto space-y-8 md:space-y-12 animate-pulse">
+      {/* Header Skeleton */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-l-8 border-gray-200 pl-6">
+        <div className="space-y-3">
+          <Skeleton className="h-8 w-48 md:h-12 md:w-64" />
+          <Skeleton className="h-4 w-32 md:w-40" />
+        </div>
+        <div className="flex flex-col items-end gap-2">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-8 w-32" />
+        </div>
+      </div>
+
+      {/* Hero Skeleton (Subscription) */}
+      <div className="relative bg-white p-6 md:p-12 rounded-[2.5rem] md:rounded-[4rem] border border-gray-100 shadow-xl overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+            <div className="lg:col-span-5 flex items-center gap-6">
+              <Skeleton className="w-16 h-16 md:w-24 md:h-24 rounded-3xl" />
+              <div className="space-y-3">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-10 w-48" />
+              </div>
+            </div>
+            <div className="lg:col-span-4 flex justify-between gap-8 px-8">
+               <div className="space-y-2"><Skeleton className="h-2 w-16" /><Skeleton className="h-6 w-24" /></div>
+               <div className="space-y-2"><Skeleton className="h-2 w-16" /><Skeleton className="h-6 w-24" /></div>
+            </div>
+            <div className="lg:col-span-3">
+              <Skeleton className="h-16 w-full rounded-3xl" />
+            </div>
+        </div>
+      </div>
+
+      {/* Stats Grid Skeleton */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-6">
+        {[1, 2, 3, 4, 5].map(i => (
+          <div key={i} className="bg-white p-6 rounded-[2rem] border border-gray-100 space-y-4">
+            <Skeleton className="w-10 h-10 rounded-xl" />
+            <div className="space-y-2">
+              <Skeleton className="h-2 w-12" />
+              <Skeleton className="h-6 w-20" />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Activity Stream Skeleton */}
+      <div className="bg-white rounded-[3rem] p-6 md:p-10 border border-gray-100 space-y-8">
+         <div className="flex justify-between items-center mb-4">
+           <Skeleton className="h-8 w-48" />
+           <Skeleton className="h-4 w-24" />
+         </div>
+         {[1, 2, 3].map(i => (
+           <Skeleton key={i} className="h-24 md:h-32 w-full rounded-[2rem]" />
+         ))}
+      </div>
+    </div>
+    
+    {/* Cinematic Loading Overlay */}
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/40 backdrop-blur-md">
+       <div className="relative mb-8">
+          <div className="w-20 h-20 border-4 border-pink-500/20 rounded-full animate-ping"></div>
+          <div className="absolute inset-0 flex items-center justify-center">
+             <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-indigo-600 rounded-2xl rotate-45 animate-spin-slow shadow-lg shadow-pink-500/40" />
+          </div>
+       </div>
+       <motion.h2 
+         initial={{ opacity: 0, y: 10 }}
+         animate={{ opacity: 1, y: 0 }}
+         className="text-slate-900 font-black text-2xl tracking-[0.2em] uppercase italic text-center px-6"
+       >
+         Synchronizing Neural Gateways
+       </motion.h2>
+       <p className="text-slate-400 font-bold mt-2 uppercase tracking-widest text-[10px]">Accessing Real-time Intelligence...</p>
+    </div>
+  </div>
+);
 
 export default function UserDashboard() {
   const [data, setData] = useState(null);
@@ -62,12 +154,7 @@ export default function UserDashboard() {
   }, []);
 
   if (loading) {
-    return (
-      <div className="p-20 text-center flex flex-col items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-pink-500 mb-4"></div>
-        <h2 className="text-gray-400 font-black text-xl uppercase italic">Loading Intelligence...</h2>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   if (error || !data) {
