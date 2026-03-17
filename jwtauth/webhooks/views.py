@@ -78,7 +78,11 @@ def ai_webhook(request):
         # WhatsApp specific: 'from' is often more accurate (contains @s.whatsapp.net)
         wa_sender = data.get('from') or data.get('phone')
         if wa_sender:
-            sender_id = str(wa_sender).split('@')[0]
+            # যদি @lid থাকে তবে সেটি স্প্লিট করবো না
+            if '@lid' in str(wa_sender):
+                sender_id = str(wa_sender)
+            else:
+                sender_id = str(wa_sender).split('@')[0]
     
     logger.info(f"🔍 [ai_webhook] Type: {request_type}, Extracted Sender: {sender_id}")
 

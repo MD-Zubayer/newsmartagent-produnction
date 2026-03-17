@@ -420,8 +420,10 @@ def get_ai_response(agent_config, full_prompt, history):
 def deliver_whatsapp_reply(data, reply):
     """Deliver final reply for WhatsApp via n8n webhook"""
     webhook_url = "https://n8n.newsmartagent.com/webhook-test/whatsapp-delivery"
+    final_target = data.get('delivery_jid') or data.get('sender_id', '')
     payload = {
-        "to": str(data.get('sender_id', '')),
+        "to": str(final_target),
+        "delivery_jid": str(data.get('delivery_jid', '')),
         "phone": str(data.get('sender_id', '')),
         "sender_id": str(data.get('sender_id', '')),
         "message": str(reply),
