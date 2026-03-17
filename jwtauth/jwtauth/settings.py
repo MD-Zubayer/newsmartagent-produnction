@@ -30,7 +30,7 @@ SECRET_KEY = 'django-insecure-i6it!d42&fu(j0*&)*53ymr5k+7osf^r__i$+@vds)a#7r-&^^
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ['newsmartagent.com', 'api.newsmartagent.com', 'n8n.newsmartagent.com', 'newsmartagent-django', 'newsmartagent-n8n', 'localhost','127.0.0.1', 'monitor.newsmartagent.com', 'dev.newsmartagent.com', 'dev-api.newsmartagent.com', 'dev.newsmartagent.com', 'dev-n8n.newsmartagent.com' ]
+ALLOWED_HOSTS = ['newsmartagent.com', 'api.newsmartagent.com', 'n8n.newsmartagent.com', 'newsmartagent-django', 'newsmartagent-n8n', 'localhost','127.0.0.1', 'monitor.newsmartagent.com', 'dev.newsmartagent.com', 'dev-api.newsmartagent.com', 'dev.newsmartagent.com', 'dev-n8n.newsmartagent.com', 'backend', 'newsmartagent-baileys']
 CSRF_TRUSTED_ORIGINS = ['https://newsmartagent.com', 'https://api.newsmartagent.com', 'https://n8n.newsmartagent.com', 'http://newsmartagent-django:8000', 'https://monitor.newsmartagent.com', 'https://dev.newsmartagent.com', 'https://dev-api.newsmartagent.com', 'https://dev-n8n.newsmartagent.com']
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 USE_X_FORWARDED_HOST = True
