@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from aiAgent.models import AgentAI, TokenUsageLog, AIProviderModel
+from aiAgent.models import AgentAI, TokenUsageLog, AIProviderModel, Contact
 
 
 class AIProviderModelSerializer(serializers.ModelSerializer):

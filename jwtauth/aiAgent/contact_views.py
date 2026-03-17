@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status
 from .models import AgentAI, Contact
+from .serializers import ContactSerializer
 
 class ContactListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -11,19 +12,8 @@ class ContactListView(APIView):
         try:
             agent = AgentAI.objects.get(page_id=agent_id, user=request.user)
             contacts = Contact.objects.filter(agent=agent).order_by('-updated_at')
-            data = [
-                {
-                    "id": c.id,
-                    "identifier": c.identifier,
-                    "name": c.name,
-                    "push_name": c.push_name,
-                    "is_auto_reply_enabled": c.is_auto_reply_enabled,
-                    "platform": c.platform,
-                    "updated_at": c.updated_at
-                }
-                for c in contacts
-            ]
-            return Response({"contacts": data}, status=status.HTTP_200_OK)
+            serializer = ContactSerializer(contacts, many=True)
+            return Response({"contacts": serializer.data}, status=status.HTTP_200_OK)
         except AgentAI.DoesNotExist:
             return Response({"error": "Agent not found"}, status=status.HTTP_404_NOT_FOUND)
 

@@ -1,7 +1,7 @@
 # aiAgent/admin.py
 from django.contrib import admin
 from unfold.admin import ModelAdmin
-from .models import AgentAI,MissingRequirement
+from .models import AgentAI,MissingRequirement, Contact
 from django.utils.html import format_html
 from .models import UserMemory, AgentAI
 import json
@@ -362,3 +362,10 @@ class SmartKeywordAdmin(ModelAdmin):
             'opts': self.model._meta,
         }
         return render(request, "admin/aiAgent/smartkeyword/upload_json.html", context)
+
+@admin.register(Contact)
+class ContactAdmin(ModelAdmin):
+    list_display = ['identifier', 'name', 'push_name', 'agent', 'platform', 'is_auto_reply_enabled', 'updated_at']
+    list_filter = ['platform', 'is_auto_reply_enabled', 'agent', 'platform']
+    search_fields = ['identifier', 'name', 'push_name']
+    readonly_fields = ['created_at', 'updated_at']
