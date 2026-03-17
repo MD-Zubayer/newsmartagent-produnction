@@ -21,7 +21,12 @@ export default function MessengerButton() {
       {!isHidden && (
         <motion.div
           drag
-          dragConstraints={{ left: 0, right: window?.innerWidth - 80, top: 0, bottom: window?.innerHeight - 80 }}
+          dragConstraints={{ 
+            left: 0, 
+            right: (typeof window !== 'undefined' ? window.innerWidth : 1200) - 80, 
+            top: 0, 
+            bottom: (typeof window !== 'undefined' ? window.innerHeight : 800) - 80 
+          }}
           dragElastic={0.1}
           dragMomentum={false}
           initial={{ scale: 0, opacity: 0 }}

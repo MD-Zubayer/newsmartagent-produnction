@@ -117,7 +117,12 @@ export default function DashboardAI() {
           <motion.div
             key="trigger"
             drag
-            dragConstraints={{ left: -window?.innerWidth + 100, right: 0, top: -window?.innerHeight + 100, bottom: 0 }}
+            dragConstraints={{ 
+              left: -(typeof window !== 'undefined' ? window.innerWidth : 1200) + 100, 
+              right: 0, 
+              top: -(typeof window !== 'undefined' ? window.innerHeight : 800) + 100, 
+              bottom: 0 
+            }}
             dragElastic={0.1}
             dragMomentum={false}
             initial={{ scale: 0, opacity: 0 }}
