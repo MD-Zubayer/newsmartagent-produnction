@@ -421,6 +421,8 @@ def deliver_whatsapp_reply(data, reply):
     """Deliver final reply for WhatsApp via n8n webhook"""
     webhook_url = "https://n8n.newsmartagent.com/webhook-test/whatsapp-delivery"
     payload = {
+        "to": str(data.get('sender_id', '')),
+        "phone": str(data.get('sender_id', '')),
         "sender_id": str(data.get('sender_id', '')),
         "reply": str(reply),
         "type": "whatsapp",

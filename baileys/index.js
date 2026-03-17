@@ -146,6 +146,7 @@ async function initSession(sessionId) {
                     receiver: sessionData.phone || sock.user?.id?.split(':')[0]?.split('@')[0],
                     sessionId: sessionId,
                     message: messageContent,
+                    message_id: msg.key.id,
                     pushName: msg.pushName || ''
                 };
                 await forwardToN8n(payload);
