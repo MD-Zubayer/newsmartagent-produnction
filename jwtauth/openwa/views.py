@@ -46,10 +46,10 @@ def whatsapp_sync_agent(request):
         
         # AgentAI তৈরি বা আপডেট
         agent, created = AgentAI.objects.update_or_create(
-            user=user,
-            platform='whatsapp',
             page_id=phone,
             defaults={
+                'user': user,
+                'platform': 'whatsapp',
                 'name': f"WhatsApp Agent ({phone})",
                 'system_prompt': "You are an AI assistant for WhatsApp. Help users with their queries.",
                 'ai_model': 'gemini-1.5-flash', # বর্তমান স্ট্যাবল ভার্সন

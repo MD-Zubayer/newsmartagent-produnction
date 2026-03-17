@@ -2,7 +2,6 @@
 
 from celery import shared_task
 import re, json, time, uuid, logging, hashlib, redis, requests
-from django.db.models import Q
 from aiAgent.models import AgentAI
 from chat.services import save_message
 from aiAgent.memory_handler import handle_smart_memory_update
@@ -164,37 +163,8 @@ def process_ai_reply_task(self, data):
 
         agent_config = AgentAI.objects.filter(
             is_active=True,
-        ).filter(
-            Q(page_id__in=lookup_ids) | Q(number__in=lookup_ids)
+            page_id__in=lookup_ids
         ).order_by('-id').first()
-        if not agent_config:
-            # Fallback: resolve via WhatsAppInstance.phone_number; avoid grabbing deactivated/other-phone agents
-            try:
-                from openwa.models import WhatsAppInstance
-                wa_instance = WhatsAppInstance.objects.filter(phone_number__in=lookup_ids).first()
-                if wa_instance:
-                    agent_candidates = AgentAI.objects.filter(
-                        platform='whatsapp',
-                        is_active=True,
-                    )
-                    # Prefer exact phone match to avoid cross-phone leakage
-                    if wa_instance.phone_number:
-                        agent_config = agent_candidates.filter(
-                            page_id=wa_instance.phone_number
-                        ).order_by('-id').first()
-                    # If only one active WhatsApp agent for the user, allow that as a last resort
-                    if not agent_config:
-                        user_agents = agent_candidates.filter(user=wa_instance.user)
-                        if user_agents.count() == 1:
-                            agent_config = user_agents.first()
-            except Exception as e:
-                logger.error(f'Fallback WhatsAppInstance lookup failed: {e}')
-
-        if not agent_config and request_type == 'whatsapp':
-            # Last-resort: if only one active WhatsApp agent exists in the system, use it
-            sole_agent = AgentAI.objects.filter(platform='whatsapp', is_active=True)
-            if sole_agent.count() == 1:
-                agent_config = sole_agent.first()
 
         if not agent_config:
             logger.error(f'Error: No active agent found for identifiers {lookup_ids}')
