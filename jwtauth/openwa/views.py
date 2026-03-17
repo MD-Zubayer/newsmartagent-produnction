@@ -116,8 +116,9 @@ def whatsapp_sync_contacts(request):
             if not jid: continue
             
             identifier = jid.split('@')[0]
-            name = c.get('name') or c.get('notify') or c.get('verifiedName')
-            push_name = c.get('notify') or c.get('name') or ''
+            # Check various common keys for names
+            name = c.get('name') or c.get('notify') or c.get('pushName') or c.get('push_name') or c.get('verifiedName')
+            push_name_val = c.get('notify') or c.get('pushName') or c.get('push_name') or c.get('name') or ''
             
             Contact.objects.update_or_create(
                 agent=agent,
@@ -125,7 +126,7 @@ def whatsapp_sync_contacts(request):
                 platform='whatsapp',
                 defaults={
                     'name': name,
-                    'push_name': push_name or None
+                    'push_name': push_name_val or None
                 }
             )
 

@@ -225,14 +225,17 @@ def process_ai_reply_task(self, data):
 
         # ── Contact Sync Logic (Auto-create or Update) ──
         from aiAgent.models import Contact
-        contact_name = data.get('pushName') or data.get('name')
+        # Check both camelCase (from Baileys) and snake_case (often from n8n)
+        incoming_push_name = data.get('pushName') or data.get('push_name')
+        contact_name = incoming_push_name or data.get('name')
+        
         Contact.objects.update_or_create(
             agent=agent_config,
             identifier=sender_id,
             platform=request_type if request_type in ['whatsapp', 'messenger'] else 'messenger',
             defaults={
                 'name': contact_name if contact_name else None,
-                'push_name': data.get('pushName') or None
+                'push_name': incoming_push_name if incoming_push_name else None
             }
         )
 
