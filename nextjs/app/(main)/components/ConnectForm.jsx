@@ -96,20 +96,20 @@ export default function IntegrationManager() {
         <div className="absolute -bottom-20 left-1/2 -translate-x-1/2 w-64 md:w-96 h-64 md:h-96 bg-pink-400 rounded-full mix-blend-multiply filter blur-[80px] md:blur-[128px] opacity-20 animate-blob animation-delay-4000"></div>
 
         <div className="max-w-[1200px] mx-auto text-center relative z-10">
-          <div className="mb-12 md:mb-20">
+          <div className="mb-10 md:mb-20">
             <div className="inline-flex items-center gap-3 px-4 py-1.5 rounded-full bg-indigo-50 border border-indigo-100/50 text-indigo-600 text-[10px] md:text-[11px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em] mb-6 md:mb-8 shadow-sm">
               <HiOutlineSparkles className="h-4 w-4 animate-pulse" /> The Intelligence Hub
             </div>
-            <h2 className="text-4xl sm:text-5xl md:text-8xl font-black text-slate-900 tracking-tighter mb-4 md:mb-6 leading-[1.1] md:leading-none italic">
+            <h2 className="text-3xl sm:text-4xl md:text-6xl lg:text-8xl font-black text-slate-900 tracking-tighter mb-4 md:mb-6 leading-[1.1] md:leading-none italic">
               Empower Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-violet-600 to-purple-600">Enterprise</span>
             </h2>
-            <p className="text-slate-400 max-w-2xl mx-auto text-sm md:text-xl font-medium leading-relaxed opacity-80 px-4 md:px-0">
+            <p className="text-slate-400 max-w-2xl mx-auto text-sm md:text-lg lg:text-xl font-medium leading-relaxed opacity-80 px-4 md:px-0">
               Synchronize your business channels with our cutting-edge AI architecture. 
               Select a platform to initialize your global agent network.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-12">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 md:gap-12">
             {Object.values(platformConfigs).map((p) => (
               <div 
                 key={p.id} 
@@ -168,39 +168,39 @@ export default function IntegrationManager() {
         <div className="bg-white rounded-[2.5rem] md:rounded-[4rem] shadow-[0_50px_100px_-20px_rgba(0,0,0,0.08)] md:shadow-[0_100px_160px_-40px_rgba(0,0,0,0.08)] border border-slate-50 overflow-hidden relative group">
           
           {/* Stunning Interaction Hero */}
-          <div className={`bg-gradient-to-br ${selectedPlatform.color} p-10 md:p-24 text-white relative overflow-hidden`}>
+          <div className={`bg-gradient-to-br ${selectedPlatform.color} p-8 md:p-16 lg:p-24 text-white relative overflow-hidden`}>
             {/* Animated Flare */}
             <div className="absolute top-0 right-0 w-[150%] h-[150%] bg-white/5 blur-[80px] md:blur-[120px] rounded-full translate-x-1/2 -translate-y-1/2 animate-pulse"></div>
             
-            <div className="relative z-10 flex flex-col md:flex-row items-center gap-8 md:gap-14 text-center md:text-left">
-              <div className="p-6 md:p-10 bg-white/10 rounded-[2.5rem] md:rounded-[4rem] backdrop-blur-3xl border border-white/20 shadow-[inset_0_0_40px_rgba(255,255,255,0.2)] group-hover:scale-105 transition-transform duration-700">
-                <span className="text-5xl md:text-9xl drop-shadow-[0_20px_40px_rgba(0,0,0,0.2)]">{selectedPlatform.icon}</span>
+            <div className="relative z-10 flex flex-col md:flex-row items-center gap-6 md:gap-14 text-center md:text-left">
+              <div className="p-5 md:p-10 bg-white/10 rounded-[2rem] md:rounded-[4rem] backdrop-blur-3xl border border-white/20 shadow-[inset_0_0_40px_rgba(255,255,255,0.2)] group-hover:scale-105 transition-transform duration-700 shrink-0">
+                <span className="text-4xl md:text-7xl lg:text-9xl drop-shadow-[0_20px_40px_rgba(0,0,0,0.2)]">{selectedPlatform.icon}</span>
               </div>
-              <div className="space-y-4 md:space-y-6">
+              <div className="space-y-3 md:space-y-6">
                 <div>
-                  <p className="text-white/60 text-[9px] md:text-[11px] font-black uppercase tracking-[0.3em] md:tracking-[0.4em] mb-2 md:mb-4 drop-shadow-sm flex items-center gap-3 justify-center md:justify-start">
-                    <span className="w-1.5 h-1.5 md:w-2 md:h-2 bg-emerald-400 rounded-full animate-ping"></span> Enterprise Connectivity
+                  <p className="text-white/60 text-[8px] md:text-[11px] font-black uppercase tracking-[0.3em] md:tracking-[0.4em] mb-2 md:mb-4 drop-shadow-sm flex items-center gap-3 justify-center md:justify-start">
+                    <span className="w-1.5 bg-emerald-400 rounded-full animate-ping aspect-square"></span> Enterprise Connectivity
                   </p>
-                  <h2 className="text-4xl sm:text-6xl md:text-8xl font-black tracking-tighter leading-none italic uppercase">
+                  <h2 className="text-3xl sm:text-5xl md:text-6xl lg:text-8xl font-black tracking-tighter leading-none italic uppercase">
                     {selectedPlatform.name}
                   </h2>
                 </div>
-                <p className="text-white/80 text-base md:text-2xl font-light leading-relaxed max-w-xl opacity-90 drop-shadow-sm px-4 md:px-0">
+                <p className="text-white/80 text-sm md:text-xl lg:text-2xl font-light leading-relaxed max-w-xl opacity-90 drop-shadow-sm px-4 md:px-0">
                   Initialize high-performance agents for your {selectedPlatform.name} brand presence with one click.
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="p-8 md:p-24 bg-[radial-gradient(circle_at_bottom_right,_var(--tw-gradient-stops))] from-white via-white to-indigo-50/20">
+          <div className="p-6 md:p-16 lg:p-24 bg-[radial-gradient(circle_at_bottom_right,_var(--tw-gradient-stops))] from-white via-white to-indigo-50/20">
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-12 md:gap-24 items-center mb-16 md:mb-24">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24 items-center mb-16 md:mb-24">
                <div className="space-y-6 md:space-y-8 text-center md:text-left">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-50 text-emerald-600 text-[8px] md:text-[9px] font-black uppercase tracking-widest border border-emerald-100">
                     <FaShieldAlt className="animate-pulse" /> Precision Security
                   </div>
-                  <h3 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter leading-none italic uppercase">Authorized <br className="hidden md:block"/> Access</h3>
-                  <p className="text-slate-500 font-medium text-base md:text-lg leading-relaxed max-w-md opacity-80 mx-auto md:mx-0">
+                  <h3 className="text-2xl md:text-3xl lg:text-5xl font-black text-slate-900 tracking-tighter leading-none italic uppercase">Authorized <br className="hidden md:block"/> Access</h3>
+                  <p className="text-slate-500 font-medium text-sm md:text-base lg:text-lg leading-relaxed max-w-md opacity-80 mx-auto md:mx-0">
                     Your account synchronization is managed via enterprise-grade encryption protocol. 
                     No technical configuration required.
                   </p>
@@ -216,14 +216,14 @@ export default function IntegrationManager() {
                   </div>
                </div>
                
-               <div className="bg-slate-50/50 p-1 rounded-[2.5rem] md:rounded-[3.5rem] border border-slate-100 shadow-xl md:shadow-2xl relative group-hover:-translate-y-2 transition-transform duration-1000">
-                  <div className="bg-white rounded-[2.4rem] md:rounded-[3.3rem] p-8 md:p-12 flex flex-col items-center justify-center text-center gap-6 md:gap-10">
-                    <div className="w-16 h-16 md:w-24 md:h-24 bg-indigo-50 rounded-[1.8rem] md:rounded-[2.5rem] shadow-inner flex items-center justify-center text-indigo-600">
+               <div className="bg-slate-50/50 p-1 rounded-[2rem] md:rounded-[3.5rem] border border-slate-100 shadow-xl md:shadow-2xl relative group-hover:-translate-y-2 transition-transform duration-1000">
+                  <div className="bg-white rounded-[1.9rem] md:rounded-[3.3rem] p-6 md:p-12 flex flex-col items-center justify-center text-center gap-6 md:gap-10">
+                    <div className="w-14 h-14 md:w-24 md:h-24 bg-indigo-50 rounded-[1.5rem] md:rounded-[2.5rem] shadow-inner flex items-center justify-center text-indigo-600">
                        <FaRobot size={32} className="md:w-12 md:h-12 animate-bounce-slow" />
                     </div>
                     <div className="space-y-1 md:space-y-1.5">
-                      <p className="text-base md:text-lg font-black text-slate-900 uppercase tracking-tight italic">AI Infrastructure Ready</p>
-                      <p className="text-[10px] md:text-xs text-slate-400 font-bold uppercase tracking-[0.15em] md:tracking-[0.2em] opacity-80">Latency: 14ms | Status: Optimal</p>
+                      <p className="text-sm md:text-lg font-black text-slate-900 uppercase tracking-tight italic">AI Infrastructure Ready</p>
+                      <p className="text-[9px] md:text-xs text-slate-400 font-bold uppercase tracking-[0.15em] md:tracking-[0.2em] opacity-80">Latency: 14ms | Status: Optimal</p>
                     </div>
                     <div className="w-full h-1 bg-slate-50 rounded-full overflow-hidden">
                        <div className="w-1/3 h-full bg-indigo-600 rounded-full"></div>
@@ -318,26 +318,26 @@ export default function IntegrationManager() {
                   {/* Moving Aurora Effect */}
                   <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-purple-600 to-rose-500 opacity-20 group-hover:opacity-40 blur-[40px] md:blur-[80px] transition-opacity duration-1000 animate-pulse"></div>
                   
-                  <div className="relative px-8 md:px-12 py-12 md:py-24 rounded-[2rem] md:rounded-[3rem] border border-white/10 bg-slate-950 flex flex-col md:flex-row items-center justify-between gap-10 md:gap-16 overflow-hidden">
+                  <div className="relative px-6 md:px-12 py-10 md:py-20 lg:py-24 rounded-[2rem] md:rounded-[3rem] border border-white/10 bg-slate-950 flex flex-col lg:flex-row items-center justify-between gap-10 md:gap-16 overflow-hidden">
                     {/* Inner texture */}
                     <div className="absolute inset-0 opacity-[0.05] bg-[url('https://grainy-gradients.vercel.app/noise.svg')]"></div>
 
-                    <div className="flex flex-col md:flex-row items-center gap-8 md:gap-10 text-center md:text-left relative z-10">
-                      <div className="w-20 h-20 md:w-28 md:h-28 bg-gradient-to-br from-indigo-600 to-violet-700 rounded-[1.8rem] md:rounded-[2.5rem] flex items-center justify-center text-white shadow-[0_20px_40px_rgba(0,0,0,0.4)] group-hover:rotate-12 group-hover:scale-110 transition-all duration-700 border border-white/10">
+                    <div className="flex flex-col md:flex-row items-center gap-6 md:gap-10 text-center md:text-left relative z-10">
+                      <div className="w-20 h-20 md:w-28 md:h-28 bg-gradient-to-br from-indigo-600 to-violet-700 rounded-[1.8rem] md:rounded-[2.5rem] flex items-center justify-center text-white shadow-[0_20px_40px_rgba(0,0,0,0.4)] group-hover:rotate-12 group-hover:scale-110 transition-all duration-700 border border-white/10 shrink-0">
                         <FaRobot className="text-4xl md:text-5xl" />
                       </div>
-                      <div className="space-y-2 md:space-y-3">
-                        <h4 className="text-3xl md:text-6xl font-black text-white italic tracking-tighter leading-none flex items-center gap-3 md:gap-4 justify-center md:justify-start">
+                      <div className="space-y-2">
+                        <h4 className="text-3xl md:text-4xl lg:text-6xl font-black text-white italic tracking-tighter leading-none flex items-center gap-3 md:gap-4 justify-center md:justify-start">
                           ENTER COMMAND <span className="w-3 md:w-4 h-6 md:h-8 bg-indigo-500 animate-cursor"></span>
                         </h4>
-                        <p className="text-slate-400 text-base md:text-2xl font-light opacity-60 tracking-tight">Deploy your cognitive workforce across the connected ecosystem.</p>
+                        <p className="text-slate-400 text-sm md:text-xl lg:text-2xl font-light opacity-60 tracking-tight">Deploy your cognitive workforce across the connected ecosystem.</p>
                       </div>
                     </div>
                     
                     <div className="relative group/btn z-10">
                       <div className="absolute -inset-6 bg-white/10 blur-[40px] rounded-full scale-0 group-hover:scale-100 transition-transform duration-700"></div>
-                      <div className="w-20 h-20 md:w-36 md:h-36 bg-white rounded-full flex items-center justify-center text-slate-950 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-700 shadow-[0_20px_40px_-10px_rgba(255,255,255,0.1)] md:shadow-[0_32px_64px_-16px_rgba(255,255,255,0.2)]">
-                         <span className="text-3xl md:text-6xl font-black transform group-hover:translate-x-3 transition-all duration-700 tracking-tighter italic">GO</span>
+                      <div className="w-20 h-20 md:w-28 lg:w-36 md:h-28 lg:h-36 bg-white rounded-full flex items-center justify-center text-slate-950 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-700 shadow-[0_20px_40px_-10px_rgba(255,255,255,0.1)] md:shadow-[0_32px_64px_-16px_rgba(255,255,255,0.2)]">
+                         <span className="text-2xl md:text-4xl lg:text-6xl font-black transform group-hover:translate-x-3 transition-all duration-700 tracking-tighter italic uppercase text-center ml-1">GO</span>
                       </div>
                     </div>
                   </div>
