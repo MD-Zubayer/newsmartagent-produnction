@@ -63,6 +63,8 @@ services:
       - GOOGLE_DRIVE_LOG_FOLDER_ID=${GOOGLE_DRIVE_LOG_FOLDER_ID}
       - GOOGLE_DRIVE_LOG_SUBFOLDER=${GOOGLE_DRIVE_LOG_SUBFOLDER}
       - GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE=/app/gdrive_key.json
+      - BAILEYS_API_URL=${BAILEYS_API_URL}
+      - BAILEYS_API_SECRET=${BAILEYS_API_SECRET}
     depends_on:
       - db
       - redis
@@ -228,6 +230,25 @@ services:
       - nginx
 
 
+  baileys:
+    build: ./baileys
+    container_name: newsmartagent-baileys
+    environment:
+      - PORT=3001
+      # n8n webhook URL — incoming WhatsApp message এখানে forward হবে
+      - N8N_WEBHOOK_URL=${N8N_WHATSAPP_WEBHOOK_URL}
+      # n8n থেকে /send-message call করার সময় এই secret দিতে হবে
+      - BAILEYS_API_SECRET=${BAILEYS_API_SECRET}
+      - LOG_LEVEL=info
+    volumes:
+      # WhatsApp session persistent করার জন্য (QR rescan এড়াতে)
+      - baileys_auth:/app/auth_info_baileys
+    depends_on:
+      - n8n
+    restart: always
+    networks:
+      - smart-network
+
 volumes:
   postgres_data:
     external: true
@@ -240,6 +261,8 @@ volumes:
     name: newsmartagent-media
   n8n_data:
     name: production_n8n_data
+  baileys_auth:
+    name: newsmartagent-baileys-auth
   
 
 networks:

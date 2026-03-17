@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { 
-  Zap, Activity, BarChart3, MessageSquare, TrendingUp, 
-  Cpu, Globe, Info, Calendar, CreditCard, Hourglass 
+import {
+  Zap, Activity, BarChart3, MessageSquare, TrendingUp,
+  Cpu, Globe, Info, Calendar, CreditCard, Hourglass
 } from "lucide-react";
 import AnalyticsCharts from "app/(main)/components/AnalyticsCharts";
-import PlatformTokenChart from "app/(main)/components/PlatformTokenChart"; 
+import PlatformTokenChart from "app/(main)/components/PlatformTokenChart";
 import api from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -60,20 +60,20 @@ const DashboardSkeleton = () => (
       {/* Hero Skeleton (Subscription) */}
       <div className="relative bg-white p-6 md:p-12 rounded-[2.5rem] md:rounded-[4rem] border border-gray-100 shadow-xl overflow-hidden">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
-            <div className="lg:col-span-5 flex items-center gap-6">
-              <Skeleton className="w-16 h-16 md:w-24 md:h-24 rounded-3xl" />
-              <div className="space-y-3">
-                <Skeleton className="h-3 w-24" />
-                <Skeleton className="h-10 w-48" />
-              </div>
+          <div className="lg:col-span-5 flex items-center gap-6">
+            <Skeleton className="w-16 h-16 md:w-24 md:h-24 rounded-3xl" />
+            <div className="space-y-3">
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-10 w-48" />
             </div>
-            <div className="lg:col-span-4 flex justify-between gap-8 px-8">
-               <div className="space-y-2"><Skeleton className="h-2 w-16" /><Skeleton className="h-6 w-24" /></div>
-               <div className="space-y-2"><Skeleton className="h-2 w-16" /><Skeleton className="h-6 w-24" /></div>
-            </div>
-            <div className="lg:col-span-3">
-              <Skeleton className="h-16 w-full rounded-3xl" />
-            </div>
+          </div>
+          <div className="lg:col-span-4 flex justify-between gap-8 px-8">
+            <div className="space-y-2"><Skeleton className="h-2 w-16" /><Skeleton className="h-6 w-24" /></div>
+            <div className="space-y-2"><Skeleton className="h-2 w-16" /><Skeleton className="h-6 w-24" /></div>
+          </div>
+          <div className="lg:col-span-3">
+            <Skeleton className="h-16 w-full rounded-3xl" />
+          </div>
         </div>
       </div>
 
@@ -92,32 +92,32 @@ const DashboardSkeleton = () => (
 
       {/* Activity Stream Skeleton */}
       <div className="bg-white rounded-[3rem] p-6 md:p-10 border border-gray-100 space-y-8">
-         <div className="flex justify-between items-center mb-4">
-           <Skeleton className="h-8 w-48" />
-           <Skeleton className="h-4 w-24" />
-         </div>
-         {[1, 2, 3].map(i => (
-           <Skeleton key={i} className="h-24 md:h-32 w-full rounded-[2rem]" />
-         ))}
+        <div className="flex justify-between items-center mb-4">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-24" />
+        </div>
+        {[1, 2, 3].map(i => (
+          <Skeleton key={i} className="h-24 md:h-32 w-full rounded-[2rem]" />
+        ))}
       </div>
     </div>
-    
+
     {/* Cinematic Loading Overlay */}
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/40 backdrop-blur-md">
-       <div className="relative mb-8">
-          <div className="w-20 h-20 border-4 border-pink-500/20 rounded-full animate-ping"></div>
-          <div className="absolute inset-0 flex items-center justify-center">
-             <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-indigo-600 rounded-2xl rotate-45 animate-spin-slow shadow-lg shadow-pink-500/40" />
-          </div>
-       </div>
-       <motion.h2 
-         initial={{ opacity: 0, y: 10 }}
-         animate={{ opacity: 1, y: 0 }}
-         className="text-slate-900 font-black text-2xl tracking-[0.2em] uppercase italic text-center px-6"
-       >
-         Synchronizing Neural Gateways
-       </motion.h2>
-       <p className="text-slate-400 font-bold mt-2 uppercase tracking-widest text-[10px]">Accessing Real-time Intelligence...</p>
+      <div className="relative mb-8">
+        <div className="w-20 h-20 border-4 border-pink-500/20 rounded-full animate-ping"></div>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="w-12 h-12 bg-gradient-to-br from-pink-500 to-indigo-600 rounded-2xl rotate-45 animate-spin-slow shadow-lg shadow-pink-500/40" />
+        </div>
+      </div>
+      <motion.h2
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="text-slate-900 font-black text-2xl tracking-[0.2em] uppercase italic text-center px-6"
+      >
+        Synchronizing Neural Gateways
+      </motion.h2>
+      <p className="text-slate-400 font-bold mt-2 uppercase tracking-widest text-[10px]">Accessing Real-time Intelligence...</p>
     </div>
   </div>
 );
@@ -162,8 +162,8 @@ export default function UserDashboard() {
       <div className="p-20 text-center">
         <h2 className="text-red-500 font-black text-3xl italic uppercase">Connection Lost</h2>
         <p className="text-gray-400 font-bold mt-2">API is not responding. Check your backend server.</p>
-        <button 
-          onClick={() => window.location.reload()} 
+        <button
+          onClick={() => window.location.reload()}
           className="mt-6 px-6 py-2 bg-pink-500 text-white font-bold rounded-xl"
         >
           Retry Connection
@@ -179,7 +179,7 @@ export default function UserDashboard() {
   return (
     <div className="p-3 md:p-10 bg-[#f8fafc] min-h-screen font-sans overflow-x-hidden">
       <div className="max-w-7xl mx-auto space-y-6 md:space-y-10">
-        
+
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-l-8 border-pink-500 pl-6">
           <div>
@@ -196,49 +196,49 @@ export default function UserDashboard() {
         <div className="space-y-6">
           {currentSub && (
             <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800 p-6 md:p-10 rounded-[2rem] md:rounded-[3rem] shadow-2xl text-white relative overflow-hidden group">
-               <div className="absolute top-0 right-0 w-64 h-64 bg-pink-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none group-hover:bg-pink-500/20 transition-all duration-700"></div>
-               
-               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
-                  <div className="lg:col-span-5 flex items-center gap-4 md:gap-6">
-                     <div className="w-14 h-14 md:w-20 md:h-20 rounded-2xl md:rounded-3xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-xl group-hover:scale-110 transition-transform duration-500">
-                        <Zap size={32} className="text-yellow-400 fill-yellow-400" />
-                     </div>
-                     <div>
-                        <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-1 md:mb-2">Total Available Balance</p>
-                        <h2 className="text-3xl md:text-5xl font-black tracking-tight flex items-baseline gap-2">
-                          {user?.profile?.word_balance?.toLocaleString() || 0} 
-                          <span className="text-sm md:text-xl text-slate-500 font-bold uppercase tracking-widest">Tokens</span>
-                        </h2>
-                     </div>
-                  </div>
+              <div className="absolute top-0 right-0 w-64 h-64 bg-pink-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none group-hover:bg-pink-500/20 transition-all duration-700"></div>
 
-                  <div className="lg:col-span-4 flex justify-between lg:justify-center items-center gap-6 md:gap-12 px-2 lg:border-x lg:border-white/10">
-                     <div className="text-center lg:text-left">
-                        <div className="flex items-center gap-2 mb-2 justify-center lg:justify-start">
-                          <Calendar size={14} className="text-blue-400"/>
-                          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Global Start</p>
-                        </div>
-                        <p className="text-sm md:text-xl font-black">{formatDateTime(currentSub.start_date).date}</p>
-                     </div>
-                     <div className="text-center lg:text-left">
-                        <div className="flex items-center gap-2 mb-2 justify-center lg:justify-start">
-                          <CreditCard size={14} className="text-pink-400"/>
-                          <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Global End</p>
-                        </div>
-                        <p className="text-sm md:text-xl font-black">{formatDateTime(currentSub.end_date).date}</p>
-                     </div>
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
+                <div className="lg:col-span-5 flex items-center gap-4 md:gap-6">
+                  <div className="w-14 h-14 md:w-20 md:h-20 rounded-2xl md:rounded-3xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-xl group-hover:scale-110 transition-transform duration-500">
+                    <Zap size={32} className="text-yellow-400 fill-yellow-400" />
                   </div>
+                  <div>
+                    <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-1 md:mb-2">Total Available Balance</p>
+                    <h2 className="text-3xl md:text-5xl font-black tracking-tight flex items-baseline gap-2">
+                      {user?.profile?.word_balance?.toLocaleString() || 0}
+                      <span className="text-sm md:text-xl text-slate-500 font-bold uppercase tracking-widest">Tokens</span>
+                    </h2>
+                  </div>
+                </div>
 
-                  <div className="lg:col-span-3">
-                    <div className="bg-white/5 backdrop-blur-sm px-6 py-4 rounded-2xl md:rounded-3xl border border-white/10 flex items-center gap-4 group/box hover:bg-white/10 transition-all duration-300">
-                       <Hourglass size={24} className="text-emerald-400 animate-pulse"/>
-                       <div>
-                          <p className="text-[9px] md:text-[10px] font-black text-emerald-400/70 uppercase tracking-widest mb-0.5">Time Remaining</p>
-                          <p className="text-lg md:text-2xl font-black tracking-tighter">{calculateTimeLeft(currentSub.end_date)}</p>
-                       </div>
+                <div className="lg:col-span-4 flex justify-between lg:justify-center items-center gap-6 md:gap-12 px-2 lg:border-x lg:border-white/10">
+                  <div className="text-center lg:text-left">
+                    <div className="flex items-center gap-2 mb-2 justify-center lg:justify-start">
+                      <Calendar size={14} className="text-blue-400" />
+                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Global Start</p>
+                    </div>
+                    <p className="text-sm md:text-xl font-black">{formatDateTime(currentSub.start_date).date}</p>
+                  </div>
+                  <div className="text-center lg:text-left">
+                    <div className="flex items-center gap-2 mb-2 justify-center lg:justify-start">
+                      <CreditCard size={14} className="text-pink-400" />
+                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Global End</p>
+                    </div>
+                    <p className="text-sm md:text-xl font-black">{formatDateTime(currentSub.end_date).date}</p>
+                  </div>
+                </div>
+
+                <div className="lg:col-span-3">
+                  <div className="bg-white/5 backdrop-blur-sm px-6 py-4 rounded-2xl md:rounded-3xl border border-white/10 flex items-center gap-4 group/box hover:bg-white/10 transition-all duration-300">
+                    <Hourglass size={24} className="text-emerald-400 animate-pulse" />
+                    <div>
+                      <p className="text-[9px] md:text-[10px] font-black text-emerald-400/70 uppercase tracking-widest mb-0.5">Time Remaining</p>
+                      <p className="text-lg md:text-2xl font-black tracking-tighter">{calculateTimeLeft(currentSub.end_date)}</p>
                     </div>
                   </div>
-               </div>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -254,31 +254,31 @@ export default function UserDashboard() {
 
         {/* Chart & Engine Usage */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-           <div className="lg:col-span-2 bg-white px-2 py-8 rounded-[2.5rem] shadow-2xl border border-gray-100">
-              <h3 className="text-lg md:text-xl font-black text-gray-800 mb-8 flex items-center gap-2 italic uppercase">
-                <TrendingUp size={24} className="text-pink-500"/> Token Usage Trend
-              </h3>
-              <AnalyticsCharts trendData={charts.usage_trend} />
-           </div>
+          <div className="lg:col-span-2 bg-white px-2 py-8 rounded-[2.5rem] shadow-2xl border border-gray-100">
+            <h3 className="text-lg md:text-xl font-black text-gray-800 mb-8 flex items-center gap-2 italic uppercase">
+              <TrendingUp size={24} className="text-pink-500" /> Token Usage Trend
+            </h3>
+            <AnalyticsCharts trendData={charts.usage_trend} />
+          </div>
 
-           <div className="bg-white py-8 px-6 rounded-[2.5rem] shadow-2xl border border-gray-100">
-              <h3 className="text-[16px]  md:text-xl font-black text-gray-800 mb-8 flex items-center gap-2 italic uppercase">
-                <Cpu size={24} className="text-purple-600"/> Engine Distribution
-              </h3>
-              <div className="space-y-6">
-                {charts.model_distribution.map((m, idx) => (
-                  <div key={idx}>
-                    <div className="flex justify-between mb-2">
-                      <span className="text-[10px] font-black text-gray-400 uppercase">{m.model_name}</span>
-                      <span className="text-xs font-black text-gray-700">{m.count} Req</span>
-                    </div>
-                    <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-purple-500 to-blue-500" style={{ width: `${(m.count / summary.total_messages) * 100}%` }}></div>
-                    </div>
+          <div className="bg-white py-8 px-6 rounded-[2.5rem] shadow-2xl border border-gray-100">
+            <h3 className="text-[16px]  md:text-xl font-black text-gray-800 mb-8 flex items-center gap-2 italic uppercase">
+              <Cpu size={24} className="text-purple-600" /> Engine Distribution
+            </h3>
+            <div className="space-y-6">
+              {charts.model_distribution.map((m, idx) => (
+                <div key={idx}>
+                  <div className="flex justify-between mb-2">
+                    <span className="text-[10px] font-black text-gray-400 uppercase">{m.model_name}</span>
+                    <span className="text-xs font-black text-gray-700">{m.count} Req</span>
                   </div>
-                ))}
-              </div>
-           </div>
+                  <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-purple-500 to-blue-500" style={{ width: `${(m.count / summary.total_messages) * 100}%` }}></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Platform Analytics */}
@@ -294,7 +294,7 @@ export default function UserDashboard() {
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Active Subscriptions & Model Access</p>
             </div>
             <div className="bg-indigo-50 px-4 py-2 rounded-xl">
-               <p className="text-[10px] font-black text-indigo-600 uppercase">Active Slots: {subscriptions?.filter(s => s.is_active).length}</p>
+              <p className="text-[10px] font-black text-indigo-600 uppercase">Active Slots: {subscriptions?.filter(s => s.is_active).length}</p>
             </div>
           </div>
 
@@ -302,12 +302,12 @@ export default function UserDashboard() {
             {subscriptions?.filter(s => s.is_active).map((sub) => {
               const percent = Math.round((sub.remaining_tokens / sub.offer.tokens) * 100);
               const isLow = percent < 15;
-              
+
               return (
                 <div key={sub.id} className="relative bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 hover:shadow-2xl transition-all group overflow-hidden">
                   {/* Decorative Background */}
                   <div className={`absolute top-0 right-0 w-32 h-32 ${isLow ? 'bg-rose-500/5' : 'bg-indigo-500/5'} rounded-full blur-3xl pointer-events-none`} />
-                  
+
                   <div className="flex flex-col gap-6 relative z-10">
                     {/* Top Row: Icon & Name */}
                     <div className="flex items-start justify-between">
@@ -353,13 +353,13 @@ export default function UserDashboard() {
                         <span className={isLow ? 'text-rose-500' : 'text-indigo-600'}>{percent}% Left</span>
                       </div>
                       <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200">
-                        <div 
+                        <div
                           className={`h-full rounded-full transition-all duration-1000 ease-out shadow-sm ${isLow ? 'bg-gradient-to-r from-rose-500 to-rose-400' : 'bg-gradient-to-r from-indigo-600 to-blue-500'}`}
                           style={{ width: `${percent}%` }}
                         />
                       </div>
                       <div className="flex items-center gap-1.5 text-slate-400">
-                        <Calendar size={12}/>
+                        <Calendar size={12} />
                         <span className="text-[9px] font-bold uppercase tracking-widest">Valid Until: {formatDateTime(sub.end_date).date}</span>
                       </div>
                     </div>
@@ -374,11 +374,11 @@ export default function UserDashboard() {
         <div className="bg-white rounded-[3rem] shadow-2xl border border-gray-100 overflow-hidden">
           <div className="py-10 px-3 md:p-10 bg-gray-50/50 border-b border-gray-100 flex justify-between items-center">
             <h3 className="text-sm md:text-2xl font-black text-gray-800 italic uppercase flex items-center gap-3">
-              <Globe size={28} className="text-emerald-500 animate-pulse"/> Live Activity Stream
+              <Globe size={28} className="text-emerald-500 animate-pulse" /> Live Activity Stream
             </h3>
             <div className="flex gap-2">
-               <span className="w-3 h-3 bg-blue-500 rounded-full animate-ping"></span>
-               <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest">Real-time update</p>
+              <span className="w-3 h-3 bg-blue-500 rounded-full animate-ping"></span>
+              <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest">Real-time update</p>
             </div>
           </div>
 
@@ -386,14 +386,14 @@ export default function UserDashboard() {
             {recent_logs.map((log) => {
               const { date, time } = formatDateTime(log.created_at);
               const isMessenger = log.platform.includes('messenger');
-              
+
               return (
                 <div key={log.id} className="group relative bg-white border border-slate-100 rounded-[1.5rem] md:rounded-[2.5rem] p-4 md:p-6 hover:shadow-2xl transition-all overflow-hidden hover:-translate-y-1">
                   <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${isMessenger ? 'bg-blue-500' : 'bg-pink-500'}`} />
-                  
+
                   {/* Mobile View: Vertical Stack */}
                   <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 md:gap-8 min-w-0">
-                    
+
                     {/* Source Device/Account */}
                     <div className="flex items-center gap-4 flex-1 min-w-0">
                       <div className={`w-12 h-12 md:w-16 md:h-16 shrink-0 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-xl ${isMessenger ? 'bg-blue-600' : 'bg-pink-600'} group-hover:scale-110 transition-transform duration-500`}>
@@ -409,8 +409,8 @@ export default function UserDashboard() {
                     </div>
 
                     <div className="xl:border-l xl:border-slate-100 xl:pl-8">
-                       <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1.5">Operation Type</p>
-                       <p className="text-xs md:text-sm font-black text-slate-600 capitalize py-1.5 px-3 bg-slate-50 rounded-xl inline-block xl:bg-transparent xl:p-0">{log.request_type.replace('_', ' ')}</p>
+                      <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1.5">Operation Type</p>
+                      <p className="text-xs md:text-sm font-black text-slate-600 capitalize py-1.5 px-3 bg-slate-50 rounded-xl inline-block xl:bg-transparent xl:p-0">{log.request_type.replace('_', ' ')}</p>
                     </div>
 
                     <div className="flex items-center justify-between xl:justify-end gap-3 lg:gap-12 overflow-x-auto no-scrollbar">
