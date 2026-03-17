@@ -17,6 +17,7 @@ import Image from "next/image";
 export default function DashboardAI() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const [isHidden, setIsHidden] = useState(false);
   const [messages, setMessages] = useState([
     { role: "bot", content: "আসসালামু আলাইকুম! আমি New Smart Agent AI। আমি আপনাকে কিভাবে সাহায্য করতে পারি?", time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
   ]);
@@ -112,23 +113,40 @@ export default function DashboardAI() {
     <>
       {/* Messenger Style Floating Trigger */}
       <AnimatePresence mode="wait">
-        {!isOpen && (
+        {!isOpen && !isHidden && (
           <motion.div
             key="trigger"
+            drag
+            dragConstraints={{ left: -window?.innerWidth + 100, right: 0, top: -window?.innerHeight + 100, bottom: 0 }}
+            dragElastic={0.1}
+            dragMomentum={false}
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0, opacity: 0 }}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            onClick={() => setIsOpen(true)}
-            className="fixed bottom-6 right-6 z-[1000] cursor-pointer"
+            className="fixed bottom-6 right-6 z-[1000] cursor-grab active:cursor-grabbing p-1"
           >
             <div className="relative group">
+               {/* Close Button (X) */}
+               <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsHidden(true);
+                  }}
+                  className="absolute -top-1 -right-1 w-6 h-6 bg-white rounded-full shadow-md z-20 flex items-center justify-center border border-gray-100 opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-gray-50"
+               >
+                 <X size={12} className="text-gray-500" />
+               </button>
+
               {/* Animated Glow Effect */}
               <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500 to-cyan-400 rounded-full blur-lg opacity-40 group-hover:opacity-70 transition-opacity duration-300"></div>
               
               {/* Main Button Container */}
-              <div className="w-16 h-16 sm:w-18 sm:h-18 md:w-20 md:h-20 bg-gradient-to-tr from-[#E0E7FF] to-[#F3E8FF] rounded-full flex items-center justify-center shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-[3px] border-white overflow-hidden relative z-10 p-0.5">
+              <div 
+                onClick={() => setIsOpen(true)}
+                className="w-16 h-16 sm:w-18 sm:h-18 md:w-20 md:h-20 bg-gradient-to-tr from-[#E0E7FF] to-[#F3E8FF] rounded-full flex items-center justify-center shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-[3px] border-white overflow-hidden relative z-10 p-0.5"
+              >
                 <div className="relative w-full h-full rounded-full overflow-hidden shadow-inner bg-white">
                   <Image 
                      src="/newsmartagent_ai_logo.jpeg" 
