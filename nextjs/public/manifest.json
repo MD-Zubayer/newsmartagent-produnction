@@ -2,7 +2,7 @@
   "name": "New Smart Agent",
   "short_name": "NewSmartAgent",
   "description": "AI automation platform for Facebook pages and customer management.",
-  "start_url": "/",
+  "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#ffffff",
