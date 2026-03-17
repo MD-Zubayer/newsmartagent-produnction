@@ -65,14 +65,24 @@ def ai_webhook(request):
     if not request_type and (data.get('receiver') or data.get('sessionId') or data.get('phone')):
         request_type = 'whatsapp'
 
-    # WhatsApp: allow fallback to receiver/sessionId/phone when page_id absent
-    if request_type == 'whatsapp' and not page_id:
-        page_id = (
-            data.get('receiver')
-            or data.get('sessionId')
-            or data.get('phone')
-            or data.get('from')
-        )
+    # WhatsApp: normalize page_id to phone/session so agent lookup succeeds
+    if request_type == 'whatsapp':
+        cleaned_session = None
+        if data.get('sessionId'):
+            cleaned_session = str(data.get('sessionId')).replace('user_', '')
+        page_candidates = [
+            data.get('receiver'),
+            data.get('phone'),
+            data.get('from'),
+            data.get('sessionId'),
+            cleaned_session,
+            page_id,
+        ]
+        # pick the first truthy value
+        for candidate in page_candidates:
+            if candidate:
+                page_id = candidate
+                break
 
     # comment or message
 

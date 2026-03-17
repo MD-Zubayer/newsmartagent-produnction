@@ -113,14 +113,24 @@ def process_ai_reply_task(self, data):
     request_type = data.get('type', 'messenger')
     if not request_type and (data.get('receiver') or data.get('sessionId') or data.get('phone')):
         request_type = 'whatsapp'
-    # WhatsApp fallback: use receiver/sessionId/phone if page_id missing
-    if request_type == 'whatsapp' and not page_id:
-        page_id = (
-            data.get('receiver')
-            or data.get('sessionId')
-            or data.get('phone')
-            or data.get('from')
-        )
+
+    # WhatsApp: normalize page_id to phone/session for lookup
+    if request_type == 'whatsapp':
+        cleaned_session = None
+        if data.get('sessionId'):
+            cleaned_session = str(data.get('sessionId')).replace('user_', '')
+        page_candidates = [
+            data.get('receiver'),
+            data.get('phone'),
+            data.get('from'),
+            data.get('sessionId'),
+            cleaned_session,
+            page_id,
+        ]
+        for candidate in page_candidates:
+            if candidate:
+                page_id = candidate
+                break
 
     if request_type == 'facebook_comment':
         text = data.get('comment_text')
@@ -136,12 +146,43 @@ def process_ai_reply_task(self, data):
 
     # ২. এজেন্ট ও প্রোফাইল লোড
     try:
+        lookup_ids = []
+        if request_type == 'whatsapp':
+            lookup_ids = [
+                page_id,
+                data.get('receiver'),
+                data.get('phone'),
+                data.get('from'),
+                data.get('sessionId'),
+                str(data.get('sessionId')).replace('user_', '') if data.get('sessionId') else None,
+            ]
+        else:
+            lookup_ids = [page_id]
+
+        lookup_ids = [str(i) for i in lookup_ids if i]
+
         agent_config = AgentAI.objects.filter(
-            page_id=page_id, is_active=True
+            page_id__in=lookup_ids, is_active=True
         ).order_by('-id').first()
         if not agent_config:
-            logger.error(f'Error: No active agent found for page_id {page_id}')
+            # Fallback: find by WhatsAppInstance phone_number → user → whatsapp agent
+            try:
+                from openwa.models import WhatsAppInstance
+                wa_instance = WhatsAppInstance.objects.filter(phone_number__in=lookup_ids).first()
+                if wa_instance:
+                    agent_config = AgentAI.objects.filter(
+                        user=wa_instance.user,
+                        platform='whatsapp',
+                        is_active=True
+                    ).order_by('-id').first()
+            except Exception as e:
+                logger.error(f'Fallback WhatsAppInstance lookup failed: {e}')
+
+        if not agent_config:
+            logger.error(f'Error: No active agent found for identifiers {lookup_ids}')
             return
+        # Use matched agent page_id for downstream operations/cache keys
+        page_id = agent_config.page_id
         user_profile = agent_config.user.profile
 
         from users.models import FacebookPage
