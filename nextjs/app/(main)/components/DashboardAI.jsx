@@ -119,30 +119,41 @@ export default function DashboardAI() {
             drag
             dragConstraints={{ left: -1000, right: 1000, top: -1000, bottom: 1000 }}
             dragElastic={0.1}
+            dragMomentum={false}
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            whileDrag={{ scale: 1.1, cursor: "grabbing" }}
-            className="fixed bottom-6 right-6 z-[1000] cursor-grab p-1"
+            dragTransition={{ power: 0.2, timeConstant: 200 }}
+            className="fixed bottom-6 right-6 z-[1000] p-3 touch-none"
+            style={{ cursor: 'grab' }}
           >
             <div className="relative group">
-               {/* Close Button (X) */}
+               {/* Close Button (X) - Visible on hover (desktop) or active/tap (mobile) */}
                <button 
                   onClick={(e) => {
+                    e.preventDefault();
                     e.stopPropagation();
                     setIsHidden(true);
                   }}
-                  className="absolute -top-1 -right-1 w-6 h-6 bg-white rounded-full shadow-md z-20 flex items-center justify-center border border-gray-100 opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-gray-50"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="absolute -top-1 -right-1 w-8 h-8 bg-white rounded-full shadow-lg z-30 flex items-center justify-center border border-gray-100 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-200 hover:bg-gray-50 active:scale-90"
                >
-                 <X size={12} className="text-gray-500" />
+                 <X size={14} className="text-gray-500" />
                </button>
 
               {/* Animated Glow Effect */}
-              <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500 to-cyan-400 rounded-full blur-lg opacity-40 group-hover:opacity-70 transition-opacity duration-300"></div>
+              <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500 to-cyan-400 rounded-full blur-lg opacity-40 group-hover:opacity-70 transition-opacity duration-300 pointer-events-none"></div>
               
               {/* Main Button Container */}
               <div 
-                onClick={() => setIsOpen(true)}
-                className="w-16 h-16 sm:w-18 sm:h-18 md:w-20 md:h-20 bg-gradient-to-tr from-[#E0E7FF] to-[#F3E8FF] rounded-full flex items-center justify-center shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-[3px] border-white overflow-hidden relative z-10 p-0.5"
+                onClick={(e) => {
+                   // Only open if not dragging
+                   if (e.defaultPrevented) return;
+                   setIsOpen(true);
+                }}
+                className="w-16 h-16 sm:w-18 sm:h-18 md:w-20 md:h-20 bg-gradient-to-tr from-[#E0E7FF] to-[#F3E8FF] rounded-full flex items-center justify-center shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-[3px] border-white overflow-hidden relative z-10 p-0.5 cursor-pointer"
               >
                 <div className="relative w-full h-full rounded-full overflow-hidden shadow-inner bg-white">
                   <Image 

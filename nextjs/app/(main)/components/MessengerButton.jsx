@@ -23,20 +23,27 @@ export default function MessengerButton() {
           drag
           dragConstraints={{ left: -1000, right: 1000, top: -1000, bottom: 1000 }}
           dragElastic={0.1}
+          dragMomentum={false}
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0, opacity: 0 }}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          whileDrag={{ scale: 1.1, cursor: "grabbing" }}
-          className="fixed bottom-8 left-8 z-[9999] group cursor-grab p-2"
+          dragTransition={{ power: 0.2, timeConstant: 200 }}
+          className="fixed bottom-8 left-8 z-[9999] p-3 touch-none"
+          style={{ cursor: 'grab' }}
         >
-          {/* Close Button (X) */}
+          {/* Close Button (X) - Visible on hover or active/touch */}
           <button 
             onClick={(e) => {
+               e.preventDefault();
                e.stopPropagation();
                setIsHidden(true);
             }}
-            className="absolute -top-1 -left-1 w-5 h-5 bg-white rounded-full shadow-md z-20 flex items-center justify-center border border-gray-100 opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-gray-50"
+            onPointerDown={(e) => e.stopPropagation()}
+            className="absolute -top-1 -left-1 w-8 h-8 bg-white rounded-full shadow-lg z-30 flex items-center justify-center border border-gray-100 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-200 hover:bg-gray-50 active:scale-90"
           >
-            <X size={10} className="text-gray-500" />
+            <X size={14} className="text-gray-500" />
           </button>
 
           <a 
