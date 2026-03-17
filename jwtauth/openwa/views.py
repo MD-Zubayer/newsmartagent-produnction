@@ -170,7 +170,7 @@ class WhatsAppStatusView(APIView):
     def get(self, request):
         try:
             response = requests.get(
-                f'{BAILEYS_API_URL}/status',
+                f'{settings.BAILEYS_API_URL}/status',
                 timeout=5,
             )
             data = response.json()
@@ -193,7 +193,7 @@ class WhatsAppQRView(APIView):
     def get(self, request):
         try:
             response = requests.get(
-                f'{BAILEYS_API_URL}/qr',
+                f'{settings.BAILEYS_API_URL}/qr',
                 timeout=5,
             )
             data = response.json()
