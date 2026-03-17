@@ -60,6 +60,9 @@ def ai_webhook(request):
     # first validation
     logger.info(f"📥 [ai_webhook] Received raw data: {data}")
     
+    sender_id = data.get('sender_id')
+    page_id = data.get('page_id')
+    
     # 1. Identify Request Type
     request_type = data.get('type') or data.get('platform')
     if not request_type:
