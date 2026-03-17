@@ -61,10 +61,18 @@ def ai_webhook(request):
     sender_id = data.get('sender_id')
     page_id = data.get('page_id')
     request_type = data.get('type')
+    # Infer whatsapp if type missing but whatsapp markers exist
+    if not request_type and (data.get('receiver') or data.get('sessionId') or data.get('phone')):
+        request_type = 'whatsapp'
 
     # WhatsApp: allow fallback to receiver/sessionId/phone when page_id absent
     if request_type == 'whatsapp' and not page_id:
-        page_id = data.get('receiver') or data.get('sessionId') or data.get('phone')
+        page_id = (
+            data.get('receiver')
+            or data.get('sessionId')
+            or data.get('phone')
+            or data.get('from')
+        )
 
     # comment or message
 
