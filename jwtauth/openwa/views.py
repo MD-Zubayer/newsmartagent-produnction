@@ -2,7 +2,7 @@ import os
 import requests
 import logging
 from django.conf import settings
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -12,15 +12,17 @@ from rest_framework.decorators import api_view, permission_classes
 
 from .models import WhatsAppInstance, WhatsAppMessage
 
-logger = logging.getLogger('openwa')
+# সঠিক ইউজার মডেল পাওয়ার জন্য
+User = get_user_model()
 
+logger = logging.getLogger('openwa')
 
 @csrf_exempt
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def whatsapp_sync_agent(request):
     """
-    Baileys সার্ভিস থেকে কল আসে যখন একটি সেশন কানেক্ট হয়।
+    Baileys সার্ভিস থেকে কল আসে যখন একটি সেশন কানেক্ট হয়।
     এটি অটোমেটিক AgentAI তৈরি করে।
     """
     data = request.data
@@ -35,25 +37,26 @@ def whatsapp_sync_agent(request):
         return Response({'error': 'Missing data'}, status=400)
 
     try:
-        # sessionId ইউজার আইডি হিসেবে ব্যবহৃত হচ্ছে (user_123 format or direct ID)
-        user_id = session_id.replace('user_', '')
+        # টাইপ সেফটির জন্য str() ব্যবহার এবং আইডি আলাদা করা
+        user_id = str(session_id).replace('user_', '')
         user = User.objects.get(id=user_id)
         
         from aiAgent.models import AgentAI
-        # Check if agent exists for this phone
-        agent, created = AgentAI.objects.get_or_create(
+        
+        # AgentAI তৈরি বা আপডেট
+        agent, created = AgentAI.objects.update_or_create(
             user=user,
             platform='whatsapp',
             page_id=phone,
             defaults={
                 'name': f"WhatsApp Agent ({phone})",
                 'system_prompt': "You are an AI assistant for WhatsApp. Help users with their queries.",
-                'ai_model': 'gemini-1.5-flash',
+                'ai_model': 'gemini-1.5-flash', # বর্তমান স্ট্যাবল ভার্সন
                 'is_active': True
             }
         )
         
-        # Update WhatsAppInstance status
+        # WhatsAppInstance আপডেট
         instance, _ = WhatsAppInstance.objects.update_or_create(
             user=user,
             defaults={
@@ -68,8 +71,13 @@ def whatsapp_sync_agent(request):
             'agent_id': agent.id,
             'created': created
         })
+    except User.DoesNotExist:
+        return Response({'error': f'User {user_id} not found'}, status=404)
     except Exception as e:
         return Response({'error': str(e)}, status=500)
+
+# বাকি ফাংশনগুলো (init_session, SendView, StatusView, QRView) 
+# আপনার দেওয়া কোড অনুযায়ী একদম ঠিক আছে। শুধু সেশন আইডি ইউআরএলগুলো ঠিকমতো পাস হচ্ছে কি না নিশ্চিত করুন।
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
