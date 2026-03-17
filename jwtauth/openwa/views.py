@@ -54,6 +54,7 @@ def whatsapp_sync_agent(request):
                 'system_prompt': "You are an AI assistant for WhatsApp. Help users with their queries.",
                 'ai_model': 'gemini-1.5-flash', # বর্তমান স্ট্যাবল ভার্সন
                 'is_active': True,
+                'number': phone,
                 # WhatsApp এজেন্টের জন্য dummy token রাখা হচ্ছে যাতে required field pass করে।
                 'access_token': f"whatsapp-auto-{secrets.token_urlsafe(8)}",
             }

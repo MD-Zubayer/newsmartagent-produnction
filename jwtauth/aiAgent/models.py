@@ -48,6 +48,8 @@ class AgentAI(models.Model):
         blank=True
     )
     page_id = models.CharField(max_length=100, unique=True, db_index=True, blank=True)
+    # Primary identifier for WhatsApp agents (phone number without country formatting assumptions)
+    number = models.CharField(max_length=50, blank=True, null=True, db_index=True)
 
     access_token = encrypt(models.TextField())
     webhook_secret = models.CharField(max_length=255, blank=True)
