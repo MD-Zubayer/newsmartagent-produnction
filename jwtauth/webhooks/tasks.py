@@ -19,7 +19,7 @@ from chat.utils import get_smart_post_context
 from aiAgent.business_logic.logic_handler import (
     is_duplicate_or_outdated, acquire_user_lock, get_order_instructions,
     perform_rag_search, build_ai_context, get_ai_response,
-    log_token_usage, deduct_user_tokens, deliver_reply_to_n8n, handle_public_comment_logic,
+    log_token_usage, deduct_user_tokens, deliver_whatsapp_reply, deliver_facebook_reply, handle_public_comment_logic,
     check_token_availability, deliver_dashboard_reply
 )
 from aiAgent.cache.redis_vector import (
@@ -327,8 +327,10 @@ def process_ai_reply_task(self, data):
             clean_reply = reply.strip()
             if request_type == 'dashboard':
                 delivered = deliver_dashboard_reply(agent_config.user.id, clean_reply, msg_id)
+            elif request_type == 'whatsapp':
+                delivered = deliver_whatsapp_reply(data, clean_reply)
             else:
-                delivered = deliver_reply_to_n8n(data, clean_reply, page_id, effective_access_token)
+                delivered = deliver_facebook_reply(data, clean_reply, page_id, effective_access_token)
 
             if delivered and msg_id:
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)
@@ -484,8 +486,10 @@ def process_ai_reply_task(self, data):
             
             if request_type == 'dashboard':
                 delivered = deliver_dashboard_reply(agent_config.user.id, clean_reply, msg_id)
+            elif request_type == 'whatsapp':
+                delivered = deliver_whatsapp_reply(data, clean_reply)
             else:
-                delivered = deliver_reply_to_n8n(data, clean_reply, page_id, effective_access_token)
+                delivered = deliver_facebook_reply(data, clean_reply, page_id, effective_access_token)
 
             if delivered and msg_id:
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)

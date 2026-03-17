@@ -417,34 +417,31 @@ def get_ai_response(agent_config, full_prompt, history):
             'error': str(e)
         }
 
-def deliver_reply_to_n8n(data, reply, page_id, access_token):
-    """Deliver final reply — routes WhatsApp to Baileys, Facebook to n8n"""
-    import os
-    request_type = str(data.get('type', 'messenger'))
-
-    # ─── WhatsApp: n8n-এ পাঠান ──────────────────────────────────────────────
-    if request_type == 'whatsapp':
-        webhook_url = "https://n8n.newsmartagent.com/webhook/whatsapp-delivery"
-        payload = {
-            "sender_id": str(data.get('sender_id', '')),
-            "reply": str(reply),
-            "type": "whatsapp",
-            "message_id": str(data.get('message_id', '')),
-            "sessionId": str(data.get('sessionId', ''))
-        }
-        try:
-            logger.info(f"📲 Routing WhatsApp reply to n8n delivery: {payload}")
-            response = requests.post(webhook_url, json=payload, timeout=15)
-            if response.status_code != 200:
-                logger.error(f"n8n delivery error: {response.status_code} - {response.text}")
-                return False
-            return True
-        except Exception as e:
-            logger.error(f"n8n WhatsApp delivery critical failure: {e}")
+def deliver_whatsapp_reply(data, reply):
+    """Deliver final reply for WhatsApp via n8n webhook"""
+    webhook_url = "https://n8n.newsmartagent.com/webhook/whatsapp-delivery"
+    payload = {
+        "sender_id": str(data.get('sender_id', '')),
+        "reply": str(reply),
+        "type": "whatsapp",
+        "message_id": str(data.get('message_id', '')),
+        "sessionId": str(data.get('sessionId', ''))
+    }
+    try:
+        logger.info(f"📲 Routing WhatsApp reply to n8n delivery: {payload}")
+        response = requests.post(webhook_url, json=payload, timeout=15)
+        if response.status_code != 200:
+            logger.error(f"n8n WhatsApp delivery error: {response.status_code} - {response.text}")
             return False
+        return True
+    except Exception as e:
+        logger.error(f"n8n WhatsApp delivery critical failure: {e}")
+        return False
 
-    # ─── Facebook (Messenger / Comment): n8n-এ পাঠান ────────────────────────
+def deliver_facebook_reply(data, reply, page_id, access_token):
+    """Deliver final reply for Facebook (Messenger / Comment) via n8n webhook"""
     webhook_url = "https://n8n.newsmartagent.com/webhook/fb-comment-message-delivery"
+    request_type = str(data.get('type', 'messenger'))
     payload = {
         "sender_id": str(data.get('sender_id', '')),
         "reply": str(reply),
@@ -456,18 +453,18 @@ def deliver_reply_to_n8n(data, reply, page_id, access_token):
     }
 
     try:
-        logger.info(f"Sending payload to n8n: {payload}")
+        logger.info(f"Sending Facebook payload to n8n: {payload}")
         response = requests.post(
             webhook_url,
             json=payload,
             timeout=15
         )
         if response.status_code != 200:
-            logger.error(f"n8n returned error: {response.status_code} - {response.text}")
+            logger.error(f"n8n Facebook delivery error: {response.status_code} - {response.text}")
             return False
         return True
     except Exception as e:
-        logger.error(f"Webhook delivery critical failure: {e}")
+        logger.error(f"n8n Facebook delivery critical failure: {e}")
         return False
 
 def deliver_dashboard_reply(user_id, reply_text, message_id):
