@@ -103,21 +103,28 @@ class WhatsAppSendView(APIView):
     permission_classes = [AllowAny] 
 
     def post(self, request):
-        # existing send logic with sessionId logic
-        data = request.data
-        to = data.get('to')
-        message = data.get('message')
+        to = request.data.get('to')
+        message = request.data.get('message')
+        session_id = request.data.get('sessionId')
 
-        if not to or not message:
+        # If sessionId not provided (e.g. from dashboard), use user's ID
+        if not session_id and request.user.is_authenticated:
+            session_id = f"user_{request.user.id}"
+
+        if not all([to, message, session_id]):
             return Response(
-                {'error': '`to` and `message` are required'},
+                {'error': '`to`, `message`, and `sessionId` are required'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
             response = requests.post(
                 f'{settings.BAILEYS_API_URL}/send-message',
-                json={'to': to, 'message': message},
+                json={
+                    'sessionId': session_id,
+                    'to': to,
+                    'message': message
+                },
                 headers={
                     'Content-Type': 'application/json',
                     'x-api-secret': settings.BAILEYS_API_SECRET,
@@ -136,7 +143,7 @@ class WhatsAppSendView(APIView):
                 ai_reply=message,
             )
 
-            logger.info(f'WhatsApp message sent to {to}')
+            logger.info(f'WhatsApp message sent to {to} (Session: {session_id})')
             return Response(data, status=status.HTTP_200_OK)
 
         except requests.exceptions.ConnectionError:
@@ -162,19 +169,17 @@ class WhatsAppSendView(APIView):
 class WhatsAppStatusView(APIView):
     """
     Baileys WhatsApp connection status চেক করে।
-
-    GET /api/whatsapp/status/
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        session_id = f"user_{request.user.id}"
         try:
             response = requests.get(
-                f'{settings.BAILEYS_API_URL}/status',
+                f'{settings.BAILEYS_API_URL}/status/{session_id}',
                 timeout=5,
             )
-            data = response.json()
-            return Response(data, status=status.HTTP_200_OK)
+            return Response(response.json(), status=response.status_code)
         except Exception as e:
             return Response(
                 {'status': 'unreachable', 'error': str(e)},
@@ -185,19 +190,17 @@ class WhatsAppStatusView(APIView):
 class WhatsAppQRView(APIView):
     """
     Baileys QR code দেখায় (browser থেকে scan করার জন্য)।
-
-    GET /api/whatsapp/qr/
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        session_id = f"user_{request.user.id}"
         try:
             response = requests.get(
-                f'{settings.BAILEYS_API_URL}/qr',
+                f'{settings.BAILEYS_API_URL}/qr/{session_id}',
                 timeout=5,
             )
-            data = response.json()
-            return Response(data, status=status.HTTP_200_OK)
+            return Response(response.json(), status=response.status_code)
         except Exception as e:
             return Response(
                 {'error': str(e)},
