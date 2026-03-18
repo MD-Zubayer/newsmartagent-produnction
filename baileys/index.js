@@ -34,8 +34,44 @@ const jidNormalizedUser = getFromBaileys('jidNormalizedUser');
 const sessions = new Map();
 const cleanupPromises = new Map();
 const jidMap = new Map(); // Store LID -> Phone mappings
+const messageQueues = new Map(); // Store message queues per session
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
+const delay = ms => new Promise(res => setTimeout(res, ms));
+
+async function processQueue(sessionId) {
+    const queueData = messageQueues.get(sessionId);
+    if (!queueData || queueData.processing) return;
+
+    queueData.processing = true;
+    while (queueData.messages.length > 0) {
+        const session = sessions.get(sessionId);
+        if (!session || session.state !== 'open') {
+            queueData.processing = false;
+            return;
+        }
+
+        const { jid, message, resolve, reject } = queueData.messages.shift();
+        try {
+            // "Fake Typing" behavior: send presence update first
+            await session.sock.sendPresenceUpdate('composing', jid);
+
+            // Random delay between 2-5 seconds
+            const randomDelay = Math.floor(Math.random() * (5000 - 2000 + 1)) + 2000;
+            logger.info(`⏳ [Baileys] Typing for ${randomDelay}ms before sending to ${jid}`);
+            await delay(randomDelay);
+
+            const sent = await session.sock.sendMessage(jid, { text: message });
+            logger.info(`✅ [Baileys] Sent successfully to ${jid}`);
+            resolve({ success: true, messageId: sent?.key?.id });
+        } catch (err) {
+            logger.error(`❌ [Baileys] Send FAILED to ${jid}: ${err.message}`);
+            reject(err);
+        }
+    }
+    queueData.processing = false;
+}
+
 async function forwardToN8n(payload) {
     if (!N8N_WEBHOOK_URL) return;
     try {
@@ -242,6 +278,7 @@ async function cleanupSession(sessionId, { removeFolder = true } = {}) {
             try { fs.rmSync(sessionFolder, { recursive: true, force: true }); } catch (err) {}
         }
         sessions.delete(sessionId);
+        messageQueues.delete(sessionId);
         cleanupPromises.delete(sessionId);
     })();
     cleanupPromises.set(sessionId, cleanup);
@@ -290,14 +327,35 @@ app.post('/send-message', async (req, res) => {
         return res.status(503).json({ error: 'WhatsApp session not connected' });
     }
 
-    try {
-        let jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
-        logger.info(`✨ [Baileys] Sending to ${jid}`);
-        const sent = await session.sock.sendMessage(jid, { text: message });
-        res.json({ success: true, messageId: sent?.key?.id });
-    } catch (err) {
-        logger.error(`❌ Send FAILED: ${err.message}`);
-        res.status(500).json({ error: err.message });
+    if (!messageQueues.has(sessionId)) {
+        messageQueues.set(sessionId, { messages: [], processing: false });
+    }
+
+    const jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
+    const queueData = messageQueues.get(sessionId);
+
+    // Return promise after queuing
+    const sendPromise = new Promise((resolve, reject) => {
+        queueData.messages.push({ jid, message, resolve, reject });
+    });
+
+    processQueue(sessionId).catch(err => logger.error(`Queue error: ${err.message}`));
+
+    // Option: Return immediately to acknowledge receipt, or wait for the promise.
+    // Given the request for rate limiting, it's better to return immediately to the caller
+    // but here we wait for the result to keep the API response consistent for now.
+    // However, if the queue gets long, this might timeout.
+    // Let's return the message as "Queued" if the queue is not empty.
+    
+    if (queueData.messages.length > 1) {
+        res.json({ success: true, status: 'queued', queueLength: queueData.messages.length });
+    } else {
+        try {
+            const result = await sendPromise;
+            res.json(result);
+        } catch (err) {
+            res.status(500).json({ error: err.message });
+        }
     }
 });
 
