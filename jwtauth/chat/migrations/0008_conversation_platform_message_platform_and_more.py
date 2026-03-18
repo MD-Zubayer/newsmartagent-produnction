@@ -1,4 +1,5 @@
 from django.db import migrations, models
+import django.db.models.deletion
 
 class Migration(migrations.Migration):
 
@@ -16,6 +17,11 @@ class Migration(migrations.Migration):
             model_name='message',
             name='platform',
             field=models.CharField(choices=[('whatsapp', 'WhatsApp'), ('messenger', 'Messenger')], default='messenger', max_length=20),
+        ),
+        migrations.AlterField(
+            model_name='conversation',
+            name='agentAi',
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='conversations', to='aiAgent.AgentAI'),
         ),
         migrations.AlterUniqueTogether(
             name='conversation',

@@ -10,7 +10,7 @@ class Conversation(models.Model):
         ('whatsapp', 'WhatsApp'),
         ('messenger', 'Messenger'),
     ]
-    agentAi = models.ForeignKey('aiAgent.AgentAi', on_delete=models.CASCADE, related_name='conversations')
+    agentAi = models.ForeignKey('aiAgent.AgentAI', on_delete=models.CASCADE, related_name='conversations')
     contact_id = models.CharField(max_length=100)
     contact_name = models.CharField(max_length=120, blank=True, null=True)
     platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES, default='messenger')
