@@ -118,27 +118,31 @@
 <body>
     <div class="container">
         <div class="header">
-            <p>New Smart Agent</p>
-            <h1>Automation Monitoring</h1>
+            <p>{{ project }}</p>
+            <h1>Automation Alert</h1>
         </div>
         <div class="content">
             <div class="alert-box">
-                <h2>⚠️ Workflow Error Detected</h2>
+                <h2>⚠️ {{ error_type }}: Workflow Error</h2>
                 <p>{{ error_message }}</p>
             </div>
             
             <table class="details-table">
                 <tr>
+                    <th>Project</th>
+                    <td>{{ project }}</td>
+                </tr>
+                <tr>
                     <th>Workflow</th>
                     <td>{{ workflow_name }}</td>
                 </tr>
                 <tr>
-                    <th>Workflow ID</th>
-                    <td>{{ workflow_id }}</td>
+                    <th>Execution ID</th>
+                    <td>{{ execution_id }}</td>
                 </tr>
                 <tr>
                     <th>Failed Node</th>
-                    <td>{{ node_name }}</td>
+                    <td>{{ failed_node }}</td>
                 </tr>
                 <tr>
                     <th>Occurred At</th>
@@ -146,12 +150,19 @@
                 </tr>
             </table>
 
+            {% if full_stack %}
+            <div style="margin-top: 30px;">
+                <h3 style="font-size: 14px; color: #718096; text-transform: uppercase; margin-bottom: 10px;">Full Stack Trace</h3>
+                <div style="background-color: #f7fafc; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 11px; color: #4a5568; overflow-x: auto; white-space: pre-wrap; border: 1px solid #edf2f7;">{{ full_stack }}</div>
+            </div>
+            {% endif %}
+
             <div class="cta-container">
-                <a href="{{ execution_url }}" class="cta-button">Open Error Link</a>
+                <a href="{{ workflow_url }}" class="cta-button">Open Workflow Link</a>
             </div>
         </div>
         <div class="footer">
-            <p>&copy; 2024 New Smart Agent. All rights reserved.</p>
+            <p>&copy; 2024 {{ project }}. All rights reserved.</p>
             <p>This is an automated system alert. Please do not reply directly to this email.</p>
         </div>
     </div>

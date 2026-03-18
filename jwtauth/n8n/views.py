@@ -11,14 +11,17 @@ class N8NErrorAlertView(APIView):
 
     def post(self, request, *args, **kwargs):
         try:
-            # Data sent from n8n
+            # Data sent from n8n (Enhanced Structure)
             data = request.data
             context = {
+                'project': data.get('project', 'New Smart Agent'),
                 'workflow_name': data.get('workflow_name', 'Unnamed Workflow'),
-                'workflow_id': data.get('workflow_id', 'Unknown'),
+                'workflow_url': data.get('workflow_url', '#'),
+                'execution_id': data.get('execution_id', 'Unknown'),
+                'failed_node': data.get('failed_node', 'Unknown Node'),
+                'error_type': data.get('error_type', 'Error'),
                 'error_message': data.get('error_message', 'No specific error message provided.'),
-                'node_name': data.get('node_name', 'Unknown Node'),
-                'execution_url': data.get('execution_url', 'https://dev-n8n.newsmartagent.com'),
+                'full_stack': data.get('full_stack', ''),
                 'timestamp': data.get('timestamp', 'Just now'),
             }
 
