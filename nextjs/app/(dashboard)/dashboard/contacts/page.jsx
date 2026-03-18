@@ -15,7 +15,7 @@ import {
 import api from "@/lib/api";
 import { toast } from 'react-hot-toast';
 
-export default function ContactsPage() {
+export default function Contacts() {
   const [agents, setAgents] = useState([]);
   const [selectedAgent, setSelectedAgent] = useState("");
   const [contacts, setContacts] = useState([]);
