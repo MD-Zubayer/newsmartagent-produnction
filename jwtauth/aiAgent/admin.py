@@ -20,6 +20,19 @@ class KeywordUploadForm(forms.Form):
     category = forms.ChoiceField(choices=SmartKeyword.CATEGORY_CHOICES)
     json_file = forms.FileField(label="Select JSON File")
 
+class TranslationMapBulkUploadForm(forms.Form):
+    json_file = forms.FileField(
+        label="JSON File (Optional)",
+        required=False,
+        help_text='Accepted: {"source":"target"} or [{"source":"...","target":"..."}]'
+    )
+    bulk_text = forms.CharField(
+        label="Bulk Text (Optional)",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 12, "placeholder": "দাম => price\nkoto => price"}),
+        help_text='One mapping per line. Supported separators: "=>", "->", tab, comma, "|", ":"'
+    )
+
     
 
 
@@ -371,6 +384,123 @@ class SmartTranslationMapAdmin(ModelAdmin):
     list_editable = ('is_active',)
     ordering = ('source_text',)
     list_per_page = 50
+    change_list_template = "admin/aiAgent/smarttranslationmap/change_list.html"
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                'upload-bulk/',
+                self.admin_site.admin_view(self.upload_bulk),
+                name='aiAgent_smarttranslationmap_upload_bulk'
+            ),
+        ]
+        return custom_urls + urls
+
+    def _parse_mapping_json(self, parsed):
+        pairs = []
+        if isinstance(parsed, dict):
+            for k, v in parsed.items():
+                if isinstance(k, str) and isinstance(v, str):
+                    pairs.append((k.strip(), v.strip()))
+        elif isinstance(parsed, list):
+            for item in parsed:
+                if isinstance(item, dict):
+                    src = item.get("source") or item.get("source_text") or item.get("from") or item.get("key")
+                    tgt = item.get("target") or item.get("target_text") or item.get("to") or item.get("value")
+                    if isinstance(src, str) and isinstance(tgt, str):
+                        pairs.append((src.strip(), tgt.strip()))
+                elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                    src, tgt = item[0], item[1]
+                    if isinstance(src, str) and isinstance(tgt, str):
+                        pairs.append((src.strip(), tgt.strip()))
+        return pairs
+
+    def _parse_mapping_lines(self, text):
+        pairs = []
+        separators = ["=>", "->", "\t", ",", "|", ":"]
+        for raw in text.splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            matched = False
+            for sep in separators:
+                if sep in line:
+                    left, right = line.split(sep, 1)
+                    src = left.strip().strip('"').strip("'")
+                    tgt = right.strip().strip('"').strip("'")
+                    if src and tgt:
+                        pairs.append((src, tgt))
+                    matched = True
+                    break
+            if not matched:
+                continue
+        return pairs
+
+    def upload_bulk(self, request):
+        if request.method == "POST":
+            form = TranslationMapBulkUploadForm(request.POST, request.FILES)
+            if form.is_valid():
+                json_file = form.cleaned_data.get("json_file")
+                bulk_text = (form.cleaned_data.get("bulk_text") or "").strip()
+                extracted_pairs = []
+
+                try:
+                    if json_file:
+                        file_content = json_file.read().decode("utf-8").strip()
+                        parsed = json.loads(file_content)
+                        extracted_pairs.extend(self._parse_mapping_json(parsed))
+
+                    if bulk_text:
+                        extracted_pairs.extend(self._parse_mapping_lines(bulk_text))
+
+                    if not extracted_pairs:
+                        messages.error(
+                            request,
+                            "No valid mappings found. Provide JSON or line format like: source => target"
+                        )
+                        return redirect("..")
+
+                    normalized = []
+                    seen = set()
+                    for src, tgt in extracted_pairs:
+                        if not src or not tgt:
+                            continue
+                        key = src.lower()
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        normalized.append((src, tgt))
+
+                    created_count = 0
+                    updated_count = 0
+                    for src, tgt in normalized:
+                        _, created = SmartTranslationMap.objects.update_or_create(
+                            source_text=src,
+                            defaults={"target_text": tgt, "is_active": True}
+                        )
+                        if created:
+                            created_count += 1
+                        else:
+                            updated_count += 1
+
+                    messages.success(
+                        request,
+                        f"Bulk mapping done. Created {created_count}, Updated {updated_count}, Total processed {len(normalized)}."
+                    )
+                    return redirect("admin:aiAgent_smarttranslationmap_changelist")
+                except Exception as e:
+                    messages.error(request, f"Bulk upload failed: {str(e)}")
+                    return redirect("..")
+        else:
+            form = TranslationMapBulkUploadForm()
+
+        context = {
+            **self.admin_site.each_context(request),
+            "form": form,
+            "opts": self.model._meta,
+        }
+        return render(request, "admin/aiAgent/smarttranslationmap/upload_bulk.html", context)
 
 @admin.register(Contact)
 class ContactAdmin(ModelAdmin):
