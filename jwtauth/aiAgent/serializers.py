@@ -103,6 +103,14 @@ class AgentAISerializer(serializers.ModelSerializer):
              raise serializers.ValidationError("Max tokens must be at least 1.")
         return value
 
+    def validate_platform(self, value):
+        """
+        Ensure platform is lowercase
+        """
+        if value:
+            return value.lower()
+        return value
+
     def create(self, validated_data):
         user = self.context['request'].user
         return AgentAI.objects.create(user=user, **validated_data)

@@ -296,8 +296,10 @@ const openModal = (agent = null) => {
                 <input type="text" name="name" value={formData.name} onChange={handleChange} required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" placeholder="Agent Name" />
                 <select name="platform" value={formData.platform} onChange={handleChange} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none">
                   <option value="messenger">Facebook Messenger</option>
-                  {/* <option value="facebook_comment">Facebook Comment</option> */}
-                  <option value="WhatsApp">WhatsApp Business</option>
+                  <option value="facebook_comment">Facebook Comment</option>
+                  <option value="whatsapp">WhatsApp Business</option>
+                  <option value="instagram">Instagram Direct</option>
+                  <option value="instagram_comment">Instagram Comment</option>
                 </select>
               </div>
 
