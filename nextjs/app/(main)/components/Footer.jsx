@@ -7,7 +7,7 @@ import {
 } from "react-icons/fa";
 
 const PaymentBadge = ({ name, color, bg }) => (
-  <div className={`px-3 py-1.5 ${bg} rounded-lg flex items-center justify-center border border-white/10 hover:scale-105 transition-transform cursor-pointer`}>
+  <div className={`px-3 py-1.5 ${bg} rounded-lg flex items-center justify-center border border-white/10 hover:scale-105 active:scale-95 transition-transform cursor-pointer`}>
     <span className={`text-[11px] font-black tracking-tight ${color}`}>{name}</span>
   </div>
 );
@@ -50,10 +50,8 @@ function Footer() {
       <div className="relative z-10 max-w-7xl mx-auto px-6 pt-20 pb-8">
 
         {/* === Top Brand Bar === */}
-        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8 pb-16 border-b border-white/5">
-
-          {/* Brand Identity */}
-          <div className="space-y-4 max-w-md">
+        <div className="pb-16 border-b border-white/5">
+          <div className="space-y-4 max-w-lg">
             <div className="inline-flex items-center gap-2 mb-2">
               <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
               <span className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400">Bangladesh's Leading AI Tool</span>
@@ -69,20 +67,6 @@ function Footer() {
               বাংলাদেশের সেরা অটোমেশন সলিউশন। আমাদের স্মার্ট এজেন্ট টুলস দিয়ে আপনার সোশ্যাল মিডিয়া ম্যানেজমেন্ট হবে আরও সহজ ও কার্যকর।
             </p>
           </div>
-
-          {/* Stats strip */}
-          <div className="flex gap-10 lg:gap-16">
-            {[
-              { value: "৫০০+", label: "সক্রিয় ক্লায়েন্ট" },
-              { value: "৯৮%", label: "সন্তুষ্টি রেটিং" },
-              { value: "২৪/৭", label: "সাপোর্ট" },
-            ].map((stat) => (
-              <div key={stat.label} className="text-center">
-                <p className="text-2xl font-black text-white">{stat.value}</p>
-                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">{stat.label}</p>
-              </div>
-            ))}
-          </div>
         </div>
 
         {/* === Main Grid === */}
@@ -97,31 +81,11 @@ function Footer() {
                   key={s.label}
                   href="#"
                   aria-label={s.label}
-                  className={`w-10 h-10 rounded-xl bg-white/5 border border-white/8 flex items-center justify-center text-sm text-gray-400 hover:text-white transition-all duration-300 ${s.bg} hover:-translate-y-1 hover:shadow-lg hover:shadow-indigo-500/20`}
+                  className={`w-11 h-11 rounded-xl bg-white/5 border border-white/8 flex items-center justify-center text-sm text-gray-400 hover:text-white active:text-white active:scale-95 transition-all duration-200 ${s.bg} hover:-translate-y-1 active:translate-y-0 hover:shadow-lg hover:shadow-indigo-500/20`}
                 >
                   {s.icon}
                 </a>
               ))}
-            </div>
-
-            <div className="pt-2 space-y-3">
-              <p className="text-[10px] text-gray-600 font-bold uppercase tracking-widest">Trusted by businesses across BD</p>
-              <div className="flex -space-x-2">
-                {["JR", "SA", "MH", "NK", "RL"].map((init, i) => (
-                  <div
-                    key={i}
-                    className="w-7 h-7 rounded-full border-2 border-[#06060f] flex items-center justify-center text-[9px] font-black"
-                    style={{
-                      background: `hsl(${220 + i * 30}, 70%, 50%)`,
-                    }}
-                  >
-                    {init}
-                  </div>
-                ))}
-                <div className="w-7 h-7 rounded-full border-2 border-[#06060f] bg-white/10 flex items-center justify-center text-[8px] font-black text-gray-400">
-                  +
-                </div>
-              </div>
             </div>
           </div>
 
@@ -133,7 +97,7 @@ function Footer() {
                 <li key={link}>
                   <Link
                     href="#"
-                    className="group flex items-center gap-3 text-sm font-bold text-gray-500 hover:text-white transition-all duration-200"
+                    className="group flex items-center gap-3 text-sm font-bold text-gray-500 hover:text-white active:text-indigo-400 transition-all duration-200"
                   >
                     <span className="w-5 h-px bg-indigo-500/0 group-hover:bg-indigo-500 group-hover:w-6 transition-all duration-300" />
                     {link}
@@ -148,8 +112,8 @@ function Footer() {
             <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400 mb-6">যোগাযোগ</h3>
             <div className="space-y-4">
 
-              <a href="tel:01727358743" className="group flex items-start gap-4">
-                <div className="mt-0.5 w-9 h-9 shrink-0 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500 group-hover:border-indigo-500 group-hover:text-white transition-all duration-300">
+              <a href="tel:01727358743" className="group flex items-start gap-4 active:opacity-70 transition-opacity">
+                <div className="mt-0.5 w-9 h-9 shrink-0 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500 group-hover:border-indigo-500 group-hover:text-white group-active:bg-indigo-500 group-active:text-white transition-all duration-200">
                   <FaPhoneAlt size={13} />
                 </div>
                 <div>
@@ -158,8 +122,8 @@ function Footer() {
                 </div>
               </a>
 
-              <a href="mailto:newsmartagentbd@gmail.com" className="group flex items-start gap-4">
-                <div className="mt-0.5 w-9 h-9 shrink-0 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400 group-hover:bg-pink-500 group-hover:border-pink-500 group-hover:text-white transition-all duration-300">
+              <a href="mailto:newsmartagentbd@gmail.com" className="group flex items-start gap-4 active:opacity-70 transition-opacity">
+                <div className="mt-0.5 w-9 h-9 shrink-0 rounded-xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center text-pink-400 group-hover:bg-pink-500 group-hover:border-pink-500 group-hover:text-white group-active:bg-pink-500 group-active:text-white transition-all duration-200">
                   <FaEnvelope size={13} />
                 </div>
                 <div>
@@ -234,8 +198,8 @@ function Footer() {
               © {new Date().getFullYear()} New Smart Agent — অল রাইটস রিজার্ভড।
             </p>
             <div className="flex gap-8 text-[11px] font-black uppercase tracking-widest">
-              <a href="/privacy-policy" className="text-gray-600 hover:text-indigo-400 transition-colors">Privacy Policy</a>
-              <a href="/terms-of-service" className="text-gray-600 hover:text-indigo-400 transition-colors">Terms of Use</a>
+              <a href="/privacy-policy" className="text-gray-600 hover:text-indigo-400 active:text-indigo-300 transition-colors">Privacy Policy</a>
+              <a href="/terms-of-service" className="text-gray-600 hover:text-indigo-400 active:text-indigo-300 transition-colors">Terms of Use</a>
             </div>
           </div>
         </div>
