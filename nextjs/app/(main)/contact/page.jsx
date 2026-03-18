@@ -6,7 +6,7 @@ import {
   PhoneIcon, 
 } from "@heroicons/react/24/outline";
 import api from "@/lib/api";
-import toast from "react-hot-toast";
+import { toast } from "react-hot-toast";
 
 export default function ContactPage() {
   // ১. স্টেট ডিক্লেয়ার করা

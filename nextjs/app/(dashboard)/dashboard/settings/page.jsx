@@ -387,4 +387,3 @@ export default function SettingsPage() {
     </div>
   );
 }
-鼓
