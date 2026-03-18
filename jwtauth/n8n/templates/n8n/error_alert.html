@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>n8n Workflow Error Alert</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7fa;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            background-color: #ffffff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e1e8ef;
+        }
+        .header {
+            background-color: #1a1a2e;
+            padding: 30px;
+            text-align: center;
+            color: #ffffff;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        .header p {
+            margin: 5px 0 0;
+            font-size: 14px;
+            color: #a0aec0;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .content {
+            padding: 40px;
+        }
+        .alert-box {
+            background-color: #fffaf0;
+            border-left: 4px solid #ed8936;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 4px;
+        }
+        .alert-box h2 {
+            margin: 0 0 10px;
+            font-size: 18px;
+            color: #dd6b20;
+            display: flex;
+            align-items: center;
+        }
+        .alert-box p {
+            margin: 0;
+            font-size: 14px;
+            color: #744210;
+            word-wrap: break-word;
+        }
+        .details-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+        .details-table th, .details-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #edf2f7;
+        }
+        .details-table th {
+            font-size: 12px;
+            color: #718096;
+            text-transform: uppercase;
+            font-weight: 700;
+            width: 140px;
+        }
+        .details-table td {
+            font-size: 14px;
+            font-weight: 600;
+            color: #2d3748;
+        }
+        .cta-container {
+            text-align: center;
+            margin-top: 40px;
+        }
+        .cta-button {
+            background-color: #1a1a2e;
+            color: #ffffff !important;
+            padding: 14px 28px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 700;
+            display: inline-block;
+            transition: background-color 0.2s;
+        }
+        .footer {
+            background-color: #f7fafc;
+            padding: 24px;
+            text-align: center;
+            font-size: 12px;
+            color: #a0aec0;
+            border-top: 1px solid #edf2f7;
+        }
+        .footer p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <p>New Smart Agent</p>
+            <h1>Automation Monitoring</h1>
+        </div>
+        <div class="content">
+            <div class="alert-box">
+                <h2>⚠️ Workflow Error Detected</h2>
+                <p>{{ error_message }}</p>
+            </div>
+            
+            <table class="details-table">
+                <tr>
+                    <th>Workflow</th>
+                    <td>{{ workflow_name }}</td>
+                </tr>
+                <tr>
+                    <th>Workflow ID</th>
+                    <td>{{ workflow_id }}</td>
+                </tr>
+                <tr>
+                    <th>Failed Node</th>
+                    <td>{{ node_name }}</td>
+                </tr>
+                <tr>
+                    <th>Occurred At</th>
+                    <td>{{ timestamp }}</td>
+                </tr>
+            </table>
+
+            <div class="cta-container">
+                <a href="{{ execution_url }}" class="cta-button">Open Error Link</a>
+            </div>
+        </div>
+        <div class="footer">
+            <p>&copy; 2024 New Smart Agent. All rights reserved.</p>
+            <p>This is an automated system alert. Please do not reply directly to this email.</p>
+        </div>
+    </div>
+</body>
+</html>
