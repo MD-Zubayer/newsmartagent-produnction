@@ -1,0 +1,12 @@
+{
+  "ডেলিভারি": "delivery",
+  "ডেলিভারি চার্জ": "delivery_charge",
+  "কুরিয়ার": "courier",
+  "শিপিং": "shipping",
+  "কত দিনে পাব": "delivery_time",
+  "কখন পাব": "delivery_time",
+  "ঢাকার ভিতরে": "inside_dhaka",
+  "ঢাকার বাইরে": "outside_dhaka",
+  "লোকেশন": "location",
+  "ঠিকানা": "address"
+}
