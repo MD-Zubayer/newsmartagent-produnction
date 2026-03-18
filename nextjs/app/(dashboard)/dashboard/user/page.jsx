@@ -199,15 +199,15 @@ export default function UserDashboard() {
               <div className="absolute top-0 right-0 w-64 h-64 bg-pink-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none group-hover:bg-pink-500/20 transition-all duration-700"></div>
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
-                <div className="lg:col-span-5 flex items-center gap-4 md:gap-6">
+                <div className="lg:col-span-5 flex items-center gap-4 md:gap-6 min-w-0">
                   <div className="w-14 h-14 md:w-20 md:h-20 rounded-2xl md:rounded-3xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-xl group-hover:scale-110 transition-transform duration-500">
                     <Zap size={32} className="text-yellow-400 fill-yellow-400" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-1 md:mb-2">Total Available Balance</p>
-                    <h2 className="text-3xl md:text-5xl font-black tracking-tight flex items-baseline gap-2">
-                      {user?.profile?.word_balance?.toLocaleString() || 0}
-                      <span className="text-sm md:text-xl text-slate-500 font-bold uppercase tracking-widest">Tokens</span>
+                    <h2 className="text-2xl sm:text-3xl md:text-5xl font-black tracking-tight flex flex-wrap items-baseline gap-x-2 gap-y-1 leading-tight min-w-0">
+                      <span className="max-w-full break-all">{user?.profile?.word_balance?.toLocaleString() || 0}</span>
+                      <span className="text-xs sm:text-sm md:text-xl text-slate-500 font-bold uppercase tracking-widest shrink-0">Tokens</span>
                     </h2>
                   </div>
                 </div>

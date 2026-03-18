@@ -5,7 +5,7 @@ import {
   FaBell, FaRobot, FaShieldAlt, FaGlobe, 
   FaSave, FaCog, FaCheckCircle, FaExclamationCircle,
   FaUserEdit, FaSearch, FaChevronRight, FaRobot as FaChat,
-  FaShoppingCart
+  FaShoppingCart, FaChevronDown, FaClock, FaCoins
 } from "react-icons/fa";
 import api from "@/lib/api";
 import { toast } from 'react-hot-toast';
@@ -303,19 +303,88 @@ export default function SettingsPage() {
                     {agentSettings.auto_renew_enabled && (
                       <div className="mt-4 ml-14 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
                         <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Select Offer to Renew</label>
-                        <select 
-                          value={agentSettings.auto_renew_offer || ""}
-                          onChange={(e) => handleGlobalSettingChange('auto_renew_offer', e.target.value)}
-                          className="w-full px-6 py-4 bg-white border border-gray-100 rounded-[2rem] font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500/10 text-sm shadow-sm"
-                        >
-                          <option value="">Select an Offer</option>
-                          {offers.map(offer => (
-                            <option key={offer.id} value={offer.id}>
-                              {offer.name} - {offer.price} BDT ({offer.tokens} Tokens)
-                            </option>
-                          ))}
-                        </select>
-                        <p className="text-[10px] text-gray-400 ml-2 italic">Ensure your account has sufficient balance for automatic renewal.</p>
+                        
+                        <div className="relative group/dropdown">
+                          <button
+                            onClick={() => {
+                              const dropdown = document.getElementById('offer-dropdown');
+                              dropdown.classList.toggle('hidden');
+                            }}
+                            className="w-full px-6 py-4 bg-white border border-gray-100 rounded-[2rem] font-bold text-gray-700 outline-none focus:ring-4 focus:ring-indigo-500/10 text-sm shadow-sm flex items-center justify-between group hover:border-indigo-200 transition-all"
+                          >
+                            <div className="flex items-center gap-3">
+                              {agentSettings.auto_renew_offer ? (
+                                <>
+                                  <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600">
+                                    <FaShoppingCart className="text-xs" />
+                                  </div>
+                                  <div className="text-left">
+                                    <p className="font-black text-gray-900 leading-tight">
+                                      {offers.find(o => String(o.id) === String(agentSettings.auto_renew_offer))?.name || "Selected Offer"}
+                                    </p>
+                                    <p className="text-[10px] text-gray-400 font-bold">
+                                      {offers.find(o => String(o.id) === String(agentSettings.auto_renew_offer))?.price} BDT • {offers.find(o => String(o.id) === String(agentSettings.auto_renew_offer))?.tokens} Tokens
+                                    </p>
+                                  </div>
+                                </>
+                              ) : (
+                                <span className="text-gray-400 font-bold">Select an Offer to Auto-Renew</span>
+                              )}
+                            </div>
+                            <FaChevronDown className="text-gray-300 group-hover:text-indigo-400 transition-colors" />
+                          </button>
+
+                          <div 
+                            id="offer-dropdown"
+                            className="absolute z-50 mt-3 w-full bg-white border border-gray-100 rounded-[2.5rem] shadow-2xl p-3 hidden animate-in fade-in slide-in-from-top-4 duration-300"
+                          >
+                            <div className="max-h-[300px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                              {offers.length > 0 ? (
+                                offers.map(offer => (
+                                  <button
+                                    key={offer.id}
+                                    onClick={() => {
+                                      handleGlobalSettingChange('auto_renew_offer', offer.id);
+                                      document.getElementById('offer-dropdown').classList.add('hidden');
+                                    }}
+                                    className={`w-full p-4 rounded-[1.8rem] transition-all flex items-center justify-between group/item ${
+                                      String(agentSettings.auto_renew_offer) === String(offer.id) 
+                                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' 
+                                      : 'hover:bg-gray-50 text-gray-700'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-4">
+                                      <div className={`p-3 rounded-2xl ${String(agentSettings.auto_renew_offer) === String(offer.id) ? 'bg-white/20' : 'bg-gray-100 group-hover/item:bg-white group-hover/item:shadow-sm'} transition-colors`}>
+                                        <FaCoins className={String(agentSettings.auto_renew_offer) === String(offer.id) ? 'text-white' : 'text-amber-500'} />
+                                      </div>
+                                      <div className="text-left">
+                                        <p className="font-black text-sm">{offer.name}</p>
+                                        <div className={`flex items-center gap-2 mt-0.5 ${String(agentSettings.auto_renew_offer) === String(offer.id) ? 'text-indigo-100' : 'text-gray-400'}`}>
+                                          <div className="flex items-center gap-1 text-[10px] font-bold">
+                                            <FaClock className="text-[10px]" /> {offer.duration_days} Days
+                                          </div>
+                                          <span className="text-[10px]">•</span>
+                                          <p className="text-[10px] font-bold uppercase tracking-widest">{offer.tokens} Tokens</p>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className={`font-black text-lg italic ${String(agentSettings.auto_renew_offer) === String(offer.id) ? 'text-white' : 'text-indigo-600'}`}>
+                                        ৳{offer.price}
+                                      </p>
+                                    </div>
+                                  </button>
+                                ))
+                              ) : (
+                                <div className="p-10 text-center">
+                                  <p className="text-gray-400 font-bold italic">No offers available</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <p className="text-[10px] text-gray-400 ml-6 italic">Ensure your account has sufficient balance for automatic renewal. Tokens will renew with {offers.find(o => String(o.id) === String(agentSettings.auto_renew_offer))?.duration_days || "30"} days validity.</p>
                       </div>
                     )}
                   </div>
