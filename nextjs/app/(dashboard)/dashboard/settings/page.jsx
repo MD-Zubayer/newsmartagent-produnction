@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { 
   FaBell, FaRobot, FaShieldAlt, FaGlobe, 
   FaSave, FaCog, FaCheckCircle, FaExclamationCircle,
-  FaUserEdit, FaSearch, FaChevronRight, FaRobot as FaChat
+  FaUserEdit, FaSearch, FaChevronRight, FaRobot as FaChat,
+  FaShoppingCart
 } from "react-icons/fa";
 import api from "@/lib/api";
 import { toast } from 'react-hot-toast';
@@ -16,6 +17,10 @@ export default function SettingsPage() {
     autoReply: false,
     darkMode: false,
     publicProfile: true,
+  });
+
+  const [agentSettings, setAgentSettings] = useState({
+    is_order_enable: true
   });
   const [isSaving, setIsSaving] = useState(false);
 
@@ -45,6 +50,19 @@ export default function SettingsPage() {
       return () => clearTimeout(delayDebounceFn);
     }
   }, [contactSearch, selectedAgent]);
+
+  useEffect(() => {
+    fetchAgentSettings();
+  }, []);
+
+  const fetchAgentSettings = async () => {
+    try {
+      const response = await api.get('/settings/agent-settings/');
+      setAgentSettings(response.data);
+    } catch (err) {
+      console.error("Failed to fetch agent global settings:", err);
+    }
+  };
 
   const fetchAgents = async () => {
     try {
@@ -120,6 +138,21 @@ export default function SettingsPage() {
     } catch (err) {
       console.error("Failed to update agent setting:", err);
       toast.error("Failed to update setting.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleGlobalSettingToggle = async (key, currentValue) => {
+    setIsSaving(true);
+    try {
+      const newValue = !currentValue;
+      await api.patch('/settings/agent-settings/', { [key]: newValue });
+      setAgentSettings(prev => ({ ...prev, [key]: newValue }));
+      toast.success("Global setting updated!");
+    } catch (err) {
+      console.error("Failed to update global setting:", err);
+      toast.error("Failed to update global setting.");
     } finally {
       setIsSaving(false);
     }
@@ -231,6 +264,17 @@ export default function SettingsPage() {
               <section>
                 <h3 className="text-sm font-black uppercase tracking-widest text-gray-400 mb-6 ml-2">AI Rules</h3>
                 
+                <div className="mb-8 space-y-4">
+                  <SettingRow 
+                    icon={FaShoppingCart} 
+                    title="Enable Order Link Logic" 
+                    desc="AI will provide order links and instructions when users ask to buy."
+                    active={agentSettings.is_order_enable}
+                    onClick={() => handleGlobalSettingToggle('is_order_enable', agentSettings.is_order_enable)}
+                    color="text-green-500"
+                  />
+                </div>
+
                 {agents.length > 0 ? (
                   <div className="space-y-6">
                     {agents.map(agent => (

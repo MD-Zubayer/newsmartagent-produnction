@@ -65,6 +65,7 @@ urlpatterns = [
     
     # অ্যাপ ভিত্তিক ইউআরএল
     path('api/webhooks/', include('webhooks.urls')),
+    path('api/settings/', include('settings.urls')),
     path('api/AgentAI/', include('aiAgent.urls')),
     path('api/datasheet/', include("datasheet.urls")),
     path('api/embedding/', include("embedding.urls")),
