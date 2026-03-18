@@ -167,24 +167,26 @@ function Footer() {
                     <text x="0" y="11" fontFamily="serif" fontWeight="900" fontStyle="italic" fontSize="13" fill="#60a5fa">VISA</text>
                   </svg>
                 </div>
+
                 {/* Mastercard circles */}
-                <div className="px-2 py-1.5 bg-white/5 border border-white/10 rounded-lg hover:scale-105 transition-transform cursor-pointer flex items-center">
+                {/* <div className="px-2 py-1.5 bg-white/5 border border-white/10 rounded-lg hover:scale-105 transition-transform cursor-pointer flex items-center">
                   <div className="w-5 h-5 rounded-full bg-red-500/60" />
                   <div className="w-5 h-5 rounded-full bg-yellow-500/60 -ml-2" />
-                </div>
+                </div> */}
+
                 {/* PayPal */}
-                <div className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg hover:scale-105 transition-transform cursor-pointer">
+                {/* <div className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg hover:scale-105 transition-transform cursor-pointer">
                   <svg width="40" height="12" viewBox="0 0 40 12" fill="none">
                     <text x="0" y="11" fontFamily="sans-serif" fontWeight="900" fontSize="11" fill="#38bdf8">Pay</text>
                     <text x="22" y="11" fontFamily="sans-serif" fontWeight="900" fontSize="11" fill="#818cf8">Pal</text>
                   </svg>
-                </div>
+                </div> */}
               </div>
             </div>
 
-            <p className="text-[10px] text-gray-600 font-bold leading-relaxed">
+            {/* <p className="text-[10px] text-gray-600 font-bold leading-relaxed">
               ✦ সব ধরণের লোকাল ও ইন্টারন্যাশনাল পেমেন্ট গ্রহণযোগ্য।
-            </p>
+            </p> */}
           </div>
         </div>
 
