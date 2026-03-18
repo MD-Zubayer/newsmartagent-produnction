@@ -32,7 +32,7 @@ export default function SettingsPage() {
   });
 
   useEffect(() => {
-    if (activeTab === "contacts") {
+    if (activeTab === "contacts" || activeTab === "automation") {
       fetchAgents();
     }
   }, [activeTab]);
@@ -105,6 +105,22 @@ export default function SettingsPage() {
       setIsSaving(false);
       toast.success("General settings saved!");
     }, 1000);
+  };
+
+  const handleAgentToggle = async (agentId, key, currentValue) => {
+    setIsSaving(true);
+    try {
+      const newValue = !currentValue;
+      await api.patch(`/AgentAI/agents/${agentId}/`, { [key]: newValue });
+      toast.success("Setting updated!");
+      // Update local agent state
+      setAgents(prev => prev.map(a => a.id === agentId ? { ...a, [key]: newValue } : a));
+    } catch (err) {
+      console.error("Failed to update agent setting:", err);
+      toast.error("Failed to update setting.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const SettingRow = ({ icon: Icon, title, desc, active, onClick, color }) => (
@@ -212,7 +228,40 @@ export default function SettingsPage() {
             <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
               <section>
                 <h3 className="text-sm font-black uppercase tracking-widest text-gray-400 mb-6 ml-2">AI Rules</h3>
-                <div className="space-y-4">
+                
+                {agents.length > 0 ? (
+                  <div className="space-y-6">
+                    {agents.map(agent => (
+                      <div key={agent.id} className="p-6 bg-gray-50/50 rounded-[2.5rem] border border-gray-100">
+                        <div className="flex items-center gap-3 mb-4 ml-2">
+                          <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-[10px] font-black">
+                            {agent.platform[0].toUpperCase()}
+                          </div>
+                          <h4 className="font-black text-gray-800 text-sm">{agent.name || agent.page_id}</h4>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 gap-4">
+                          <SettingRow 
+                            icon={FaRobot} 
+                            title="Auto-Reply" 
+                            desc="Automatically respond using AI on this agent."
+                            active={agent.is_active}
+                            onClick={() => handleAgentToggle(agent.id, 'is_active', agent.is_active)}
+                            color="text-purple-500"
+                          />
+                          <SettingRow 
+                            icon={FaCog} 
+                            title="Skip History" 
+                            desc="Don't send previous conversation history to AI (Saves tokens, reduces context)."
+                            active={agent.skip_history}
+                            onClick={() => handleAgentToggle(agent.id, 'skip_history', agent.skip_history)}
+                            color="text-amber-500"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
                   <SettingRow 
                     icon={FaRobot} 
                     title="Auto-reply to comments" 
@@ -221,7 +270,7 @@ export default function SettingsPage() {
                     onClick={() => toggleSetting('autoReply')}
                     color="text-purple-500"
                   />
-                </div>
+                )}
               </section>
               
               <div className="bg-indigo-50 p-6 rounded-[2rem] border border-indigo-100 flex items-start gap-4">

@@ -76,6 +76,7 @@ class AgentAI(models.Model):
     token_expires_at = models.DateTimeField(null=True, blank=True)
 
     is_active = models.BooleanField(default=True)
+    skip_history = models.BooleanField(default=False, help_text="AI call এ মেমোরি/হিস্টোরি ব্যবহার করবে কিনা?")
     is_special_agent = models.BooleanField(default=False, help_text="বিশেষ এজেন্টদের ডাটা দীর্ঘক্ষণ (১ বছর) ক্যাশে থাকবে")
 
     SPECIAL_AGENT_STATUS_CHOICES = [

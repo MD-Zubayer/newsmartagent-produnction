@@ -34,6 +34,7 @@ class AgentAIListSerializer(serializers.ModelSerializer):
             'is_active',
             'created_at',
             'access_token',
+            'skip_history',
             'is_special_agent',
             'special_agent_status'
         ]
@@ -65,6 +66,7 @@ class AgentAISerializer(serializers.ModelSerializer):
             'max_tokens',
             'token_expires_at',
             'is_active',
+            'skip_history',
             'is_special_agent',
             'special_agent_status'
         ]

@@ -313,9 +313,9 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
 
     logger.info(f"\n======= FINAL PROMPT SENT TO AI =======\n{full_prompt}\n=======================================")
 
-    raw_history = get_last_message(agent_config, sender_id, limit=3)
+    raw_history = get_last_message(agent_config, sender_id, limit=5)
     
-    skip_history = False
+    skip_history = agent_config.skip_history
     matched_history_skips = check_keyword_match(text, 'history_skip')
     if matched_history_skips:
         skip_history = True
