@@ -61,15 +61,15 @@ export default function ContactsPage() {
   const fetchAgents = async () => {
     try {
       const res = await api.get("/AgentAI/agents/");
-      setAgents(res.data || []);
-      if (res.data.length > 0) {
-        setSelectedAgent(res.data[0].page_id);
-      } else {
-        setLoading(false);
+      const agentList = Array.isArray(res?.data) ? res.data : [];
+      setAgents(agentList);
+      if (agentList.length > 0) {
+        setSelectedAgent(agentList[0].page_id);
       }
     } catch (err) {
       console.error("Failed to load agents:", err);
       toast.error("Failed to load agents.");
+    } finally {
       setLoading(false);
     }
   };
@@ -78,7 +78,8 @@ export default function ContactsPage() {
     setLoading(true);
     try {
       const res = await api.get(`/AgentAI/contacts/${agentId}/`);
-      setContacts(res.data.contacts || []);
+      const list = Array.isArray(res?.data?.contacts) ? res.data.contacts : [];
+      setContacts(list);
     } catch (err) {
       console.error("Failed to load contacts:", err);
       toast.error("Failed to load contacts.");
@@ -115,8 +116,25 @@ export default function ContactsPage() {
     if (page === 1) setHistoryLoading(true);
     try {
       const res = await api.get(`/AgentAI/contacts/${contactId}/messages/?page=${page}`);
-      const newMessages = res.data.results || [];
-      setHistoryMessages(prev => page === 1 ? newMessages : [...prev, ...newMessages]);
+      const newMessages = Array.isArray(res?.data?.results) ? res.data.results : [];
+      setHistoryMessages(prev => {
+        const merged = page === 1 ? newMessages : [...prev, ...newMessages];
+
+        // Deduplicate by message id (fallback to sent_at+role+content signature)
+        const seen = new Set();
+        const unique = [];
+        for (const m of merged) {
+          const key = m?.id ?? `${m?.sent_at ?? ""}|${m?.role ?? ""}|${m?.content ?? ""}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          unique.push(m);
+        }
+
+        // Show newest messages first; older messages load as you scroll
+        return unique.sort(
+          (a, b) => new Date(b?.sent_at || 0) - new Date(a?.sent_at || 0)
+        );
+      });
       setHasMoreHistory(!!res.data.next);
     } catch (err) {
       console.error("Failed to load history:", err);
@@ -330,4 +348,3 @@ export default function ContactsPage() {
     </div>
   );
 }
-
