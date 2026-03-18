@@ -484,7 +484,7 @@ export default function HomePage() {
                 <motion.div 
                   key={idx}
                   whileHover={{ x: 10 }}
-                  className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 flex items-start gap-6 group cursor-default"
+                  className="bg-white py-6 px-3 rounded-[2.5rem] shadow-sm border border-gray-100 flex items-start gap-6 group cursor-default"
                 >
                   <div className={`w-14 h-14 ${card.bg} rounded-2xl flex items-center justify-center ${card.color} text-xl group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300`}>
                     {card.icon}
