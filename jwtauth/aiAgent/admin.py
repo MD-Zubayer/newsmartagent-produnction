@@ -8,7 +8,7 @@ import json
 from django.db.models import Sum, Count, Avg
 from django.utils.html import format_html
 from .models import TokenUsageLog
-from .models import AIProviderModel, SmartKeyword
+from .models import AIProviderModel, SmartKeyword, SmartTranslationMap
 from django import forms
 from django.urls import path
 from django.shortcuts import render, redirect
@@ -362,6 +362,15 @@ class SmartKeywordAdmin(ModelAdmin):
             'opts': self.model._meta,
         }
         return render(request, "admin/aiAgent/smartkeyword/upload_json.html", context)
+
+@admin.register(SmartTranslationMap)
+class SmartTranslationMapAdmin(ModelAdmin):
+    list_display = ('id', 'source_text', 'target_text', 'is_active', 'updated_at')
+    list_filter = ('is_active',)
+    search_fields = ('source_text', 'target_text')
+    list_editable = ('is_active',)
+    ordering = ('source_text',)
+    list_per_page = 50
 
 @admin.register(Contact)
 class ContactAdmin(ModelAdmin):

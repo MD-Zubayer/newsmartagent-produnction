@@ -10,6 +10,7 @@ from celery.signals import after_setup_logger, after_setup_task_logger
 import logging
 import logging.config
 from django.conf import settings
+from django.core.cache import cache
 from aiAgent.cache.client import get_redis_client
 
 
@@ -27,12 +28,20 @@ logger = logging.getLogger(__name__)
 r = get_redis_client(db=2)  # DB 2 for agent-specific cache
 r_grouped = get_redis_client(db=6)  # DB 6 for grouped cache (global + sender)
 
+def normalize_for_cache(text):
+    """
+    Cache hash/fuzzy matching-এর জন্য unified normalization.
+    1) শব্দ/ফ্রেজ mapping (বাংলা/বাংলিশ -> canonical)
+    2) common normalize_text pipeline
+    """
+    return normalize_text(normalize_with_map(text))
+
 
 def get_cached_reply(agent_id, msg_text=None, msg_hash=None):                
     if msg_hash:
         key = f"agent:{agent_id}:reply:{msg_hash}"
     elif msg_text:
-        normalized = normalize_text(msg_text)
+        normalized = normalize_for_cache(msg_text)
         msg_hash = hashlib.md5(normalized.encode()).hexdigest()
         key = f"agent:{agent_id}:reply:{msg_hash}"
     else:
@@ -51,7 +60,7 @@ def get_cached_reply(agent_id, msg_text=None, msg_hash=None):
 
 
 def set_cached_reply(agent_id, msg_text, reply, model, input_tokens=0, output_tokens=0, ttl=None, is_special=False):
-    normalized = normalize_text(msg_text)
+    normalized = normalize_for_cache(msg_text)
     msg_hash = hashlib.md5(normalized.encode()).hexdigest()
     key = f"agent:{agent_id}:reply:{msg_hash}"
     
@@ -73,7 +82,7 @@ def set_cached_reply(agent_id, msg_text, reply, model, input_tokens=0, output_to
     
     
 def fuzzy_match(agent_id, msg_text, threshold=85): # ⚡ RapidFuzz সাধারণত ০-১০০ স্কেলে কাজ করে
-    normalized_input = normalize_text(msg_text)
+    normalized_input = normalize_for_cache(msg_text)
     
     # ১. r.keys() এর বদলে r.scan_iter() ব্যবহার করা হয়েছে (Non-blocking approach)
     pattern = f"agent:{agent_id}:reply:*"
@@ -123,7 +132,7 @@ def fuzzy_match(agent_id, msg_text, threshold=85): # ⚡ RapidFuzz সাধা�
     return None
 
 
-TRANSLATION_MAP = {
+DEFAULT_TRANSLATION_MAP = {
     "আসসালামু আলাইকুম": "assalamualaikum",
     "সালাম": "assalamualaikum",
     "ভাই": "brother",
@@ -132,8 +141,36 @@ TRANSLATION_MAP = {
     "koto": "price", # বাংলিশ সাপোর্ট
     "dam": "price",
 }
+TRANSLATION_CACHE_KEY = "smart_translation_map_v1"
+TRANSLATION_PATTERN_CACHE = {"signature": None, "pattern": None}
+
+def get_translation_map():
+    """
+    Hardcoded defaults + Admin configurable DB mappings.
+    DB mappings একই source_text এর ক্ষেত্রে defaults override করবে।
+    """
+    cached_map = cache.get(TRANSLATION_CACHE_KEY)
+    if cached_map is not None:
+        return cached_map
+
+    merged_map = dict(DEFAULT_TRANSLATION_MAP)
+    try:
+        from aiAgent.models import SmartTranslationMap
+        db_rows = SmartTranslationMap.objects.filter(is_active=True).values_list("source_text", "target_text")
+        for src, target in db_rows:
+            src = (src or "").strip()
+            target = (target or "").strip()
+            if src and target:
+                merged_map[src] = target
+    except Exception as e:
+        logger.error(f"SmartTranslationMap load error: {e}")
+
+    cache.set(TRANSLATION_CACHE_KEY, merged_map, timeout=600)
+    return merged_map
 
 def get_optimized_pattern(mapping):
+    if not mapping:
+        return None
     # ১. কি (keys) গুলোকে বড় থেকে ছোট হিসেবে সাজানো (যাতে 'দাম কত' আগে রিপ্লেস হয়)
     sorted_keys = sorted(mapping.keys(), key=len, reverse=True)
     
@@ -143,22 +180,29 @@ def get_optimized_pattern(mapping):
     
     return re.compile(pattern_string, re.IGNORECASE | re.UNICODE)
 
-# প্যাটার্নটি একবার গ্লোবালি জেনারেট করে রাখা ভালো (পারফরম্যান্সের জন্য)
-TRANSLATION_PATTERN = get_optimized_pattern(TRANSLATION_MAP)
-
 def normalize_with_map(text):
     if not text:
         return ""
+    translation_map = get_translation_map()
+    signature = tuple(sorted(translation_map.items()))
+    if TRANSLATION_PATTERN_CACHE["signature"] != signature:
+        TRANSLATION_PATTERN_CACHE["pattern"] = get_optimized_pattern(translation_map)
+        TRANSLATION_PATTERN_CACHE["signature"] = signature
+    translation_pattern = TRANSLATION_PATTERN_CACHE["pattern"]
+    if translation_pattern is None:
+        return text
 
     # ৩. রিপ্লেসমেন্ট লজিক
     def replace_logic(match):
         matched_text = match.group(0)
         # প্রথমে হুবহু মিলে কি না চেক করবে, না মিললে ছোট হাতের অক্ষরে চেক করবে
-        return TRANSLATION_MAP.get(matched_text, 
-               TRANSLATION_MAP.get(matched_text.lower(), matched_text))
+        return translation_map.get(
+            matched_text,
+            translation_map.get(matched_text.lower(), matched_text)
+        )
 
     # মূল টেক্সট রিপ্লেস করা
-    return TRANSLATION_PATTERN.sub(replace_logic, text)
+    return translation_pattern.sub(replace_logic, text)
 
 
 def find_best_cached_hash(agent_id, msg_text, threshold=70):                
@@ -168,7 +212,7 @@ def find_best_cached_hash(agent_id, msg_text, threshold=70):
     
     best_hash = None                
     highest_score = 0
-    normalized_input = normalize_text(msg_text)
+    normalized_input = normalize_for_cache(msg_text)
     
     for key in keys:                
         raw_data = r.get(key)
@@ -201,7 +245,7 @@ def get_global_cached_reply(agent_id, msg_text):
     """Global cache থেকে exact match করে reply নিয়ে আসে।"""
     if not msg_text:
         return None
-    normalized = normalize_text(msg_text)
+    normalized = normalize_for_cache(msg_text)
     msg_hash = hashlib.md5(normalized.encode()).hexdigest()
     key = f"global:reply:{msg_hash}"
     try:
@@ -218,7 +262,7 @@ def get_global_cached_reply(agent_id, msg_text):
 
 def set_global_cached_reply(msg_text, reply, model, input_tokens=0, output_tokens=0, ttl=GLOBAL_CACHE_TTL):
     """AI reply-কে global cache-এ save করে।"""
-    normalized = normalize_text(msg_text)
+    normalized = normalize_for_cache(msg_text)
     msg_hash = hashlib.md5(normalized.encode()).hexdigest()
     key = f"global:reply:{msg_hash}"
     try:
@@ -243,7 +287,7 @@ def global_fuzzy_match(agent_id, msg_text, threshold=92):
     """
     if not msg_text:
         return None
-    normalized_input = normalize_text(msg_text)
+    normalized_input = normalize_for_cache(msg_text)
     pattern = "global:reply:*"
     best_score = 0
     best_data = None
@@ -285,7 +329,7 @@ def get_sender_cached_reply(agent_id, sender_id, msg_text):
     """নির্দিষ্ট agent ও sender-এর জন্য exact cache lookup।"""
     if not msg_text:
         return None
-    normalized = normalize_text(msg_text)
+    normalized = normalize_for_cache(msg_text)
     msg_hash = hashlib.md5(normalized.encode()).hexdigest()
     key = f"agent:{agent_id}:sender:{sender_id}:reply:{msg_hash}"
     try:
@@ -302,7 +346,7 @@ def get_sender_cached_reply(agent_id, sender_id, msg_text):
 
 def set_sender_cached_reply(agent_id, sender_id, msg_text, reply, model, input_tokens=0, output_tokens=0, ttl=SENDER_CACHE_TTL):
     """AI reply-কে sender-specific cache-এ save করে।"""
-    normalized = normalize_text(msg_text)
+    normalized = normalize_for_cache(msg_text)
     msg_hash = hashlib.md5(normalized.encode()).hexdigest()
     key = f"agent:{agent_id}:sender:{sender_id}:reply:{msg_hash}"
     try:

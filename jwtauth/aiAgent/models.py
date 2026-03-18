@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+from django.core.cache import cache
 from django_cryptography.fields import encrypt
 
 
@@ -227,6 +228,31 @@ class SmartKeyword(models.Model):
         indexes = [
             models.Index(fields=['category', 'text']),
         ]
+
+class SmartTranslationMap(models.Model):
+    source_text = models.CharField(max_length=255, unique=True, db_index=True)
+    target_text = models.CharField(max_length=255, db_index=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Smart Translation Map"
+        verbose_name_plural = "Smart Translation Maps"
+        ordering = ['source_text']
+
+    def save(self, *args, **kwargs):
+        self.source_text = (self.source_text or "").strip()
+        self.target_text = (self.target_text or "").strip()
+        super().save(*args, **kwargs)
+        cache.delete("smart_translation_map_v1")
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        cache.delete("smart_translation_map_v1")
+
+    def __str__(self):
+        return f"{self.source_text} -> {self.target_text}"
 
 class Contact(models.Model):
     PLATFORM_CHOICES = [

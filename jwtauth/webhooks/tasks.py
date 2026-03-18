@@ -9,11 +9,11 @@ from aiAgent.cache.hybrid_similarity import (
     get_cached_reply, set_cached_reply, fuzzy_match,
     get_global_cached_reply, set_global_cached_reply, global_fuzzy_match,
     get_sender_cached_reply, set_sender_cached_reply,
+    normalize_for_cache,
 )
 from aiAgent.cache.ranking import incr_message_frequency
 from aiAgent.cache.metrics import incr_counter
 from aiAgent.cache.cluster import get_cluster_map
-from aiAgent.cache.utils import normalize_text
 from chat.utils import get_smart_post_context
 
 from aiAgent.business_logic.logic_handler import (
@@ -327,7 +327,7 @@ def process_ai_reply_task(self, data):
         # --- Layer 6: Cluster Match ---
         if not cached_res:
             cluster_map = get_cluster_map(page_id)
-            normalized = normalize_text(text)
+            normalized = normalize_for_cache(text)
             msg_hash = hashlib.md5(normalized.encode()).hexdigest()
             cluster_id = cluster_map.get(msg_hash)
             if cluster_id:
@@ -526,14 +526,14 @@ def process_ai_reply_task(self, data):
                     from aiAgent.cache.cluster import assign_to_cluster
                     from aiAgent.cache.hybrid_similarity import find_best_cached_hash
                     best_cluster_hash = find_best_cached_hash(page_id, text, threshold=70)
-                    target_hash = best_cluster_hash if best_cluster_hash else hashlib.md5(normalize_text(text).encode()).hexdigest()
+                    target_hash = best_cluster_hash if best_cluster_hash else hashlib.md5(normalize_for_cache(text).encode()).hexdigest()
                     assign_to_cluster(page_id, text, target_hash)
                 except Exception as e:
                     logger.error(f"Failed to assign cluster: {e}")
 
                 # ---- Vector Embedding Save (unchanged) ----
                 if query_vector:
-                    msg_hash_for_vector = hashlib.md5(normalize_text(text).encode()).hexdigest()
+                    msg_hash_for_vector = hashlib.md5(normalize_for_cache(text).encode()).hexdigest()
                     save_vector_embedding(page_id, text, msg_hash_for_vector, query_vector)
                     logger.info(f"✅ Saved vector embedding for '{text[:30]}'")
 
