@@ -38,7 +38,7 @@ def get_last_message(agentAi, contact_id, limit=5, platform='messenger'):
     if not convo:
         return []
     # Fetch latest messages first
-    messages = convo.messages.all().order_by('-sent_at')[:limit]
+    messages = convo.messages.all().order_by('-id')[:limit]
 
     # Preserve newest → oldest order for the AI so fresh context is sent first
     return [

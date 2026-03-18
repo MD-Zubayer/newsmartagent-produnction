@@ -250,7 +250,7 @@ def deduct_user_tokens(user_profile, total_tokens, ai_model_name):
         except Exception as e:
             logger.error(f"Token Deduction Error: {e}")
 
-def build_ai_context(agent_config, sender_id, text, extra_instruction=None, sheet_context=None):
+def build_ai_context(agent_config, sender_id, text, extra_instruction=None, sheet_context=None, platform='messenger'):
     from aiAgent.utils import get_memory_context
     from chat.services import get_last_message
     from aiAgent.memory_handler import calculate_context_score, check_keyword_match
@@ -313,7 +313,7 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
 
     logger.info(f"\n======= FINAL PROMPT SENT TO AI =======\n{full_prompt}\n=======================================")
 
-    raw_history = get_last_message(agent_config, sender_id, limit=5)
+    raw_history = get_last_message(agent_config, sender_id, limit=5, platform=platform)
     
     skip_history = False
     if agent_config.skip_history:

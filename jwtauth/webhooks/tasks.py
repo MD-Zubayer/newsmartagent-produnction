@@ -425,7 +425,7 @@ def process_ai_reply_task(self, data):
             sheet_ctx, extra_instr, query_vector = perform_rag_search(
                 agent_config, text, post_context, order_instr, existing_vector=query_vector
             )
-            full_prompt, history = build_ai_context(agent_config, sender_id, text, extra_instr, sheet_ctx)
+            full_prompt, history = build_ai_context(agent_config, sender_id, text, extra_instr, sheet_ctx, platform=request_type)
 
             # ---- Cache Classification Instruction (JSON suffix) ----
             # logic_handler.py-তে কোনো পরিবর্তন নেই। Prompt suffix এখানেই যোগ হয়।
