@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from aiAgent.models import AgentAI, TokenUsageLog, AIProviderModel, Contact
+from chat.models import Message
 
 
 class AIProviderModelSerializer(serializers.ModelSerializer):
@@ -118,3 +119,8 @@ class ContactSerializer(serializers.ModelSerializer):
             'is_auto_reply_enabled', 'platform', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+class MessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Message
+        fields = ['id', 'role', 'content', 'platform', 'sent_at', 'tokens_used']

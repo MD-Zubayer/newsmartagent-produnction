@@ -2,7 +2,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from aiAgent.views import AgentAIViewSet, TokenUsageAnalyticsView, dashboard_chat_view, RankingAPIView, UserAvailableModelsView, AgentMetricsAPIView, DeleteRankingDataAPIView, UpdateCacheScopeAPIView, RequestSpecialAgentAPIView
-from aiAgent.contact_views import ContactListView, ToggleAutoReplyView
+from aiAgent.contact_views import ContactListView, ToggleAutoReplyView, ContactMessageHistoryView
 from chat.views import facebook_data_deletion_callback
 router = DefaultRouter()
 router.register(r'agents', AgentAIViewSet, basename='agent-ai')
@@ -20,6 +20,7 @@ urlpatterns = [
     path('available-models/', UserAvailableModelsView.as_view(), name='user-available-models'),
     path('contacts/<str:agent_id>/', ContactListView.as_view(), name='contact-list'),
     path('contacts/toggle-reply/<int:contact_id>/', ToggleAutoReplyView.as_view(), name='toggle-auto-reply'),
+    path('contacts/<int:contact_id>/messages/', ContactMessageHistoryView.as_view(), name='contact-messages'),
     
 
 

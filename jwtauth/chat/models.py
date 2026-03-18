@@ -6,9 +6,14 @@ from django.conf import settings
 
 class Conversation(models.Model):
 
+    PLATFORM_CHOICES = [
+        ('whatsapp', 'WhatsApp'),
+        ('messenger', 'Messenger'),
+    ]
     agentAi = models.ForeignKey('aiAgent.AgentAi', on_delete=models.CASCADE, related_name='conversations')
     contact_id = models.CharField(max_length=100)
     contact_name = models.CharField(max_length=120, blank=True, null=True)
+    platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES, default='messenger')
 
     status = models.CharField(default='open', max_length=20)
 
@@ -17,9 +22,9 @@ class Conversation(models.Model):
 
 
     class Meta:
-        unique_together = ['agentAi', 'contact_id']
+        unique_together = ['agentAi', 'contact_id', 'platform']
         indexes = [
-            models.Index(fields=['agentAi', 'contact_id']),
+            models.Index(fields=['agentAi', 'contact_id', 'platform']),
         ]
 
     
@@ -34,6 +39,7 @@ class Message(models.Model):
 
     role = models.CharField(max_length=20, choices=ROLE_CHOICES)
     content = models.TextField()
+    platform = models.CharField(max_length=20, choices=Conversation.PLATFORM_CHOICES, default='messenger')
 
     tokens_used = models.IntegerField(default=0)
 

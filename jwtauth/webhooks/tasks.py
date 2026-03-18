@@ -378,8 +378,8 @@ def process_ai_reply_task(self, data):
             logger.info(f"⚡ CACHE HIT [{cache_hit_scope}] → '{text[:30]}'")
             send_cache_update_ws(agent_config.user.id, page_id)
 
-            save_message(agent_config, sender_id, text, 'user')
-            save_message(agent_config, sender_id, reply, 'assistant', tokens=0)
+            save_message(agent_config, sender_id, text, 'user', platform=agent_config.platform)
+            save_message(agent_config, sender_id, reply, 'assistant', tokens=0, platform=agent_config.platform)
             handle_smart_memory_update(agent_config, sender_id, text)
 
             clean_reply = reply.strip()
@@ -537,8 +537,8 @@ def process_ai_reply_task(self, data):
                     save_vector_embedding(page_id, text, msg_hash_for_vector, query_vector)
                     logger.info(f"✅ Saved vector embedding for '{text[:30]}'")
 
-                save_message(agent_config, sender_id, text, 'user')
-                save_message(agent_config, sender_id, reply, 'assistant', tokens=total_tokens)
+                save_message(agent_config, sender_id, text, 'user', platform=agent_config.platform)
+                save_message(agent_config, sender_id, reply, 'assistant', tokens=total_tokens, platform=agent_config.platform)
                 handle_smart_memory_update(agent_config, sender_id, text)
 
                 # ── Update WhatsApp Log (AI Call) ──
