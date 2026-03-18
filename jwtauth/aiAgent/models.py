@@ -77,6 +77,7 @@ class AgentAI(models.Model):
 
     is_active = models.BooleanField(default=True)
     skip_history = models.BooleanField(default=False, help_text="AI call এ মেমোরি/হিস্টোরি ব্যবহার করবে কিনা?")
+    history_skip_keywords = models.TextField(blank=True, null=True, help_text="কমা দিয়ে হিস্টোরি স্কিপ কি-ওয়ার্ডগুলো লিখুন")
     is_special_agent = models.BooleanField(default=False, help_text="বিশেষ এজেন্টদের ডাটা দীর্ঘক্ষণ (১ বছর) ক্যাশে থাকবে")
 
     SPECIAL_AGENT_STATUS_CHOICES = [

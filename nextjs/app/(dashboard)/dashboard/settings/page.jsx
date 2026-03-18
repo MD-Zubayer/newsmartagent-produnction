@@ -107,14 +107,16 @@ export default function SettingsPage() {
     }, 1000);
   };
 
-  const handleAgentToggle = async (agentId, key, currentValue) => {
+  const handleAgentToggle = async (agentId, key, currentValue, isDirectValue = false) => {
     setIsSaving(true);
     try {
-      const newValue = !currentValue;
+      const newValue = isDirectValue ? currentValue : !currentValue;
       await api.patch(`/AgentAI/agents/${agentId}/`, { [key]: newValue });
-      toast.success("Setting updated!");
-      // Update local agent state
-      setAgents(prev => prev.map(a => a.id === agentId ? { ...a, [key]: newValue } : a));
+      toast.success(isDirectValue ? "Keywords saved!" : "Setting updated!");
+      // Update local agent state if it was a toggle
+      if (!isDirectValue) {
+        setAgents(prev => prev.map(a => a.id === agentId ? { ...a, [key]: newValue } : a));
+      }
     } catch (err) {
       console.error("Failed to update agent setting:", err);
       toast.error("Failed to update setting.");
@@ -252,11 +254,36 @@ export default function SettingsPage() {
                           <SettingRow 
                             icon={FaCog} 
                             title="Skip History" 
-                            desc="Don't send previous conversation history to AI (Saves tokens, reduces context)."
+                            desc="Only skip history if a keyword is found (Saves tokens)."
                             active={agent.skip_history}
                             onClick={() => handleAgentToggle(agent.id, 'skip_history', agent.skip_history)}
                             color="text-amber-500"
                           />
+                          
+                          {agent.skip_history && (
+                            <div className="mt-2 ml-14 space-y-2 animate-in slide-in-from-top-2 duration-300">
+                              <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">History Skip Keywords</label>
+                              <div className="flex gap-2">
+                                <input 
+                                  type="text"
+                                  placeholder="e.g. reset, clear, নতুন করে (comma separated)"
+                                  value={agent.history_skip_keywords || ""}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setAgents(prev => prev.map(a => a.id === agent.id ? { ...a, history_skip_keywords: val } : a));
+                                  }}
+                                  className="flex-1 px-4 py-3 bg-white border border-gray-100 rounded-xl font-bold text-gray-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 shadow-sm"
+                                />
+                                <button 
+                                  onClick={() => handleAgentToggle(agent.id, 'history_skip_keywords', agent.history_skip_keywords, true)}
+                                  className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black shadow-md hover:bg-indigo-700 transition-all"
+                                >
+                                  Save
+                                </button>
+                              </div>
+                              <p className="text-[10px] text-gray-400 ml-2 italic underline decoration-indigo-200/50">Only skips history if one of these keywords is found in the user's message.</p>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}

@@ -315,12 +315,19 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
 
     raw_history = get_last_message(agent_config, sender_id, limit=5)
     
-    skip_history = agent_config.skip_history
-    matched_history_skips = check_keyword_match(text, 'history_skip')
-    if matched_history_skips:
-        skip_history = True
-        logger.info(f"⏭️ Skipping history: DB Keyword '{matched_history_skips[0]}' found.")
-            
+    skip_history = False
+    if agent_config.skip_history:
+        # Check global smart keywords
+        matched_global = check_keyword_match(text, 'history_skip')
+        
+        # Check per-agent custom history skip keywords
+        custom_skips = [k.strip().lower() for k in (agent_config.history_skip_keywords or "").split(',') if k.strip()]
+        matched_custom = [k for k in custom_skips if k in text.lower()]
+        
+        if matched_global or matched_custom:
+            skip_history = True
+            logger.info(f"⏭️ Skipping history: Keyword found. Global: {matched_global}, Custom: {matched_custom}")
+    
     if skip_history:
         history = []
     else:
