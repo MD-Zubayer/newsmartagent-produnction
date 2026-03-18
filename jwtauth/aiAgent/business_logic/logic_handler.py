@@ -282,9 +282,26 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
             memory_context = f"\nUser Database Memory [Very Important]:\n{mem_data}"
             logger.info(f"🧠 Injecting Memory Context for {sender_id}. Score: {c_score} | DB Triggers: {matched_intents or matched_targets}")
 
+    # 4. Fetch Contact specific settings
+    from aiAgent.models import Contact
+    custom_role = agent_config.system_prompt
+    contact_instructions = extra_instruction or ""
+
+    try:
+        contact = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
+        if contact:
+            if contact.custom_prompt:
+                custom_role = contact.custom_prompt
+                logger.info(f"🎯 Using Custom Role for {sender_id}")
+            if contact.custom_instructions:
+                contact_instructions = f"{contact_instructions}\n[CONTACT SPECIFIC INSTRUCTIONS]: {contact.custom_instructions}"
+                logger.info(f"📝 Adding Custom Instructions for {sender_id}")
+    except Exception as e:
+        logger.error(f"Error fetching contact settings: {e}")
+
     prompt_parts = [
-        f"Role: {agent_config.system_prompt}",
-        f"Instructions: {extra_instruction}"
+        f"Role: {custom_role}",
+        f"Instructions: {contact_instructions}"
     ]
 
     if sheet_context: prompt_parts.append(sheet_context)

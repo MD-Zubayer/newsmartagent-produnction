@@ -285,7 +285,7 @@ export default function ContactsPage() {
                   </div>
                 ) : (
                   <>
-                    <div className="flex flex-col-reverse space-y-6 space-y-reverse">
+                    <div className="flex flex-col space-y-6">
                       {historyMessages.map((msg, index) => (
                         <div 
                           key={msg.id || index} 
@@ -330,3 +330,4 @@ export default function ContactsPage() {
     </div>
   );
 }
+鼓

@@ -116,7 +116,8 @@ class ContactSerializer(serializers.ModelSerializer):
         model = Contact
         fields = [
             'id', 'agent', 'identifier', 'name', 'push_name', 
-            'is_auto_reply_enabled', 'platform', 'created_at', 'updated_at'
+            'is_auto_reply_enabled', 'platform', 'created_at', 'updated_at',
+            'custom_prompt', 'custom_instructions'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 

@@ -1,3 +1,4 @@
+from django.db import models
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -13,11 +14,34 @@ class ContactListView(APIView):
     def get(self, request, agent_id):
         try:
             agent = AgentAI.objects.get(page_id=agent_id, user=request.user)
+            query = request.GET.get('q', '')
             contacts = Contact.objects.filter(agent=agent).order_by('-updated_at')
-            serializer = ContactSerializer(contacts, many=True)
+            
+            if query:
+                contacts = contacts.filter(
+                    models.Q(name__icontains=query) | 
+                    models.Q(push_name__icontains=query) | 
+                    models.Q(identifier__icontains=query)
+                )
+                
+            serializer = ContactSerializer(contacts[:50], many=True)
             return Response({"contacts": serializer.data}, status=status.HTTP_200_OK)
         except AgentAI.DoesNotExist:
             return Response({"error": "Agent not found"}, status=status.HTTP_404_NOT_FOUND)
+
+class ContactDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, contact_id):
+        try:
+            contact = Contact.objects.get(id=contact_id, agent__user=request.user)
+            serializer = ContactSerializer(contact, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Contact.DoesNotExist:
+            return Response({"error": "Contact not found"}, status=status.HTTP_404_NOT_FOUND)
 
 class ToggleAutoReplyView(APIView):
     permission_classes = [IsAuthenticated]

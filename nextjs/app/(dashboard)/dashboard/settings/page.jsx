@@ -1,31 +1,110 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   FaBell, FaRobot, FaShieldAlt, FaGlobe, 
-  FaSave, FaCog, FaCheckCircle, FaExclamationCircle 
+  FaSave, FaCog, FaCheckCircle, FaExclamationCircle,
+  FaUserEdit, FaSearch, FaChevronRight, FaRobot as FaChat
 } from "react-icons/fa";
+import api from "@/lib/api";
+import { toast } from 'react-hot-toast';
 
 export default function SettingsPage() {
+  const [activeTab, setActiveTab] = useState("general");
   const [settings, setSettings] = useState({
     emailNotif: true,
     autoReply: false,
     darkMode: false,
     publicProfile: true,
   });
-
   const [isSaving, setIsSaving] = useState(false);
+
+  // Per-Contact Settings State
+  const [agents, setAgents] = useState([]);
+  const [selectedAgent, setSelectedAgent] = useState("");
+  const [contactSearch, setContactSearch] = useState("");
+  const [contacts, setContacts] = useState([]);
+  const [selectedContact, setSelectedContact] = useState(null);
+  const [contactLoading, setContactLoading] = useState(false);
+  const [contactSettings, setContactSettings] = useState({
+    custom_prompt: "",
+    custom_instructions: ""
+  });
+
+  useEffect(() => {
+    if (activeTab === "contacts") {
+      fetchAgents();
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (selectedAgent && contactSearch.length >= 2) {
+      const delayDebounceFn = setTimeout(() => {
+        searchContacts();
+      }, 500);
+      return () => clearTimeout(delayDebounceFn);
+    }
+  }, [contactSearch, selectedAgent]);
+
+  const fetchAgents = async () => {
+    try {
+      const res = await api.get("/AgentAI/agents/");
+      setAgents(res.data || []);
+      if (res.data.length > 0 && !selectedAgent) {
+        setSelectedAgent(res.data[0].page_id);
+      }
+    } catch (err) {
+      console.error("Failed to load agents:", err);
+    }
+  };
+
+  const searchContacts = async () => {
+    setContactLoading(true);
+    try {
+      const res = await api.get(`/AgentAI/contacts/${selectedAgent}/?q=${contactSearch}`);
+      setContacts(res.data.contacts || []);
+    } catch (err) {
+      console.error("Failed to search contacts:", err);
+    } finally {
+      setContactLoading(false);
+    }
+  };
+
+  const handleSelectContact = (contact) => {
+    setSelectedContact(contact);
+    setContactSettings({
+      custom_prompt: contact.custom_prompt || "",
+      custom_instructions: contact.custom_instructions || ""
+    });
+    setContacts([]);
+    setContactSearch("");
+  };
+
+  const handleSaveContactSettings = async () => {
+    if (!selectedContact) return;
+    setIsSaving(true);
+    try {
+      await api.patch(`/AgentAI/contacts/detail/${selectedContact.id}/`, contactSettings);
+      toast.success("Contact settings saved!");
+      setSelectedContact(prev => ({ ...prev, ...contactSettings }));
+    } catch (err) {
+      console.error("Failed to save contact settings:", err);
+      toast.error("Failed to save settings.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const toggleSetting = (key) => {
     setSettings(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const handleSave = () => {
+  const handleGeneralSave = () => {
     setIsSaving(true);
     setTimeout(() => {
       setIsSaving(false);
-      alert("Settings saved successfully!");
-    }, 1500);
+      toast.success("General settings saved!");
+    }, 1000);
   };
 
   const SettingRow = ({ icon: Icon, title, desc, active, onClick, color }) => (
@@ -48,112 +127,264 @@ export default function SettingsPage() {
     </div>
   );
 
+  const tabs = [
+    { id: "general", label: "General", icon: FaCog },
+    { id: "automation", label: "Automation", icon: FaRobot },
+    { id: "contacts", label: "Contact-Specific", icon: FaUserEdit },
+    { id: "security", label: "Security", icon: FaShieldAlt },
+  ];
+
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 animate-in fade-in slide-in-from-bottom-6 duration-700">
+    <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 animate-in fade-in slide-in-from-bottom-6 duration-700">
       
       {/* Header */}
-      <div className="flex items-center gap-4 mb-10">
-        <div className="p-4 bg-indigo-600 rounded-[1.5rem] text-white shadow-xl shadow-indigo-100">
-          <FaCog className="text-2xl animate-spin-slow" />
-        </div>
-        <div>
-          <h2 className="text-3xl font-black text-gray-900 tracking-tight">App Settings</h2>
-          <p className="text-gray-500 font-medium">Manage your preferences and automation rules.</p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+        <div className="flex items-center gap-4">
+          <div className="p-4 bg-indigo-600 rounded-[1.5rem] text-white shadow-xl shadow-indigo-100">
+            <FaCog className="text-2xl animate-spin-slow" />
+          </div>
+          <div>
+            <h2 className="text-3xl font-black text-gray-900 tracking-tight">App Settings</h2>
+            <p className="text-gray-500 font-medium">Manage your preferences and automation rules.</p>
+          </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-[3rem] shadow-[0_30px_80px_rgba(0,0,0,0.04)] border border-gray-50 overflow-hidden">
+      <div className="bg-white rounded-[3rem] shadow-[0_30px_80px_rgba(0,0,0,0.04)] border border-gray-50 overflow-hidden flex flex-col md:flex-row min-h-[600px]">
         
-        {/* Settings Categories */}
-        <div className="p-6 sm:p-10 space-y-10">
-          
-          {/* Automation Section */}
-          <section>
-            <div className="flex items-center gap-2 mb-6 ml-2">
-              <FaRobot className="text-indigo-600" />
-              <h3 className="text-sm font-black uppercase tracking-widest text-gray-400">Automation & AI</h3>
-            </div>
-            <div className="space-y-4">
-              <SettingRow 
-                icon={FaRobot} 
-                title="Auto-reply to comments" 
-                desc="Automatically respond to user comments using AI."
-                active={settings.autoReply}
-                onClick={() => toggleSetting('autoReply')}
-                color="text-purple-500"
-              />
-              <SettingRow 
-                icon={FaBell} 
-                title="Email Notifications" 
-                desc="Receive weekly reports and alert emails."
-                active={settings.emailNotif}
-                onClick={() => toggleSetting('emailNotif')}
-                color="text-blue-500"
-              />
-            </div>
-          </section>
-
-          {/* Privacy & App Section */}
-          <section>
-            <div className="flex items-center gap-2 mb-6 ml-2">
-              <FaShieldAlt className="text-indigo-600" />
-              <h3 className="text-sm font-black uppercase tracking-widest text-gray-400">Privacy & Display</h3>
-            </div>
-            <div className="space-y-4">
-              <SettingRow 
-                icon={FaGlobe} 
-                title="Public Portfolio" 
-                desc="Make your automation stats visible to others."
-                active={settings.publicProfile}
-                onClick={() => toggleSetting('publicProfile')}
-                color="text-green-500"
-              />
-              <SettingRow 
-                icon={FaShieldAlt} 
-                title="Enhanced Security" 
-                desc="Enable two-factor authentication for changes."
-                active={true}
-                onClick={() => {}}
-                color="text-amber-500"
-              />
-            </div>
-          </section>
-
-          {/* Alert Box */}
-          <div className="bg-indigo-50 p-6 rounded-[2rem] border border-indigo-100 flex items-start gap-4">
-            <FaExclamationCircle className="text-indigo-600 mt-1" />
-            <div>
-              <p className="text-indigo-900 font-bold text-sm">Pro Tip!</p>
-              <p className="text-indigo-700/70 text-xs font-medium mt-1">
-                Enabling Auto-reply can increase your engagement rate by up to 40%. Make sure your tokens are active.
-              </p>
-            </div>
-          </div>
-
-          {/* Save Button Area */}
-          <div className="pt-6 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="text-xs text-gray-400 font-bold italic">
-              * Some changes may take a few minutes to reflect.
-            </p>
-            <button 
-              onClick={handleSave}
-              disabled={isSaving}
-              className={`w-full sm:w-auto flex items-center justify-center gap-3 px-10 py-4 rounded-2xl font-black transition-all shadow-xl active:scale-95 ${
-                isSaving 
-                ? 'bg-gray-100 text-gray-400' 
-                : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-200'
+        {/* Sidebar Tabs */}
+        <div className="w-full md:w-64 bg-gray-50/50 border-r border-gray-50 p-6 flex flex-col gap-2">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-3 px-6 py-4 rounded-2xl font-bold transition-all ${
+                activeTab === tab.id 
+                ? 'bg-white text-indigo-600 shadow-md ring-1 ring-black/5' 
+                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100/50'
               }`}
             >
-              {isSaving ? (
-                <>Saving...</>
-              ) : (
-                <><FaSave /> Save Changes</>
-              )}
+              <tab.icon className="text-lg" />
+              <span className="text-sm">{tab.label}</span>
             </button>
-          </div>
+          ))}
+        </div>
 
+        {/* Tab Content */}
+        <div className="flex-1 p-6 sm:p-10">
+          {activeTab === "general" && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+              <section>
+                <h3 className="text-sm font-black uppercase tracking-widest text-gray-400 mb-6 ml-2">Display & Notifications</h3>
+                <div className="space-y-4">
+                  <SettingRow 
+                    icon={FaBell} 
+                    title="Email Notifications" 
+                    desc="Receive weekly reports and alert emails."
+                    active={settings.emailNotif}
+                    onClick={() => toggleSetting('emailNotif')}
+                    color="text-blue-500"
+                  />
+                  <SettingRow 
+                    icon={FaGlobe} 
+                    title="Public Portfolio" 
+                    desc="Make your automation stats visible to others."
+                    active={settings.publicProfile}
+                    onClick={() => toggleSetting('publicProfile')}
+                    color="text-green-500"
+                  />
+                </div>
+              </section>
+
+              <div className="pt-6 border-t border-gray-100 flex justify-end">
+                <button 
+                  onClick={handleGeneralSave}
+                  disabled={isSaving}
+                  className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2"
+                >
+                  {isSaving ? "Saving..." : <><FaSave /> Save Changes</>}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "automation" && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+              <section>
+                <h3 className="text-sm font-black uppercase tracking-widest text-gray-400 mb-6 ml-2">AI Rules</h3>
+                <div className="space-y-4">
+                  <SettingRow 
+                    icon={FaRobot} 
+                    title="Auto-reply to comments" 
+                    desc="Automatically respond to user comments using AI."
+                    active={settings.autoReply}
+                    onClick={() => toggleSetting('autoReply')}
+                    color="text-purple-500"
+                  />
+                </div>
+              </section>
+              
+              <div className="bg-indigo-50 p-6 rounded-[2rem] border border-indigo-100 flex items-start gap-4">
+                <FaExclamationCircle className="text-indigo-600 mt-1" />
+                <div>
+                  <p className="text-indigo-900 font-bold text-sm">AI Efficiency</p>
+                  <p className="text-indigo-700/70 text-xs font-medium mt-1">
+                    Customizing your AI logic for specific users can increase engagement by up to 60%. Use the 'Contact-Specific' tab for granular control.
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-6 border-t border-gray-100 flex justify-end">
+                <button 
+                  onClick={handleGeneralSave}
+                  disabled={isSaving}
+                  className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2"
+                >
+                  <FaSave /> Save Changes
+                </button>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "contacts" && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+              <section>
+                <h3 className="text-sm font-black uppercase tracking-widest text-gray-400 mb-6 ml-2">Sender-Specific Logic</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Select Agent</label>
+                    <select 
+                      value={selectedAgent} 
+                      onChange={(e) => setSelectedAgent(e.target.value)}
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500/10"
+                    >
+                      {agents.map(agent => (
+                        <option key={agent.id} value={agent.page_id}>{agent.name} ({agent.platform})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2 relative">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Search Contact</label>
+                    <div className="relative">
+                      <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input 
+                        type="text"
+                        placeholder="Name or identifier..."
+                        value={contactSearch}
+                        onChange={(e) => setContactSearch(e.target.value)}
+                        className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500/10"
+                      />
+                    </div>
+                    
+                    {contacts.length > 0 && (
+                      <div className="absolute top-[100%] left-0 right-0 z-50 mt-2 bg-white border border-gray-100 shadow-xl rounded-2xl max-h-60 overflow-y-auto p-2">
+                        {contacts.map(c => (
+                          <button
+                            key={c.id}
+                            onClick={() => handleSelectContact(c)}
+                            className="w-full flex items-center justify-between p-3 hover:bg-indigo-50 rounded-xl transition-colors text-left"
+                          >
+                            <div className="flex flex-col">
+                              <span className="text-sm font-black text-gray-800">{c.name || c.push_name || c.identifier}</span>
+                              <span className="text-[10px] font-bold text-gray-400">{c.identifier}</span>
+                            </div>
+                            <FaChevronRight className="text-xs text-gray-300" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {selectedContact ? (
+                  <div className="space-y-6 animate-in zoom-in-95 duration-300">
+                    <div className="p-6 bg-indigo-50/50 border border-indigo-100/50 rounded-[2.5rem]">
+                      <div className="flex items-center gap-4 mb-6 pb-6 border-b border-indigo-100/30">
+                        <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-indigo-600 shadow-sm font-black">
+                          {selectedContact.name?.[0] || selectedContact.identifier[0]}
+                        </div>
+                        <div>
+                          <h4 className="font-black text-gray-800">{selectedContact.name || selectedContact.identifier}</h4>
+                          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Editing custom AI rules</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-6">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Custom System Prompt (Role)</label>
+                          <textarea 
+                            rows="4"
+                            placeholder="e.g. You are a senior accountant dealing with a high-priority client. Be formal and precise."
+                            value={contactSettings.custom_prompt}
+                            onChange={(e) => setContactSettings(prev => ({ ...prev, custom_prompt: e.target.value }))}
+                            className="w-full px-6 py-4 bg-white border border-gray-100 rounded-[2rem] font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500/10 text-sm shadow-sm"
+                          ></textarea>
+                          <p className="text-[10px] text-gray-400 ml-2 italic">This overrides the general agent prompt for this contact.</p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Additional Instructions</label>
+                          <textarea 
+                            rows="4"
+                            placeholder="e.g. Always mention the next board meeting. Never discuss pricing."
+                            value={contactSettings.custom_instructions}
+                            onChange={(e) => setContactSettings(prev => ({ ...prev, custom_instructions: e.target.value }))}
+                            className="w-full px-6 py-4 bg-white border border-gray-100 rounded-[2rem] font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500/10 text-sm shadow-sm"
+                          ></textarea>
+                          <p className="text-[10px] text-gray-400 ml-2 italic">These instructions are appended to the main prompt.</p>
+                        </div>
+                      </div>
+
+                      <div className="mt-8 flex items-center justify-between gap-4">
+                        <button 
+                          onClick={() => setSelectedContact(null)}
+                          className="px-6 py-3 text-gray-400 text-xs font-black uppercase hover:text-rose-500"
+                        >
+                          Cancel
+                        </button>
+                        <button 
+                          onClick={handleSaveContactSettings}
+                          disabled={isSaving}
+                          className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2"
+                        >
+                          {isSaving ? "Saving..." : <><FaSave /> Save Contact Settings</>}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-20 bg-gray-50/50 rounded-[3rem] border border-dashed border-gray-200">
+                    <FaUserEdit className="h-12 w-12 text-gray-300 mb-4" />
+                    <h4 className="font-black text-gray-400">Search & select a contact to start</h4>
+                    <p className="text-xs text-gray-400 mt-1">Granular AI controls will appear here.</p>
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
+
+          {activeTab === "security" && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+              <section>
+                <h3 className="text-sm font-black uppercase tracking-widest text-gray-400 mb-6 ml-2">Account Protection</h3>
+                <div className="space-y-4">
+                  <SettingRow 
+                    icon={FaShieldAlt} 
+                    title="Enhanced Security" 
+                    desc="Enable two-factor authentication for changes."
+                    active={true}
+                    onClick={() => {}}
+                    color="text-amber-500"
+                  />
+                </div>
+              </section>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
+鼓
