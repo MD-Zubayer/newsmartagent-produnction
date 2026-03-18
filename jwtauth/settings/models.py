@@ -9,6 +9,10 @@ class AgentSettings(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='agent_settings')
     is_order_enable = models.BooleanField(default=True)
     
+    # Auto Renew Settings
+    auto_renew_enabled = models.BooleanField(default=False)
+    auto_renew_offer = models.ForeignKey('users.Offer', on_delete=models.SET_NULL, null=True, blank=True)
+
     def __str__(self):
         return f"Settings for {self.user.name}"
 

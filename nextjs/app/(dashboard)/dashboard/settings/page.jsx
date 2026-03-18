@@ -20,9 +20,12 @@ export default function SettingsPage() {
   });
 
   const [agentSettings, setAgentSettings] = useState({
-    is_order_enable: true
+    is_order_enable: true,
+    auto_renew_enabled: false,
+    auto_renew_offer: null
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [offers, setOffers] = useState([]);
 
   // Per-Contact Settings State
   const [agents, setAgents] = useState([]);
@@ -39,6 +42,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (activeTab === "contacts" || activeTab === "automation") {
       fetchAgents();
+      fetchOffers();
     }
   }, [activeTab]);
 
@@ -61,6 +65,15 @@ export default function SettingsPage() {
       setAgentSettings(response.data);
     } catch (err) {
       console.error("Failed to fetch agent global settings:", err);
+    }
+  };
+
+  const fetchOffers = async () => {
+    try {
+      const res = await api.get("/offers/");
+      setOffers(res.data || []);
+    } catch (err) {
+      console.error("Failed to load offers:", err);
     }
   };
 
@@ -144,12 +157,15 @@ export default function SettingsPage() {
   };
 
   const handleGlobalSettingToggle = async (key, currentValue) => {
+    handleGlobalSettingChange(key, !currentValue);
+  };
+
+  const handleGlobalSettingChange = async (key, value) => {
     setIsSaving(true);
     try {
-      const newValue = !currentValue;
-      await api.patch('/settings/agent-settings/', { [key]: newValue });
-      setAgentSettings(prev => ({ ...prev, [key]: newValue }));
-      toast.success("Global setting updated!");
+      await api.patch('/settings/agent-settings/', { [key]: value });
+      setAgentSettings(prev => ({ ...prev, [key]: value }));
+      toast.success("Settings updated!");
     } catch (err) {
       console.error("Failed to update global setting:", err);
       toast.error("Failed to update global setting.");
@@ -273,6 +289,36 @@ export default function SettingsPage() {
                     onClick={() => handleGlobalSettingToggle('is_order_enable', agentSettings.is_order_enable)}
                     color="text-green-500"
                   />
+
+                  <div className="pt-6 border-t border-gray-100 mt-6">
+                    <SettingRow 
+                      icon={FaShoppingCart} 
+                      title="Auto-Renew Offer" 
+                      desc="Automatic purchase when token balance reaches 2,000."
+                      active={agentSettings.auto_renew_enabled}
+                      onClick={() => handleGlobalSettingToggle('auto_renew_enabled', agentSettings.auto_renew_enabled)}
+                      color="text-indigo-500"
+                    />
+
+                    {agentSettings.auto_renew_enabled && (
+                      <div className="mt-4 ml-14 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Select Offer to Renew</label>
+                        <select 
+                          value={agentSettings.auto_renew_offer || ""}
+                          onChange={(e) => handleGlobalSettingChange('auto_renew_offer', e.target.value)}
+                          className="w-full px-6 py-4 bg-white border border-gray-100 rounded-[2rem] font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500/10 text-sm shadow-sm"
+                        >
+                          <option value="">Select an Offer</option>
+                          {offers.map(offer => (
+                            <option key={offer.id} value={offer.id}>
+                              {offer.name} - {offer.price} BDT ({offer.tokens} Tokens)
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-[10px] text-gray-400 ml-2 italic">Ensure your account has sufficient balance for automatic renewal.</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {agents.length > 0 ? (

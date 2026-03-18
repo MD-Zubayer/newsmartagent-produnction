@@ -4,4 +4,4 @@ from .models import AgentSettings
 class AgentSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = AgentSettings
-        fields = ['is_order_enable']
+        fields = ['is_order_enable', 'auto_renew_enabled', 'auto_renew_offer']

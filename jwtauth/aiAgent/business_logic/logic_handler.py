@@ -243,6 +243,13 @@ def deduct_user_tokens(user_profile, total_tokens, ai_model_name):
 
             # Final sync of global balance
             user_profile.sync_word_balance()
+
+            # Trigger auto-renew if balance is low
+            try:
+                from users.services.auto_renew_service import check_and_trigger_auto_renew
+                check_and_trigger_auto_renew(user_profile)
+            except Exception as e:
+                logger.error(f"Auto-renew Trigger Error: {e}")
             
             if remaining_to_deduct > 0:
                 logger.warning(f"Overdraft! Still needed to deduct {remaining_to_deduct} for {user_profile.user.email}")
