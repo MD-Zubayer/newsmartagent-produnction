@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import { 
   FaBell, FaRobot, FaShieldAlt, FaGlobe, 
-  FaSave, FaCog, FaCheckCircle, FaExclamationCircle,
-  FaUserEdit, FaSearch, FaChevronRight, FaRobot as FaChat,
+  FaSave, FaCog, FaExclamationCircle,
+  FaUserEdit, FaSearch, FaChevronRight,
   FaShoppingCart, FaChevronDown, FaClock, FaCoins
 } from "react-icons/fa";
 import api from "@/lib/api";
@@ -130,14 +130,6 @@ export default function SettingsPage() {
     setSettings(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const handleGeneralSave = () => {
-    setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
-      toast.success("General settings saved!");
-    }, 1000);
-  };
-
   const handleAgentToggle = async (agentId, key, currentValue, isDirectValue = false) => {
     setIsSaving(true);
     try {
@@ -175,19 +167,19 @@ export default function SettingsPage() {
   };
 
   const SettingRow = ({ icon: Icon, title, desc, active, onClick, color }) => (
-    <div className="flex items-center justify-between p-4 sm:p-6 bg-gray-50/50 rounded-[2rem] border border-gray-100 hover:bg-white hover:shadow-md transition-all group">
-      <div className="flex items-center gap-4">
-        <div className={`p-3 rounded-2xl ${color} bg-white shadow-sm group-hover:scale-110 transition-transform`}>
+    <div className="flex items-center justify-between gap-4 p-4 sm:p-5 bg-slate-50 rounded-xl border border-slate-200 hover:bg-white transition-all">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className={`p-2.5 rounded-lg ${color} bg-white border border-slate-200 shadow-sm`}>
           <Icon className="text-lg" />
         </div>
-        <div>
-          <h4 className="font-black text-gray-800 text-sm sm:text-base">{title}</h4>
-          <p className="text-xs text-gray-400 font-medium">{desc}</p>
+        <div className="min-w-0">
+          <h4 className="font-bold text-slate-800 text-sm sm:text-base">{title}</h4>
+          <p className="text-xs text-slate-500 font-medium">{desc}</p>
         </div>
       </div>
       <button 
         onClick={onClick}
-        className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none ${active ? 'bg-indigo-600' : 'bg-gray-300'}`}
+        className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none ring-1 ring-inset ${active ? 'bg-indigo-600 ring-indigo-600' : 'bg-slate-300 ring-slate-300'}`}
       >
         <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${active ? 'translate-x-6' : 'translate-x-1'}`} />
       </button>
@@ -202,47 +194,49 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 animate-in fade-in slide-in-from-bottom-6 duration-700">
+    <div className="max-w-6xl mx-auto py-6 px-4 sm:px-6 animate-in fade-in slide-in-from-bottom-6 duration-500">
       
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
-        <div className="flex items-center gap-4">
-          <div className="p-4 bg-indigo-600 rounded-[1.5rem] text-white shadow-xl shadow-indigo-100">
-            <FaCog className="text-2xl animate-spin-slow" />
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <div className="flex items-center gap-3">
+          <div className="p-3 bg-slate-900 rounded-xl text-white shadow-sm">
+            <FaCog className="text-lg" />
           </div>
           <div>
-            <h2 className="text-3xl font-black text-gray-900 tracking-tight">App Settings</h2>
-            <p className="text-gray-500 font-medium">Manage your preferences and automation rules.</p>
+            <h2 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Settings</h2>
+            <p className="text-slate-500 text-sm font-medium">Manage preferences, automation rules, and account controls.</p>
           </div>
         </div>
+        <p className="text-xs text-slate-500 font-semibold">Most changes apply instantly</p>
       </div>
 
-      <div className="bg-white rounded-[3rem] shadow-[0_30px_80px_rgba(0,0,0,0.04)] border border-gray-50 overflow-hidden flex flex-col md:flex-row min-h-[600px]">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col md:flex-row min-h-[620px]">
         
         {/* Sidebar Tabs */}
-        <div className="w-full md:w-64 bg-gray-50/50 border-r border-gray-50 p-6 flex flex-col gap-2">
+        <div className="w-full md:w-72 bg-slate-50 border-r border-slate-200 p-4 sm:p-5 flex flex-col gap-2">
+          <p className="text-[11px] px-2 font-bold uppercase tracking-widest text-slate-500 mb-1">Setting Categories</p>
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-3 px-6 py-4 rounded-2xl font-bold transition-all ${
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all text-left ${
                 activeTab === tab.id 
-                ? 'bg-white text-indigo-600 shadow-md ring-1 ring-black/5' 
-                : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100/50'
+                ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-slate-200' 
+                : 'text-slate-500 hover:text-slate-700 hover:bg-white'
               }`}
             >
-              <tab.icon className="text-lg" />
+              <tab.icon className="text-base" />
               <span className="text-sm">{tab.label}</span>
             </button>
           ))}
         </div>
 
         {/* Tab Content */}
-        <div className="flex-1 p-6 sm:p-10">
+        <div className="flex-1 p-5 sm:p-7 md:p-8">
           {activeTab === "general" && (
             <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
               <section>
-                <h3 className="text-sm font-black uppercase tracking-widest text-gray-400 mb-6 ml-2">Display & Notifications</h3>
+                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Display & Notifications</h3>
                 <div className="space-y-4">
                   <SettingRow 
                     icon={FaBell} 
@@ -262,23 +256,13 @@ export default function SettingsPage() {
                   />
                 </div>
               </section>
-
-              <div className="pt-6 border-t border-gray-100 flex justify-end">
-                <button 
-                  onClick={handleGeneralSave}
-                  disabled={isSaving}
-                  className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2"
-                >
-                  {isSaving ? "Saving..." : <><FaSave /> Save Changes</>}
-                </button>
-              </div>
             </div>
           )}
 
           {activeTab === "automation" && (
             <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
               <section>
-                <h3 className="text-sm font-black uppercase tracking-widest text-gray-400 mb-6 ml-2">AI Rules</h3>
+                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">AI Rules</h3>
                 
                 <div className="mb-8 space-y-4">
                   <SettingRow 
@@ -301,8 +285,8 @@ export default function SettingsPage() {
                     />
 
                     {agentSettings.auto_renew_enabled && (
-                      <div className="mt-4 ml-14 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Select Offer to Renew</label>
+                      <div className="mt-4 ml-2 sm:ml-14 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Select Offer to Renew</label>
                         
                         <div className="relative group/dropdown">
                           <button
@@ -310,7 +294,7 @@ export default function SettingsPage() {
                               const dropdown = document.getElementById('offer-dropdown');
                               dropdown.classList.toggle('hidden');
                             }}
-                            className="w-full px-6 py-4 bg-white border border-gray-100 rounded-[2rem] font-bold text-gray-700 outline-none focus:ring-4 focus:ring-indigo-500/10 text-sm shadow-sm flex items-center justify-between group hover:border-indigo-200 transition-all"
+                            className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 text-sm shadow-sm flex items-center justify-between group hover:border-indigo-300 transition-all"
                           >
                             <div className="flex items-center gap-3">
                               {agentSettings.auto_renew_offer ? (
@@ -334,9 +318,9 @@ export default function SettingsPage() {
                             <FaChevronDown className="text-gray-300 group-hover:text-indigo-400 transition-colors" />
                           </button>
 
-                          <div 
+                          <div
                             id="offer-dropdown"
-                            className="absolute z-50 mt-3 w-full bg-white border border-gray-100 rounded-[2.5rem] shadow-2xl p-3 hidden animate-in fade-in slide-in-from-top-4 duration-300"
+                            className="absolute z-50 mt-3 w-full bg-white border border-slate-200 rounded-xl shadow-xl p-3 hidden animate-in fade-in slide-in-from-top-4 duration-300"
                           >
                             <div className="max-h-[300px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
                               {offers.length > 0 ? (
@@ -347,7 +331,7 @@ export default function SettingsPage() {
                                       handleGlobalSettingChange('auto_renew_offer', offer.id);
                                       document.getElementById('offer-dropdown').classList.add('hidden');
                                     }}
-                                    className={`w-full p-4 rounded-[1.8rem] transition-all flex items-center justify-between group/item ${
+                                    className={`w-full p-4 rounded-xl transition-all flex items-center justify-between group/item ${
                                       String(agentSettings.auto_renew_offer) === String(offer.id) 
                                       ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' 
                                       : 'hover:bg-gray-50 text-gray-700'
@@ -384,7 +368,7 @@ export default function SettingsPage() {
                           </div>
                         </div>
 
-                        <p className="text-[10px] text-gray-400 ml-6 italic">Ensure your account has sufficient balance for automatic renewal. Tokens will renew with {offers.find(o => String(o.id) === String(agentSettings.auto_renew_offer))?.duration_days || "30"} days validity.</p>
+                        <p className="text-[10px] text-slate-500 ml-1 sm:ml-6 italic">Ensure sufficient balance for automatic renewal. Tokens renew with {offers.find(o => String(o.id) === String(agentSettings.auto_renew_offer))?.duration_days || "30"} days validity.</p>
                       </div>
                     )}
                   </div>
@@ -393,7 +377,7 @@ export default function SettingsPage() {
                 {agents.length > 0 ? (
                   <div className="space-y-6">
                     {agents.map(agent => (
-                      <div key={agent.id} className="p-6 bg-gray-50/50 rounded-[2.5rem] border border-gray-100">
+                      <div key={agent.id} className="p-5 bg-slate-50 rounded-xl border border-slate-200">
                         <div className="flex items-center gap-3 mb-4 ml-2">
                           <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-[10px] font-black">
                             {agent.platform[0].toUpperCase()}
@@ -421,7 +405,7 @@ export default function SettingsPage() {
                           
                           {agent.skip_history && (
                             <div className="mt-2 ml-14 space-y-2 animate-in slide-in-from-top-2 duration-300">
-                              <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">History Skip Keywords</label>
+                              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">History Skip Keywords</label>
                               <div className="flex gap-2">
                                 <input 
                                   type="text"
@@ -431,11 +415,11 @@ export default function SettingsPage() {
                                     const val = e.target.value;
                                     setAgents(prev => prev.map(a => a.id === agent.id ? { ...a, history_skip_keywords: val } : a));
                                   }}
-                                  className="flex-1 px-4 py-3 bg-white border border-gray-100 rounded-xl font-bold text-gray-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 shadow-sm"
+                                  className="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 shadow-sm"
                                 />
                                 <button 
                                   onClick={() => handleAgentToggle(agent.id, 'history_skip_keywords', agent.history_skip_keywords, true)}
-                                  className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-black shadow-md hover:bg-indigo-700 transition-all"
+                                  className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-md hover:bg-indigo-700 transition-all"
                                 >
                                   Save
                                 </button>
@@ -459,24 +443,14 @@ export default function SettingsPage() {
                 )}
               </section>
               
-              <div className="bg-indigo-50 p-6 rounded-[2rem] border border-indigo-100 flex items-start gap-4">
+              <div className="bg-indigo-50 p-5 rounded-xl border border-indigo-100 flex items-start gap-3">
                 <FaExclamationCircle className="text-indigo-600 mt-1" />
                 <div>
-                  <p className="text-indigo-900 font-bold text-sm">AI Efficiency</p>
+                  <p className="text-indigo-900 font-semibold text-sm">AI Efficiency</p>
                   <p className="text-indigo-700/70 text-xs font-medium mt-1">
                     Customizing your AI logic for specific users can increase engagement by up to 60%. Use the 'Contact-Specific' tab for granular control.
                   </p>
                 </div>
-              </div>
-
-              <div className="pt-6 border-t border-gray-100 flex justify-end">
-                <button 
-                  onClick={handleGeneralSave}
-                  disabled={isSaving}
-                  className="px-8 py-3 bg-indigo-600 text-white rounded-xl font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2"
-                >
-                  <FaSave /> Save Changes
-                </button>
               </div>
             </div>
           )}
