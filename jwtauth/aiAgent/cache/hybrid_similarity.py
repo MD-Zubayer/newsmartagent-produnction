@@ -34,7 +34,11 @@ def normalize_for_cache(text):
     1) শব্দ/ফ্রেজ mapping (বাংলা/বাংলিশ -> canonical)
     2) common normalize_text pipeline
     """
-    return normalize_text(normalize_with_map(text))
+    mapped_text = normalize_with_map(text)
+    normalized = normalize_text(mapped_text)
+    if text and normalized:
+        logger.debug("🧪 Cache normalize | raw='%s' | normalized='%s'", text[:120], normalized[:120])
+    return normalized
 
 
 def get_cached_reply(agent_id, msg_text=None, msg_hash=None):                
@@ -166,6 +170,11 @@ def get_translation_map():
         logger.error(f"SmartTranslationMap load error: {e}")
 
     cache.set(TRANSLATION_CACHE_KEY, merged_map, timeout=600)
+    db_count = max(len(merged_map) - len(DEFAULT_TRANSLATION_MAP), 0)
+    logger.info(
+        "🗺️ Translation map loaded | total=%s default=%s db=%s",
+        len(merged_map), len(DEFAULT_TRANSLATION_MAP), db_count
+    )
     return merged_map
 
 def get_optimized_pattern(mapping):
@@ -192,9 +201,12 @@ def normalize_with_map(text):
     if translation_pattern is None:
         return text
 
+    matched_terms = []
+
     # ৩. রিপ্লেসমেন্ট লজিক
     def replace_logic(match):
         matched_text = match.group(0)
+        matched_terms.append(matched_text)
         # প্রথমে হুবহু মিলে কি না চেক করবে, না মিললে ছোট হাতের অক্ষরে চেক করবে
         return translation_map.get(
             matched_text,
@@ -202,7 +214,16 @@ def normalize_with_map(text):
         )
 
     # মূল টেক্সট রিপ্লেস করা
-    return translation_pattern.sub(replace_logic, text)
+    mapped_text = translation_pattern.sub(replace_logic, text)
+    if mapped_text != text:
+        unique_terms = list(dict.fromkeys(matched_terms))
+        logger.info(
+            "🔁 Translation applied | matched=%s | before='%s' | after='%s'",
+            unique_terms[:5],
+            text[:120],
+            mapped_text[:120],
+        )
+    return mapped_text
 
 
 def find_best_cached_hash(agent_id, msg_text, threshold=70):                
