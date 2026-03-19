@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
+import Cropper from 'react-easy-crop';
+import getCroppedImg from './getCroppedImg';
 import { 
   FaUserEdit, FaSignOutAlt, FaEnvelope, FaPhone, 
   FaMapMarkerAlt, FaHashtag, FaGlobeAsia, FaTimes, 
@@ -19,6 +21,13 @@ export default function ProfilePage() {
   const [subscriptions, setSubscriptions] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [fetchingExtras, setFetchingExtras] = useState(true);
+
+  // States for image cropping
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+  const [showCropModal, setShowCropModal] = useState(false);
+  const [cropImage, setCropImage] = useState(null);
   
   const [formData, setFormData] = useState({
     name: "",
@@ -133,25 +142,92 @@ export default function ProfilePage() {
               id="profile-photo-input" 
               className="hidden" 
               accept="image/*"
-              onChange={async (e) => {
+              onChange={(e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-
-                const formData = new FormData();
-                formData.append('profile_photo', file);
-
-                const lt = toast.loading("Uploading new look...");
-                try {
-                  const res = await api.patch("/users/update-me/", formData, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                  });
-                  toast.success("Profile photo updated!", { id: lt });
-                  setUser(res.data);
-                } catch (err) {
-                  toast.error("Upload failed. Try again.", { id: lt });
-                }
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => {
+                  setCropImage(reader.result);
+                  setShowCropModal(true);
+                };
+                e.target.value = null; // Reset input
               }}
             />
+
+            {/* Crop Modal */}
+            {showCropModal && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                <div className="bg-white rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col h-[80vh] md:h-[600px]">
+                  <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-slate-50">
+                    <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest">Adjust Photo</h3>
+                    <button onClick={() => setShowCropModal(false)} className="text-slate-400 hover:text-slate-900 transition-colors">
+                      <FaTimes size={20} />
+                    </button>
+                  </div>
+                  
+                  <div className="relative flex-1 bg-slate-100">
+                    <Cropper
+                      image={cropImage}
+                      crop={crop}
+                      zoom={zoom}
+                      aspect={1}
+                      onCropChange={setCrop}
+                      onCropComplete={(croppedArea, croppedAreaPixels) => {
+                        setCroppedAreaPixels(croppedAreaPixels)
+                      }}
+                      onZoomChange={setZoom}
+                    />
+                  </div>
+
+                  <div className="p-6 bg-white flex items-center justify-between gap-4">
+                    <div className="flex-1">
+                      <input
+                        type="range"
+                        value={zoom}
+                        min={1}
+                        max={3}
+                        step={0.1}
+                        aria-labelledby="Zoom"
+                        onChange={(e) => setZoom(e.target.value)}
+                        className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                      />
+                    </div>
+                    <div className="flex gap-3">
+                      <button 
+                        onClick={() => setShowCropModal(false)}
+                        className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        onClick={async () => {
+                          const lt = toast.loading("Saving cropped photo...");
+                          try {
+                            const croppedBlob = await getCroppedImg(cropImage, croppedAreaPixels);
+                            const formData = new FormData();
+                            formData.append('profile_photo', croppedBlob, 'profile.jpg');
+
+                            const res = await api.patch("/users/update-me/", formData, {
+                              headers: { 'Content-Type': 'multipart/form-data' }
+                            });
+                            toast.success("Profile updated!", { id: lt });
+                            setUser(res.data);
+                            setShowCropModal(false);
+                          } catch (error) {
+                            console.error(error);
+                            toast.error("Crop failed. Try again.", { id: lt });
+                          }
+                        }}
+                        className="px-8 py-2.5 bg-indigo-600 text-white rounded-2xl text-sm font-black uppercase tracking-widest hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <button 
               onClick={() => setIsEditModalOpen(true)}
@@ -175,6 +251,25 @@ export default function ProfilePage() {
                   <FaCopy size={12} />
                 </button>
               </div>
+              
+              {user?.profile?.profile_photo && (
+                <button 
+                  onClick={async () => {
+                    if(!window.confirm("Delete profile photo?")) return;
+                    const lt = toast.loading("Removing photo...");
+                    try {
+                      const res = await api.patch("/users/update-me/", { profile_photo: null });
+                      toast.success("Photo removed", { id: lt });
+                      setUser(res.data);
+                    } catch (err) {
+                      toast.error("Failed to remove photo", { id: lt });
+                    }
+                  }}
+                  className="text-[9px] font-black text-rose-500 uppercase tracking-widest hover:underline"
+                >
+                  Delete Photo
+                </button>
+              )}
             </div>
           </div>
 
