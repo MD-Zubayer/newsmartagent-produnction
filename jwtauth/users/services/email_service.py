@@ -181,6 +181,6 @@ def send_2fa_otp_email(to_email: str, otp_code: str):
         message,
         settings.DEFAULT_FROM_EMAIL,
         [to_email],
-        fail_silently=False,
+        fail_silently=True,
         html_message=html_message,
     )

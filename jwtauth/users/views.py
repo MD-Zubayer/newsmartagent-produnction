@@ -251,13 +251,13 @@ class LoginView(APIView):
 
             try:
                 send_2fa_otp_email(user.email, otp)
-            except Exception:
-                return Response({"error": "Failed to send verification code. Try again."},
-                                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            except Exception as e:
+                # ইমেইল না গেলেও কোড সেভ থাকে; ইউজার চাইলে নতুন কোড চেয়ে নিতে পারবে
+                print(f"2FA email send failed: {e}")
 
             return Response({
                 "two_factor_required": True,
-                "message": "We emailed a 6-digit code. Submit to /api/auth/2fa/verify/ to finish login."
+                "message": "একটি ৬-সংখ্যার কোড ইমেইলে পাঠানো হয়েছে। আবার কোড চাইলে পুনরায় লগইন রিকোয়েস্ট করুন।"
             }, status=status.HTTP_200_OK)
 
         # JWT Token generation
