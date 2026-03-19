@@ -188,7 +188,11 @@ export default function DocumentPage() {
         const arrayBuffer = await file.arrayBuffer();
         const result = await mammoth.extractRawText({ arrayBuffer });
         if (editorRef.current) {
-          editorRef.current.innerText = result.value;
+          const currentContent = editorRef.current.innerText || "";
+          editorRef.current.innerText = (currentContent.trim() ? currentContent + "\n\n" : "") + result.value;
+          if (!currentContent.trim() || docTitle === "Untitled Document") {
+            setDocTitle(fileName);
+          }
         }
         toast.success("Word file imported");
       } else if (file.type === "application/pdf") {
@@ -202,7 +206,11 @@ export default function DocumentPage() {
           fullText += pageText + "\n\n";
         }
         if (editorRef.current) {
-          editorRef.current.innerText = fullText;
+          const currentContent = editorRef.current.innerText || "";
+          editorRef.current.innerText = (currentContent.trim() ? currentContent + "\n\n" : "") + fullText;
+          if (!currentContent.trim() || docTitle === "Untitled Document") {
+            setDocTitle(fileName);
+          }
         }
         toast.success("PDF file imported");
       } else {
