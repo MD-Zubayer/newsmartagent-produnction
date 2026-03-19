@@ -12,7 +12,6 @@ import {
   Loader2 // লোডিং আইকনের জন্য
 } from "lucide-react"; 
 import toast from "react-hot-toast";
-import Image from "next/image";
 
 export default function PublicOrderForm({ params }) {
   // params আনর‍্যাপ করা
@@ -108,12 +107,10 @@ export default function PublicOrderForm({ params }) {
         <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-6 text-white text-center">
           {shopProfile && shopProfile.profile_photo_url ? (
             <div className="relative w-20 h-20 mx-auto mb-3">
-              <Image 
+              <img 
                 src={shopProfile.profile_photo_url} 
                 alt="Shop Logo" 
-                layout="fill" 
-                objectFit="cover" 
-                className="rounded-full border-4 border-white shadow-md"
+                className="w-full h-full object-cover rounded-full border-4 border-white shadow-md"
               />
             </div>
           ) : (
