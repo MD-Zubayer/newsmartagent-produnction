@@ -28,7 +28,7 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profile
-        fields = ["user", "id_type", "unique_id", "created_at", "updated_at", "word_balance", 'acount_balance', 'commission_balance']
+        fields = ["user", "id_type", "unique_id", "created_at", "updated_at", "two_factor_enabled", "word_balance", 'acount_balance', 'commission_balance']
 
 
 class UserSerializer(serializers.ModelSerializer[User]):

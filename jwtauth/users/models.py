@@ -117,6 +117,7 @@ class Profile(models.Model):
     acount_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     otp_code = models.CharField(max_length=6, blank=True, null=True)
     otp_created_at = models.DateTimeField(blank=True, null=True)
+    two_factor_enabled = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

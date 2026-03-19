@@ -10,7 +10,7 @@ from users.views import (
     UserViewSet, LoginView, LogoutView, ForgotPasswordView, 
     ResetPasswordView, OfferViewSet, SubscriptionViewSet, 
     CookieTokenRefreshView, CookieTokenVerifyView, OrderSubmitView, NSABalanceTransferView, SendPaymentOTPView, SendTransferOTPView,
-    WithdrawMethodViewSet, CashoutRequestViewSet, FinancialSummaryView
+    WithdrawMethodViewSet, CashoutRequestViewSet, FinancialSummaryView, Verify2FALoginView, Toggle2FAView
 )
 from payments.views import PaymentViewSet
 from webhooks import views as webhook_views
@@ -45,6 +45,8 @@ urlpatterns = [
     path('api/', include('chat.urls')),
     path('api/', include('payments.urls')),
     path('api/login/', LoginView.as_view(), name='login'),
+    path('api/auth/2fa/verify/', Verify2FALoginView.as_view(), name='verify-2fa-login'),
+    path('api/auth/2fa/toggle/', Toggle2FAView.as_view(), name='toggle-2fa'),
     path("api/logout/", LogoutView.as_view(), name="logout"),
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/verify/', CookieTokenVerifyView.as_view(), name='verify_token'),

@@ -9,9 +9,12 @@ import {
 } from "react-icons/fa";
 import api from "@/lib/api";
 import { toast } from 'react-hot-toast';
+import { useAuth } from "@/context/AuthContext";
 
 export default function SettingsPage() {
+  const { user, setUser } = useAuth();
   const [activeTab, setActiveTab] = useState("general");
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [settings, setSettings] = useState({
     emailNotif: true,
     autoReply: false,
@@ -58,6 +61,12 @@ export default function SettingsPage() {
   useEffect(() => {
     fetchAgentSettings();
   }, []);
+
+  useEffect(() => {
+    if (user?.profile?.two_factor_enabled !== undefined) {
+      setTwoFactorEnabled(user.profile.two_factor_enabled);
+    }
+  }, [user]);
 
   const fetchAgentSettings = async () => {
     try {
@@ -148,10 +157,6 @@ export default function SettingsPage() {
     }
   };
 
-  const handleGlobalSettingToggle = async (key, currentValue) => {
-    handleGlobalSettingChange(key, !currentValue);
-  };
-
   const handleGlobalSettingChange = async (key, value) => {
     setIsSaving(true);
     try {
@@ -161,6 +166,37 @@ export default function SettingsPage() {
     } catch (err) {
       console.error("Failed to update global setting:", err);
       toast.error("Failed to update global setting.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleGlobalSettingToggle = async (key, currentValue) => {
+    handleGlobalSettingChange(key, !currentValue);
+  };
+
+  const handleToggle2FA = async () => {
+    setIsSaving(true);
+    try {
+      const newValue = !twoFactorEnabled;
+      const res = await api.post('/api/auth/2fa/toggle/', { enabled: newValue });
+      setTwoFactorEnabled(newValue);
+      
+      // Update local user state
+      if (setUser) {
+        setUser(prev => ({
+          ...prev,
+          profile: {
+            ...prev.profile,
+            two_factor_enabled: newValue
+          }
+        }));
+      }
+      
+      toast.success(res.data.message);
+    } catch (err) {
+      console.error("Failed to toggle 2FA:", err);
+      toast.error(err.response?.data?.error || "Failed to update 2FA setting.");
     } finally {
       setIsSaving(false);
     }
@@ -581,10 +617,10 @@ export default function SettingsPage() {
                 <div className="space-y-4">
                   <SettingRow 
                     icon={FaShieldAlt} 
-                    title="Enhanced Security" 
-                    desc="Enable two-factor authentication for changes."
-                    active={true}
-                    onClick={() => {}}
+                    title="Two-Factor Authentication" 
+                    desc="Require a verification code sent to your email during login."
+                    active={twoFactorEnabled}
+                    onClick={handleToggle2FA}
                     color="text-amber-500"
                   />
                 </div>

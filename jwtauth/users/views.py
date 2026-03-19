@@ -13,7 +13,7 @@ from rest_framework.views import APIView
 from datetime import datetime, timedelta, timezone
 import jwt
 from django.conf import settings
-from users.services.email_service import send_reset_email, send_verification_email
+from users.services.email_service import send_reset_email, send_verification_email, send_2fa_otp_email
 from users.authentication import CookieJWTAuthentication
 from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -239,6 +239,24 @@ class LoginView(APIView):
         if not user.is_verified:
             return Response({"error": "Email is not verified. Please check your inbox."
             }, status=status.HTTP_403_FORBIDDEN)
+
+        # 2FA Check
+        if user.profile.two_factor_enabled:
+            otp = str(random.randint(100000, 999999))
+            user.profile.otp_code = otp
+            user.profile.otp_created_at = timezone.now()
+            user.profile.save()
+
+            try:
+                send_2fa_otp_email(user.email, otp)
+            except Exception as e:
+                return Response({"error": "Failed to send 2FA code. Please try again."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            return Response({
+                "status": "2fa_required",
+                "email": user.email,
+                "message": "Two-factor authentication is required. Please check your email for the verification code."
+            }, status=status.HTTP_200_OK)
 
         # JWT Token generation
         refresh = RefreshToken.for_user(user)
@@ -935,3 +953,94 @@ class FinancialSummaryView(APIView):
             'account_pending': acc_pending_amount,
             'account_failed': acc_failed_amount,
         })
+class Verify2FALoginView(APIView):
+    """Verify OTP and complete login for 2FA enabled users
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get("email")
+        password = request.data.get("password")
+        otp_code = request.data.get("otp_code")
+
+        if not email or not password or not otp_code:
+            return Response({"error": "Email, password and OTP code are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = authenticate(request, email=email, password=password)
+        if user is None:
+            return Response({"error": "Invalid email or password"}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        profile = user.profile
+        if not profile.two_factor_enabled:
+            return Response({"error": "2FA is not enabled for this account"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Verify OTP
+        if not profile.otp_code or str(profile.otp_code) != str(otp_code):
+            return Response({'error': 'Incorrect verification code.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check OTP expiry (5 minutes)
+        if not profile.otp_created_at:
+             return Response({'error': 'Invalid verification session.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        time_limit = profile.otp_created_at + timedelta(minutes=5)
+        if timezone.now() > time_limit:
+            return Response({'error': 'Verification code has expired.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Clear OTP after success
+        profile.otp_code = ""
+        profile.save()
+
+        # JWT Token generation
+        refresh = RefreshToken.for_user(user)
+        access_token = str(refresh.access_token)
+        refresh_token = str(refresh)
+
+        response = Response({
+            "user": {
+                "id": user.id,
+                "email": user.email
+            },
+            "message": "Login successful"
+            }, status=status.HTTP_200_OK
+        )
+
+        # Httponly cookie set
+        response.set_cookie(key='access_token',
+            value=access_token,
+            httponly=True,
+            samesite="Lax",
+            secure=settings.DEBUG is False,
+            path='/',
+        )
+        response.set_cookie(
+            key="refresh_token", 
+            value=refresh_token,
+            httponly=True,
+            samesite="Lax",
+            secure=settings.DEBUG is False,
+            path='/',
+        )
+
+        return response
+
+
+class Toggle2FAView(APIView):
+    """Enable or disable 2FA for the authenticated user
+    """
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        enabled = request.data.get("enabled")
+        if enabled is None:
+            return Response({"error": "enabled status is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        profile = request.user.profile
+        profile.two_factor_enabled = bool(enabled)
+        profile.save()
+
+        status_msg = "enabled" if profile.two_factor_enabled else "disabled"
+        return Response({
+            "message": f"Two-factor authentication has been {status_msg} successfully.",
+            "two_factor_enabled": profile.two_factor_enabled
+        }, status=status.HTTP_200_OK)
