@@ -383,63 +383,82 @@ export default function UserDashboard() {
           </div>
 
           <div className="p-3 md:p-6 space-y-4">
-            {recent_logs.map((log) => {
-              const { date, time } = formatDateTime(log.created_at);
-              const isMessenger = log.platform.includes('messenger');
+            {recent_logs.length === 0 ? (
+              <div className="rounded-[2rem] border border-dashed border-slate-200 bg-white/80 px-6 py-10 text-center">
+                <p className="text-sm font-black text-slate-500 uppercase tracking-widest mb-2">
+                  No activity yet
+                </p>
+                <p className="text-xs font-bold text-slate-400">
+                  Once you start sending requests, the latest interactions will appear here in real time.
+                </p>
+              </div>
+            ) : (
+              recent_logs.map((log) => {
+                const { date, time } = formatDateTime(log.created_at);
+                const platformSlug = (log.platform || "").toLowerCase();
+                const isMessenger = platformSlug.includes("messenger");
+                const platformLabel = platformSlug ? platformSlug.replace(/_/g, " ") : "Unknown Platform";
+                const requestLabel = log.request_type ? log.request_type.replace(/_/g, " ") : "Unknown Operation";
+                const statusLabel = log.success === false ? "Failed" : "Success";
+                const statusColorClass = log.success === false
+                  ? "bg-rose-500 text-white shadow-rose-500/20"
+                  : "bg-emerald-500 text-white shadow-emerald-500/20";
+                const avatarLabel = platformSlug ? platformSlug[0].toUpperCase() : "#";
 
-              return (
-                <div key={log.id} className="group relative bg-white border border-slate-100 rounded-[1.5rem] md:rounded-[2.5rem] p-4 md:p-6 hover:shadow-2xl transition-all overflow-hidden hover:-translate-y-1">
-                  <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${isMessenger ? 'bg-blue-500' : 'bg-pink-500'}`} />
+                return (
+                  <div key={log.id} className="group relative bg-white border border-slate-100 rounded-[1.5rem] md:rounded-[2.5rem] p-4 md:p-6 hover:shadow-2xl transition-all overflow-hidden hover:-translate-y-1">
+                    <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${isMessenger ? 'bg-blue-500' : 'bg-pink-500'}`} />
 
-                  {/* Mobile View: Vertical Stack */}
-                  <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 md:gap-8 min-w-0">
+                    {/* Mobile View: Vertical Stack */}
+                    <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 md:gap-8 min-w-0">
 
-                    {/* Source Device/Account */}
-                    <div className="flex items-center gap-4 flex-1 min-w-0">
-                      <div className={`w-12 h-12 md:w-16 md:h-16 shrink-0 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-xl ${isMessenger ? 'bg-blue-600' : 'bg-pink-600'} group-hover:scale-110 transition-transform duration-500`}>
-                        {log.platform[0].toUpperCase()}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm md:text-base font-black text-slate-800 leading-tight truncate">ID: {log.sender_id.slice(-8)}</p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isMessenger ? 'bg-blue-400' : 'bg-pink-400'}`}></span>
-                          <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest truncate">{log.platform.replace('_', ' ')}</p>
+                      {/* Source Device/Account */}
+                      <div className="flex items-center gap-4 flex-1 min-w-0">
+                        <div className={`w-12 h-12 md:w-16 md:h-16 shrink-0 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-xl ${isMessenger ? 'bg-blue-600' : 'bg-pink-600'} group-hover:scale-110 transition-transform duration-500`}>
+                          {avatarLabel}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm md:text-base font-black text-slate-800 leading-tight truncate">ID: {log.sender_id?.slice(-8) || "—"}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isMessenger ? 'bg-blue-400' : 'bg-pink-400'}`}></span>
+                            <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest truncate">{platformLabel}</p>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="xl:border-l xl:border-slate-100 xl:pl-8">
-                      <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1.5">Operation Type</p>
-                      <p className="text-xs md:text-sm font-black text-slate-600 capitalize py-1.5 px-3 bg-slate-50 rounded-xl inline-block xl:bg-transparent xl:p-0">{log.request_type.replace('_', ' ')}</p>
-                    </div>
-
-                    <div className="flex items-center justify-between xl:justify-end gap-3 lg:gap-12 overflow-x-auto no-scrollbar">
-                      <div className="bg-slate-50/80 rounded-2xl px-3 md:px-8 py-3 flex items-center gap-4 md:gap-10 border border-slate-100 group-hover:bg-white group-hover:border-slate-200 transition-all shrink-0">
-                        <div className="text-center">
-                          <p className="text-[8px] md:text-[9px] font-black text-blue-500 uppercase tracking-widest mb-1">Inbound</p>
-                          <p className="text-base md:text-xl font-black text-slate-800 tabular-nums leading-none">{log.input_tokens}</p>
-                        </div>
-                        <div className="w-[1px] h-6 bg-slate-200"></div>
-                        <div className="text-center">
-                          <p className="text-[8px] md:text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-1">Outbound</p>
-                          <p className="text-base md:text-xl font-black text-slate-800 tabular-nums leading-none">{log.output_tokens}</p>
-                        </div>
+                      <div className="xl:border-l xl:border-slate-100 xl:pl-8">
+                        <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1.5">Operation Type</p>
+                        <p className="text-xs md:text-sm font-black text-slate-600 capitalize py-1.5 px-3 bg-slate-50 rounded-xl inline-block xl:bg-transparent xl:p-0">{requestLabel}</p>
                       </div>
 
-                      <div className="flex items-center gap-3 md:gap-8 justify-end border-l border-slate-100 pl-3 md:pl-0 xl:border-0 xl:p-0">
-                        <div className="text-right hidden sm:block">
-                          <p className="text-sm font-black text-slate-800 tabular-nums leading-tight">{time}</p>
-                          <p className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-tight">{date}</p>
+                      <div className="flex items-center justify-between xl:justify-end gap-3 lg:gap-12 overflow-x-auto no-scrollbar">
+                        <div className="bg-slate-50/80 rounded-2xl px-3 md:px-8 py-3 flex items-center gap-4 md:gap-10 border border-slate-100 group-hover:bg-white group-hover:border-slate-200 transition-all shrink-0">
+                          <div className="text-center">
+                            <p className="text-[8px] md:text-[9px] font-black text-blue-500 uppercase tracking-widest mb-1">Inbound</p>
+                            <p className="text-base md:text-xl font-black text-slate-800 tabular-nums leading-none">{log.input_tokens ?? 0}</p>
+                          </div>
+                          <div className="w-[1px] h-6 bg-slate-200"></div>
+                          <div className="text-center">
+                            <p className="text-[8px] md:text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-1">Outbound</p>
+                            <p className="text-base md:text-xl font-black text-slate-800 tabular-nums leading-none">{log.output_tokens ?? 0}</p>
+                          </div>
                         </div>
-                        <div className={`px-3 md:px-6 py-2 md:py-3 rounded-xl md:rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-lg shrink-0 ${log.success ? "bg-emerald-500 text-white shadow-emerald-500/20" : "bg-rose-500 text-white shadow-rose-500/20"}`}>
-                          {log.success ? "Success" : "Failed"}
+
+                        <div className="flex items-center gap-3 md:gap-8 justify-end border-l border-slate-100 pl-3 md:pl-0 xl:border-0 xl:p-0">
+                          <div className="text-right hidden sm:block">
+                            <p className="text-sm font-black text-slate-800 tabular-nums leading-tight">{time}</p>
+                            <p className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-tight">{date}</p>
+                          </div>
+                          <div className={`px-3 md:px-6 py-2 md:py-3 rounded-xl md:rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-lg shrink-0 ${statusColorClass}`}>
+                            {statusLabel}
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
       </div>

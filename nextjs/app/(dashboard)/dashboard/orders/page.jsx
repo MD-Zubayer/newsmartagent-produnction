@@ -1,10 +1,10 @@
 "use client";
-import { useEffect, useState, useMemo, useCallback} from "react";
-import api from "@/lib/api"; 
-import { useAuth } from "app/context/AuthContext"; 
-import { 
-  Package, Phone, CheckSquare, Square, Store, 
-  ChevronRight, Link as LinkIcon, Check, MapPin, 
+import { useEffect, useState, useMemo, useCallback } from "react";
+import api from "@/lib/api";
+import { useAuth } from "app/context/AuthContext";
+import {
+  Package, Phone, CheckSquare, Square, Store,
+  ChevronRight, Link as LinkIcon, Check, MapPin,
   Search, Printer, LayoutDashboard, BarChart3, TrendingUp
 } from "lucide-react";
 
@@ -28,38 +28,38 @@ import { useNotifications } from "@/hooks/useNotifications";
 
 // Chart Register
 ChartJS.register(
-  CategoryScale, LinearScale, PointElement, LineElement, 
+  CategoryScale, LinearScale, PointElement, LineElement,
   BarElement, Title, Tooltip, Legend, ArcElement, Filler
 );
 
 export default function OrderDashboard() {
-  const { user } = useAuth(); 
+  const { user } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [formId, setFormId] = useState("");
   const [apiError, setApiError] = useState(null);
   const [copied, setCopied] = useState(false);
 
-  const [viewMode, setViewMode] = useState("orders"); 
+  const [viewMode, setViewMode] = useState("orders");
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [districtFilter, setDistrictFilter] = useState("all");
   const [selectedOrders, setSelectedOrders] = useState([]);
   const { notifications } = useNotifications(user, setOrders);
-  
- 
+
+
 
   const shopName = user?.name || "Smart Shop BD";
-  
-  const orderLink = formId 
+
+  const orderLink = formId
     ? `${typeof window !== 'undefined' ? window.location.origin : 'https://newsmartagent.com/'}/orders/${formId}`
     : "Generating link...";
 
   // --- ১. কপি লিঙ্ক ফাংশন (প্রিমিয়াম) ---
   const copyLink = () => {
     if (!formId) return toast.error("The link has not been created yet!");
-    
+
     if (copied) return;
 
     navigator.clipboard.writeText(orderLink)
@@ -77,13 +77,13 @@ export default function OrderDashboard() {
 
   useEffect(() => {
     fetchOrders();
-    fetchFormId(); 
+    fetchFormId();
   }, []);
 
   const fetchOrders = async () => {
     try {
       setLoading(true);
-      const response = await api.get('orders/'); 
+      const response = await api.get('orders/');
       setOrders(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       setApiError("The order could not be loaded.");
@@ -101,7 +101,7 @@ export default function OrderDashboard() {
     }
   };
 
-  
+
 
   const analyticsData = useMemo(() => {
     if (!orders.length) return null;
@@ -125,7 +125,7 @@ export default function OrderDashboard() {
 
   const lineChartOptions = {
     responsive: true,
-    maintainAspectRatio: false, 
+    maintainAspectRatio: false,
     plugins: {
       legend: { position: 'top' },
       title: { display: true, text: 'Daily Order Growth' },
@@ -172,7 +172,7 @@ export default function OrderDashboard() {
     try {
       await api.patch(`orders/${id}/`, { status: s });
       setOrders(prev => prev.map(o => o.id === id ? { ...o, status: s } : o));
-      
+
       toast.success(`Order now ${s}`, { id: loadingToast });
     } catch (error) {
       toast.error("Update failed. Check network.", { id: loadingToast });
@@ -183,7 +183,7 @@ export default function OrderDashboard() {
   const handlePrint = (orderList = null) => {
     // ১. অর্ডার লিস্ট ফিল্টার করা
     const ordersToPrint = orderList || orders.filter(o => selectedOrders.includes(o.id));
-    
+
     // ২. সিলেক্ট না করলে এরর টোস্ট
     if (ordersToPrint.length === 0) {
       return toast.error("Select at least one order to print.", {
@@ -416,11 +416,11 @@ export default function OrderDashboard() {
     </head>
     <body>
       ${ordersToPrint.map(o => {
-        let statusClass = 'status-pending';
-        if (o.status === 'shipped') statusClass = 'status-shipped';
-        if (o.status === 'delivered') statusClass = 'status-delivered';
+      let statusClass = 'status-pending';
+      if (o.status === 'shipped') statusClass = 'status-shipped';
+      if (o.status === 'delivered') statusClass = 'status-delivered';
 
-        return `
+      return `
         <div class="page">
           
           <div class="invoice-header">
@@ -523,13 +523,13 @@ export default function OrderDashboard() {
 
         </div>
         `;
-      }).join('')}
+    }).join('')}
     </body>
   </html>
     `);
 
     printWindow.document.close();
-    
+
     // ৫. ইমেজ বা ফন্ট লোড হওয়ার জন্য সামান্য বিরতি দিয়ে প্রিন্ট ডায়ালগ ওপেন করা
     printWindow.onload = () => {
       printWindow.print();
@@ -538,16 +538,16 @@ export default function OrderDashboard() {
 
   return (
     <div className="p-2 sm:p-4 md:p-10 max-w-7xl mx-auto bg-gray-50 min-h-screen font-sans overflow-x-hidden">
-      
+
       {/* HEADER & LINK SHARE */}
       <div className="mb-6 flex flex-col lg:flex-row justify-between items-center lg:items-end gap-4 md:gap-6">
         <div className="space-y-1 w-full text-center lg:text-left">
-           <div className="flex items-center gap-2 text-indigo-600 font-bold bg-indigo-50 w-fit px-3 py-1 rounded-full text-[9px] md:text-xs uppercase tracking-widest border border-indigo-100 mx-auto lg:mx-0">
-             <Store className="w-3 md:w-4 h-3 md:h-4" /> {shopName}
-           </div>
-           <h1 className="text-2xl xs:text-3xl md:text-5xl font-black text-gray-900 tracking-tighter leading-tight">
-             Order <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-500">Center</span>
-           </h1>
+          <div className="flex items-center gap-2 text-indigo-600 font-bold bg-indigo-50 w-fit px-3 py-1 rounded-full text-[9px] md:text-xs uppercase tracking-widest border border-indigo-100 mx-auto lg:mx-0">
+            <Store className="w-3 md:w-4 h-3 md:h-4" /> {shopName}
+          </div>
+          <h1 className="text-2xl xs:text-3xl md:text-5xl font-black text-gray-900 tracking-tighter leading-tight">
+            Order <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-500">Center</span>
+          </h1>
         </div>
 
         <div className="w-full lg:w-auto">
@@ -558,7 +558,7 @@ export default function OrderDashboard() {
                 {formId ? orderLink : "Loading..."}
               </p>
             </div>
-            <button 
+            <button
               onClick={copyLink}
               disabled={!formId}
               className={`flex items-center gap-1.5 px-3 md:px-8 py-2.5 md:py-4 rounded-lg md:rounded-[1.8rem] font-black text-[10px] md:text-sm transition-all duration-300 flex-shrink-0 ${copied ? 'bg-emerald-500 text-white' : 'bg-indigo-600 text-white active:scale-95'}`}
@@ -573,13 +573,13 @@ export default function OrderDashboard() {
       {/* TAB SWITCHER */}
       <div className="flex justify-center mb-6">
         <div className="bg-white p-1 rounded-full shadow-md border border-indigo-50 inline-flex gap-1">
-          <button 
+          <button
             onClick={() => setViewMode("orders")}
             className={`flex items-center gap-1.5 px-4 md:px-8 py-2 md:py-3 rounded-full font-bold text-[10px] md:text-sm transition-all ${viewMode === 'orders' ? 'bg-indigo-600 text-white' : 'text-gray-500'}`}
           >
             <LayoutDashboard className="w-3 md:w-4 h-3 md:h-4" /> <span className="whitespace-nowrap">Order List</span>
           </button>
-          <button 
+          <button
             onClick={() => setViewMode("analytics")}
             className={`flex items-center gap-1.5 px-4 md:px-8 py-2 md:py-3 rounded-full font-bold text-[10px] md:text-sm transition-all ${viewMode === 'analytics' ? 'bg-indigo-600 text-white' : 'text-gray-500'}`}
           >
@@ -588,10 +588,10 @@ export default function OrderDashboard() {
         </div>
       </div>
 
-    {/* ANALYTICS VIEW */}
+      {/* ANALYTICS VIEW */}
       {viewMode === "analytics" && (
         <div className="space-y-6 md:space-y-10 animate-in fade-in slide-in-from-bottom-6 duration-700">
-          
+
           {/* TOP STATS CARDS */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
             <div className="relative overflow-hidden bg-gradient-to-br from-indigo-600 to-indigo-700 p-6 md:p-8 rounded-[2rem] shadow-xl shadow-indigo-100 group transition-all hover:-translate-y-1">
@@ -639,79 +639,79 @@ export default function OrderDashboard() {
           {/* CHARTS SECTION */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 bg-white p-6 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] shadow-sm border border-slate-50 relative overflow-hidden">
-               <div className="flex items-center justify-between mb-8">
-                  <div>
-                    <h4 className="text-xl font-black text-slate-900 italic uppercase tracking-tighter">Order Trajectory</h4>
-                    <p className="text-slate-400 text-[10px] font-bold">Timeline of your business growth</p>
-                  </div>
-                  <div className="hidden sm:block bg-indigo-50 px-4 py-2 rounded-2xl text-indigo-600 font-black text-[10px] uppercase">
-                    Daily Analytics
-                  </div>
-               </div>
-               <div className="h-[300px] md:h-[350px] w-full">
-                  {analyticsData && (
-                    <Line 
-                      data={{ 
-                        labels: analyticsData.labels, 
-                        datasets: [{ 
-                          label: 'Orders', 
-                          data: analyticsData.lineData, 
-                          borderColor: '#4f46e5', 
-                          borderWidth: 4,
-                          pointBackgroundColor: '#fff',
-                          pointBorderColor: '#4f46e5',
-                          pointBorderWidth: 2,
-                          pointRadius: 4,
-                          pointHoverRadius: 6,
-                          tension: 0.4, 
-                          fill: true, 
-                          backgroundColor: (context) => {
-                            const ctx = context.chart.ctx;
-                            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-                            gradient.addColorStop(0, 'rgba(79, 70, 229, 0.2)');
-                            gradient.addColorStop(1, 'rgba(79, 70, 229, 0)');
-                            return gradient;
-                          },
-                        }] 
-                      }} 
-                      options={{
-                        ...lineChartOptions,
-                        plugins: { ...lineChartOptions.plugins, title: { display: false }, legend: { display: false } },
-                        scales: {
-                          x: { grid: { display: false }, ticks: { font: { size: 10, weight: 'bold' } } },
-                          y: { grid: { color: '#f8fafc' }, ticks: { font: { size: 10 } } }
-                        }
-                      }} 
-                    />
-                  )}
-               </div>
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h4 className="text-xl font-black text-slate-900 italic uppercase tracking-tighter">Order Trajectory</h4>
+                  <p className="text-slate-400 text-[10px] font-bold">Timeline of your business growth</p>
+                </div>
+                <div className="hidden sm:block bg-indigo-50 px-4 py-2 rounded-2xl text-indigo-600 font-black text-[10px] uppercase">
+                  Daily Analytics
+                </div>
+              </div>
+              <div className="h-[300px] md:h-[350px] w-full">
+                {analyticsData && (
+                  <Line
+                    data={{
+                      labels: analyticsData.labels,
+                      datasets: [{
+                        label: 'Orders',
+                        data: analyticsData.lineData,
+                        borderColor: '#4f46e5',
+                        borderWidth: 4,
+                        pointBackgroundColor: '#fff',
+                        pointBorderColor: '#4f46e5',
+                        pointBorderWidth: 2,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        tension: 0.4,
+                        fill: true,
+                        backgroundColor: (context) => {
+                          const ctx = context.chart.ctx;
+                          const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+                          gradient.addColorStop(0, 'rgba(79, 70, 229, 0.2)');
+                          gradient.addColorStop(1, 'rgba(79, 70, 229, 0)');
+                          return gradient;
+                        },
+                      }]
+                    }}
+                    options={{
+                      ...lineChartOptions,
+                      plugins: { ...lineChartOptions.plugins, title: { display: false }, legend: { display: false } },
+                      scales: {
+                        x: { grid: { display: false }, ticks: { font: { size: 10, weight: 'bold' } } },
+                        y: { grid: { color: '#f8fafc' }, ticks: { font: { size: 10 } } }
+                      }
+                    }}
+                  />
+                )}
+              </div>
             </div>
 
             <div className="bg-slate-900 p-8 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] shadow-2xl flex flex-col items-center justify-center relative overflow-hidden group">
-               {/* Background Glow */}
-               <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full blur-3xl" />
-               <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl" />
-               
-               <div className="text-center mb-8 relative z-10">
-                  <h4 className="text-white text-xl font-black italic uppercase tracking-tighter">Status Split</h4>
-                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">Order Distribution</p>
-               </div>
-               
-               <div className="w-full max-w-[200px] md:max-w-[240px] relative z-10 transition-transform group-hover:scale-105 duration-500">
-                 {analyticsData && (
-                   <Doughnut 
-                    data={{ 
-                      labels: ['Pending', 'Shipped', 'Delivered'], 
-                      datasets: [{ 
-                        data: analyticsData.statusData, 
+              {/* Background Glow */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full blur-3xl" />
+              <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl" />
+
+              <div className="text-center mb-8 relative z-10">
+                <h4 className="text-white text-xl font-black italic uppercase tracking-tighter">Status Split</h4>
+                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">Order Distribution</p>
+              </div>
+
+              <div className="w-full max-w-[200px] md:max-w-[240px] relative z-10 transition-transform group-hover:scale-105 duration-500">
+                {analyticsData && (
+                  <Doughnut
+                    data={{
+                      labels: ['Pending', 'Shipped', 'Delivered'],
+                      datasets: [{
+                        data: analyticsData.statusData,
                         backgroundColor: ['#fbbf24', '#6366f1', '#10b981'],
                         borderWidth: 0,
                         hoverOffset: 15
-                      }] 
-                    }} 
-                    options={{ 
-                      cutout: '75%', 
-                      plugins: { 
+                      }]
+                    }}
+                    options={{
+                      cutout: '75%',
+                      plugins: {
                         legend: { display: false },
                         tooltip: {
                           backgroundColor: '#1e293b',
@@ -719,31 +719,31 @@ export default function OrderDashboard() {
                           titleFont: { size: 14, weight: 'bold' },
                           cornerRadius: 12
                         }
-                      } 
-                    }} 
-                   />
-                 )}
-                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <span className="text-white text-3xl font-black">{orders.length}</span>
-                    <span className="text-slate-500 text-[8px] font-black uppercase tracking-widest">Units</span>
-                 </div>
-               </div>
+                      }
+                    }}
+                  />
+                )}
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-white text-3xl font-black">{orders.length}</span>
+                  <span className="text-slate-500 text-[8px] font-black uppercase tracking-widest">Units</span>
+                </div>
+              </div>
 
-               <div className="mt-8 w-full space-y-3 relative z-10">
-                  {[
-                    { label: 'Pending', count: orders.filter(o => o.status === 'pending').length, color: 'bg-amber-400' },
-                    { label: 'Shipped', count: orders.filter(o => o.status === 'shipped').length, color: 'bg-indigo-500' },
-                    { label: 'Delivered', count: orders.filter(o => o.status === 'delivered').length, color: 'bg-emerald-500' }
-                  ].map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between text-white/80">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${item.color}`} />
-                        <span className="text-[10px] font-bold uppercase tracking-widest">{item.label}</span>
-                      </div>
-                      <span className="text-xs font-black">{item.count}</span>
+              <div className="mt-8 w-full space-y-3 relative z-10">
+                {[
+                  { label: 'Pending', count: orders.filter(o => o.status === 'pending').length, color: 'bg-amber-400' },
+                  { label: 'Shipped', count: orders.filter(o => o.status === 'shipped').length, color: 'bg-indigo-500' },
+                  { label: 'Delivered', count: orders.filter(o => o.status === 'delivered').length, color: 'bg-emerald-500' }
+                ].map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-white/80">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${item.color}`} />
+                      <span className="text-[10px] font-bold uppercase tracking-widest">{item.label}</span>
                     </div>
-                  ))}
-               </div>
+                    <span className="text-xs font-black">{item.count}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -753,23 +753,23 @@ export default function OrderDashboard() {
       {viewMode === "orders" && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="mb-4 md:mb-10 flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
-                <input 
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-white shadow-sm rounded-xl text-xs md:text-sm outline-none border border-transparent focus:border-indigo-500" 
-                  placeholder="Search orders..." 
-                />
-              </div>
-              <select onChange={(e) => setDistrictFilter(e.target.value)} className="bg-white shadow-sm rounded-xl px-4 py-3 text-xs md:text-sm font-bold outline-none border-r-8 border-transparent">
-                <option value="all">Districts</option>
-                {districts.filter(d => d !== "all").map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+              <input
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 bg-white shadow-sm rounded-xl text-xs md:text-sm outline-none border border-transparent focus:border-indigo-500"
+                placeholder="Search orders..."
+              />
+            </div>
+            <select onChange={(e) => setDistrictFilter(e.target.value)} className="bg-white shadow-sm rounded-xl px-4 py-3 text-xs md:text-sm font-bold outline-none border-r-8 border-transparent">
+              <option value="all">Districts</option>
+              {districts.filter(d => d !== "all").map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
           </div>
 
           <div className="sticky top-4 z-20 bg-white/80 backdrop-blur-md border border-gray-200 text-gray-800 p-3 sm:p-4 mb-6 rounded-2xl shadow-sm flex items-center justify-between gap-4">
             <button onClick={toggleSelectAll} className="flex items-center gap-2 ml-1 text-sm font-bold text-gray-600 hover:text-indigo-600 transition-colors">
-              {selectedOrders.length === filteredOrders.length && filteredOrders.length > 0 ? <CheckSquare className="w-5 h-5 text-indigo-600" /> : <Square className="w-5 h-5" />} 
+              {selectedOrders.length === filteredOrders.length && filteredOrders.length > 0 ? <CheckSquare className="w-5 h-5 text-indigo-600" /> : <Square className="w-5 h-5" />}
               <span>Select All</span>
             </button>
             {selectedOrders.length > 0 && (
@@ -782,7 +782,7 @@ export default function OrderDashboard() {
           <div className="grid grid-cols-1 gap-4">
             {filteredOrders.map((order) => (
               <div key={order.id} className={`bg-white border rounded-2xl p-4 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-5 transition-all hover:shadow-md ${selectedOrders.includes(order.id) ? 'border-indigo-500 ring-1 ring-indigo-500 bg-indigo-50/10' : 'border-gray-200 hover:border-indigo-300'}`}>
-                
+
                 {/* Left Section: Checkbox & Customer Info */}
                 <div className="flex items-start lg:items-center gap-4 w-full lg:w-4/12">
                   <div className="mt-1 lg:mt-0">
@@ -807,7 +807,7 @@ export default function OrderDashboard() {
                 {/* Middle Section: Product Details & Price */}
                 <div className="flex flex-col w-full lg:w-4/12 px-0 lg:px-6 border-t lg:border-t-0 lg:border-l lg:border-r border-gray-100 pt-4 lg:pt-0 pb-4 lg:pb-0">
                   <div className="font-semibold text-gray-800 flex items-center gap-2 text-sm sm:text-base mb-1.5">
-                    <Package className="w-4.5 h-4.5 text-indigo-500 flex-shrink-0" /> 
+                    <Package className="w-4.5 h-4.5 text-indigo-500 flex-shrink-0" />
                     <span className="truncate">{order.product_name || "N/A"}</span>
                   </div>
                   <div className="flex items-center flex-wrap gap-3 mb-2">
@@ -840,15 +840,14 @@ export default function OrderDashboard() {
                     <button onClick={() => handlePrint([order])} className="p-2 sm:p-2.5 bg-white text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-200 hover:border-indigo-200 shadow-sm">
                       <Printer className="w-4 h-4" />
                     </button>
-                    
+
                     <div className="relative flex-1 sm:flex-none">
-                      <select 
+                      <select
                         value={order.status}
                         onChange={(e) => updateStatus(order.id, e.target.value)}
-                        className={`w-full appearance-none pl-4 pr-10 py-2 sm:py-2.5 rounded-xl font-bold text-xs uppercase tracking-wide cursor-pointer transition-colors border shadow-sm ${
-                          order.status === 'delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 focus:ring-2 focus:ring-emerald-500 focus:outline-none' : 
-                          order.status === 'shipped' ? 'bg-indigo-50 text-indigo-700 border-indigo-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none' : 'bg-amber-50 text-amber-700 border-amber-200 focus:ring-2 focus:ring-amber-500 focus:outline-none'
-                        }`}
+                        className={`w-full appearance-none pl-4 pr-10 py-2 sm:py-2.5 rounded-xl font-bold text-xs uppercase tracking-wide cursor-pointer transition-colors border shadow-sm ${order.status === 'delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 focus:ring-2 focus:ring-emerald-500 focus:outline-none' :
+                            order.status === 'shipped' ? 'bg-indigo-50 text-indigo-700 border-indigo-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none' : 'bg-amber-50 text-amber-700 border-amber-200 focus:ring-2 focus:ring-amber-500 focus:outline-none'
+                          }`}
                       >
                         <option value="pending">Pending</option>
                         <option value="shipped">Shipped</option>

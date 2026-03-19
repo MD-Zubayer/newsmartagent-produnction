@@ -20,9 +20,19 @@ import {
   FilePlus,
   Trash2,
   X,
-  List as ListIcon
+  List as ListIcon,
+  Upload,
+  Download,
+  FileDown
 } from "lucide-react";
 import toast from "react-hot-toast";
+import * as mammoth from "mammoth";
+import * as pdfjs from "pdfjs-dist";
+import { jsPDF } from "jspdf";
+
+// Setup PDF.js worker
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+
 
 /* ================= FILE MENU MODAL ================= */
 const FileMenu = ({ isOpen, onClose, currentId }) => {
@@ -106,6 +116,8 @@ export default function DocumentMain() {
   const [loading, setLoading] = useState(false);
   const [showFileMenu, setShowFileMenu] = useState(false);
   const editorRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const [downloadDropdown, setDownloadDropdown] = useState(false);
 
   // --- AUTO REDIRECT TO FIRST DOC (UNLESS CREATING NEW) ---
   useEffect(() => {
@@ -163,6 +175,83 @@ export default function DocumentMain() {
     }
   };
 
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setLoading(true);
+    const fileName = file.name.replace(/\.[^/.]+$/, "");
+    setDocTitle(fileName);
+
+    try {
+      if (file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        if (editorRef.current) {
+          editorRef.current.innerText = result.value;
+        }
+        toast.success("Word file imported");
+      } else if (file.type === "application/pdf") {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+        let fullText = "";
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items.map(item => item.str).join(" ");
+          fullText += pageText + "\n\n";
+        }
+        if (editorRef.current) {
+          editorRef.current.innerText = fullText;
+        }
+        toast.success("PDF file imported");
+      } else {
+        toast.error("Unsupported file type. Please upload .docx or .pdf");
+      }
+    } catch (error) {
+      console.error("File upload error:", error);
+      toast.error("Failed to process file");
+    } finally {
+      setLoading(false);
+      e.target.value = ""; // Reset input
+    }
+  };
+
+  const downloadAsPDF = () => {
+    if (!editorRef.current) return;
+    const doc = new jsPDF();
+    const text = editorRef.current.innerText || "";
+    const splitText = doc.splitTextToSize(text, 180);
+    doc.text(splitText, 10, 10);
+    doc.save(`${docTitle}.pdf`);
+    setDownloadDropdown(false);
+  };
+
+  const downloadAsWord = () => {
+    if (!editorRef.current) return;
+    const text = editorRef.current.innerText || "";
+    // Create a basic HTML structure for Word
+    const htmlContent = `
+      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+      <head><meta charset='utf-8'><title>${docTitle}</title></head>
+      <body style="font-family: Calibri, Arial, sans-serif;">
+        ${text.split('\n').map(line => `<p>${line}</p>`).join('')}
+      </body>
+      </html>
+    `;
+    const blob = new Blob(['\ufeff', htmlContent], {
+      type: 'application/msword'
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${docTitle}.doc`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setDownloadDropdown(false);
+  };
+
   return (
     <div className="flex flex-col min-h-[calc(100vh-64px)] md:min-h-[calc(100vh-80px)] bg-[#F3F2F1] text-gray-800 font-sans -m-4 relative text-xs md:text-base">
       <FileMenu 
@@ -188,6 +277,54 @@ export default function DocumentMain() {
           />
         </div>
         <div className="flex items-center gap-2">
+          {/* Hidden File Input */}
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleFileUpload} 
+            accept=".docx,.pdf" 
+            className="hidden" 
+          />
+          
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
+            title="Upload Word or PDF"
+          >
+            <Upload size={16} />
+            <span className="hidden sm:inline">Upload</span>
+          </button>
+
+          <div className="relative">
+            <button
+              onClick={() => setDownloadDropdown(!downloadDropdown)}
+              className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors"
+              title="Download Document"
+            >
+              <Download size={16} />
+              <span className="hidden sm:inline">Download</span>
+            </button>
+            
+            {downloadDropdown && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50 animate-in fade-in slide-in-from-top-2">
+                <button 
+                  onClick={downloadAsPDF}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <FileDown size={16} className="text-red-500" />
+                  Download as PDF
+                </button>
+                <button 
+                  onClick={downloadAsWord}
+                  className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <FileText size={16} className="text-blue-500" />
+                  Download as Word
+                </button>
+              </div>
+            )}
+          </div>
+
           <button
             onClick={handleSave}
             disabled={loading}

@@ -19,6 +19,8 @@
     "axios-auth-refresh": "^3.3.6",
     "chart.js": "^4.5.1",
     "framer-motion": "^12.35.2",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.7",
     "lodash": "^4.17.23",
     "lucide-react": "^0.563.0",
     "mammoth": "^1.12.0",
