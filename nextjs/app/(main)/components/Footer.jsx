@@ -138,7 +138,7 @@ function Footer() {
                 </div>
                 <div>
                   <p className="text-[10px] text-gray-600 font-bold uppercase tracking-wider mb-0.5">ঠিকানা</p>
-                  <p className="text-sm font-bold text-gray-400">Dhaka, Bangladesh</p>
+                  <p className="text-sm font-bold text-gray-400">Sadarpur, Faridpur, Dhaka, Bangladesh</p>
                 </div>
               </div>
 

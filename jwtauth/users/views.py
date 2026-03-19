@@ -162,15 +162,34 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['patch', 'put'], url_path='update-me', permission_classes=[IsAuthenticated])
     def update_me(self, request):
         user = request.user
+        payload = request.data.copy()
         
-        # Handle profile photo upload explicitly if provided
-        profile_photo = request.FILES.get('profile_photo') or request.data.get('profile_photo')
-        if profile_photo:
+        # Handle profile photo upload or deletion
+        if 'profile_photo' in request.data or 'profile_photo' in request.FILES:
             profile = user.profile
-            profile.profile_photo = profile_photo
-            profile.save()
+            new_photo = request.FILES.get('profile_photo')
+            if new_photo is None:
+                raw_data = request.data.get('profile_photo')
+                if raw_data in ('null', '', None):
+                    new_photo = None
+                else:
+                    new_photo = raw_data
 
-        serializer = self.get_serializer(user, data=request.data, partial=True)
+            old_photo = profile.profile_photo
+            if old_photo and (new_photo is None or old_photo != new_photo):
+                try:
+                    old_photo.delete(save=False)
+                except Exception as e:
+                    print(f"File deletion error: {e}")
+
+            if new_photo is None:
+                profile.profile_photo = None
+            else:
+                profile.profile_photo = new_photo
+            profile.save(update_fields=["profile_photo"])
+            payload.pop('profile_photo', None)
+
+        serializer = self.get_serializer(user, data=payload, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
