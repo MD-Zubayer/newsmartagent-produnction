@@ -1,5 +1,5 @@
 "use client";
-import { useState, use } from "react"; 
+import { useState, use, useEffect } from "react"; 
 import { 
   ShoppingCart, 
   CheckCircle, 
