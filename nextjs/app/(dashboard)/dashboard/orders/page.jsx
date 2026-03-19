@@ -205,162 +205,263 @@ export default function OrderDashboard() {
     printWindow.document.write(`
       <html>
     <head>
-      <title>Invoice - ${shopName}</title>
+      <title>Invoice - #${ordersToPrint[0]?.id || 'Print'}</title>
       <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body { 
           font-family: 'Inter', sans-serif; 
-          margin: 0; 
-          padding: 0; 
-          background-color: #f1f5f9; 
-          color: #1e293b;
+          background-color: #f3f4f6; 
+          color: #1f2937;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
         }
 
         .page { 
           background: white;
-          width: 210mm; /* A4 size */
-          min-height: 148mm; /* Half A4 or flexible */
-          padding: 50px; 
-          margin: 20px auto;
-          position: relative;
-          box-shadow: 0 10px 25px rgba(0,0,0,0.05);
-          overflow: hidden;
+          width: 210mm; 
+          min-height: 297mm; 
+          padding: 15mm 20mm; 
+          margin: 10mm auto;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
           page-break-after: always;
         }
 
-        /* ডেকোরেশন এলিমেন্ট */
-        .page::before {
-          content: "";
-          position: absolute;
-          top: 0; left: 0; width: 100%; height: 8px;
-          background: linear-gradient(90deg, #4f46e5 0%, #818cf8 100%);
+        /* Header Segment */
+        .invoice-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          border-bottom: 2px solid #e5e7eb;
+          padding-bottom: 25px;
+          margin-bottom: 30px;
         }
 
-        .header { 
-          display: flex; 
-          justify-content: space-between; 
-          align-items: flex-start;
+        .company-details h1 {
+          font-size: 28px;
+          font-weight: 800;
+          color: #111827;
+          margin-bottom: 5px;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+        }
+        .company-details p {
+          color: #6b7280;
+          font-size: 14px;
+        }
+
+        .invoice-title-block {
+          text-align: right;
+        }
+        .invoice-title-block h2 {
+          font-size: 36px;
+          font-weight: 800;
+          color: #3b82f6; /* Professional Blue */
+          text-transform: uppercase;
+          letter-spacing: 2px;
+          margin-bottom: 10px;
+        }
+        .invoice-meta {
+          font-size: 14px;
+          color: #4b5563;
+        }
+        .invoice-meta strong { color: #111827; }
+
+        /* Billing Segment */
+        .billing-grid {
+          display: flex;
+          justify-content: space-between;
           margin-bottom: 40px;
         }
 
-        .shop-info h1 { 
-          color: #4f46e5; 
-          margin: 0; 
-          font-size: 32px; 
-          font-weight: 800; 
-          letter-spacing: -1px;
+        .bill-to-section {
+          background: #f9fafb;
+          padding: 20px;
+          border-radius: 8px;
+          border-left: 4px solid #3b82f6;
+          width: 60%;
+          display: flex;
+          gap: 20px;
+          align-items: center;
         }
-        .shop-info p { color: #64748b; margin: 5px 0; font-size: 14px; }
 
-        .invoice-badge {
-          background: #eef2ff;
-          color: #4f46e5;
-          padding: 10px 20px;
-          border-radius: 12px;
+        .customer-avatar {
+          width: 70px;
+          height: 70px;
+          border-radius: 50%;
+          object-fit: cover;
+          border: 2px solid #d1d5db;
+        }
+
+        .bill-to-section h3 {
+          font-size: 12px;
+          text-transform: uppercase;
+          color: #6b7280;
+          margin-bottom: 8px;
+          letter-spacing: 1px;
+        }
+        .bill-to-details h4 {
+          font-size: 18px;
+          color: #111827;
+          margin-bottom: 4px;
+        }
+        .bill-to-details p {
+          font-size: 14px;
+          color: #4b5563;
+          line-height: 1.5;
+        }
+
+        .payment-info {
+          width: 35%;
+        }
+        .payment-info h3 {
+          font-size: 12px;
+          text-transform: uppercase;
+          color: #6b7280;
+          margin-bottom: 8px;
+          letter-spacing: 1px;
+        }
+        .payment-info-line {
+          display: flex;
+          justify-content: space-between;
+          font-size: 14px;
+          margin-bottom: 8px;
+          padding-bottom: 4px;
+          border-bottom: 1px solid #e5e7eb;
+        }
+        .payment-info-line span { color: #6b7280; }
+        .payment-info-line strong { color: #111827; }
+
+        /* Table Segment */
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 40px;
+        }
+        th {
+          background-color: #3b82f6;
+          color: white;
+          font-size: 13px;
+          text-transform: uppercase;
+          padding: 12px 15px;
+          text-align: left;
+          letter-spacing: 1px;
+        }
+        th:last-child {
+          text-align: right;
+          border-top-right-radius: 6px;
+          border-bottom-right-radius: 6px;
+        }
+        th:first-child {
+          border-top-left-radius: 6px;
+          border-bottom-left-radius: 6px;
+        }
+        td {
+          padding: 15px;
+          border-bottom: 1px solid #e5e7eb;
+          font-size: 15px;
+          color: #374151;
+        }
+        td:last-child {
           text-align: right;
         }
-        .invoice-badge span { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; opacity: 0.7; }
-        .invoice-badge strong { font-size: 18px; }
 
-        .details-grid { 
-          display: grid; 
-          grid-template-cols: 1.5fr 1fr; 
-          gap: 30px; 
-          margin-bottom: 40px; 
+        .item-name { font-weight: 600; color: #111827; margin-bottom: 4px; display: block; }
+        .item-desc { font-size: 13px; color: #6b7280; }
+
+        .status-badge {
+          display: inline-block;
+          padding: 4px 12px;
+          border-radius: 20px;
+          font-size: 12px;
+          font-weight: 600;
+          text-transform: uppercase;
         }
+        .status-pending { background: #fef3c7; color: #92400e; }
+        .status-shipped { background: #dbeafe; color: #1e40af; }
+        .status-delivered { background: #d1fae5; color: #065f46; }
 
-        .address-box {
-          border: 1.5px solid #e2e8f0;
-          padding: 20px;
-          border-radius: 16px;
-        }
-        .address-box h3 { margin: 0 0 10px 0; font-size: 14px; text-transform: uppercase; color: #64748b; letter-spacing: 1px; }
-        .address-box p { margin: 0; line-height: 1.6; font-weight: 600; font-size: 16px; }
-
-        .meta-box {
-          display: flex;
-          flex-direction: column;
-          gap: 15px;
-        }
-        .meta-item { display: flex; justify-content: space-between; font-size: 14px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 8px; }
-        .meta-item span { color: #64748b; }
-        .meta-item strong { color: #1e293b; }
-
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th { 
-          background: #f8fafc; 
-          color: #64748b; 
-          padding: 15px; 
-          text-align: left; 
-          font-size: 12px; 
-          text-transform: uppercase; 
-          border-bottom: 2px solid #e2e8f0;
-        }
-        td { padding: 20px 15px; border-bottom: 1px solid #f1f5f9; font-weight: 500; }
-
-        .footer { 
-          margin-top: 60px; 
+        /* Footer Segment */
+        .invoice-footer {
+          margin-top: auto;
+          border-top: 2px solid #e5e7eb;
           padding-top: 20px;
-          text-align: center; 
-          border-top: 1px solid #f1f5f9;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
         }
-        .footer p { font-size: 12px; color: #94a3b8; margin: 5px 0; }
+        .footer-thanks {
+          font-size: 16px;
+          font-weight: 700;
+          color: #111827;
+        }
+        .footer-contact {
+          font-size: 13px;
+          color: #6b7280;
+          text-align: right;
+        }
 
-        /* প্রিন্ট মিডিয়া কোয়েরি */
         @media print {
           body { background: white; }
           .page { 
-            box-shadow: none; 
             margin: 0; 
+            padding: 10mm; 
+            box-shadow: none; 
             width: 100%;
-            padding: 40px;
+            height: auto;
           }
-          .page::before { -webkit-print-color-adjust: exact; }
         }
       </style>
     </head>
     <body>
-      ${ordersToPrint.map(o => `
+      ${ordersToPrint.map(o => {
+        let statusClass = 'status-pending';
+        if (o.status === 'shipped') statusClass = 'status-shipped';
+        if (o.status === 'delivered') statusClass = 'status-delivered';
+
+        return `
         <div class="page">
-          <div class="header">
-            <div class="shop-info">
+          
+          <div class="invoice-header">
+            <div class="company-details">
               <h1>${shopName}</h1>
-              <p>Trusted Online Shopping Mall</p>
+              <p>Your Trusted Shopping Partner</p>
             </div>
-            <div class="invoice-badge">
-              <span>Invoice Number</span>
-              <strong>#${o.id}</strong>
+            <div class="invoice-title-block">
+              <h2>INVOICE</h2>
+              <div class="invoice-meta">
+                <p>Invoice No: <strong>#INV-${10000 + !!o.id ? o.id : 0}</strong></p>
+                <p>Date: <strong>${new Date(o.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</strong></p>
+              </div>
             </div>
           </div>
 
-          <div class="details-grid">
-            <div class="address-box" style="display: flex; align-items: flex-start; gap: 20px;">
-              ${o.customer_profile_photo ? `
-                <img src="${o.customer_profile_photo}" alt="Profile Photo" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid #eef2ff; flex-shrink: 0;" />
-              ` : ''}
-              <div>
-                <h3>Customer & Shipping</h3>
-                <p>${o.customer_name}</p>
+          <div class="billing-grid">
+            <div class="bill-to-section">
+              ${o.customer_profile_photo ? `<img src="${o.customer_profile_photo}" class="customer-avatar" alt="Customer Photo" />` : ''}
+              <div class="bill-to-details">
+                <h3>Billed To</h3>
+                <h4>${o.customer_name}</h4>
                 <p>${o.phone_number}</p>
-                <p style="font-weight: 400; font-size: 14px; color: #64748b; margin-top: 5px;">
-                  ${o.address}, ${o.district}
-                </p>
+                <p>${o.address}</p>
+                <p>${o.upazila ? o.upazila + ', ' : ''}${o.district}</p>
               </div>
             </div>
-            <div class="meta-box">
-              <div class="meta-item">
-                <span>Date</span>
-                <strong>${new Date(o.created_at).toLocaleDateString('en-En')}</strong>
-              </div>
-              <div class="meta-item">
-                <span>Payment</span>
+            
+            <div class="payment-info">
+              <h3>Order Details</h3>
+              <div class="payment-info-line">
+                <span>Payment Method</span>
                 <strong>Cash on Delivery</strong>
               </div>
-              <div class="meta-item">
-                <span>Method</span>
+              <div class="payment-info-line">
+                <span>Delivery Type</span>
                 <strong>Home Delivery</strong>
+              </div>
+              <div class="payment-info-line">
+                <span>Notes/Extra</span>
+                <strong>${o.extra_info ? o.extra_info.substring(0, 20) + (o.extra_info.length > 20 ? '...' : '') : 'N/A'}</strong>
               </div>
             </div>
           </div>
@@ -368,31 +469,40 @@ export default function OrderDashboard() {
           <table>
             <thead>
               <tr>
-                <th style="width: 60%">Product Description</th>
-                <th style="text-align: center">Qty</th>
-                <th style="text-align: right">Status</th>
+                <th style="width: 5%;">#</th>
+                <th style="width: 55%;">Item Description</th>
+                <th style="width: 15%; text-align: center;">Qty</th>
+                <th style="width: 25%;">Status</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td>${o.product_name || "Smart Gadget Item"}</td>
-                <td style="text-align: center">01</td>
-                <td style="text-align: right">
-                  <span style="color: #4f46e5; background: #eef2ff; padding: 4px 10px; border-radius: 6px; font-size: 12px;">
-                    ${o.status.toUpperCase()}
-                  </span>
+                <td>1</td>
+                <td>
+                  <span class="item-name">${o.product_name || "Premium Product"}</span>
+                  <span class="item-desc">Product order from ${shopName}</span>
+                </td>
+                <td style="text-align: center; font-weight: 600;">1</td>
+                <td>
+                  <span class="status-badge ${statusClass}">${o.status}</span>
                 </td>
               </tr>
             </tbody>
           </table>
 
-          <div class="footer">
-            <p style="color: #4f46e5; font-weight: 700; font-size: 14px;">Thank you for your order!</p>
-            <p>If you have any questions, please contact us at support@${shopName.toLowerCase().replace(/\s/g, '')}.com</p>
-            <p>This is a computer-generated invoice.</p>
+          <div class="invoice-footer">
+            <div class="footer-thanks">
+              Thank you for your business!
+            </div>
+            <div class="footer-contact">
+              support@${shopName.toLowerCase().replace(/\s/g, '')}.com<br/>
+              www.${shopName.toLowerCase().replace(/\s/g, '')}.com
+            </div>
           </div>
+
         </div>
-      `).join('')}
+        `;
+      }).join('')}
     </body>
   </html>
     `);
