@@ -82,6 +82,7 @@ INSTALLED_APPS = [
 
     'ckeditor_uploader',
     'storages',
+    'minio_management',
 ]
 
 CKEDITOR_UPLOAD_PATH = "uploads/"
