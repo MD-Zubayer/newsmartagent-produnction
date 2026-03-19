@@ -12,9 +12,20 @@ class DocumentListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        documents = Document.objects.filter(user=request.user)
-        serializer = DocumentSerializer(documents, many=True)
-        return Response({"documents": serializer.data}, status=status.HTTP_200_OK)
+        limit = int(request.query_params.get('limit', 20))
+        offset = int(request.query_params.get('offset', 0))
+        
+        documents = Document.objects.filter(user=request.user).order_by('-created_at')
+        total_count = documents.count()
+        
+        paginated_docs = documents[offset:offset+limit]
+        serializer = DocumentSerializer(paginated_docs, many=True)
+        
+        return Response({
+            "documents": serializer.data,
+            "total_count": total_count,
+            "has_more": offset + limit < total_count
+        }, status=status.HTTP_200_OK)
 
     def post(self, request):
         text = request.data.get('text')

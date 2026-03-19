@@ -38,17 +38,45 @@ pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/b
 const FileMenu = ({ isOpen, onClose, currentId }) => {
   const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const scrollRef = useRef(null);
   const router = useRouter();
+
+  const fetchFiles = async (reset = false) => {
+    if (loading || (!hasMore && !reset)) return;
+    setLoading(true);
+    const newOffset = reset ? 0 : offset;
+    try {
+      const res = await api.get(`/embedding/documents/?limit=15&offset=${newOffset}`);
+      const newFiles = res.data?.documents || [];
+      if (reset) {
+        setFiles(newFiles);
+      } else {
+        setFiles(prev => [...prev, ...newFiles]);
+      }
+      setOffset(newOffset + newFiles.length);
+      setHasMore(res.data?.has_more || false);
+    } catch (err) {
+      console.error("Failed to load documents", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
-      setLoading(true);
-      api.get('/embedding/documents/')
-         .then(res => setFiles(res.data?.documents || []))
-         .catch(err => console.error("Failed to load documents", err))
-         .finally(() => setLoading(false));
+      fetchFiles(true);
     }
   }, [isOpen]);
+
+  const handleScroll = () => {
+    if (!scrollRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+    if (scrollHeight - scrollTop <= clientHeight + 50) {
+      fetchFiles();
+    }
+  };
 
   const loadFile = (id) => {
     router.push(`/dashboard/docs/${id}`);
@@ -88,19 +116,23 @@ const FileMenu = ({ isOpen, onClose, currentId }) => {
            </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-3 space-y-2 no-scrollbar">
-           {loading ? <div className="text-center p-6 text-slate-500 font-medium">Loading documents...</div> : 
-             files.map((doc, idx) => (
-               <div key={doc.id} className={`group flex items-center justify-between p-3.5 rounded-xl border transition-all duration-200 ${currentId === doc.id.toString() ? "border-[#2B579A] bg-blue-50" : "border-slate-100 hover:border-blue-200 hover:bg-slate-50"}`}>
-                 <div onClick={() => loadFile(doc.id)} className="flex-1 cursor-pointer">
-                    <div className="font-semibold text-slate-800 text-sm group-hover:text-[#2B579A] transition-colors">{idx + 1}. {doc.title || "Untitled"}</div>
-                 </div>
-                 <button onClick={() => deleteFile(doc.id, doc.title)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100" title="Delete">
-                    <Trash2 size={18}/>
-                 </button>
+        <div 
+          ref={scrollRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto p-3 space-y-2 no-scrollbar"
+        >
+           {files.map((doc, idx) => (
+             <div key={doc.id} className={`group flex items-center justify-between p-3.5 rounded-xl border transition-all duration-200 ${currentId === doc.id.toString() ? "border-[#2B579A] bg-blue-50" : "border-slate-100 hover:border-blue-200 hover:bg-slate-50"}`}>
+               <div onClick={() => loadFile(doc.id)} className="flex-1 cursor-pointer">
+                  <div className="font-semibold text-slate-800 text-sm group-hover:text-[#2B579A] transition-colors">{idx + 1}. {doc.title || "Untitled"}</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">{new Date(doc.created_at).toLocaleDateString()}</div>
                </div>
-             ))
-           }
+               <button onClick={() => deleteFile(doc.id, doc.title)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100" title="Delete">
+                  <Trash2 size={18}/>
+               </button>
+             </div>
+           ))}
+           {loading && <div className="text-center p-4 text-slate-500 font-medium animate-pulse text-sm">Loading more...</div>}
            {!loading && files.length === 0 && (
              <div className="text-center p-6 text-slate-500 font-medium">No documents found.</div>
            )}
@@ -189,12 +221,14 @@ export default function DocumentMain() {
         const result = await mammoth.extractRawText({ arrayBuffer });
         if (editorRef.current) {
           const currentContent = editorRef.current.innerText || "";
-          editorRef.current.innerText = (currentContent.trim() ? currentContent + "\n\n" : "") + result.value;
+          editorRef.current.focus();
+          document.execCommand('insertText', false, (currentContent.trim() ? "\n\n" : "") + result.value);
+          
           if (!currentContent.trim() || docTitle === "Untitled Document") {
             setDocTitle(fileName);
           }
         }
-        toast.success("Word file imported");
+        toast.success("Word file imported at cursor");
       } else if (file.type === "application/pdf") {
         const arrayBuffer = await file.arrayBuffer();
         const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
@@ -207,12 +241,13 @@ export default function DocumentMain() {
         }
         if (editorRef.current) {
           const currentContent = editorRef.current.innerText || "";
-          editorRef.current.innerText = (currentContent.trim() ? currentContent + "\n\n" : "") + fullText;
+          editorRef.current.focus();
+          document.execCommand('insertText', false, (currentContent.trim() ? "\n\n" : "") + fullText);
           if (!currentContent.trim() || docTitle === "Untitled Document") {
             setDocTitle(fileName);
           }
         }
-        toast.success("PDF file imported");
+        toast.success("PDF file imported at cursor");
       } else {
         toast.error("Unsupported file type. Please upload .docx or .pdf");
       }
@@ -230,7 +265,23 @@ export default function DocumentMain() {
     const doc = new jsPDF();
     const text = editorRef.current.innerText || "";
     const splitText = doc.splitTextToSize(text, 180);
-    doc.text(splitText, 10, 10);
+    
+    let y = 20;
+    const margin = 10;
+    const pageHeight = doc.internal.pageSize.height;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+
+    for (let i = 0; i < splitText.length; i++) {
+        if (y > pageHeight - 20) {
+            doc.addPage();
+            y = 20;
+        }
+        doc.text(splitText[i], margin, y);
+        y += 7;
+    }
+
     doc.save(`${docTitle}.pdf`);
     setDownloadDropdown(false);
   };
@@ -376,8 +427,16 @@ export default function DocumentMain() {
 
       <div className="flex-1 bg-[#F3F2F1] p-2 md:p-8 flex justify-center pb-20">
         <div 
-          className="bg-white w-full max-w-[816px] min-h-[300px] md:min-h-[500px] shadow-lg border border-gray-200 p-6 md:p-12 text-gray-900 outline-none editor-canvas"
-          style={{boxShadow: "0 4px 12px 0 rgba(0,0,0,0.1)", fontFamily: "Calibri, Arial, sans-serif", fontSize: "15px", lineHeight: "1.6"}}
+          className="bg-white w-full max-w-[816px] min-h-[1123px] shadow-lg border border-gray-200 p-12 text-gray-900 outline-none editor-canvas relative"
+          style={{
+            boxShadow: "0 4px 25px 0 rgba(0,0,0,0.15)", 
+            fontFamily: "Calibri, Arial, sans-serif", 
+            fontSize: "16px", 
+            lineHeight: "1.6",
+            backgroundImage: "linear-gradient(to bottom, transparent 1123px, #F0F0F0 1123px, #F0F0F0 1143px, transparent 1143px)",
+            backgroundSize: "100% 1143px",
+            backgroundAttachment: "local"
+          }}
           contentEditable
           suppressContentEditableWarning
           ref={editorRef}
