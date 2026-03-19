@@ -77,7 +77,7 @@ export default function PublicOrderForm({ params }) {
       upazila: data.upazila,
       address: data.address,
       product_name: data.product,
-      price: data.price ? parseFloat(data.price) || 0 : 0,
+      price: data.price,
       extra_info: data.extra_info,
     };
 
@@ -134,7 +134,7 @@ export default function PublicOrderForm({ params }) {
       submitOrderFromChat(chatData);
     } else {
       setMessages(prev => [...prev, { text: "না", sender: "user" }]);
-      setTimeout(() => setMessages(prev => [...prev, { text: "অর্ডার বাতিল করা হয়েছে। নতুন করে شروع করতে পেজ রিলোড দিন। ❌", sender: "bot" }]), 300);
+      setTimeout(() => setMessages(prev => [...prev, { text: "অর্ডার বাতিল করা হয়েছে। নতুন করে শুরু করতে পেজ রিলোড দিন। ❌", sender: "bot" }]), 300);
     }
   };
   // ---------------------------------------------------
@@ -323,7 +323,7 @@ export default function PublicOrderForm({ params }) {
                 <MessageCircle size={20} />
               </div>
               <div>
-                <h3 className="font-bold text-lg">Smart Agent</h3>
+                <h3 className="font-bold text-lg">New Smart Agent</h3>
                 <p className="text-xs text-blue-100">Online 🟢</p>
               </div>
             </div>
