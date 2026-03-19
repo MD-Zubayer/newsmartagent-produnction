@@ -498,42 +498,121 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
   },[]);
 
   /* ---------------- IMPORT / EXPORT ---------------- */
-  const handleFileUpload = (e) => {
+  const pushImportedData = (jsonData) => {
+    const currentData = sheet.data || {};
+    let lastUsedRow = -1;
+    Object.keys(currentData).forEach(key => {
+      const [r] = key.split('-').map(Number);
+      if (r > lastUsedRow) lastUsedRow = r;
+    });
+    const startRowIndex = lastUsedRow + 1;
+    const mergedData = { ...currentData };
+    let maxCols = sheet.cols;
+    jsonData.forEach((row, rowIndex) => {
+      if (row.length > maxCols) maxCols = row.length;
+      row.forEach((cellValue, colIndex) => {
+        if (cellValue !== undefined && cellValue !== null && cellValue !== '') {
+          mergedData[`${startRowIndex + rowIndex}-${colIndex}`] = String(cellValue);
+        }
+      });
+    });
+    pushToHistory({
+      ...sheet,
+      data: mergedData,
+      rows: Math.max(sheet.rows, startRowIndex + jsonData.length + 10),
+      cols: Math.max(sheet.cols, maxCols + 5)
+    });
+  };
+
+  const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const bstr = evt.target.result;
-      const workbook = XLSX.read(bstr, { type: "binary" });
-      const firstSheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[firstSheetName];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-      const currentData = sheet.data || {};
-      let lastUsedRow = -1;
-      Object.keys(currentData).forEach(key => {
-        const [r] = key.split('-').map(Number);
-        if (r > lastUsedRow) lastUsedRow = r;
-      });
-      const startRowIndex = lastUsedRow + 1;
-      const mergedData = { ...currentData }; 
-      let maxCols = sheet.cols;
-      jsonData.forEach((row, rowIndex) => {
-        if (row.length > maxCols) maxCols = row.length;
-        row.forEach((cellValue, colIndex) => {
-          if (cellValue !== undefined && cellValue !== null) {
-            mergedData[`${startRowIndex + rowIndex}-${colIndex}`] = String(cellValue);
-          }
-        });
-      });
-      pushToHistory({
-        ...sheet,
-        data: mergedData,
-        rows: Math.max(sheet.rows, startRowIndex + jsonData.length + 10),
-        cols: Math.max(sheet.cols, maxCols + 5)
-      });
-      e.target.value = null; 
-    };
-    reader.readAsBinaryString(file);
+    const ext = file.name.split('.').pop().toLowerCase();
+
+    if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') {
+      // ---- Excel / CSV ----
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const bstr = evt.target.result;
+        const workbook = XLSX.read(bstr, { type: 'binary' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        pushImportedData(jsonData);
+        e.target.value = null;
+      };
+      reader.readAsBinaryString(file);
+
+    } else if (ext === 'pdf') {
+      // ---- PDF ----
+      try {
+        const pdfjsLib = await import('pdfjs-dist');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const allRows = [];
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const content = await page.getTextContent();
+          // Group items into rows by approximate Y position
+          const lineMap = {};
+          content.items.forEach(item => {
+            const y = Math.round(item.transform[5]);
+            if (!lineMap[y]) lineMap[y] = [];
+            lineMap[y].push({ x: item.transform[4], text: item.str.trim() });
+          });
+          const sortedYs = Object.keys(lineMap).map(Number).sort((a, b) => b - a);
+          sortedYs.forEach(y => {
+            const row = lineMap[y].sort((a, b) => a.x - b.x).map(i => i.text).filter(Boolean);
+            if (row.length) allRows.push(row);
+          });
+        }
+        pushImportedData(allRows);
+      } catch (err) {
+        console.error('PDF parse error:', err);
+        alert('Could not parse PDF. Please ensure it contains selectable text.');
+      }
+      e.target.value = null;
+
+    } else if (ext === 'docx') {
+      // ---- Word (.docx) ----
+      try {
+        const mammoth = (await import('mammoth')).default;
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.convertToHtml({ arrayBuffer });
+        const html = result.value;
+        // Parse <table> elements from HTML
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const tables = doc.querySelectorAll('table');
+        const allRows = [];
+        if (tables.length > 0) {
+          tables.forEach(table => {
+            table.querySelectorAll('tr').forEach(tr => {
+              const row = [];
+              tr.querySelectorAll('td, th').forEach(cell => row.push(cell.innerText?.trim() || ''));
+              if (row.some(c => c)) allRows.push(row);
+            });
+            allRows.push([]); // blank separator row between tables
+          });
+        } else {
+          // No tables — fall back to paragraph-per-row
+          doc.querySelectorAll('p').forEach(p => {
+            const text = p.innerText?.trim();
+            if (text) allRows.push([text]);
+          });
+        }
+        pushImportedData(allRows);
+      } catch (err) {
+        console.error('Word parse error:', err);
+        alert('Could not read .docx file.');
+      }
+      e.target.value = null;
+
+    } else {
+      alert('Unsupported file type. Please use .xlsx, .xls, .csv, .pdf or .docx');
+      e.target.value = null;
+    }
   };
 
   const exportCSV = () => {
@@ -654,7 +733,7 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
                 <Star size={16} className={sheet.data[`${selection.start.row}-${selection.start.col}`]?.endsWith('*') ? "fill-rose-500 text-rose-500 transform scale-110 transition-transform" : "transition-transform"} /> <span className="hidden lg:inline">Important</span>
             </button>
             <div className="h-8 w-[1px] bg-slate-300 dark:bg-slate-600 shrink-0"></div>
-            <input type="file" accept=".xlsx, .xls, .csv" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
+            <input type="file" accept=".xlsx,.xls,.csv,.pdf,.docx" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
             <button onClick={() => fileInputRef.current.click()} className="p-2.5 bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-xl border border-slate-200 dark:border-slate-700 transition-all shadow-sm group relative" title="Import File">
               <Upload size={18} className="group-hover:-translate-y-0.5 transition-transform" />
             </button>
