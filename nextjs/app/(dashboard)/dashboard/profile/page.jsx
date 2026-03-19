@@ -138,7 +138,7 @@ export default function ProfilePage() {
                 if (!file) return;
 
                 const formData = new FormData();
-                formData.append('profile[profile_photo]', file);
+                formData.append('profile_photo', file);
 
                 const lt = toast.loading("Uploading new look...");
                 try {

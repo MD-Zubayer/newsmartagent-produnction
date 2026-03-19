@@ -32,7 +32,7 @@ class ProfileSerializer(serializers.ModelSerializer):
 
 
 class UserSerializer(serializers.ModelSerializer[User]):
-    profile = ProfileSerializer(read_only=True) # nested serializer
+    profile = ProfileSerializer(required=False) # nested serializer
     two_factor_enabled = serializers.SerializerMethodField(read_only=True)
 
     man_agent_unique_id = serializers.CharField(write_only=True, required=False,allow_blank=True, allow_null=True)

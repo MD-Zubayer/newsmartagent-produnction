@@ -26,9 +26,9 @@ Cookie: access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYW
 
 
 ###
-GET http://localhost/api/users/me/
+GET https://newsmartagent.com/api/users/me/
 Content-Type: application/json
-Cookie: access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzcxMzI2MzQwLCJpYXQiOjE3NzEzMjI3NDAsImp0aSI6ImYwZDExNzQ2MjI5NjQzNjM4YzRhOTY3MThkNzZlYzFhIiwidXNlcl9pZCI6IjIifQ.myAQpOpYOI7SviLOTHyXl86yRLpiPeCD3Td9iabLUX0
+Cookie: access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzczOTA5MzU3LCJpYXQiOjE3NzM5MDU3NTcsImp0aSI6ImJkZWNjN2E5MDQ4YjQ2MDRhNTVjNjYwZDA2N2I3NTdlIiwidXNlcl9pZCI6IjIifQ.ODzJnMIhXedMl_vzSCFki3aeEsg_moKrRn0JIrUiEwE
 
 
 {

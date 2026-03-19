@@ -162,8 +162,15 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['patch', 'put'], url_path='update-me', permission_classes=[IsAuthenticated])
     def update_me(self, request):
         user = request.user
-        serializer = self.get_serializer(user, data=request.data, partial=True)
+        
+        # Handle profile photo upload explicitly if provided
+        profile_photo = request.FILES.get('profile_photo') or request.data.get('profile_photo')
+        if profile_photo:
+            profile = user.profile
+            profile.profile_photo = profile_photo
+            profile.save()
 
+        serializer = self.get_serializer(user, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
