@@ -154,6 +154,16 @@ export default function DocumentPage() {
   // Real multi-page state
   const [pages, setPages] = useState([""]);
   const docId = params?.id;
+  const pageRefs = useRef([]);
+
+  // Sync initial content to DOM refs when pages change (e.g. after upload or load)
+  useEffect(() => {
+    pages.forEach((content, idx) => {
+      if (pageRefs.current[idx] && pageRefs.current[idx].innerText !== content) {
+        pageRefs.current[idx].innerText = content;
+      }
+    });
+  }, [pages]);
 
   useEffect(() => {
     if (docId) {
@@ -172,7 +182,6 @@ export default function DocumentPage() {
       setDocTitle(res.data.title);
       const text = res.data.full_content || "";
       if (text) {
-        // Split text into pages (~3000 chars per page for display)
         const chunks = [];
         if (text.length > 0) {
           for (let i = 0; i < text.length; i += 3000) {
@@ -195,18 +204,19 @@ export default function DocumentPage() {
   };
 
   const handlePageInput = (index, e) => {
-    const newPages = [...pages];
-    newPages[index] = e.target.innerText;
-    
-    // Simple overflow check: if content too long for A4, add a new page
+    // We DON'T update the state here to avoid re-render cursor jumps.
+    // Instead, we just check for overflow to add a new page if needed.
     if (e.target.scrollHeight > 1150 && index === pages.length - 1) {
-       newPages.push("");
+       setPages([...pages, ""]);
     }
-    setPages(newPages);
+  };
+
+  const getFullContent = () => {
+    return pageRefs.current.map(ref => ref?.innerText || "").join("\n\n");
   };
 
   const handleSave = async () => {
-    const textContent = pages.join("\n\n");
+    const textContent = getFullContent();
     if (!textContent.trim()) {
       toast.error("Document is empty!");
       return;
@@ -277,7 +287,7 @@ export default function DocumentPage() {
 
   const downloadAsPDF = () => {
     const doc = new jsPDF();
-    const text = pages.join("\n\n");
+    const text = getFullContent();
     const splitText = doc.splitTextToSize(text, 180);
     let y = 20;
     const pageHeight = doc.internal.pageSize.height;
@@ -296,7 +306,7 @@ export default function DocumentPage() {
   };
 
   const downloadAsWord = () => {
-    const text = pages.join("\n\n");
+    const text = getFullContent();
     const htmlContent = `
       <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
       <head><meta charset='utf-8'><title>${docTitle}</title></head>
@@ -384,9 +394,10 @@ export default function DocumentPage() {
 
       {/* Editor Pages */}
       <div className="flex-1 bg-[#F3F2F1] p-4 md:p-12 flex flex-col items-center gap-10 overflow-y-auto">
-        {pages.map((content, idx) => (
+        {pages.map((_, idx) => (
           <div key={idx} className="relative group">
             <div 
+              ref={el => pageRefs.current[idx] = el}
               className="bg-white w-[816px] min-h-[1056px] shadow-2xl border border-gray-300 p-[72px] text-gray-900 outline-none editor-page transition-all focus:border-[#2B579A]"
               contentEditable
               suppressContentEditableWarning
@@ -404,7 +415,6 @@ export default function DocumentPage() {
                 document.execCommand("insertText", false, text);
               }}
             >
-              {content}
             </div>
             
             {/* Page Number */}
