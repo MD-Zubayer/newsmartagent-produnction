@@ -155,15 +155,15 @@ export default function Sidebar({ viewMode, isDesktopMode }) {
                     pathname === link.href ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-50"
                   }`}
                 >
-                  <div className="w-5 h-5 rounded-md overflow-hidden bg-gray-100 flex-shrink-0">
-                    {user?.profile?.profile_photo ? (
+                  <div className="w-5 h-5 rounded-md overflow-hidden bg-gray-100 flex-shrink-0 flex items-center justify-center">
+                    {link.name === "Profile" && user?.profile?.profile_photo ? (
                       <img src={user.profile.profile_photo} alt="" className="w-full h-full object-cover" />
                     ) : (
-                      <Icon className="h-full w-full p-0.5" />
+                      <Icon className="h-4 w-4" />
                     )}
                   </div>
                   <span className="md:inline pl-3 text-sm font-medium">
-                    {user ? user.name?.split(' ')[0] || "Profile" : "Profile"}
+                    {link.name === "Profile" && user ? user.name?.split(' ')[0] || "Profile" : link.name}
                   </span>
                 </div>
               </Link>
