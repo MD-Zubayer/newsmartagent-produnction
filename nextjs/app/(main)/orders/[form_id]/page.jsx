@@ -158,6 +158,7 @@ export default function PublicOrderForm({ params }) {
       upazila: e.target.upazila.value,
       address: e.target.address.value,
       product_name: e.target.product.value,
+      price: e.target.price.value ? parseFloat(e.target.price.value) || 0 : 0,
       extra_info: e.target.extra_info.value,
     };
 
@@ -271,6 +272,16 @@ export default function PublicOrderForm({ params }) {
               <input name="extra_info" placeholder="Color, size..." className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" />
             </div>
           </div>
+
+
+          <div className="relative">
+            <label className="text-xs font-semibold text-gray-500 uppercase ml-1 tracking-wide">Price</label>
+            <div className="flex items-center mt-1">
+              <DollarSign className="absolute ml-3 text-gray-400 w-5 h-5" />
+              <input name="price" placeholder="Price" className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" />
+            </div>
+          </div>  
+
 
           <div className="relative">
             <label className="text-xs font-semibold text-gray-500 uppercase ml-1 tracking-wide">Address details</label>
