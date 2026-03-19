@@ -231,31 +231,33 @@ class LoginView(APIView):
     def post(self, request):
         email = request.data.get("email")
         password = request.data.get("password")
+        otp_code = request.data.get("otp_code")
 
         user = authenticate(request, email=email, password=password)
         if user is None:
             return Response({"error": "Invalid email or password"}, status=status.HTTP_401_UNAUTHORIZED)
 
         if not user.is_verified:
-            return Response({"error": "Email is not verified. Please check your inbox."
-            }, status=status.HTTP_403_FORBIDDEN)
+            return Response({"error": "Email is not verified. Please check your inbox."}, status=status.HTTP_403_FORBIDDEN)
 
-        # 2FA Check
-        if user.profile.two_factor_enabled:
+        # TOTP-based 2FA
+        if user.two_factor_enabled:
+            # Issue a fresh one-time code via email
             otp = str(random.randint(100000, 999999))
-            user.profile.otp_code = otp
-            user.profile.otp_created_at = timezone.now()
-            user.profile.save()
+            profile = user.profile
+            profile.otp_code = otp
+            profile.otp_created_at = timezone.now()
+            profile.save(update_fields=["otp_code", "otp_created_at"])
 
             try:
                 send_2fa_otp_email(user.email, otp)
-            except Exception as e:
-                return Response({"error": "Failed to send 2FA code. Please try again."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            except Exception:
+                return Response({"error": "Failed to send verification code. Try again."},
+                                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             return Response({
-                "status": "2fa_required",
-                "email": user.email,
-                "message": "Two-factor authentication is required. Please check your email for the verification code."
+                "two_factor_required": True,
+                "message": "We emailed a 6-digit code. Submit to /api/auth/2fa/verify/ to finish login."
             }, status=status.HTTP_200_OK)
 
         # JWT Token generation
@@ -273,14 +275,13 @@ class LoginView(APIView):
         )
 
         # Httponly cookie set
-        response.set_cookie(key='access_token',
-        value=access_token,
-        httponly=True,
-        samesite="Lax", # its in dev, production 'strict' , None
-        secure=settings.DEBUG is False,#HTTPS True, dev False
-        path='/',
-        
-
+        response.set_cookie(
+            key='access_token',
+            value=access_token,
+            httponly=True,
+            samesite="Lax", # its in dev, production 'strict' , None
+            secure=settings.DEBUG is False, # HTTPS True, dev False
+            path='/',
         )
         response.set_cookie(
             key="refresh_token", 
@@ -953,9 +954,10 @@ class FinancialSummaryView(APIView):
             'account_pending': acc_pending_amount,
             'account_failed': acc_failed_amount,
         })
+
+
 class Verify2FALoginView(APIView):
-    """Verify OTP and complete login for 2FA enabled users
-    """
+    """ইমেইল OTP দিয়ে লগইন সম্পন্ন করা।"""
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -964,48 +966,36 @@ class Verify2FALoginView(APIView):
         otp_code = request.data.get("otp_code")
 
         if not email or not password or not otp_code:
-            return Response({"error": "Email, password and OTP code are required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "email, password আর otp_code লাগবে"}, status=status.HTTP_400_BAD_REQUEST)
 
         user = authenticate(request, email=email, password=password)
         if user is None:
             return Response({"error": "Invalid email or password"}, status=status.HTTP_401_UNAUTHORIZED)
-        
+
+        if not user.two_factor_enabled:
+            return Response({"error": "2FA চালু নেই"}, status=status.HTTP_400_BAD_REQUEST)
+
         profile = user.profile
-        if not profile.two_factor_enabled:
-            return Response({"error": "2FA is not enabled for this account"}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Verify OTP
         if not profile.otp_code or str(profile.otp_code) != str(otp_code):
-            return Response({'error': 'Incorrect verification code.'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Check OTP expiry (5 minutes)
-        if not profile.otp_created_at:
-             return Response({'error': 'Invalid verification session.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'কোড ভুল'}, status=status.HTTP_400_BAD_REQUEST)
 
-        time_limit = profile.otp_created_at + timedelta(minutes=5)
-        if timezone.now() > time_limit:
-            return Response({'error': 'Verification code has expired.'}, status=status.HTTP_400_BAD_REQUEST)
+        if not profile.otp_created_at or timezone.now() > profile.otp_created_at + timedelta(minutes=5):
+            return Response({'error': 'কোডের মেয়াদ শেষ'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Clear OTP after success
         profile.otp_code = ""
-        profile.save()
+        profile.save(update_fields=["otp_code"])
 
-        # JWT Token generation
         refresh = RefreshToken.for_user(user)
         access_token = str(refresh.access_token)
         refresh_token = str(refresh)
 
         response = Response({
-            "user": {
-                "id": user.id,
-                "email": user.email
-            },
+            "user": {"id": user.id, "email": user.email},
             "message": "Login successful"
-            }, status=status.HTTP_200_OK
-        )
+        }, status=status.HTTP_200_OK)
 
-        # Httponly cookie set
-        response.set_cookie(key='access_token',
+        response.set_cookie(
+            key='access_token',
             value=access_token,
             httponly=True,
             samesite="Lax",
@@ -1013,34 +1003,45 @@ class Verify2FALoginView(APIView):
             path='/',
         )
         response.set_cookie(
-            key="refresh_token", 
+            key="refresh_token",
             value=refresh_token,
             httponly=True,
             samesite="Lax",
             secure=settings.DEBUG is False,
             path='/',
         )
-
         return response
 
 
 class Toggle2FAView(APIView):
-    """Enable or disable 2FA for the authenticated user
-    """
+    """ইমেইল OTP 2FA অন/অফ করুন।"""
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         enabled = request.data.get("enabled")
         if enabled is None:
-            return Response({"error": "enabled status is required"}, status=status.HTTP_400_BAD_REQUEST)
-        
-        profile = request.user.profile
-        profile.two_factor_enabled = bool(enabled)
-        profile.save()
+            return Response({"error": "enabled true/false পাঠান"}, status=status.HTTP_400_BAD_REQUEST)
 
-        status_msg = "enabled" if profile.two_factor_enabled else "disabled"
+        user = request.user
+        user.two_factor_enabled = bool(enabled)
+        user.save(update_fields=["two_factor_enabled"])
+
+        if user.two_factor_enabled:
+            otp = str(random.randint(100000, 999999))
+            profile = user.profile
+            profile.otp_code = otp
+            profile.otp_created_at = timezone.now()
+            profile.save(update_fields=["otp_code", "otp_created_at"])
+            try:
+                send_2fa_otp_email(user.email, otp)
+            except Exception:
+                return Response({"error": "ইমেইল পাঠাতে পারিনি, পরে আবার চেষ্টা করুন"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            msg = "2FA চালু। ইমেইলে একটি কোড পাঠানো হয়েছে (শুধু যাচাইয়ের জন্য)।"
+        else:
+            msg = "2FA বন্ধ করা হয়েছে।"
+
         return Response({
-            "message": f"Two-factor authentication has been {status_msg} successfully.",
-            "two_factor_enabled": profile.two_factor_enabled
+            "message": msg,
+            "two_factor_enabled": user.two_factor_enabled
         }, status=status.HTTP_200_OK)

@@ -163,3 +163,24 @@ def send_verification_email(to_email, verify_link):
         fail_silently=False,
         html_message=html_message
     )
+
+
+def send_2fa_otp_email(to_email: str, otp_code: str):
+    """Send a simple 6-digit OTP for email-based 2FA."""
+    subject = "Your Login Verification Code"
+    message = (
+        f"Your verification code is: {otp_code}\n\n"
+        "It will expire in 5 minutes. If you didn't try to log in, you can ignore this email."
+    )
+    html_message = f"""
+    <p><strong>Verification code:</strong> <span style="font-size:20px;">{otp_code}</span></p>
+    <p>This code will expire in 5 minutes. If you didn't request it, please ignore.</p>
+    """
+    send_mail(
+        subject,
+        message,
+        settings.DEFAULT_FROM_EMAIL,
+        [to_email],
+        fail_silently=False,
+        html_message=html_message,
+    )

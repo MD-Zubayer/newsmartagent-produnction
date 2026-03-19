@@ -17,7 +17,7 @@ import api from '../../lib/api';
 
 export default function AuthPage() {
   const router = useRouter();
-  const [showSignUp, setShowSignUp] = useState(false);
+  const [showSignUp, setShowSignUp] = useState(true);
   const [isRegistered, setIsRegistered] = useState(false);
   const[passwordError, setPasswordError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -339,7 +339,7 @@ export default function AuthPage() {
               <p className="text-gray-500 font-medium px-4 mb-8">
                 আমরা আপনার <b>{formData.email}</b> ঠিকানায় একটি ভেরিফিকেশন লিঙ্ক পাঠিয়েছি। দয়া করে ইনবক্স চেক করুন।
               </p>
-              <button className="text-indigo-600 font-extrabold hover:underline" onClick={() => { setIsRegistered(false); setShowSignUp(false); }}>
+              <button className="text-indigo-600 font-extrabold hover:underline" onClick={() => { setIsRegistered(false); router.push("/login"); }}>
                 Back to Login
               </button>
           </div>
@@ -495,7 +495,7 @@ export default function AuthPage() {
 
                   <button className={btnPrimary}>Register Account</button>
 
-                  <button type="button" className="w-full text-center text-sm font-bold text-gray-400 hover:text-indigo-600 transition-all flex items-center justify-center gap-2 pt-2" onClick={() => setShowSignUp(false)}>
+                  <button type="button" className="w-full text-center text-sm font-bold text-gray-400 hover:text-indigo-600 transition-all flex items-center justify-center gap-2 pt-2" onClick={() => router.push("/login")}>
                     <FaArrowLeft size={12} /> Already have an account? Login
                   </button>
                 </form>
