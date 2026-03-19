@@ -87,3 +87,5 @@ rapidfuzz
 django-unfold
 django-ckeditor
 pillow
+django-storages
+boto3

@@ -81,6 +81,7 @@ INSTALLED_APPS = [
     
 
     'ckeditor_uploader',
+    'storages',
 ]
 
 CKEDITOR_UPLOAD_PATH = "uploads/"
@@ -212,6 +213,37 @@ STATIC_ROOT = "/app/static/"
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# MinIO/S3 Storage Configuration
+if os.environ.get('MINIO_STORAGE_BUCKET_NAME'):
+    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+    AWS_ACCESS_KEY_ID = os.environ.get('MINIO_ROOT_USER')
+    AWS_SECRET_ACCESS_KEY = os.environ.get('MINIO_ROOT_PASSWORD')
+    AWS_STORAGE_BUCKET_NAME = os.environ.get('MINIO_STORAGE_BUCKET_NAME')
+    AWS_S3_ENDPOINT_URL = os.environ.get('MINIO_ENDPOINT')
+    
+    # Use custom domain for external access
+    minio_ext_endpoint = os.environ.get('MINIO_EXTERNAL_ENDPOINT', '')
+    if minio_ext_endpoint:
+        AWS_S3_CUSTOM_DOMAIN = minio_ext_endpoint.replace('https://', '').replace('http://', '')
+        AWS_S3_URL_PROTOCOL = 'https' if minio_ext_endpoint.startswith('https') else 'http'
+    
+    AWS_S3_USE_SSL = AWS_S3_URL_PROTOCOL == 'https'
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_QUERYSTRING_AUTH = False
+    AWS_DEFAULT_ACL = None # Typically bucket policy handles this
+    
+    # Optional: static files also on S3
+    # STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+    
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
 
 AUTH_USER_MODEL = 'users.User'
 

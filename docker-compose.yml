@@ -251,6 +251,19 @@ services:
     networks:
       - smart-network
 
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: newsmartagent-minio
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    restart: always
+    networks:
+      - smart-network
+
 volumes:
   postgres_data:
     external: true
@@ -265,6 +278,8 @@ volumes:
     name: production_n8n_data
   baileys_auth:
     name: newsmartagent-baileys-auth
+  minio_data:
+    name: newsmartagent-minio-data
   
 
 networks:
