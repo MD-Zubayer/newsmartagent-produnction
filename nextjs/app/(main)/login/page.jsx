@@ -183,8 +183,8 @@ export default function LoginPage() {
 
         <div className="mt-8 text-center text-sm text-gray-600 space-y-2">
           <div>
-            <Link href="/reset-password" className="text-indigo-600 font-bold hover:underline">
-              Reset password
+            <Link href="/forgot-password" className="text-indigo-600 font-bold hover:underline">
+              forgot-password
             </Link>
           </div>
           <div>

@@ -1027,19 +1027,7 @@ class Toggle2FAView(APIView):
         user.two_factor_enabled = bool(enabled)
         user.save(update_fields=["two_factor_enabled"])
 
-        if user.two_factor_enabled:
-            otp = str(random.randint(100000, 999999))
-            profile = user.profile
-            profile.otp_code = otp
-            profile.otp_created_at = timezone.now()
-            profile.save(update_fields=["otp_code", "otp_created_at"])
-            try:
-                send_2fa_otp_email(user.email, otp)
-            except Exception:
-                return Response({"error": "ইমেইল পাঠাতে পারিনি, পরে আবার চেষ্টা করুন"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            msg = "2FA চালু। ইমেইলে একটি কোড পাঠানো হয়েছে (শুধু যাচাইয়ের জন্য)।"
-        else:
-            msg = "2FA বন্ধ করা হয়েছে।"
+        msg = "2FA চালু করা হয়েছে।" if user.two_factor_enabled else "2FA বন্ধ করা হয়েছে।"
 
         return Response({
             "message": msg,
