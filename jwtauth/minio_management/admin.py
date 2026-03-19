@@ -33,8 +33,8 @@ class MinioBucketAdmin(admin.ModelAdmin):
 
     def status_tag(self, obj):
         if obj.is_public:
-            return format_html('<span style="color: green;">Public</span>')
-        return format_html('<span style="color: red;">Private</span>')
+            return format_html('<span style="color: green;">{}</span>', 'Public')
+        return format_html('<span style="color: red;">{}</span>', 'Private')
     status_tag.short_description = "Policy Status"
 
     def save_model(self, request, obj, form, change):
