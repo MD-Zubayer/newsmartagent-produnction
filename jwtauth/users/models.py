@@ -13,6 +13,7 @@ import phonenumbers
 from phonenumbers import geocoder
 from .validators import validate_international_phone
 from aiAgent.models import AIProviderModel
+from minio_management.storages import ProfileStorage
 # Create your models here.
 
 
@@ -110,6 +111,7 @@ class Profile(models.Model):
 
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
+    profile_photo = models.ImageField(upload_to='photos/', storage=ProfileStorage(), null=True, blank=True)
     id_type = models.CharField(max_length=10, choices=ID_TYPE_CHOICES)
     unique_id = models.CharField(max_length=10, unique=True)
     word_balance = models.PositiveBigIntegerField(default=0)

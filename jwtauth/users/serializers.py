@@ -28,7 +28,7 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profile
-        fields = ["user", "id_type", "unique_id", "created_at", "updated_at", "two_factor_enabled", "word_balance", 'acount_balance', 'commission_balance']
+        fields = ["user", "id_type", "unique_id", "profile_photo", "created_at", "updated_at", "two_factor_enabled", "word_balance", 'acount_balance', 'commission_balance']
 
 
 class UserSerializer(serializers.ModelSerializer[User]):
@@ -135,10 +135,24 @@ class UserSerializer(serializers.ModelSerializer[User]):
                 )
             except Exception as e:
                 print(f"Notification Error: {e}")
-        
-
-
         return user
+
+    def update(self, instance, validated_data):
+        profile_data = validated_data.pop('profile', None)
+        
+        # Update user fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        # Update profile fields if provided
+        if profile_data:
+            profile = instance.profile
+            for attr, value in profile_data.items():
+                setattr(profile, attr, value)
+            profile.save()
+            
+        return instance
 
 
 

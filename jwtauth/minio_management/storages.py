@@ -24,3 +24,6 @@ class MediaStorage(BaseMinioStorage):
 
 class BlogStorage(BaseMinioStorage):
     bucket_name = os.environ.get('MINIO_BLOG_BUCKET_NAME', 'blogs')
+
+class ProfileStorage(BaseMinioStorage):
+    bucket_name = os.environ.get('MINIO_PROFILE_BUCKET_NAME', 'newsmartagent-profile')

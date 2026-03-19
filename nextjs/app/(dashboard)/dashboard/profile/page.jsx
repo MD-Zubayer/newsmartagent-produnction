@@ -112,16 +112,51 @@ export default function ProfilePage() {
       <div className="bg-white border-b border-slate-200 py-10 px-6 mb-8 shadow-sm">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-8">
           <div className="relative group">
-            <div className="w-32 h-32 md:w-40 md:h-40 rounded-full bg-slate-100 flex items-center justify-center border-4 border-white shadow-xl overflow-hidden group-hover:bg-slate-200 transition-colors">
-              {user?.profile_image ? (
-                <img src={user.profile_image} alt="Profile" className="w-full h-full object-cover" />
+            <div 
+              className="w-32 h-32 md:w-40 md:h-40 rounded-full bg-slate-100 flex items-center justify-center border-4 border-white shadow-xl overflow-hidden group-hover:bg-slate-200 transition-all cursor-pointer relative"
+              onClick={() => document.getElementById('profile-photo-input').click()}
+            >
+              {user?.profile?.profile_photo ? (
+                <img src={user.profile.profile_photo} alt="Profile" className="w-full h-full object-cover" />
               ) : (
                 <span className="text-5xl font-black text-slate-300 italic">{user?.name?.[0]?.toUpperCase() || "U"}</span>
               )}
+              
+              {/* Overly on hover */}
+              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <FaUserEdit className="text-white text-2xl" />
+              </div>
             </div>
+
+            <input 
+              type="file" 
+              id="profile-photo-input" 
+              className="hidden" 
+              accept="image/*"
+              onChange={async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const formData = new FormData();
+                formData.append('profile[profile_photo]', file);
+
+                const lt = toast.loading("Uploading new look...");
+                try {
+                  const res = await api.patch("/users/update-me/", formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                  });
+                  toast.success("Profile photo updated!", { id: lt });
+                  setUser(res.data);
+                } catch (err) {
+                  toast.error("Upload failed. Try again.", { id: lt });
+                }
+              }}
+            />
+
             <button 
               onClick={() => setIsEditModalOpen(true)}
               className="absolute bottom-1 right-1 bg-indigo-600 text-white p-3 rounded-full shadow-lg hover:bg-slate-900 transition-all active:scale-90"
+              title="Edit Profile Details"
             >
               <FaUserEdit size={16} />
             </button>
