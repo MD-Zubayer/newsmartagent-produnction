@@ -509,6 +509,15 @@ class OrderSubmitView(viewsets.ModelViewSet):
         except OrderForm.DoesNotExist:
             return Response({'error': 'Form not found'}, status=404)
 
+    @action(detail=False, methods=['get'], url_path='track', permission_classes=[AllowAny])
+    def track_by_phone(self, request):
+        phone = request.query_params.get('phone', '').strip()
+        if not phone:
+            return Response({'error': 'Phone number is required'}, status=400)
+        orders = CustomerOrder.objects.filter(phone_number__icontains=phone).order_by('-created_at')
+        serializer = self.get_serializer(orders, many=True)
+        return Response(serializer.data)
+
 
 
 
