@@ -150,6 +150,8 @@ export default function DocumentMain() {
   const editorRef = useRef(null);
   const fileInputRef = useRef(null);
   const [downloadDropdown, setDownloadDropdown] = useState(false);
+  const [totalPages, setTotalPages] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // --- AUTO REDIRECT TO FIRST DOC (UNLESS CREATING NEW) ---
   useEffect(() => {
@@ -176,6 +178,23 @@ export default function DocumentMain() {
   const execCommand = (command, value = null) => {
     document.execCommand(command, false, value);
     editorRef.current?.focus();
+  };
+
+  const updatePageCount = () => {
+    if (editorRef.current) {
+      const height = editorRef.current.scrollHeight;
+      const pages = Math.max(1, Math.ceil(height / 1123));
+      setTotalPages(pages);
+    }
+  };
+
+  const handleEditorScroll = () => {
+    const container = document.querySelector('.overflow-y-auto');
+    if (container) {
+        const scrollTop = container.scrollTop;
+        const page = Math.floor(scrollTop / 1123) + 1;
+        setCurrentPage(page);
+    }
   };
 
   const createNewDoc = () => {
@@ -425,21 +444,21 @@ export default function DocumentMain() {
         </div>
       </div>
 
-      <div className="flex-1 bg-[#F3F2F1] p-2 md:p-8 flex justify-center pb-20">
+      <div className="flex-1 bg-[#F3F2F1] p-2 md:p-8 flex flex-col items-center pb-20 overflow-y-auto" onScroll={handleEditorScroll}>
         <div 
-          className="bg-white w-full max-w-[816px] min-h-[1123px] shadow-lg border border-gray-200 p-12 text-gray-900 outline-none editor-canvas relative"
+          className="bg-white w-full max-w-[816px] min-h-[1123px] shadow-2xl border border-gray-300 p-12 text-gray-900 outline-none editor-canvas relative"
           style={{
-            boxShadow: "0 4px 25px 0 rgba(0,0,0,0.15)", 
             fontFamily: "Calibri, Arial, sans-serif", 
             fontSize: "16px", 
             lineHeight: "1.6",
-            backgroundImage: "linear-gradient(to bottom, transparent 1123px, #F0F0F0 1123px, #F0F0F0 1143px, transparent 1143px)",
-            backgroundSize: "100% 1143px",
+            backgroundImage: "linear-gradient(to bottom, #ffffff 1123px, #E5E7EB 1123px, #E5E7EB 1163px, #ffffff 1163px)",
+            backgroundSize: "100% 1163px",
             backgroundAttachment: "local"
           }}
           contentEditable
           suppressContentEditableWarning
           ref={editorRef}
+          onInput={updatePageCount}
           onPaste={(e) => {
             e.preventDefault();
             const text = e.clipboardData.getData("text/plain");
@@ -449,12 +468,28 @@ export default function DocumentMain() {
         </div>
       </div>
 
+      <div className="fixed bottom-4 right-4 bg-white/80 backdrop-blur-md px-3 py-1.5 rounded-full shadow-lg border border-gray-200 text-xs font-semibold text-gray-600 z-50">
+        Page {currentPage} of {totalPages}
+      </div>
+
       <style jsx global>{`
         .editor-canvas:empty:before {
           content: 'Start drafting your AI Knowledge Document here...';
           color: #9ca3af;
+          white-space: pre-wrap;
           pointer-events: none;
           display: block;
+        }
+        .editor-canvas::after {
+          content: "";
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          height: 100%;
+          pointer-events: none;
+          background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 1123px, rgba(0,0,0,0.05) 1123px, rgba(0,0,0,0.05) 1124px, transparent 1124px, transparent 1163px);
+          background-size: 100% 1163px;
         }
       `}</style>
     </div>
