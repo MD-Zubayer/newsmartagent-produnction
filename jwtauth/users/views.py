@@ -240,11 +240,10 @@ class LoginView(APIView):
         if not user.is_verified:
             return Response({"error": "Email is not verified. Please check your inbox."}, status=status.HTTP_403_FORBIDDEN)
 
-        # Email OTP-based 2FA (guard if field missing)
-        if getattr(user, "two_factor_enabled", False):
-            # Issue a fresh one-time code via email
+        # Email OTP-based 2FA (Profile flag)
+        profile = user.profile
+        if getattr(profile, "two_factor_enabled", False):
             otp = str(random.randint(100000, 999999))
-            profile = user.profile
             profile.otp_code = otp
             profile.otp_created_at = timezone.now()
             profile.save(update_fields=["otp_code", "otp_created_at"])
@@ -972,10 +971,9 @@ class Verify2FALoginView(APIView):
         if user is None:
             return Response({"error": "Invalid email or password"}, status=status.HTTP_401_UNAUTHORIZED)
 
-        if not user.two_factor_enabled:
-            return Response({"error": "2FA চালু নেই"}, status=status.HTTP_400_BAD_REQUEST)
-
         profile = user.profile
+        if not getattr(profile, "two_factor_enabled", False):
+            return Response({"error": "2FA চালু নেই"}, status=status.HTTP_400_BAD_REQUEST)
         if not profile.otp_code or str(profile.otp_code) != str(otp_code):
             return Response({'error': 'কোড ভুল'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -1025,17 +1023,17 @@ class Toggle2FAView(APIView):
 
         user = request.user
         try:
-            current = getattr(user, "two_factor_enabled", False)
-            user.two_factor_enabled = bool(enabled)
-            user.save(update_fields=["two_factor_enabled"])
+            profile = user.profile
+            profile.two_factor_enabled = bool(enabled)
+            profile.save(update_fields=["two_factor_enabled"])
         except Exception as e:
             import logging
             logging.getLogger(__name__).exception("Toggle2FA save failed for user %s: %s", getattr(user, "id", None), e)
             return Response({"error": "Could not update 2FA. Contact support."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        msg = "2FA চালু করা হয়েছে।" if user.two_factor_enabled else "2FA বন্ধ করা হয়েছে।"
+        msg = "2FA চালু করা হয়েছে।" if profile.two_factor_enabled else "2FA বন্ধ করা হয়েছে।"
 
         return Response({
             "message": msg,
-            "two_factor_enabled": user.two_factor_enabled
+            "two_factor_enabled": profile.two_factor_enabled
         }, status=status.HTTP_200_OK)

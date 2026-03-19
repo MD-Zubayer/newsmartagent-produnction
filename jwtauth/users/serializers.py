@@ -33,6 +33,7 @@ class ProfileSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer[User]):
     profile = ProfileSerializer(read_only=True) # nested serializer
+    two_factor_enabled = serializers.SerializerMethodField(read_only=True)
 
     man_agent_unique_id = serializers.CharField(write_only=True, required=False,allow_blank=True, allow_null=True)
     man_agent_otp_key = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
@@ -61,6 +62,7 @@ class UserSerializer(serializers.ModelSerializer[User]):
             'man_agent_otp_key',
             'is_staff',
             'is_superuser',
+            'two_factor_enabled',
         ]
 
 
@@ -68,8 +70,14 @@ class UserSerializer(serializers.ModelSerializer[User]):
         extra_kwargs = {
             # "url": {"view_name": "user-detail", "lookup_field": "id"},
             # "email": {"read_only": True},
-            "password": {"write_only": True}
+            "password": {"write_only": True},
           }
+
+    def get_two_factor_enabled(self, obj):
+        try:
+            return getattr(obj.profile, "two_factor_enabled", False)
+        except Exception:
+            return False
 
     def create(self, validated_data):
 
