@@ -168,7 +168,7 @@ export default function DocumentPage() {
   const loadDoc = async (id) => {
     setLoading(true);
     try {
-      const res = await api.get(`/embedding/documents/${id}//`);
+      const res = await api.get(`/embedding/documents/${id}/`);
       setDocTitle(res.data.title);
       const text = res.data.full_content || "";
       if (text) {
