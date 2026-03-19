@@ -767,78 +767,98 @@ export default function OrderDashboard() {
               </select>
           </div>
 
-          <div className="sticky top-2 z-20 bg-gray-900 text-white p-2.5 md:p-5 mb-6 rounded-xl md:rounded-[2.5rem] shadow-xl flex items-center justify-between gap-2">
-            <button onClick={toggleSelectAll} className="flex items-center gap-2 ml-2 text-[10px] md:text-sm font-bold">
-              {selectedOrders.length === filteredOrders.length ? <CheckSquare className="w-4 h-4 text-indigo-400" /> : <Square className="w-4 h-4" />} 
-              <span>All</span>
+          <div className="sticky top-4 z-20 bg-white/80 backdrop-blur-md border border-gray-200 text-gray-800 p-3 sm:p-4 mb-6 rounded-2xl shadow-sm flex items-center justify-between gap-4">
+            <button onClick={toggleSelectAll} className="flex items-center gap-2 ml-1 text-sm font-bold text-gray-600 hover:text-indigo-600 transition-colors">
+              {selectedOrders.length === filteredOrders.length && filteredOrders.length > 0 ? <CheckSquare className="w-5 h-5 text-indigo-600" /> : <Square className="w-5 h-5" />} 
+              <span>Select All</span>
             </button>
             {selectedOrders.length > 0 && (
-              <button onClick={() => handlePrint()} className="flex items-center gap-1.5 bg-indigo-500 px-4 py-2 rounded-lg text-[10px] md:text-sm font-black active:scale-95">
-                <Printer className="w-3 md:w-4 h-3 md:h-4" /> Print ({selectedOrders.length})
+              <button onClick={() => handlePrint()} className="flex items-center gap-2 bg-indigo-600 px-5 py-2.5 rounded-xl text-sm font-bold text-white shadow-md active:scale-95 hover:bg-indigo-700 transition-all">
+                <Printer className="w-4 h-4" /> Print Selected ({selectedOrders.length})
               </button>
             )}
           </div>
 
-          <div className="grid grid-cols-1 gap-3 md:gap-6">
+          <div className="grid grid-cols-1 gap-4">
             {filteredOrders.map((order) => (
-              <div key={order.id} className={`rounded-2xl md:rounded-[3.5rem] p-0.5 ${selectedOrders.includes(order.id) ? 'bg-indigo-500' : 'bg-gray-100'}`}>
-                <div className="bg-white p-3 xs:p-4 md:p-8 rounded-[1.2rem] md:rounded-[3.3rem] flex flex-col lg:flex-row justify-between gap-4">
-                  
-                  <div className="flex gap-3 md:gap-6 items-start">
-                    <button onClick={() => toggleSelect(order.id)} className="mt-1 flex-shrink-0">
-                      {selectedOrders.includes(order.id) ? <CheckSquare className="text-indigo-600 w-5 h-5 md:w-8 md:h-8" /> : <Square className="text-gray-200 w-5 h-5 md:w-8 md:h-8" />}
+              <div key={order.id} className={`bg-white border rounded-2xl p-4 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-5 transition-all hover:shadow-md ${selectedOrders.includes(order.id) ? 'border-indigo-500 ring-1 ring-indigo-500 bg-indigo-50/10' : 'border-gray-200 hover:border-indigo-300'}`}>
+                
+                {/* Left Section: Checkbox & Customer Info */}
+                <div className="flex items-start lg:items-center gap-4 w-full lg:w-4/12">
+                  <div className="mt-1 lg:mt-0">
+                    <button onClick={() => toggleSelect(order.id)} className="text-gray-400 hover:text-indigo-600 transition-colors">
+                      {selectedOrders.includes(order.id) ? <CheckSquare className="w-6 h-6 text-indigo-600" /> : <Square className="w-6 h-6" />}
                     </button>
-                    
-                    <div className="space-y-2 md:space-y-4 flex-1 min-w-0">
-                      <div>
-                        <h3 className="text-base xs:text-lg md:text-3xl font-black text-gray-900 tracking-tight truncate">{order.customer_name}</h3>
-                        <div className="flex items-center gap-1 text-[9px] md:text-sm font-bold text-gray-400">
-                          <MapPin className="w-3 h-3 text-indigo-500" /> {order.district}
-                        </div>
-                      </div>
-                      
-                      <div className="flex flex-wrap gap-1.5">
-                        <span className="flex items-center gap-1 text-[9px] md:text-sm font-bold text-gray-600 bg-gray-50 px-2 py-1 rounded-md border border-gray-100"><Phone className="w-3 h-3 text-indigo-500" /> {order.phone_number}</span>
-                        <span className="flex items-center gap-1 text-[9px] md:text-sm font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md border border-indigo-100 truncate max-w-[120px] xs:max-w-none"><Package className="w-3 h-3" /> {order.product_name || "Item"}</span>
-                      </div>
-
-                        <span className="flex items-center gap-1 text-[9px] md:text-sm font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md border border-indigo-100 truncate max-w-[120px] xs:max-w-none"><Package className="w-3 h-3" /> {order.extra_info || "Item"}</span>
-
-                      <p className="text-[10px] md:text-sm text-gray-500 leading-snug bg-slate-50 p-3 md:p-6 rounded-xl md:rounded-[2rem] border-l-4 md:border-l-8 border-indigo-500 break-words">
-                        {order.address}
-                      </p>
-                    </div>
                   </div>
-
-                  <div className="flex flex-row lg:flex-col justify-between items-center lg:items-end gap-2 pt-3 lg:pt-0 border-t lg:border-t-0 border-gray-50">
-                    <div className="bg-gray-50 px-3 py-1.5 md:py-4 rounded-lg md:rounded-[2rem] border border-gray-100">
-                       <p className="text-[7px] md:text-[10px] font-black text-gray-300 uppercase">Order date</p>
-                       <p className="text-[9px] md:text-sm font-black text-gray-700">{new Date(order.created_at).toLocaleDateString('en-GB')}</p>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <h3 className="font-bold text-gray-900 text-base sm:text-lg truncate">{order.customer_name}</h3>
+                      <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 flex-shrink-0">
+                        #{order.id}
+                      </span>
                     </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => handlePrint([order])} className="p-2.5 md:p-5 bg-indigo-50 text-indigo-600 rounded-lg md:rounded-[2rem]">
-                          <Printer className="w-4 h-4 md:w-6 md:h-6" />
-                      </button>
-                      
-                      <div className="relative">
-                        <select 
-                          value={order.status}
-                          onChange={(e) => updateStatus(order.id, e.target.value)}
-                          className={`appearance-none pl-3 md:pl-8 pr-7 md:pr-12 py-2 md:py-5 rounded-lg md:rounded-[2rem] font-black text-[9px] md:text-xs uppercase cursor-pointer ${
-                            order.status === 'delivered' ? 'bg-emerald-500 text-white' : 
-                            order.status === 'shipped' ? 'bg-indigo-600 text-white' : 'bg-amber-400 text-white'
-                          }`}
-                        >
-                          <option value="pending">Pending</option>
-                          <option value="shipped">Shipped</option>
-                          <option value="delivered">Delivered</option>
-                        </select>
-                        <ChevronRight className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 w-3 md:w-4 h-3 md:h-4 pointer-events-none rotate-90" />
-                      </div>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs text-gray-500 font-medium tracking-wide">
+                      <span className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-gray-400" /> {order.phone_number}</span>
+                      <span className="flex items-center gap-1.5 truncate"><MapPin className="w-3.5 h-3.5 text-gray-400" /> {order.district}, {order.upazila}</span>
                     </div>
                   </div>
                 </div>
+
+                {/* Middle Section: Product Details & Price */}
+                <div className="flex flex-col w-full lg:w-4/12 px-0 lg:px-6 border-t lg:border-t-0 lg:border-l lg:border-r border-gray-100 pt-4 lg:pt-0 pb-4 lg:pb-0">
+                  <div className="font-semibold text-gray-800 flex items-center gap-2 text-sm sm:text-base mb-1.5">
+                    <Package className="w-4.5 h-4.5 text-indigo-500 flex-shrink-0" /> 
+                    <span className="truncate">{order.product_name || "N/A"}</span>
+                  </div>
+                  <div className="flex items-center flex-wrap gap-3 mb-2">
+                    {order.price > 0 ? (
+                      <span className="text-sm font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100">
+                        ৳ {Number(order.price).toLocaleString()}
+                      </span>
+                    ) : (
+                      <span className="text-sm font-medium text-gray-400 italic">No price set</span>
+                    )}
+                    {order.extra_info && (
+                      <span className="text-xs font-medium text-gray-500 bg-gray-50 px-2 py-1 rounded-md border border-gray-200 truncate max-w-[150px]" title={order.extra_info}>
+                        Info: {order.extra_info}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500 line-clamp-2 leading-relaxed" title={order.address}>
+                    <span className="font-semibold text-gray-400 uppercase tracking-widest text-[9px] mr-1">Address:</span> {order.address}
+                  </div>
+                </div>
+
+                {/* Right Section: Actions & Status */}
+                <div className="flex flex-col sm:flex-row items-center justify-between lg:justify-end gap-4 w-full lg:w-3/12 pt-4 lg:pt-0 border-t lg:border-t-0 border-gray-100">
+                  <div className="text-left sm:text-right w-full sm:w-auto flex flex-row sm:flex-col justify-between sm:justify-start">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Date Added</p>
+                    <p className="text-xs font-bold text-gray-700">{new Date(order.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                  </div>
+
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <button onClick={() => handlePrint([order])} className="p-2 sm:p-2.5 bg-white text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-200 hover:border-indigo-200 shadow-sm">
+                      <Printer className="w-4 h-4" />
+                    </button>
+                    
+                    <div className="relative flex-1 sm:flex-none">
+                      <select 
+                        value={order.status}
+                        onChange={(e) => updateStatus(order.id, e.target.value)}
+                        className={`w-full appearance-none pl-4 pr-10 py-2 sm:py-2.5 rounded-xl font-bold text-xs uppercase tracking-wide cursor-pointer transition-colors border shadow-sm ${
+                          order.status === 'delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 focus:ring-2 focus:ring-emerald-500 focus:outline-none' : 
+                          order.status === 'shipped' ? 'bg-indigo-50 text-indigo-700 border-indigo-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none' : 'bg-amber-50 text-amber-700 border-amber-200 focus:ring-2 focus:ring-amber-500 focus:outline-none'
+                        }`}
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="shipped">Shipped</option>
+                        <option value="delivered">Delivered</option>
+                      </select>
+                      <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none rotate-90 opacity-50" />
+                    </div>
+                  </div>
+                </div>
+
               </div>
             ))}
           </div>
