@@ -67,7 +67,7 @@ export default function Sidebar({ viewMode, isDesktopMode }) {
       await api.post("/logout/", {}, { withCredentials: true });
       setUser(null);
       localStorage.removeItem("active_view");
-      router.push("/signup");
+      router.push("/login");
     } catch (err) {
       console.error("Logout failed", err);
     }
@@ -165,7 +165,11 @@ export default function Sidebar({ viewMode, isDesktopMode }) {
                     )}
                   </div>
                   <span className="md:inline pl-3 text-sm font-medium truncate">
-                    {link.name === "Profile" && user ? user.name || "Profile" : link.name}
+                    {link.name === "Profile" && user 
+                      ? (user.name?.length > 10
+                          ? user.name.substring(0, user.name.lastIndexOf(' ', 10)) + '...' 
+                          : user.name || "Profile")
+                      : link.name}
                   </span>
                 </div>
               </Link>

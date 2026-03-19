@@ -78,10 +78,10 @@ export default function Navbar() {
 
             <div className="flex items-center gap-4 border-l border-gray-100 pl-8">
               <Link
-                href="/signup"
+                href="/login"
                 className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-black hover:bg-indigo-700 transition shadow-lg shadow-indigo-100 active:scale-95"
               >
-                Sign Up
+                Sign In
               </Link>
             </div>
           </div>
@@ -137,11 +137,11 @@ export default function Navbar() {
 
           <div className="pt-6 space-y-3">
             <Link
-              href="/signup"
+              href="/login"
               className="block text-center py-4 rounded-2xl bg-indigo-600 text-white font-black shadow-xl shadow-indigo-100"
               onClick={() => setOpen(false)}
             >
-              Get Started Free
+              Sign In
             </Link>
           </div>
         </div>
