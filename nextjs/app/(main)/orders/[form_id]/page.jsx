@@ -9,7 +9,10 @@ import {
   Package, 
   MessageSquare,
   Navigation,
-  Loader2 // লোডিং আইকনের জন্য
+  Loader2, // লোডিং আইকনের জন্য
+  MessageCircle,
+  X,
+  Send
 } from "lucide-react"; 
 import toast from "react-hot-toast";
 
@@ -38,6 +41,92 @@ export default function PublicOrderForm({ params }) {
     };
     fetchShopProfile();
   }, [form_id]);
+
+  // ------------------ CHATBOT LOGIC ------------------
+  const [chatOpen, setChatOpen] = useState(false);
+  const [messages, setMessages] = useState([
+    { text: "আমি তোমার অর্ডার করে দিতে পারি। প্রথমে আপনার নাম লিখুন। 😊", sender: "bot" }
+  ]);
+  const [chatStep, setChatStep] = useState(0);
+  const [chatInput, setChatInput] = useState("");
+  const [chatData, setChatData] = useState({
+    name: "", phone: "", district: "", upazila: "", address: "", product: "", price: "", extra_info: ""
+  });
+
+  const steps = [
+    { key: 'name', nextQuestion: "আপনার ফোন নাম্বার দিন 📱" },
+    { key: 'phone', nextQuestion: "আপনার জেলার নাম কী? 🌍" },
+    { key: 'district', nextQuestion: "আপনার উপজেলার নাম কী? 🏙️" },
+    { key: 'upazila', nextQuestion: "বিস্তারিত ঠিকানা (বাড়ি/রাস্তা) দিন 🏠" },
+    { key: 'address', nextQuestion: "কী প্রোডাক্ট নিতে চাচ্ছেন? 📦" },
+    { key: 'product', nextQuestion: "পণ্যের দাম কত? (না জানা থাকলে ০ দিন) 💰" },
+    { key: 'price', nextQuestion: "অতিরিক্ত কোনো তথ্য (রঙ, সাইজ) আছে কি? 📝" },
+    { key: 'extra_info', nextQuestion: "সব তথ্য ঠিক আছে। আমি কি অর্ডারটি কনফার্ম করব? (হ্যাঁ/না) ✅" },
+  ];
+
+  const submitOrderFromChat = async (data) => {
+    if (!form_id) return toast.error("Error: ফর্ম আইডি পাওয়া যায়নি!");
+    setLoading(true);
+    const toastId = toast.loading("অর্ডার প্রসেস হচ্ছে...");
+
+    const formData = {
+      form_id: form_id,
+      customer_name: data.name,
+      phone_number: data.phone,
+      district: data.district,
+      upazila: data.upazila,
+      address: data.address,
+      product_name: data.product,
+      price: data.price ? parseFloat(data.price) || 0 : 0,
+      extra_info: data.extra_info,
+    };
+
+    try {
+      const res = await fetch("https://newsmartagent.com/api/orders/", {
+        method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      const result = await res.json();
+      if (res.ok) {
+        toast.success("অর্ডারটি সফলভাবে সম্পন্ন হয়েছে! 🚀", { id: toastId });
+        setSubmitted(true);
+        setMessages(prev => [...prev, { text: "আপনার অর্ডারটি সফলভাবে সম্পন্ন হয়েছে! 🚀 ধন্যবাদ।", sender: "bot" }]);
+      } else {
+        toast.error(result.detail || "তথ্য ভুল আছে, আবার চেষ্টা করুন।", { id: toastId });
+        setMessages(prev => [...prev, { text: "দুঃখিত, কোনো একটি সমস্যা হয়েছে।", sender: "bot" }]);
+      }
+    } catch (error) {
+      toast.error("সার্ভারে সংযোগ দেওয়া সম্ভব হচ্ছে না।", { id: toastId });
+      setMessages(prev => [...prev, { text: "সার্ভারে সংযোগ সমস্যা। ইন্টারনেট চেক করুন।", sender: "bot" }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleChatSubmit = async (e) => {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+
+    const userText = chatInput.trim();
+    setMessages(prev => [...prev, { text: userText, sender: "user" }]);
+    setChatInput("");
+
+    if (chatStep < steps.length) {
+        const currentField = steps[chatStep].key;
+        setChatData(prev => ({ ...prev, [currentField]: userText }));
+        setTimeout(() => setMessages(prev => [...prev, { text: steps[chatStep].nextQuestion, sender: "bot" }]), 500);
+        setChatStep(prev => prev + 1);
+    } else if (chatStep === steps.length) {
+        if (["হ্যাঁ", "ha", "yes", "y", "ji", "জি"].includes(userText.toLowerCase())) {
+            setMessages(prev => [...prev, { text: "অর্ডার প্রসেস করা হচ্ছে... ⏳", sender: "bot" }]);
+            submitOrderFromChat(chatData);
+        } else {
+            setMessages(prev => [...prev, { text: "অর্ডার বাতিল করা হয়েছে। নতুন করে শুরু করতে পেজ রিলোড দিন। ❌", sender: "bot" }]);
+        }
+    }
+  };
+  // ---------------------------------------------------
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -186,6 +275,71 @@ export default function PublicOrderForm({ params }) {
           </button>
         </form>
       </div>
+
+      {/* Bot FAB */}
+      {!chatOpen && !submitted && (
+        <div className="fixed bottom-6 right-6 flex flex-col items-end gap-3 z-50 animate-in fade-in slide-in-from-bottom duration-500">
+          <div className="bg-white px-4 py-2 rounded-2xl shadow-xl border border-indigo-100 text-sm font-bold text-indigo-700 animate-bounce relative cursor-pointer" onClick={() => setChatOpen(true)}>
+            আমি তোমার অর্ডার করে দিতে পারি 👋
+            <div className="absolute right-4 -bottom-2 w-4 h-4 bg-white border-b border-r border-indigo-100 transform rotate-45"></div>
+          </div>
+          <button 
+            onClick={() => setChatOpen(true)}
+            className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 rounded-full shadow-2xl hover:scale-110 transition-transform flex items-center justify-center ring-4 ring-indigo-200"
+          >
+            <MessageCircle size={32} />
+          </button>
+        </div>
+      )}
+
+      {/* Chat Window */}
+      {chatOpen && (
+        <div className="fixed bottom-6 right-6 w-[340px] sm:w-[400px] bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100 z-50 flex flex-col h-[550px] max-h-[85vh] transition-all animate-in slide-in-from-bottom border-t-4 border-t-indigo-500">
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-4 text-white flex justify-between items-center shadow-md">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-indigo-600 shadow-inner">
+                <MessageCircle size={20} />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg">Smart Agent</h3>
+                <p className="text-xs text-blue-100">Online 🟢</p>
+              </div>
+            </div>
+            <button onClick={() => setChatOpen(false)} className="text-white hover:bg-white/20 p-2 rounded-full transition-colors">
+              <X size={20} />
+            </button>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 flex flex-col">
+            {messages.map((msg, idx) => (
+              <div key={idx} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`px-4 py-2.5 rounded-2xl max-w-[85%] text-sm ${msg.sender === 'user' ? 'bg-indigo-600 text-white rounded-br-sm shadow-md' : 'bg-white text-gray-800 border border-gray-100 rounded-bl-sm shadow-sm'}`}>
+                   {msg.text}
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <form onSubmit={handleChatSubmit} className="p-3 bg-white border-t border-gray-100 flex gap-2 items-center">
+            <input 
+              type="text" 
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              placeholder="Type your message..."
+              className="flex-1 bg-gray-100 border-none px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-sm"
+              disabled={loading || submitted}
+            />
+            <button 
+              type="submit" 
+              disabled={loading || submitted || !chatInput.trim()}
+              className="bg-indigo-600 text-white p-3 rounded-xl shadow-md hover:bg-indigo-700 transition-colors disabled:opacity-50"
+            >
+              <Send size={18} />
+            </button>
+          </form>
+        </div>
+      )}
+      
     </div>
   );
 }

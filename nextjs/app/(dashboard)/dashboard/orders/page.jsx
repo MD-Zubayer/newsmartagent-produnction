@@ -470,9 +470,11 @@ export default function OrderDashboard() {
             <thead>
               <tr>
                 <th style="width: 5%;">#</th>
-                <th style="width: 55%;">Item Description</th>
-                <th style="width: 15%; text-align: center;">Qty</th>
-                <th style="width: 25%;">Status</th>
+                <th style="width: 45%;">Item Description</th>
+                <th style="width: 10%; text-align: center;">Qty</th>
+                <th style="width: 15%; text-align: right;">Unit Price</th>
+                <th style="width: 10%; text-align: center;">Status</th>
+                <th style="width: 15%;">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -483,12 +485,31 @@ export default function OrderDashboard() {
                   <span class="item-desc">Product order from ${shopName}</span>
                 </td>
                 <td style="text-align: center; font-weight: 600;">1</td>
-                <td>
+                <td style="text-align: right; font-weight: 500;">৳ ${Number(o.price || 0).toLocaleString()}</td>
+                <td style="text-align: center;">
                   <span class="status-badge ${statusClass}">${o.status}</span>
                 </td>
+                <td style="text-align: right; font-weight: 700; color: #111827;">৳ ${Number(o.price || 0).toLocaleString()}</td>
               </tr>
             </tbody>
           </table>
+
+          <div style="display: flex; justify-content: flex-end; margin-bottom: 20px;">
+            <div style="width: 300px; border-top: 2px solid #e5e7eb; padding-top: 15px;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 15px;">
+                <span style="color: #6b7280;">Subtotal:</span>
+                <span style="font-weight: 600;">৳ ${Number(o.price || 0).toLocaleString()}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 15px;">
+                <span style="color: #6b7280;">Shipping:</span>
+                <span style="font-weight: 600;">৳ 0</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-top: 15px; padding-top: 15px; border-top: 1px dashed #e5e7eb; font-size: 18px;">
+                <span style="color: #111827; font-weight: 800;">Total:</span>
+                <span style="color: #3b82f6; font-weight: 800;">৳ ${Number(o.price || 0).toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
 
           <div class="invoice-footer">
             <div class="footer-thanks">
