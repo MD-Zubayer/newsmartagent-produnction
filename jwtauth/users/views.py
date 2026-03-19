@@ -240,8 +240,8 @@ class LoginView(APIView):
         if not user.is_verified:
             return Response({"error": "Email is not verified. Please check your inbox."}, status=status.HTTP_403_FORBIDDEN)
 
-        # TOTP-based 2FA
-        if user.two_factor_enabled:
+        # Email OTP-based 2FA (guard if field missing)
+        if getattr(user, "two_factor_enabled", False):
             # Issue a fresh one-time code via email
             otp = str(random.randint(100000, 999999))
             profile = user.profile
@@ -1024,8 +1024,13 @@ class Toggle2FAView(APIView):
             return Response({"error": "enabled true/false পাঠান"}, status=status.HTTP_400_BAD_REQUEST)
 
         user = request.user
-        user.two_factor_enabled = bool(enabled)
-        user.save(update_fields=["two_factor_enabled"])
+        try:
+            current = getattr(user, "two_factor_enabled", False)
+            user.two_factor_enabled = bool(enabled)
+            user.save(update_fields=["two_factor_enabled"])
+        except Exception as e:
+            logger.exception("Toggle2FA save failed for user %s: %s", getattr(user, "id", None), e)
+            return Response({"error": "Could not update 2FA. Contact support."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         msg = "2FA চালু করা হয়েছে।" if user.two_factor_enabled else "2FA বন্ধ করা হয়েছে।"
 
