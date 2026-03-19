@@ -10,11 +10,14 @@ class BaseMinioStorage(S3Boto3Storage):
     addressing_style = 'path'
 
     def __init__(self, *args, **kwargs):
-        ext_endpoint = os.environ.get('MINIO_EXTERNAL_ENDPOINT', '')
-        if ext_endpoint:
-            self.custom_domain = ext_endpoint.replace('https://', '').replace('http://', '').rstrip('/')
-            self.url_protocol = 'https' if ext_endpoint.startswith('https') else 'http'
         super().__init__(*args, **kwargs)
+
+    def url(self, name, parameters=None, expire=None, http_method=None):
+        # Robust URL generation to avoid the 'missing colon' issue
+        ext_endpoint = os.environ.get('MINIO_EXTERNAL_ENDPOINT', '').rstrip('/')
+        if ext_endpoint:
+            return f"{ext_endpoint}/{self.bucket_name}/{name}"
+        return super().url(name, parameters, expire, http_method)
 
 class MediaStorage(BaseMinioStorage):
     bucket_name = os.environ.get('MINIO_STORAGE_BUCKET_NAME', 'newsmartagent-media')
