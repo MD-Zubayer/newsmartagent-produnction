@@ -230,9 +230,12 @@ if os.environ.get('MINIO_STORAGE_BUCKET_NAME'):
         AWS_S3_URL_PROTOCOL = 'https' if minio_ext_endpoint.startswith('https') else 'http'
     
     AWS_S3_USE_SSL = AWS_S3_URL_PROTOCOL == 'https'
+    AWS_S3_ENDPOINT_URL = os.environ.get('MINIO_ENDPOINT')
+    AWS_S3_ADDRESSING_STYLE = 'path'
+    AWS_S3_SIGNATURE_VERSION = 's3v4'
     AWS_S3_FILE_OVERWRITE = False
     AWS_QUERYSTRING_AUTH = False
-    AWS_DEFAULT_ACL = None # Typically bucket policy handles this
+    AWS_DEFAULT_ACL = None 
     
     # Optional: static files also on S3
     # STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
