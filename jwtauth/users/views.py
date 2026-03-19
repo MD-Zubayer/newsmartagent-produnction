@@ -493,6 +493,22 @@ class OrderSubmitView(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         serializer.save()
 
+    @action(detail=False, methods=['get'], url_path='public-profile/(?P<form_id>[^/.]+)', permission_classes=[AllowAny])
+    def public_profile(self, request, form_id=None):
+        try:
+            order_form = OrderForm.objects.get(form_id=form_id)
+            user = order_form.user
+            profile_photo_url = None
+            if hasattr(user, 'profile') and user.profile.profile_photo:
+                profile_photo_url = user.profile.profile_photo.url
+
+            return Response({
+                'name': user.name or user.email,
+                'profile_photo_url': profile_photo_url
+            })
+        except OrderForm.DoesNotExist:
+            return Response({'error': 'Form not found'}, status=404)
+
 
 
 

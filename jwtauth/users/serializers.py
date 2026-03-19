@@ -211,11 +211,20 @@ class SubscriptionSerializer(serializers.ModelSerializer):
 class CustomerOrderSerializer(serializers.ModelSerializer):
     
     form_id = serializers.UUIDField(write_only=True, required=False)
+    customer_profile_photo = serializers.SerializerMethodField()
 
     class Meta:
         model = CustomerOrder
-        fields = ['id', 'form_id', 'customer_name', 'phone_number', 'district', 'upazila', 'address', 'product_name','status', 'extra_info', 'created_at', 'updated_at']
-        read_only_fields = ['id', 'created_at']
+        fields = ['id', 'form_id', 'customer_name', 'customer_profile_photo', 'phone_number', 'district', 'upazila', 'address', 'product_name','status', 'extra_info', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'customer_profile_photo']
+
+    def get_customer_profile_photo(self, obj):
+        try:
+            if obj.user.profile.profile_photo:
+                return obj.user.profile.profile_photo.url
+        except Exception:
+            pass
+        return None
 
     def create(self, validated_data):
         form_id = validated_data.pop('form_id', None)

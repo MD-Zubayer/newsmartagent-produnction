@@ -336,13 +336,18 @@ export default function OrderDashboard() {
           </div>
 
           <div class="details-grid">
-            <div class="address-box">
-              <h3>Customer & Shipping</h3>
-              <p>${o.customer_name}</p>
-              <p>${o.phone_number}</p>
-              <p style="font-weight: 400; font-size: 14px; color: #64748b; margin-top: 5px;">
-                ${o.address}, ${o.district}
-              </p>
+            <div class="address-box" style="display: flex; align-items: flex-start; gap: 20px;">
+              ${o.customer_profile_photo ? `
+                <img src="${o.customer_profile_photo}" alt="Profile Photo" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid #eef2ff; flex-shrink: 0;" />
+              ` : ''}
+              <div>
+                <h3>Customer & Shipping</h3>
+                <p>${o.customer_name}</p>
+                <p>${o.phone_number}</p>
+                <p style="font-weight: 400; font-size: 14px; color: #64748b; margin-top: 5px;">
+                  ${o.address}, ${o.district}
+                </p>
+              </div>
             </div>
             <div class="meta-box">
               <div class="meta-item">

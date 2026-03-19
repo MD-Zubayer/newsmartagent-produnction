@@ -12,6 +12,7 @@ import {
   Loader2 // লোডিং আইকনের জন্য
 } from "lucide-react"; 
 import toast from "react-hot-toast";
+import Image from "next/image";
 
 export default function PublicOrderForm({ params }) {
   // params আনর‍্যাপ করা
@@ -20,6 +21,24 @@ export default function PublicOrderForm({ params }) {
 
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [shopProfile, setShopProfile] = useState(null);
+
+  // Fetch shop profile details
+  useEffect(() => {
+    if (!form_id) return;
+    const fetchShopProfile = async () => {
+      try {
+        const res = await fetch(`https://newsmartagent.com/api/orders/public-profile/${form_id}/`);
+        if (res.ok) {
+          const data = await res.json();
+          setShopProfile(data);
+        }
+      } catch (error) {
+        console.error("Error fetching shop profile:", error);
+      }
+    };
+    fetchShopProfile();
+  }, [form_id]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -83,12 +102,24 @@ export default function PublicOrderForm({ params }) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full bg-white shadow-2xl rounded-3xl overflow-hidden border border-gray-100 relative">
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center py-6 sm:py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full bg-white shadow-2xl rounded-2xl sm:rounded-3xl overflow-hidden border border-gray-100 relative">
         
         <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-6 text-white text-center">
-          <ShoppingCart className="w-10 h-10 mx-auto mb-2 opacity-90" />
-          <h1 className="text-2xl font-extrabold tracking-tight">Confirm order.</h1>
+          {shopProfile && shopProfile.profile_photo_url ? (
+            <div className="relative w-20 h-20 mx-auto mb-3">
+              <Image 
+                src={shopProfile.profile_photo_url} 
+                alt="Shop Logo" 
+                layout="fill" 
+                objectFit="cover" 
+                className="rounded-full border-4 border-white shadow-md"
+              />
+            </div>
+          ) : (
+            <ShoppingCart className="w-10 h-10 mx-auto mb-2 opacity-90" />
+          )}
+          <h1 className="text-2xl font-extrabold tracking-tight">{shopProfile?.name || 'Confirm order.'}</h1>
           <p className="text-blue-100 text-sm mt-1">Fill out the form below correctly.</p>
         </div>
 
@@ -111,15 +142,15 @@ export default function PublicOrderForm({ params }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="relative">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="relative flex-1">
                 <label className="text-xs font-semibold text-gray-500 uppercase ml-1 tracking-wide">district</label>
                 <div className="flex items-center mt-1">
                     <Navigation className="absolute ml-3 text-gray-400 w-4 h-4" />
                     <input name="district" type="text" placeholder="district" className="w-full pl-9 pr-3 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all" required />
                 </div>
             </div>
-            <div className="relative">
+            <div className="relative flex-1">
                 <label className="text-xs font-semibold text-gray-500 uppercase ml-1 tracking-wide">Upazila</label>
                 <div className="flex items-center mt-1">
                     <MapPin className="absolute ml-3 text-gray-400 w-4 h-4" />
