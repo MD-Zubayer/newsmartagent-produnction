@@ -544,33 +544,58 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
       reader.readAsBinaryString(file);
 
     } else if (ext === 'pdf') {
-      // ---- PDF ----
+      // ---- PDF (text-based, supports Unicode including Bangla) ----
       try {
         const pdfjsLib = await import('pdfjs-dist');
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+        // Use locally hosted worker — avoids CDN version mismatch issues
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+
         const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const loadingTask = pdfjsLib.getDocument({
+          data: arrayBuffer,
+          // Improves Bangla / complex script rendering by disabling font hinting issues
+          cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/cmaps/`,
+          cMapPacked: true,
+          standardFontDataUrl: `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/standard_fonts/`,
+        });
+        const pdf = await loadingTask.promise;
         const allRows = [];
+
         for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
           const page = await pdf.getPage(pageNum);
-          const content = await page.getTextContent();
-          // Group items into rows by approximate Y position
+          const content = await page.getTextContent({
+            includeMarkedContent: false,
+            disableNormalization: false,  // normalize Unicode (helps Bangla)
+          });
+
+          // Group text items into visual rows by Y-position (top of page first)
           const lineMap = {};
           content.items.forEach(item => {
+            if (!item.str) return;
             const y = Math.round(item.transform[5]);
             if (!lineMap[y]) lineMap[y] = [];
-            lineMap[y].push({ x: item.transform[4], text: item.str.trim() });
+            lineMap[y].push({ x: item.transform[4], text: item.str });
           });
+
+          // Sort Y descending (top of page first), then X ascending (left to right)
           const sortedYs = Object.keys(lineMap).map(Number).sort((a, b) => b - a);
           sortedYs.forEach(y => {
-            const row = lineMap[y].sort((a, b) => a.x - b.x).map(i => i.text).filter(Boolean);
-            if (row.length) allRows.push(row);
+            const cells = lineMap[y]
+              .sort((a, b) => a.x - b.x)
+              .map(i => i.text.trim())
+              .filter(Boolean);
+            if (cells.length > 0) allRows.push(cells);
           });
         }
-        pushImportedData(allRows);
+
+        if (allRows.length === 0) {
+          alert('No text found in this PDF.\n\nPossible reasons:\n• The PDF is a scanned image (not text)\n• The PDF uses custom/encrypted fonts\n\nTry converting it to Excel or CSV first.');
+        } else {
+          pushImportedData(allRows);
+        }
       } catch (err) {
         console.error('PDF parse error:', err);
-        alert('Could not parse PDF. Please ensure it contains selectable text.');
+        alert(`PDF parsing failed: ${err.message || err}\n\nMake sure the file is a valid, non-encrypted PDF.`);
       }
       e.target.value = null;
 
