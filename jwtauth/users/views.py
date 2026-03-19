@@ -1029,7 +1029,8 @@ class Toggle2FAView(APIView):
             user.two_factor_enabled = bool(enabled)
             user.save(update_fields=["two_factor_enabled"])
         except Exception as e:
-            logger.exception("Toggle2FA save failed for user %s: %s", getattr(user, "id", None), e)
+            import logging
+            logging.getLogger(__name__).exception("Toggle2FA save failed for user %s: %s", getattr(user, "id", None), e)
             return Response({"error": "Could not update 2FA. Contact support."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         msg = "2FA চালু করা হয়েছে।" if user.two_factor_enabled else "2FA বন্ধ করা হয়েছে।"
