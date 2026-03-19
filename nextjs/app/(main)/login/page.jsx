@@ -181,12 +181,19 @@ export default function LoginPage() {
           </form>
         )}
 
-        <p className="mt-8 text-center text-sm text-gray-600">
-          Don't have an account?{" "}
-          <Link href="/signup" className="text-blue-600 font-bold hover:underline">
-            Create an account
-          </Link>
-        </p>
+        <div className="mt-8 text-center text-sm text-gray-600 space-y-2">
+          <div>
+            <Link href="/reset-password" className="text-indigo-600 font-bold hover:underline">
+              Reset password
+            </Link>
+          </div>
+          <div>
+            Don't have an account?{" "}
+            <Link href="/signup" className="text-blue-600 font-bold hover:underline">
+              Create an account
+            </Link>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -179,7 +179,7 @@ export default function SettingsPage() {
     setIsSaving(true);
     try {
       const newValue = !twoFactorEnabled;
-      const res = await api.post('/api/auth/2fa/toggle/', { enabled: newValue });
+      const res = await api.post('/auth/2fa/toggle/', { enabled: newValue });
       setTwoFactorEnabled(newValue);
       
       // Update local user state
