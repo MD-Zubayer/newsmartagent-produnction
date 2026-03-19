@@ -533,9 +533,10 @@ def deliver_dashboard_reply(user_id, reply_text, message_id):
         logger.error(f"Dashboard WebSocket delivery failure: {e}")
         return False
 
-def log_token_usage(agent_config, sender_id, ai_data, duration, request_type):
+def log_token_usage(agent_config, sender_id, ai_data, duration, request_type, platform=None):
     try:
         effective_model = agent_config.selected_model.model_id if agent_config.selected_model else agent_config.ai_model
+        platform_value = platform or request_type or agent_config.platform or "messenger"
         TokenUsageLog.objects.create(
             user=agent_config.user,
             ai_agent=agent_config,
@@ -544,6 +545,7 @@ def log_token_usage(agent_config, sender_id, ai_data, duration, request_type):
             input_tokens=ai_data.get('input_tokens', 0),
             output_tokens=ai_data.get('output_tokens', 0),
             total_tokens=ai_data.get('total_tokens', 0),
+            platform=platform_value,
             response_time=duration,
             success=ai_data.get('success', False),
             error_message=ai_data.get('error', ''),
