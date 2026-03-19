@@ -12,7 +12,8 @@ import {
   Loader2, // লোডিং আইকনের জন্য
   MessageCircle,
   X,
-  Send
+  Send,
+  DollarSign
 } from "lucide-react";
 import toast from "react-hot-toast";
 
