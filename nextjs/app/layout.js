@@ -141,6 +141,7 @@ export default function RootLayout({ children }) {
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -218,6 +219,12 @@ export default function RootLayout({ children }) {
           }}
         />
 
+
+{/* <!-- New Smart Agent Widget --> */}
+<script src="https://newsmartagent.com/static/widget.js" 
+  data-key="3a7d8586-a1eb-4c93-907f-bf8ac128bfa8" 
+  defer></script>
+{/* <!-- End New Smart Agent Widget --> */}
       </body>
     </html>
   );
