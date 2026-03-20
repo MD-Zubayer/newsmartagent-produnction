@@ -338,14 +338,16 @@ def process_ai_reply_task(self, data):
 
         # --- Layer 7: Vector Similarity ---
         if not cached_res:
-            from webhooks.constants import embedding_skip_keyword
+            from aiAgent.models import SmartKeyword
             from embedding.models import SpreadsheetKnowledge
 
             has_knowledge = SpreadsheetKnowledge.objects.filter(user=agent_config.user).exists()
-            skip_margin = 10
+            skip_margin = 6
             skip_embedding = False
             text_len = len(text)
-            for kw in embedding_skip_keyword:
+            
+            db_skip_keywords = SmartKeyword.objects.filter(category='embedding_skip').values_list('keyword', flat=True)
+            for kw in db_skip_keywords:
                 if kw.lower() in text.lower() and abs(text_len - len(kw)) <= skip_margin:
                     skip_embedding = True
                     break
