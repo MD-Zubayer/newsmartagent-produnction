@@ -1,10 +1,10 @@
 from django.apps import AppConfig
 
 
-def _ensure_periodic_tasks():
+def _ensure_periodic_tasks(sender, **kwargs):
     """Seed/refresh periodic tasks so they appear in Django admin.
 
-    Runs on app ready; safe to call multiple times. Skips if DB not ready.
+    Runs after migrations via post_migrate signal; safe to call multiple times. Skips if DB not ready.
     """
 
     from django.conf import settings
@@ -63,8 +63,10 @@ def _ensure_periodic_tasks():
 
 
 
+from django.db.models.signals import post_migrate
+
 class SettingsConfig(AppConfig):
     name = 'settings'
 
     def ready(self):
-        _ensure_periodic_tasks()
+        post_migrate.connect(_ensure_periodic_tasks, sender=self)
