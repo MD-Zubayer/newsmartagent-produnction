@@ -307,6 +307,7 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
         logger.error(f"Error fetching contact settings: {e}")
 
     system_prompt_parts = [
+        f"Identity: Your name is {agent_config.name}. Always identify yourself as {agent_config.name} if asked.",
         f"Role: {custom_role}",
         f"Instructions: {contact_instructions}"
     ]
