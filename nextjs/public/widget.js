@@ -2,8 +2,12 @@
     // ── Configuration ─────────────────────────────────────────────────────────
     var scriptTag = document.currentScript;
     var widgetKey = scriptTag ? scriptTag.getAttribute('data-key') : null;
-    var apiBase   = "https://newsmartagent.com/api/aiAgent/widget";
-    var DEFAULT_ICON = "/newsmartagent_ai_logo.jpeg";
+    
+    // Dynamically determine apiBase from the script URL
+    var scriptSrc = scriptTag ? scriptTag.src : "";
+    var origin    = scriptSrc ? new URL(scriptSrc).origin : "https://newsmartagent.com";
+    var apiBase   = origin + "/api/aiAgent/widget";
+    var DEFAULT_ICON = origin + "/newsmartagent_ai_logo.jpeg";
 
     if (!widgetKey) {
         console.error("New Smart Agent Widget: Missing data-key attribute.");
