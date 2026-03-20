@@ -146,18 +146,7 @@ function Footer() {
     </footer>
   );
 }
-ßç‡¶≠‡¶°‡•§
-            </p>
-            <div className="flex gap-8 text-[11px] font-black uppercase tracking-widest">
-              <a href="/privacy-policy" className="text-gray-600 hover:text-indigo-400 active:text-indigo-300 transition-colors">Privacy Policy</a>
-              <a href="/terms-of-service" className="text-gray-600 hover:text-indigo-400 active:text-indigo-300 transition-colors">Terms of Use</a>
-            </div>
-          </div>
-        </div>
 
-      </div>
-    </footer>
-  );
-}
+   
 
 export default Footer;
