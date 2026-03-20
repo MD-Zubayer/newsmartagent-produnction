@@ -12,7 +12,7 @@ import os
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_BUBBLE_ICON_URL = 'https://newsmartagent.com/static/newsmartagent_ai_logo.jpeg'
+DEFAULT_BUBBLE_ICON_URL = 'https://newsmartagent.com/newsmartagent_ai_logo.jpeg'
 
 
 class WidgetConfigView(APIView):
