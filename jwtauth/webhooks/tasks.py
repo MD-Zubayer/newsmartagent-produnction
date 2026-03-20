@@ -346,7 +346,7 @@ def process_ai_reply_task(self, data):
             skip_embedding = False
             text_len = len(text)
             
-            db_skip_keywords = SmartKeyword.objects.filter(category='embedding_skip').values_list('keyword', flat=True)
+            db_skip_keywords = SmartKeyword.objects.filter(category='embedding_skip').values_list('text', flat=True)
             for kw in db_skip_keywords:
                 if kw.lower() in text.lower() and abs(text_len - len(kw)) <= skip_margin:
                     skip_embedding = True
