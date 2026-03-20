@@ -462,12 +462,16 @@ export default function WidgetCustomizePage() {
                         height: Math.round(settings.bubble_size * 0.65),
                         borderRadius: `${Math.round(settings.bubble_roundness * 0.5)}%`,
                         border: settings.show_bubble_background ? 'none' : `2px solid ${settings.primary_color}`,
+                        boxShadow: settings.show_bubble_background ? '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)' : 'none',
                       }}
-                      className={`absolute ${positionClasses[settings.widget_position]} flex items-center justify-center overflow-hidden shadow-xl pointer-events-none`}
+                      className={`absolute ${positionClasses[settings.widget_position]} flex items-center justify-center overflow-hidden pointer-events-none`}
                     >
                       <img src={effectiveIconUrl} alt=""
                         className="object-contain"
-                        style={{ width: Math.round(settings.bubble_size * 0.45), height: Math.round(settings.bubble_size * 0.45) }}
+                        style={{ 
+                          width: settings.show_bubble_background ? Math.round(settings.bubble_size * 0.45) : Math.round(settings.bubble_size * 0.65), 
+                          height: settings.show_bubble_background ? Math.round(settings.bubble_size * 0.45) : Math.round(settings.bubble_size * 0.65) 
+                        }}
                       />
                     </div>
                   </div>

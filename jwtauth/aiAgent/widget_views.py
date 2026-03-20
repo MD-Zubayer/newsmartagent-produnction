@@ -133,23 +133,6 @@ class WidgetIconUploadView(APIView):
             saved_path = default_storage.save(filename, icon_file)
             icon_url = default_storage.url(saved_path)
 
-            # Cleanup URL if it contains internal hostname (e.g. backend:9000)
-            # This happens if AWS_S3_CUSTOM_DOMAIN is not correctly picked up.
-            minio_ext = getattr(django_settings, 'MINIO_EXTERNAL_ENDPOINT', None) or \
-                        os.environ.get('MINIO_EXTERNAL_ENDPOINT', '')
-            if minio_ext and ('localhost' in icon_url or 'backend' in icon_url or 'newsmartagent-minio' in icon_url or '://minio' in icon_url):
-                # Manual fix to ensure external access
-                base_ext = minio_ext.rstrip('/')
-                bucket = getattr(django_settings, 'AWS_STORAGE_BUCKET_NAME', 'newsmartagent-media')
-                # S3Boto3Storage typically generates <bucket>/<path> or <custom_domain>/<bucket>/<path>
-                if bucket not in icon_url:
-                     icon_url = f"{base_ext}/{bucket}/{saved_path}"
-                else:
-                     # Replace internal part with external
-                     # This is a bit hacky but ensures the user can see their uploaded image
-                     import re
-                     icon_url = re.sub(r'https?://[^/]+', base_ext, icon_url)
-
             # Update WidgetSettings
             widget_settings, _ = WidgetSettings.objects.get_or_create(agent=agent)
             widget_settings.bubble_icon_url = icon_url

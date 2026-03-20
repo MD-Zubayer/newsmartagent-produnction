@@ -50,9 +50,9 @@
         // CSS
         var css = [
             '#nsa-wrap{position:fixed;z-index:2147483647;display:flex;flex-direction:column;align-items:' + (isRight ? 'flex-end' : 'flex-start') + ';' + posStyle + '}',
-            '#nsa-bubble{width:' + size + 'px;height:' + size + 'px;border-radius:' + radius + ';background:' + bubbleBg + ';border:' + bubbleBorder + ';box-shadow:0 8px 30px rgba(0,0,0,.2);display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;transition:transform .3s cubic-bezier(.175,.885,.32,1.275),box-shadow .3s;}',
-            '#nsa-bubble:hover{transform:scale(1.11);box-shadow:0 14px 40px rgba(0,0,0,.26);}',
-            '#nsa-bubble img{width:' + Math.round(size * .67) + 'px;height:' + Math.round(size * .67) + 'px;object-fit:contain;}',
+            '#nsa-bubble{width:' + size + 'px;height:' + size + 'px;border-radius:' + radius + ';background:' + bubbleBg + ';border:' + bubbleBorder + ';' + (showBg ? 'box-shadow:0 8px 30px rgba(0,0,0,.2);' : '') + 'display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;transition:transform .3s cubic-bezier(.175,.885,.32,1.275),box-shadow .3s;}',
+            '#nsa-bubble:hover{transform:scale(1.11);' + (showBg ? 'box-shadow:0 14px 40px rgba(0,0,0,.26);' : '') + '}',
+            '#nsa-bubble img{width:' + (showBg ? Math.round(size * .67) : size) + 'px;height:' + (showBg ? Math.round(size * .67) : size) + 'px;object-fit:contain;}',
             '#nsa-win{width:380px;height:600px;max-width:calc(100vw - 40px);max-height:calc(100vh - 100px);background:#fff;border-radius:24px;box-shadow:0 20px 60px rgba(0,0,0,.18);margin-' + (isBottom ? 'bottom' : 'top') + ':14px;display:none;flex-direction:column;overflow:hidden;border:1px solid rgba(0,0,0,.05);animation:nsa-in .35s ease;}',
             '@keyframes nsa-in{from{opacity:0;transform:translateY(' + (isBottom ? '16' : '-16') + 'px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}',
             '.nsa-hdr{padding:18px 20px;background:' + color + ';color:#fff;display:flex;align-items:center;gap:12px;}',

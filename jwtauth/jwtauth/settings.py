@@ -226,8 +226,10 @@ if os.environ.get('MINIO_STORAGE_BUCKET_NAME'):
     # Use custom domain for external access
     minio_ext_endpoint = os.environ.get('MINIO_EXTERNAL_ENDPOINT', '')
     if minio_ext_endpoint:
-        AWS_S3_CUSTOM_DOMAIN = minio_ext_endpoint.replace('https://', '').replace('http://', '')
-        AWS_S3_URL_PROTOCOL = 'https' if minio_ext_endpoint.startswith('https') else 'http'
+        minio_ext_domain = minio_ext_endpoint.replace('https://', '').replace('http://', '').rstrip('/')
+        # Include bucket name for path-style URLs to work with custom domain
+        AWS_S3_CUSTOM_DOMAIN = f"{minio_ext_domain}/{AWS_STORAGE_BUCKET_NAME}"
+        AWS_S3_URL_PROTOCOL = 'https:' if minio_ext_endpoint.startswith('https') else 'http:'
     
     AWS_S3_USE_SSL = AWS_S3_URL_PROTOCOL == 'https'
     AWS_S3_ENDPOINT_URL = os.environ.get('MINIO_ENDPOINT')
