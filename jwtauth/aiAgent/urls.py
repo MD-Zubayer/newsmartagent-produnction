@@ -3,7 +3,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from aiAgent.views import AgentAIViewSet, TokenUsageAnalyticsView, dashboard_chat_view, RankingAPIView, UserAvailableModelsView, AgentMetricsAPIView, DeleteRankingDataAPIView, UpdateCacheScopeAPIView, RequestSpecialAgentAPIView
 from aiAgent.contact_views import ContactListView, ToggleAutoReplyView, ContactMessageHistoryView, ContactDetailView
-from aiAgent.widget_views import WidgetConfigView, WidgetChatView
+from aiAgent.widget_views import WidgetConfigView, WidgetChatView, WidgetIconUploadView
 from chat.views import facebook_data_deletion_callback
 router = DefaultRouter()
 router.register(r'agents', AgentAIViewSet, basename='agent-ai')
@@ -28,6 +28,8 @@ urlpatterns = [
     # Web Widget Public API
     path('widget/config/<str:widget_key>/', WidgetConfigView.as_view(), name='widget-config'),
     path('widget/chat/<str:widget_key>/', WidgetChatView.as_view(), name='widget-chat'),
+    # Widget Icon Upload (authenticated)
+    path('widget/upload-icon/<int:agent_id>/', WidgetIconUploadView.as_view(), name='widget-icon-upload'),
     
 
 

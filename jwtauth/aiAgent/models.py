@@ -287,8 +287,22 @@ class WidgetSettings(models.Model):
     
     # Appearance
     primary_color = models.CharField(max_length=7, default='#4f46e5')
-    bubble_icon = models.CharField(max_length=50, default='chat')
-    widget_position = models.CharField(max_length=20, default='bottom-right') # bottom-left, bottom-right
+    bubble_icon = models.CharField(max_length=50, default='image')  # 'image' or 'chat'
+    bubble_icon_url = models.CharField(
+        max_length=500,
+        blank=True,
+        default='',
+        help_text="Custom bubble icon URL. Leave blank to use the default newsmartagent logo."
+    )
+    bubble_size = models.IntegerField(
+        default=60,
+        help_text="Bubble size in pixels (e.g. 52, 60, 72)."
+    )
+    widget_position = models.CharField(
+        max_length=20,
+        default='bottom-right',
+        help_text="Corner position: bottom-right, bottom-left, top-right, top-left"
+    )
     
     # Text
     header_title = models.CharField(max_length=100, default='Chat with AI')

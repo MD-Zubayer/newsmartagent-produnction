@@ -14,9 +14,10 @@ class WidgetSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = AgentAI.widget_settings.related.model # WidgetSettings
         fields = [
-            'primary_color', 'bubble_icon', 'widget_position', 
+            'primary_color', 'bubble_icon', 'bubble_icon_url', 'bubble_size', 'widget_position',
             'header_title', 'header_subtitle', 'placeholder_text', 'is_enabled', 'allowed_domains'
         ]
+
 
 
 
@@ -126,8 +127,8 @@ class AgentAISerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        user = self.context['request'].user
-        
+        # 'user' is injected via serializer.save(user=...) from perform_create, so it's already in validated_data.
+        # Pulling it out separately and then passing via **validated_data would cause a duplicate argument error.
         history_limit = validated_data.pop('history_limit', 3)
         temperature = validated_data.pop('temperature', 0.7)
         max_tokens = validated_data.pop('max_tokens', 200)
@@ -142,7 +143,7 @@ class AgentAISerializer(serializers.ModelSerializer):
             if not validated_data.get('page_id'):
                 validated_data['page_id'] = f"widget_{validated_data['widget_key']}"
 
-        agent = AgentAI.objects.create(user=user, **validated_data)
+        agent = AgentAI.objects.create(**validated_data)
         
         from settings.models import AgentAISettings
         AgentAISettings.objects.update_or_create(
