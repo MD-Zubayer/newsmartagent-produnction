@@ -276,6 +276,15 @@ class RankingAPIView(APIView):
                     global_key = f"global:reply:{msg_hash}"
                     cached_data = r_grouped.get(global_key)
                     source = 'global'
+                    
+                # যদি Global-এও না থাকে তবে DB 6 (Sender Specific) চেক করা
+                if not cached_data:
+                    sender_pattern = f"agent:{agent_id}:sender:*:reply:{msg_hash}"
+                    for s_key in r_grouped.scan_iter(match=sender_pattern, count=10):
+                        cached_data = r_grouped.get(s_key)
+                        if cached_data:
+                            source = 'sender_specific'
+                            break
 
                 text = "Unknown Message"
                 total_token_savings = 0
@@ -284,7 +293,12 @@ class RankingAPIView(APIView):
                 if cached_data:
                     data = json.loads(cached_data)
                     text = data.get('original_normalized', data.get('original_text', 'Unknown Message')) 
-                    current_scope = data.get('cache_scope', 'agent_specific') if source == 'agent' else 'global'
+                    if source == 'agent':
+                        current_scope = data.get('cache_scope', 'agent_specific')
+                    elif source == 'global':
+                        current_scope = 'global'
+                    else:
+                        current_scope = 'sender_specific'
                     
                     input_tokens = data.get('input_tokens', 0)
                     output_tokens = data.get('output_tokens', 0)
@@ -406,6 +420,17 @@ class UpdateCacheScopeAPIView(APIView):
             r_db6 = get_redis_client(db=6) # DB 6
             
             raw_data = r_db2.get(agent_key) or r_db6.get(global_key)
+            sender_keys_to_delete = []
+            
+            if not raw_data:
+                sender_pattern = f"agent:{agent_id}:sender:*:reply:{msg_hash}"
+                for s_key in r_db6.scan_iter(match=sender_pattern):
+                    raw_data = r_db6.get(s_key)
+                    if raw_data:
+                        for key in r_db6.scan_iter(match=sender_pattern):
+                            sender_keys_to_delete.append(key)
+                        break
+
             if not raw_data:
                 return Response({"error": "Original cached message not found"}, status=status.HTTP_404_NOT_FOUND)
             
@@ -419,6 +444,8 @@ class UpdateCacheScopeAPIView(APIView):
                 # Agent -> Global
                 r_db6.set(global_key, json.dumps(data), ex=30*24*60*60) # 30 days
                 r_db2.delete(agent_key)
+                if sender_keys_to_delete:
+                    for k in sender_keys_to_delete: r_db6.delete(k)
             elif new_scope == 'special':
                 # Special Scope (Requires agent to be special)
                 if not agent.is_special_agent:
@@ -427,6 +454,8 @@ class UpdateCacheScopeAPIView(APIView):
                 # DB 2 (same as agent) but 1 year TTL
                 r_db2.set(agent_key, json.dumps(data), ex=365*24*60*60) 
                 r_db6.delete(global_key)
+                if sender_keys_to_delete:
+                    for k in sender_keys_to_delete: r_db6.delete(k)
             else:
                 # Global -> Agent
                 # ১. এজেন্টে সেভ করা
@@ -434,6 +463,8 @@ class UpdateCacheScopeAPIView(APIView):
                 
                 # ২. গ্লোবাল থেকে ডিলিট করা
                 r_db6.delete(global_key)
+                if sender_keys_to_delete:
+                    for k in sender_keys_to_delete: r_db6.delete(k)
                 
             return Response({"status": "success", "message": f"Cache scope updated to {new_scope}"}, status=status.HTTP_200_OK)
             

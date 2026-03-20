@@ -369,6 +369,7 @@ export default function RankingReportPage() {
                       <option value="agent_specific">Agent Only</option>
                       <option value="global">Global</option>
                       {isSpecialAgent && <option value="special">Special Agent</option>}
+                      {item.current_scope === 'sender_specific' && <option value="sender_specific">Sender Specific</option>}
                     </select>
                   </div>
                 </div>
@@ -426,12 +427,15 @@ export default function RankingReportPage() {
                               ? 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:border-indigo-300'
                               : item.current_scope === 'special'
                                 ? 'bg-amber-50 text-amber-700 border-amber-100 hover:border-amber-300'
-                                : 'bg-pink-50 text-pink-700 border-pink-100 hover:border-pink-300'
+                                : item.current_scope === 'sender_specific'
+                                  ? 'bg-purple-50 text-purple-700 border-purple-100 hover:border-purple-300'
+                                  : 'bg-pink-50 text-pink-700 border-pink-100 hover:border-pink-300'
                             } ${(!isStaff || isUpdatingScope === item.msg_hash) ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:scale-105'}`}
                         >
                           <option value="agent_specific">Agent Specific</option>
                           <option value="global">Global Sync</option>
                           {isSpecialAgent && <option value="special">Specialized</option>}
+                          {item.current_scope === 'sender_specific' && <option value="sender_specific">Sender Specific</option>}
                         </select>
                       </td>
                       <td className="px-8 py-6 text-right">
