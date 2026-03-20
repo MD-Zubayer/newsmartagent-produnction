@@ -113,6 +113,8 @@ class AgentAISerializer(serializers.ModelSerializer):
             'selected_model': {'required': False, 'allow_null': True},
             'special_agent_status': {'read_only': True},
             'widget_key': {'read_only': True},
+            'access_token': {'required': False, 'allow_null': True, 'write_only': True},
+            'page_id': {'required': False, 'allow_null': True},
         }
 
     def validate_platform(self, value):
@@ -136,6 +138,9 @@ class AgentAISerializer(serializers.ModelSerializer):
         # Generate widget key if platform is web_widget
         if validated_data.get('platform') == 'web_widget':
             validated_data['widget_key'] = str(uuid.uuid4())
+            # Ensure page_id is unique even if not provided
+            if not validated_data.get('page_id'):
+                validated_data['page_id'] = f"widget_{validated_data['widget_key']}"
 
         agent = AgentAI.objects.create(user=user, **validated_data)
         
@@ -171,6 +176,8 @@ class AgentAISerializer(serializers.ModelSerializer):
         # Generate widget key if changing to web_widget and doesn't exist
         if validated_data.get('platform') == 'web_widget' and not instance.widget_key:
             validated_data['widget_key'] = str(uuid.uuid4())
+            if not validated_data.get('page_id') and not instance.page_id:
+                validated_data['page_id'] = f"widget_{validated_data['widget_key']}"
 
         agent = super().update(instance, validated_data)
         

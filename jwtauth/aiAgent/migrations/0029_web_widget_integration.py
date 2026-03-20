@@ -2,6 +2,7 @@
 
 from django.db import migrations, models
 import django.db.models.deletion
+import django_cryptography.fields
 
 
 class Migration(migrations.Migration):
@@ -20,6 +21,16 @@ class Migration(migrations.Migration):
             model_name='agentai',
             name='platform',
             field=models.CharField(choices=[('whatsapp', 'WhatsApp'), ('messenger', 'Messenger'), ('facebook_comment', 'Facebook Comment'), ('web_widget', 'Web Chat Widget')], max_length=20),
+        ),
+        migrations.AlterField(
+            model_name='agentai',
+            name='access_token',
+            field=django_cryptography.fields.encrypt(models.TextField(blank=True, null=True)),
+        ),
+        migrations.AlterField(
+            model_name='agentai',
+            name='page_id',
+            field=models.CharField(blank=True, db_index=True, max_length=100, null=True, unique=True),
         ),
         migrations.CreateModel(
             name='WidgetSettings',

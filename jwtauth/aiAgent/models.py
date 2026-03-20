@@ -49,11 +49,11 @@ class AgentAI(models.Model):
         null=True, 
         blank=True
     )
-    page_id = models.CharField(max_length=100, unique=True, db_index=True, blank=True)
+    page_id = models.CharField(max_length=100, unique=True, db_index=True, blank=True, null=True)
     # Primary identifier for WhatsApp agents (phone number without country formatting assumptions)
     number = models.CharField(max_length=50, blank=True, null=True, db_index=True)
 
-    access_token = encrypt(models.TextField())
+    access_token = encrypt(models.TextField(blank=True, null=True))
     webhook_secret = models.CharField(max_length=255, blank=True)
     widget_key = models.CharField(max_length=100, unique=True, blank=True, null=True, db_index=True)
 
