@@ -1,3 +1,4 @@
+from django.contrib import admin
 from .models import AgentSettings, GlobalSettings, AgentAISettings
 
 @admin.register(AgentAISettings)

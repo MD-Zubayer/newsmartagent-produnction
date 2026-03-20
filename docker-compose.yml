@@ -1,5 +1,11 @@
 
 services:
+  app:
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
   db:
     image: pgvector/pgvector:pg16
     container_name: newsmartagent-db
