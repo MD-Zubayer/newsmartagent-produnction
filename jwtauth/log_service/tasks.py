@@ -10,8 +10,26 @@ import subprocess
 import datetime
 from celery import shared_task
 from django.conf import settings
+from django.core.mail import send_mail
 
 logger = logging.getLogger(__name__)
+
+def send_upload_notification(subject, message_body):
+    """
+    আপনার ইমেইলে নোটিফিকেশন পাঠানোর জন্য হেল্পার ফাংশন।
+    """
+    try:
+        recipient_email = getattr(settings, 'EMAIL_HOST_USER', 'newsmartagentbd@gmail.com')
+        send_mail(
+            subject=subject,
+            message=message_body,
+            from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', recipient_email),
+            recipient_list=[recipient_email],
+            fail_silently=True,
+        )
+        logger.info("📧 Email notification sent successfully!")
+    except Exception as e:
+        logger.error(f"Failed to send email notification: {e}")
 
 
 @shared_task(bind=True, name='log_service.sync_logs_to_drive')
@@ -114,10 +132,21 @@ def backup_db_to_drive():
             os.remove(local_backup_path)
 
         logger.info(f"✅ Database backup successful: {backup_filename}")
+        
+        # ইমেইল নোটিফিকেশন প্রেরণ
+        send_upload_notification(
+            subject="✅ [Success] Database Backup to Google Drive",
+            message_body=f"আপনার New Smart Agent-এর Database ব্যাকআপ (postgres) সফলভাবে গুগল ড্রাইভে আপলোড হয়েছে।\n\nফাইল: {backup_filename}\nসময়: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+        
         return {'status': 'done', 'file_id': file_id}
 
     except Exception as e:
         logger.error(f"Database backup error: {e}", exc_info=True)
+        send_upload_notification(
+            subject="❌ [Error] Database Backup Failed",
+            message_body=f"আপনার Database ব্যাকআপ প্রক্রিয়াটি ব্যর্থ হয়েছে।\n\nError Message:\n{str(e)}"
+        )
         return {'status': 'error', 'reason': str(e)}
 
 
@@ -172,8 +201,19 @@ def backup_redis_to_drive():
             os.remove(local_backup_path)
 
         logger.info(f"✅ Redis backup successful: {backup_filename}")
+        
+        # ইমেইল নোটিফিকেশন প্রেরণ
+        send_upload_notification(
+            subject="✅ [Success] Redis Backup to Google Drive",
+            message_body=f"আপনার New Smart Agent-এর Redis Database ব্যাকআপ (RDB Snapshot) সফলভাবে গুগল ড্রাইভে আপলোড হয়েছে।\n\nফাইল: {backup_filename}\nসময়: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+        
         return {'status': 'done', 'file_id': file_id}
 
     except Exception as e:
         logger.error(f"Redis backup error: {e}", exc_info=True)
+        send_upload_notification(
+            subject="❌ [Error] Redis Backup Failed",
+            message_body=f"আপনার Redis ব্যাকআপ প্রক্রিয়াটি ব্যর্থ হয়েছে।\n\nError Message:\n{str(e)}"
+        )
         return {'status': 'error', 'reason': str(e)}
