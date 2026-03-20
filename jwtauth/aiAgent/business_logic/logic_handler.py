@@ -642,3 +642,54 @@ def handle_public_comment_logic(data, agent_config, r):
             deliver_public_comment_reply(comment_id, reply_text, agent_config.access_token)
             return True, "public_reply_sent"
     return True, "continue"
+
+def handle_ai_response(agent_id, sender_id, message_text, platform='web_widget'):
+    """
+    Unified synchronous handler for direct AI responses (like Web Widget).
+    Handles context, RAG, AI call, token deduction, and logging.
+    """
+    start_time = time.time()
+    try:
+        agent_config = AgentAI.objects.get(id=agent_id)
+        user_profile = agent_config.user.profile
+        
+        # 1. Token Check
+        effective_model = agent_config.selected_model.model_id if agent_config.selected_model else agent_config.ai_model
+        if not check_token_availability(user_profile, effective_model):
+            return "Sorry, the agent has run out of tokens. Please contact the site owner."
+
+        # 2. Context & RAG
+        order_instr = get_order_instructions(agent_config.user)
+        sheet_ctx, extra_instr, query_vector = perform_rag_search(
+            agent_config, message_text, "", order_instr
+        )
+        system_instruction, history, current_msg = build_ai_context(
+            agent_config, sender_id, message_text, extra_instr, sheet_ctx, platform=platform
+        )
+
+        # 3. AI Call
+        ai_data = get_ai_response(agent_config, system_instruction, history, current_msg)
+        reply = ai_data.get('reply', 'System busy.')
+        success = ai_data.get('success', False)
+        total_tokens = ai_data.get('total_tokens', 0)
+
+        if success:
+            # 4. Token Deduction
+            deduct_user_tokens(user_profile, total_tokens, effective_model)
+            
+            # 5. Save Messages
+            save_message(agent_config, sender_id, message_text, 'user', platform=platform)
+            save_message(agent_config, sender_id, reply, 'assistant', tokens=total_tokens, platform=platform)
+            
+            # 6. Memory Update
+            handle_smart_memory_update(agent_config, sender_id, message_text)
+
+        # 7. Token Usage Log
+        duration = int((time.time() - start_time) * 1000)
+        log_token_usage(agent_config, sender_id, ai_data, duration, 'widget_direct', platform=platform)
+
+        return reply
+
+    except Exception as e:
+        logger.error(f"Error in handle_ai_response: {e}", exc_info=True)
+        return "I'm sorry, I'm having trouble processing your request right now."

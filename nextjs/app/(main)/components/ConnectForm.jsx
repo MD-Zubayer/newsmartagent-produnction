@@ -79,6 +79,16 @@ export default function IntegrationManager() {
       devLink: "https://t.me/BotFather",
       btnText: "BotFather",
       description: "Deploy secure bots across the world's most versatile cloud messenger."
+    },
+    web_widget: {
+      id: "web_widget",
+      name: "Web Widget",
+      icon: <FaCode />,
+      color: "from-amber-500 via-orange-500 to-red-600",
+      iconBg: "bg-amber-500",
+      devLink: "/dashboard/connect/widget-customize",
+      btnText: "Customize Widget",
+      description: "Embed a high-performance AI chat widget on any website in seconds."
     }
   };
 
@@ -237,6 +247,29 @@ export default function IntegrationManager() {
             {selectedPlatform.id === "whatsapp" && (
               <div className="pt-16 md:pt-24 border-t border-slate-100 animate-in slide-in-from-bottom-8 duration-1000">
                 <WhatsAppConnector />
+              </div>
+            )}
+
+            {/* Platform Specific: Web Widget */}
+            {selectedPlatform.id === "web_widget" && (
+              <div className="pt-16 md:pt-24 border-t border-slate-100 animate-in slide-in-from-bottom-8 duration-1000">
+                <div className="text-center py-10 md:py-20 space-y-8">
+                  <div className="w-24 h-24 bg-amber-50 rounded-[2.5rem] flex items-center justify-center mx-auto text-amber-600 shadow-inner">
+                    <FaCode size={48} className="animate-pulse" />
+                  </div>
+                  <div className="space-y-4">
+                    <h3 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter italic uppercase">Web Chat Hub</h3>
+                    <p className="text-slate-500 font-medium max-w-sm mx-auto opacity-80 leading-relaxed">
+                      Create and customize your embeddable AI widget. No API keys required.
+                    </p>
+                  </div>
+                  <Link 
+                    href="/dashboard/connect/widget-customize"
+                    className="inline-flex items-center gap-4 bg-amber-600 text-white px-10 py-5 rounded-[2rem] font-black uppercase tracking-widest shadow-xl hover:bg-amber-700 transition-all active:scale-95"
+                  >
+                    Go to Customizer <span className="text-xl">→</span>
+                  </Link>
+                </div>
               </div>
             )}
 

@@ -27,7 +27,8 @@ class AgentAI(models.Model):
     PLATFORM_CHOICES = [
         ('whatsapp', 'WhatsApp'),
         ('messenger', 'Messenger'),
-        ('facebook_comment', 'Facebook Comment')
+        ('facebook_comment', 'Facebook Comment'),
+        ('web_widget', 'Web Chat Widget')
     ]
     AI_AGENT_CATEGORIES = (
     ('business', 'Business / Commercial'),
@@ -54,6 +55,7 @@ class AgentAI(models.Model):
 
     access_token = encrypt(models.TextField())
     webhook_secret = models.CharField(max_length=255, blank=True)
+    widget_key = models.CharField(max_length=100, unique=True, blank=True, null=True, db_index=True)
 
     system_prompt = models.TextField()
     greeting_message = models.TextField(blank=True, null=True)
@@ -278,3 +280,26 @@ class Contact(models.Model):
 
     def __str__(self):
         return f"{self.name or self.identifier} ({self.platform}) - Agent: {self.agent.id}"
+
+
+class WidgetSettings(models.Model):
+    agent = models.OneToOneField(AgentAI, on_delete=models.CASCADE, related_name='widget_settings')
+    
+    # Appearance
+    primary_color = models.CharField(max_length=7, default='#4f46e5')
+    bubble_icon = models.CharField(max_length=50, default='chat')
+    widget_position = models.CharField(max_length=20, default='bottom-right') # bottom-left, bottom-right
+    
+    # Text
+    header_title = models.CharField(max_length=100, default='Chat with AI')
+    header_subtitle = models.CharField(max_length=100, default='Online | Powered by Smart Agent')
+    placeholder_text = models.CharField(max_length=100, default='Type a message...')
+    
+    # Advanced
+    is_enabled = models.BooleanField(default=True)
+    allowed_domains = models.TextField(blank=True, help_text="Comma separated domains (e.g. example.com). Leave blank for all.")
+    
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Widget Settings for {self.agent.name}"

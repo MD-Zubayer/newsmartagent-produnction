@@ -1,12 +1,22 @@
 from rest_framework import serializers
 from aiAgent.models import AgentAI, TokenUsageLog, AIProviderModel, Contact
 from chat.models import Message
+import uuid
 
 
 class AIProviderModelSerializer(serializers.ModelSerializer):
     class Meta:
         model = AIProviderModel # আপনার নতুন তৈরি করা মডেল
         fields = ['id', 'name', 'model_id', 'provider']
+
+
+class WidgetSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AgentAI.widget_settings.related.model # WidgetSettings
+        fields = [
+            'primary_color', 'bubble_icon', 'widget_position', 
+            'header_title', 'header_subtitle', 'placeholder_text', 'is_enabled', 'allowed_domains'
+        ]
 
 
 
@@ -21,6 +31,7 @@ class AgentAIListSerializer(serializers.ModelSerializer):
     max_tokens = serializers.IntegerField(source='get_settings.max_tokens', read_only=True)
     skip_history = serializers.BooleanField(source='get_settings.skip_history', read_only=True)
     history_skip_keywords = serializers.CharField(source='get_settings.history_skip_keywords', read_only=True)
+    widget_settings = WidgetSettingsSerializer(read_only=True)
     
     class Meta:
         model = AgentAI
@@ -44,7 +55,9 @@ class AgentAIListSerializer(serializers.ModelSerializer):
             'created_at',
             'access_token',
             'is_special_agent',
-            'special_agent_status'
+            'special_agent_status',
+            'widget_key',
+            'widget_settings'
         ]
         read_only_fields = ['id', 'created_at', 'token_expires_at', 'special_agent_status']
         extra_kwargs = {
@@ -66,6 +79,7 @@ class AgentAISerializer(serializers.ModelSerializer):
     max_tokens = serializers.IntegerField(required=False)
     skip_history = serializers.BooleanField(required=False)
     history_skip_keywords = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    widget_settings = WidgetSettingsSerializer(required=False)
 
     class Meta:
         model = AgentAI
@@ -88,7 +102,9 @@ class AgentAISerializer(serializers.ModelSerializer):
             'token_expires_at',
             'is_active',
             'is_special_agent',
-            'special_agent_status'
+            'special_agent_status',
+            'widget_key',
+            'widget_settings'
         ]
         extra_kwargs = {
             'access_token': {'write_only': True},     # শুধু write করা যাবে, response-এ দেখাবে না
@@ -96,6 +112,7 @@ class AgentAISerializer(serializers.ModelSerializer):
             'token_expires_at': {'required': False},
             'selected_model': {'required': False, 'allow_null': True},
             'special_agent_status': {'read_only': True},
+            'widget_key': {'read_only': True},
         }
 
     def validate_platform(self, value):
@@ -114,7 +131,12 @@ class AgentAISerializer(serializers.ModelSerializer):
         max_tokens = validated_data.pop('max_tokens', 200)
         skip_history = validated_data.pop('skip_history', False)
         history_skip_keywords = validated_data.pop('history_skip_keywords', '')
+        widget_settings_data = validated_data.pop('widget_settings', {})
         
+        # Generate widget key if platform is web_widget
+        if validated_data.get('platform') == 'web_widget':
+            validated_data['widget_key'] = str(uuid.uuid4())
+
         agent = AgentAI.objects.create(user=user, **validated_data)
         
         from settings.models import AgentAISettings
@@ -128,6 +150,14 @@ class AgentAISerializer(serializers.ModelSerializer):
                 'history_skip_keywords': history_skip_keywords
             }
         )
+        
+        # Create WidgetSettings if platform is web_widget
+        from aiAgent.models import WidgetSettings
+        WidgetSettings.objects.get_or_create(
+            agent=agent,
+            defaults=widget_settings_data
+        )
+        
         return agent
 
     def update(self, instance, validated_data):
@@ -135,7 +165,13 @@ class AgentAISerializer(serializers.ModelSerializer):
         for field in ['history_limit', 'temperature', 'max_tokens', 'skip_history', 'history_skip_keywords']:
             if field in validated_data:
                 settings_data[field] = validated_data.pop(field)
-                
+        
+        widget_settings_data = validated_data.pop('widget_settings', None)
+        
+        # Generate widget key if changing to web_widget and doesn't exist
+        if validated_data.get('platform') == 'web_widget' and not instance.widget_key:
+            validated_data['widget_key'] = str(uuid.uuid4())
+
         agent = super().update(instance, validated_data)
         
         if settings_data:
@@ -144,6 +180,14 @@ class AgentAISerializer(serializers.ModelSerializer):
                 agent=agent,
                 defaults=settings_data
             )
+        
+        if widget_settings_data:
+            from aiAgent.models import WidgetSettings
+            WidgetSettings.objects.update_or_create(
+                agent=agent,
+                defaults=widget_settings_data
+            )
+            
         return agent
 
 

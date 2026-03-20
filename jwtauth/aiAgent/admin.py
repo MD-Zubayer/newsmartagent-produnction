@@ -1,7 +1,7 @@
 # aiAgent/admin.py
 from django.contrib import admin
 from unfold.admin import ModelAdmin
-from .models import AgentAI,MissingRequirement, Contact
+from .models import AgentAI,MissingRequirement, Contact, WidgetSettings
 from django.utils.html import format_html
 from .models import UserMemory, AgentAI
 import json
@@ -74,12 +74,18 @@ class AgentAISettingsInline(admin.StackedInline):
     verbose_name_plural = 'Agent AI Settings'
     extra = 1
 
+class WidgetSettingsInline(admin.StackedInline):
+    model = WidgetSettings
+    can_delete = False
+    verbose_name_plural = 'Web Widget Settings'
+    extra = 1
+
 @admin.register(AgentAI)
 class AgentAIAdmin(ModelAdmin):
-    list_display = [ 'id', 'name', 'user', 'platform', 'number', 'page_id', 'ai_agent_type', 'special_agent_status', 'is_special_agent', 'is_active','custom_keywords', 'created_at']
+    list_display = [ 'id', 'name', 'user', 'platform', 'number', 'page_id', 'widget_key', 'ai_agent_type', 'special_agent_status', 'is_special_agent', 'is_active','custom_keywords', 'created_at']
     list_filter = ['platform', 'special_agent_status', 'is_active', 'is_special_agent', 'user', 'ai_agent_type',]
     search_fields = ['name', 'page_id', 'number', 'user__username']
-    inlines = [AgentAISettingsInline]
+    inlines = [AgentAISettingsInline, WidgetSettingsInline]
 
     def created_short(self, obj):
         return obj.created_at.strftime('%Y-%m-%d %H:%M')
@@ -516,3 +522,8 @@ class ContactAdmin(ModelAdmin):
     list_filter = ['platform', 'is_auto_reply_enabled', 'agent', 'platform']
     search_fields = ['identifier', 'name', 'push_name']
     readonly_fields = ['created_at', 'updated_at']
+@admin.register(WidgetSettings)
+class WidgetSettingsAdmin(ModelAdmin):
+    list_display = ['agent', 'primary_color', 'widget_position', 'is_enabled', 'updated_at']
+    list_filter = ['is_enabled', 'widget_position']
+    search_fields = ['agent__name', 'header_title']
