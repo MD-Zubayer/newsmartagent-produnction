@@ -121,7 +121,9 @@ services:
       - "80:80"
     volumes:
       - static_volume:/app/static
+      - ./jwtauth/settings/static/widget.js:/app/static/widget.js:ro
       - media_volume:/app/media
+
     depends_on:
        - backend
        - frontend
