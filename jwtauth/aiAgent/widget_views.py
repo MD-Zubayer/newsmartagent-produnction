@@ -92,6 +92,28 @@ class WidgetIconUploadView(APIView):
 
         try:
             from django.core.files.storage import default_storage
+            from django.conf import settings as django_settings
+
+            # Auto-create the bucket if missing (MinIO/S3)
+            try:
+                import boto3
+                bucket_name = getattr(django_settings, 'AWS_STORAGE_BUCKET_NAME', None)
+                endpoint_url = getattr(django_settings, 'AWS_S3_ENDPOINT_URL', None)
+                if bucket_name and endpoint_url:
+                    s3 = boto3.client(
+                        's3',
+                        endpoint_url=endpoint_url,
+                        aws_access_key_id=getattr(django_settings, 'AWS_ACCESS_KEY_ID', ''),
+                        aws_secret_access_key=getattr(django_settings, 'AWS_SECRET_ACCESS_KEY', ''),
+                    )
+                    try:
+                        s3.head_bucket(Bucket=bucket_name)
+                    except Exception:
+                        s3.create_bucket(Bucket=bucket_name)
+                        logger.info(f"Created MinIO bucket: {bucket_name}")
+            except Exception as bucket_err:
+                logger.warning(f"Could not auto-create bucket: {bucket_err}")
+
             # Save file to storage backend (MinIO in production)
             saved_path = default_storage.save(filename, icon_file)
             icon_url = default_storage.url(saved_path)
