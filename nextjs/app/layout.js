@@ -221,7 +221,7 @@ export default function RootLayout({ children }) {
 
 
 {/* <!-- New Smart Agent Widget --> */}
-<script src="https://newsmartagent.com/static/widget.js" 
+<script src="https://newsmartagent.com/widget.js" 
   data-key="3a7d8586-a1eb-4c93-907f-bf8ac128bfa8" 
   defer></script>
 {/* <!-- End New Smart Agent Widget --> */}
