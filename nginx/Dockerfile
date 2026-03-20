@@ -5,5 +5,5 @@ RUN rm /etc/nginx/conf.d/default.conf
 COPY nginx.conf /etc/nginx/conf.d/
 
 # widget.js সরাসরি image এ bake করা
-RUN mkdir -p /app/static
-COPY widget.js /app/static/widget.js
+RUN mkdir -p /app/widget
+COPY widget.js /app/widget/widget.js
