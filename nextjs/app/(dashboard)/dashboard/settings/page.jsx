@@ -463,6 +463,48 @@ export default function SettingsPage() {
                               <p className="text-[10px] text-gray-400 ml-2 italic underline decoration-indigo-200/50">Only skips history if one of these keywords is found in the user's message.</p>
                             </div>
                           )}
+
+                          <div className="mt-4 pt-4 border-t border-slate-200">
+                            <h5 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3 ml-1">AI Parameters</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">History Limit</label>
+                                <div className="flex gap-2">
+                                  <input 
+                                    type="number"
+                                    value={agent.history_limit ?? ''}
+                                    onChange={(e) => setAgents(prev => prev.map(a => a.id === agent.id ? { ...a, history_limit: e.target.value } : a))}
+                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 shadow-sm"
+                                  />
+                                  <button onClick={() => handleAgentToggle(agent.id, 'history_limit', parseInt(agent.history_limit) || 3, true)} className="px-3 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold shadow-md hover:bg-slate-900 transition-all">Save</button>
+                                </div>
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Temperature</label>
+                                <div className="flex gap-2">
+                                  <input 
+                                    type="number" step="0.1"
+                                    value={agent.temperature ?? ''}
+                                    onChange={(e) => setAgents(prev => prev.map(a => a.id === agent.id ? { ...a, temperature: e.target.value } : a))}
+                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 shadow-sm"
+                                  />
+                                  <button onClick={() => handleAgentToggle(agent.id, 'temperature', parseFloat(agent.temperature) || 0.7, true)} className="px-3 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold shadow-md hover:bg-slate-900 transition-all">Save</button>
+                                </div>
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Max Tokens</label>
+                                <div className="flex gap-2">
+                                  <input 
+                                    type="number"
+                                    value={agent.max_tokens ?? ''}
+                                    onChange={(e) => setAgents(prev => prev.map(a => a.id === agent.id ? { ...a, max_tokens: e.target.value } : a))}
+                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 shadow-sm"
+                                  />
+                                  <button onClick={() => handleAgentToggle(agent.id, 'max_tokens', parseInt(agent.max_tokens) || 200, true)} className="px-3 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold shadow-md hover:bg-slate-900 transition-all">Save</button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     ))}

@@ -16,6 +16,12 @@ class AgentAIListSerializer(serializers.ModelSerializer):
     
     """
     selected_model_detail = AIProviderModelSerializer(source='selected_model', read_only=True)
+    history_limit = serializers.IntegerField(source='get_settings.history_limit', read_only=True)
+    temperature = serializers.FloatField(source='get_settings.temperature', read_only=True)
+    max_tokens = serializers.IntegerField(source='get_settings.max_tokens', read_only=True)
+    skip_history = serializers.BooleanField(source='get_settings.skip_history', read_only=True)
+    history_skip_keywords = serializers.CharField(source='get_settings.history_skip_keywords', read_only=True)
+    
     class Meta:
         model = AgentAI
         fields = [
@@ -28,6 +34,11 @@ class AgentAIListSerializer(serializers.ModelSerializer):
             'greeting_message',
             'ai_model',
             'selected_model', 'selected_model_detail',
+            'history_limit',
+            'temperature',
+            'max_tokens',
+            'skip_history',
+            'history_skip_keywords',
             'token_expires_at',
             'is_active',
             'created_at',
@@ -46,6 +57,12 @@ class AgentAISerializer(serializers.ModelSerializer):
     """
     create & update AgentAI model
     """
+    history_limit = serializers.IntegerField(required=False)
+    temperature = serializers.FloatField(required=False)
+    max_tokens = serializers.IntegerField(required=False)
+    skip_history = serializers.BooleanField(required=False)
+    history_skip_keywords = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
     class Meta:
         model = AgentAI
         fields = [
@@ -59,6 +76,11 @@ class AgentAISerializer(serializers.ModelSerializer):
             'greeting_message',
             'ai_model',
             'selected_model',
+            'history_limit',
+            'temperature',
+            'max_tokens',
+            'skip_history',
+            'history_skip_keywords',
             'token_expires_at',
             'is_active',
             'is_special_agent',
@@ -82,7 +104,43 @@ class AgentAISerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         user = self.context['request'].user
-        return AgentAI.objects.create(user=user, **validated_data)
+        
+        history_limit = validated_data.pop('history_limit', 3)
+        temperature = validated_data.pop('temperature', 0.7)
+        max_tokens = validated_data.pop('max_tokens', 200)
+        skip_history = validated_data.pop('skip_history', False)
+        history_skip_keywords = validated_data.pop('history_skip_keywords', '')
+        
+        agent = AgentAI.objects.create(user=user, **validated_data)
+        
+        from settings.models import AgentAISettings
+        AgentAISettings.objects.update_or_create(
+            agent=agent,
+            defaults={
+                'history_limit': history_limit,
+                'temperature': temperature,
+                'max_tokens': max_tokens,
+                'skip_history': skip_history,
+                'history_skip_keywords': history_skip_keywords
+            }
+        )
+        return agent
+
+    def update(self, instance, validated_data):
+        settings_data = {}
+        for field in ['history_limit', 'temperature', 'max_tokens', 'skip_history', 'history_skip_keywords']:
+            if field in validated_data:
+                settings_data[field] = validated_data.pop(field)
+                
+        agent = super().update(instance, validated_data)
+        
+        if settings_data:
+            from settings.models import AgentAISettings
+            AgentAISettings.objects.update_or_create(
+                agent=agent,
+                defaults=settings_data
+            )
+        return agent
 
 
 
