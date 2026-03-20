@@ -12,7 +12,7 @@ import os
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_BUBBLE_ICON_URL = 'https://newsmartagent.com/newsmartagent_ai_logo.jpeg'
+DEFAULT_BUBBLE_ICON_URL = '/newsmartagent_ai_logo.jpeg'
 
 
 class WidgetConfigView(APIView):
@@ -29,9 +29,20 @@ class WidgetConfigView(APIView):
         widget_settings, _ = WidgetSettings.objects.get_or_create(agent=agent)
         
         settings_data = WidgetSettingsSerializer(widget_settings).data
-        # Resolve effective icon URL (fallback to default logo)
-        settings_data['effective_icon_url'] = widget_settings.bubble_icon_url or DEFAULT_BUBBLE_ICON_URL
+        
+        # Build absolute URLs for external consumption (the widget script)
+        request_host = request.get_host()
+        protocol = 'https' if request.is_secure() or request.headers.get('X-Forwarded-Proto') == 'https' else 'http'
+        base_url = f"{protocol}://{request_host}"
 
+        raw_icon_url = widget_settings.bubble_icon_url or DEFAULT_BUBBLE_ICON_URL
+        if raw_icon_url.startswith('/'):
+            effective_icon_url = f"{base_url}{raw_icon_url}"
+        else:
+            effective_icon_url = raw_icon_url
+
+        settings_data['effective_icon_url'] = effective_icon_url
+        
         # New fields for frontend widget script
         settings_data['bubble_roundness'] = widget_settings.bubble_roundness
         settings_data['show_bubble_background'] = widget_settings.show_bubble_background
@@ -126,7 +137,7 @@ class WidgetIconUploadView(APIView):
             # This happens if AWS_S3_CUSTOM_DOMAIN is not correctly picked up.
             minio_ext = getattr(django_settings, 'MINIO_EXTERNAL_ENDPOINT', None) or \
                         os.environ.get('MINIO_EXTERNAL_ENDPOINT', '')
-            if minio_ext and ('localhost' in icon_url or 'backend' in icon_url or 'newsmartagent-minio' in icon_url):
+            if minio_ext and ('localhost' in icon_url or 'backend' in icon_url or 'newsmartagent-minio' in icon_url or '://minio' in icon_url):
                 # Manual fix to ensure external access
                 base_ext = minio_ext.rstrip('/')
                 bucket = getattr(django_settings, 'AWS_STORAGE_BUCKET_NAME', 'newsmartagent-media')

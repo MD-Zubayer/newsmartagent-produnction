@@ -11,7 +11,7 @@ import Link from "next/link";
 import api from "@/lib/api";
 import { toast } from "react-hot-toast";
 
-const DEFAULT_ICON = "https://newsmartagent.com/newsmartagent_ai_logo.jpeg";
+const DEFAULT_ICON = "/newsmartagent_ai_logo.jpeg";
 const POSITIONS = ['bottom-right', 'bottom-left', 'top-right', 'top-left'];
 const SIZE_PRESETS = [
   { label: 'Small', value: 48 },
