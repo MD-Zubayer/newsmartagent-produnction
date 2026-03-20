@@ -81,10 +81,15 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                 skip_embedding = True
                 logger.info("embedding skipped due to length < 3.")
             else:
-                matched_embedding_skips = check_keyword_match(text, 'embedding_skip')
-                if matched_embedding_skips:
-                    skip_embedding = True
-                    logger.info(f"Keyword '{matched_embedding_skips[0]}' found. Skipping embedding.")
+                from aiAgent.models import SmartKeyword
+                db_skip_keywords = SmartKeyword.objects.filter(category='embedding_skip').values_list('text', flat=True)
+                skip_margin = 6
+                text_len = len(text)
+                for kw in db_skip_keywords:
+                    if kw.lower() in text.lower() and abs(text_len - len(kw)) <= skip_margin:
+                        skip_embedding = True
+                        logger.info(f"Keyword '{kw}' found via substring margin guard. Skipping embedding.")
+                        break
         
             if not skip_embedding:
                 logger.info(f"Generating Gemini Embedding inside perform_rag_search for '{text[:20]}'")
