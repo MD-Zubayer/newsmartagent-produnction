@@ -1,11 +1,10 @@
 
 services:
-  app:
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+  x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
   db:
     image: pgvector/pgvector:pg16
     container_name: newsmartagent-db
@@ -22,6 +21,10 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     command: postgres -c shared_buffers=4GB -c effective_cache_size=10GB -c work_mem=64MB -c maintenance_work_mem=1GB
     restart: always
+    logging: *default-logging
+    deploy:
+      update_config:
+        order: start-first
     networks:
       - smart-network
       
@@ -29,6 +32,10 @@ services:
     image: redis/redis-stack-server:latest
     container_name: newsmartagent-redis
     restart: always
+    logging: *default-logging
+    deploy:
+      update_config:
+        order: start-first
     networks:
       smart-network:
         aliases:
@@ -74,6 +81,8 @@ services:
     depends_on:
       - db
       - redis
+    logging: *default-logging
+    restart: always
     deploy:
       update_config:
         order: start-first # জিরো ডাউনটাইম নিশ্চিত করবে
@@ -91,6 +100,7 @@ services:
       - NEXT_PUBLIC_BASE_URL=https://newsmartagent.com
       - NEXT_PUBLIC_API_URL=https://newsmartagent.com/api
     restart: always
+    logging: *default-logging
     depends_on:
       - backend
     deploy:
@@ -118,6 +128,7 @@ services:
       update_config:
         order: start-first
     restart: always
+    logging: *default-logging
     networks:
       - smart-network
 
@@ -145,6 +156,11 @@ services:
     networks:
       - smart-network
     restart: always
+    logging: *default-logging
+    deploy:
+      update_config:
+        order: start-first
+
 
   celery_beat:
     build: ./jwtauth
@@ -166,6 +182,11 @@ services:
       - redis
     networks:
       - smart-network
+    logging: *default-logging
+    restart: always
+    deploy:
+      update_config:
+        order: start-first
 
   n8n:
     image: n8nio/n8n:latest
@@ -198,6 +219,7 @@ services:
       update_config:
         order: start-first
     restart: always 
+    logging: *default-logging
     networks:
       - smart-network
   
@@ -215,6 +237,8 @@ services:
       - celery_worker
     networks:
       - smart-network
+    logging: *default-logging
+    restart: always
 
 
   cloudflare-tunnel:
@@ -232,6 +256,7 @@ services:
     volumes:
       - /home/ubuntu/cloudflare-config:/etc/cloudflared:ro
     command: tunnel --config /etc/cloudflared/config.yml run
+    logging: *default-logging
     depends_on:
       - nginx
 
@@ -254,6 +279,10 @@ services:
     depends_on:
       - n8n
     restart: always
+    logging: *default-logging
+    deploy:
+      update_config:
+        order: start-first
     networks:
       - smart-network
 
@@ -269,6 +298,10 @@ services:
       - MINIO_SERVER_URL=https://s3.newsmartagent.com
       - MINIO_BROWSER_REDIRECT_URL=https://minio.newsmartagent.com
     restart: always
+    logging: *default-logging
+    deploy:
+      update_config:
+        order: start-first
     networks:
       - smart-network
 
