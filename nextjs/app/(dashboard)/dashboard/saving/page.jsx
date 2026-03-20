@@ -14,7 +14,7 @@ export default function RankingReportPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [isDeleting, setIsDeleting] = useState(null);
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, msg_hash: null, isProcessing: false });
   const [isUpdatingScope, setIsUpdatingScope] = useState(null);
   const [isRequestingSpecial, setIsRequestingSpecial] = useState(false);
   const [isStaff, setIsStaff] = useState(false);
@@ -108,20 +108,30 @@ export default function RankingReportPage() {
   }, [selectedAgent]);
 
   // ৩. ডিলিট লজিক
-  const handleDelete = async (msg_hash) => {
-    if (!selectedAgent || !confirm("Are you sure you want to delete this message from cache? The next time this message is sent, it will trigger a fresh AI response.")) return;
+  const handleDeleteClick = (msg_hash) => {
+    if (!selectedAgent) return;
+    setDeleteModal({ isOpen: true, msg_hash, isProcessing: false });
+  };
+
+  const confirmDelete = async () => {
+    const { msg_hash } = deleteModal;
+    if (!msg_hash || !selectedAgent) return;
 
     try {
-      setIsDeleting(msg_hash);
+      setDeleteModal(prev => ({ ...prev, isProcessing: true }));
       const agentId = selectedAgent.page_id;
       await api.delete(`/AgentAI/ranking/delete/${agentId}/${msg_hash}/`);
-      toast.success("Message removed from cache successfully");
+      
+      toast.success("Cache cleared!", {
+        icon: '🗑️',
+        style: { borderRadius: '16px', background: '#1e293b', color: '#fff', fontWeight: 'bold' }
+      });
       fetchData(); // Refresh list
     } catch (err) {
       console.error("Delete Error:", err);
       toast.error("Failed to delete message from cache");
     } finally {
-      setIsDeleting(null);
+      setDeleteModal({ isOpen: false, msg_hash: null, isProcessing: false });
     }
   };
 
@@ -335,11 +345,11 @@ export default function RankingReportPage() {
                       <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Query ID: {item.msg_hash?.slice(-6)}</p>
                     </div>
                     <button
-                      onClick={() => handleDelete(item.msg_hash)}
-                      disabled={isDeleting === item.msg_hash}
-                      className="p-2 text-rose-500 bg-rose-50 rounded-lg active:scale-95"
+                      onClick={() => handleDeleteClick(item.msg_hash)}
+                      disabled={deleteModal.isProcessing}
+                      className="p-2 text-rose-500 bg-rose-50 rounded-lg active:scale-95 hover:bg-rose-100 transition-colors"
                     >
-                      {isDeleting === item.msg_hash ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
+                      {deleteModal.isProcessing && deleteModal.msg_hash === item.msg_hash ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
                     </button>
                   </div>
                   
@@ -440,11 +450,11 @@ export default function RankingReportPage() {
                       </td>
                       <td className="px-8 py-6 text-right">
                         <button
-                          onClick={() => handleDelete(item.msg_hash)}
-                          disabled={isDeleting === item.msg_hash}
+                          onClick={() => handleDeleteClick(item.msg_hash)}
+                          disabled={deleteModal.isProcessing}
                           className="w-10 h-10 flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all duration-300 ml-auto"
                         >
-                          {isDeleting === item.msg_hash ? <Loader2 className="animate-spin" size={18} /> : <Trash2 size={18} />}
+                          {deleteModal.isProcessing && deleteModal.msg_hash === item.msg_hash ? <Loader2 className="animate-spin text-rose-500" size={18} /> : <Trash2 size={18} />}
                         </button>
                       </td>
                     </tr>
@@ -456,6 +466,50 @@ export default function RankingReportPage() {
         </div>
 
       </div>
+
+      {/* Beautiful Delete Confirmation Modal */}
+      {deleteModal.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-slate-900/40 backdrop-blur-sm transition-all duration-300">
+          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-slate-100">
+            <div className="bg-gradient-to-b from-rose-50 to-white p-8 flex flex-col items-center">
+              <div className="w-20 h-20 bg-white rounded-full shadow-lg shadow-rose-100 flex items-center justify-center mb-5 border border-rose-50 relative">
+                <div className="absolute inset-0 bg-rose-400 rounded-full animate-ping opacity-20"></div>
+                <AlertTriangle className="text-rose-500 w-10 h-10 relative z-10" />
+              </div>
+              <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Delete Cache?</h3>
+            </div>
+            
+            <div className="px-8 pb-8 text-center bg-white">
+              <p className="text-slate-500 font-bold text-sm leading-relaxed">
+                Are you absolutely sure you want to remove this message from the cache? 
+              </p>
+              <div className="mt-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 inline-block">
+                <p className="text-slate-400 font-black text-[10px] uppercase tracking-widest flex items-center gap-2">
+                  <Zap size={12} className="text-yellow-500" />
+                  Triggers fresh AI response next time
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 flex gap-3 border-t border-slate-100">
+              <button 
+                onClick={() => setDeleteModal({ isOpen: false, msg_hash: null, isProcessing: false })}
+                disabled={deleteModal.isProcessing}
+                className="flex-1 px-4 py-3.5 bg-white text-slate-500 font-black uppercase text-xs tracking-wider rounded-xl border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={confirmDelete}
+                disabled={deleteModal.isProcessing}
+                className="flex-1 px-4 py-3.5 bg-gradient-to-r from-rose-500 to-red-500 hover:from-rose-600 hover:to-red-600 text-white font-black uppercase text-xs tracking-wider rounded-xl shadow-md shadow-rose-200 hover:shadow-lg transition-all flex justify-center items-center gap-2 disabled:opacity-70"
+              >
+                {deleteModal.isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Yes, Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

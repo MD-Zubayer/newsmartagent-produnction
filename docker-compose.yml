@@ -137,7 +137,7 @@ services:
   celery_worker:
     build: ./jwtauth
     container_name: newsmartagent-celery-worker
-    command: celery -A jwtauth worker -Q chat_queue -c 8 --prefetch-multiplier 1 --max-tasks-per-child 1000 --loglevel=info
+    command: celery -A jwtauth worker -Q chat_queue,celery -c 8 --prefetch-multiplier 1 --max-tasks-per-child 1000 --loglevel=info
     volumes:
       - ./jwtauth:/app
       - /home/ubuntu/configs/service_account.json:/app/gdrive_key.json:ro
