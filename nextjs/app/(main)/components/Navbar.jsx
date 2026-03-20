@@ -49,10 +49,10 @@ export default function Navbar() {
   return (
     <>
       <nav
-        className={`fixed top-0 w-full z-[100] transition-all duration-300 ${
+        className={`fixed top-0 w-full z-[100] transition-all duration-500 ${
           scrolled
-          ? 'bg-white/90 backdrop-blur-md border-b border-gray-100 py-3 shadow-sm'
-          : 'bg-transparent py-5'
+          ? 'bg-white/70 glass border-b border-indigo-100/50 py-3 shadow-xl shadow-indigo-500/5'
+          : 'bg-transparent py-6'
         }`}
       >
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
@@ -68,10 +68,10 @@ export default function Navbar() {
                 className="h-20w-20 object-contain rounded-lg"
               />
             </div>
-            <span className="text-xl font-black tracking-tighter flex items-center">
-              <span className="text-indigo-600">New</span>
-              <span className="text-gray-900 ml-1">Smart</span>
-              <span className="text-indigo-600 ml-1">Agent</span>
+            <span className="text-2xl font-black tracking-tighter flex items-center">
+              <span className="text-indigo-600 group-hover:scale-110 transition-transform">New</span>
+              <span className="text-gray-950 ml-1.5">Smart</span>
+              <span className="text-indigo-600 ml-1.5 group-hover:-rotate-3 transition-transform">Agent</span>
             </span>
           </Link>
 
@@ -128,7 +128,7 @@ export default function Navbar() {
             <div className="flex items-center gap-4 border-l border-gray-100 pl-8">
               <Link
                 href="/login"
-                className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-black hover:bg-indigo-700 transition shadow-lg shadow-indigo-100 active:scale-95"
+                className="btn-premium px-8 py-2.5 text-sm"
               >
                 Sign In
               </Link>
