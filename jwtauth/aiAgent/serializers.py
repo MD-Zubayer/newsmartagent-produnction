@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from aiAgent.models import AgentAI, TokenUsageLog, AIProviderModel, Contact
+from aiAgent.models import AgentAI, TokenUsageLog, AIProviderModel, Contact, WidgetSettings
 from chat.models import Message
 import uuid
 
@@ -12,7 +12,7 @@ class AIProviderModelSerializer(serializers.ModelSerializer):
 
 class WidgetSettingsSerializer(serializers.ModelSerializer):
     class Meta:
-        model = AgentAI.widget_settings.related.model # WidgetSettings
+        model = WidgetSettings
         fields = [
             'primary_color', 'bubble_icon', 'bubble_icon_url', 'bubble_size', 'widget_position',
             'header_title', 'header_subtitle', 'placeholder_text', 'is_enabled', 'allowed_domains'
