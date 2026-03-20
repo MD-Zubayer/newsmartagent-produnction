@@ -47,11 +47,13 @@ class WidgetConfigView(APIView):
         settings_data['bubble_roundness'] = widget_settings.bubble_roundness
         settings_data['show_bubble_background'] = widget_settings.show_bubble_background
 
-        return Response({
+        response = Response({
             "name": agent.name,
             "greeting": agent.greeting_message or "Hello! How can I help you?",
             "settings": settings_data
         })
+        response['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return response
 
 
 class WidgetChatView(APIView):

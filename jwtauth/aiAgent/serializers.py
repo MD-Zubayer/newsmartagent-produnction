@@ -191,10 +191,13 @@ class AgentAISerializer(serializers.ModelSerializer):
         
         if widget_settings_data:
             from aiAgent.models import WidgetSettings
+            # Ensure we update or create the settings for this agent
             WidgetSettings.objects.update_or_create(
                 agent=agent,
                 defaults=widget_settings_data
             )
+            # Refresh the instance to ensure the nested serializer picks up the new values
+            agent.refresh_from_db()
             
         return agent
 

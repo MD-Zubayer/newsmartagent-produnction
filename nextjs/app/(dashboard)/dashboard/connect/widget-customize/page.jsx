@@ -176,7 +176,7 @@ export default function WidgetCustomizePage() {
   };
 
   const embedCode = selectedAgent
-    ? `<!-- New Smart Agent Widget -->\n<script src="https://newsmartagent.com/static/widget.js" \n  data-key="${selectedAgent.widget_key}" \n  defer></script>\n<!-- End New Smart Agent Widget -->`
+    ? `<!-- New Smart Agent Widget -->\n<script src="https://newsmartagent.com/widget.js" \n  data-key="${selectedAgent.widget_key}" \n  defer></script>\n<!-- End New Smart Agent Widget -->`
     : "";
 
   if (loading) return (
