@@ -362,7 +362,7 @@ export default function ProfilePage() {
                   <FaShieldAlt className="text-indigo-400" /> Security Node
                 </h3>
                 <p className="text-[10px] font-bold text-slate-400 leading-relaxed mb-8 uppercase tracking-wider">
-                  Your identity is protected by Smart Agent end-to-end encryption. Current Health: <span className="text-emerald-400">{analytics?.summary?.success_rate || "99.9"}%</span>
+                  Your identity is protected by New Smart Agent end-to-end encryption. Current Health: <span className="text-emerald-400">{analytics?.summary?.success_rate || "99.9"}%</span>
                 </p>
                 <div className="space-y-4">
                    <button 
@@ -376,7 +376,7 @@ export default function ProfilePage() {
                    </button>
                    <button 
                     onClick={() => {
-                      if(window.confirm("Are you sure you want to log out of Smart Agent?")) {
+                      if(window.confirm("Are you sure you want to log out of New Smart Agent?")) {
                         api.post('/users/logout/').finally(() => window.location.href = '/signup');
                       }
                     }}

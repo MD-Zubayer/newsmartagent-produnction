@@ -47,6 +47,10 @@ class AgentAIListSerializer(serializers.ModelSerializer):
             'special_agent_status'
         ]
         read_only_fields = ['id', 'created_at', 'token_expires_at', 'special_agent_status']
+        extra_kwargs = {
+            'access_token': {'write_only': True},
+            'webhook_secret': {'write_only': True},
+        }
  
 
 

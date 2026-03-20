@@ -761,6 +761,7 @@ class SendPaymentOTPView(APIView):
         <body>
             <div class="email-container">
                 <div class="header">
+                    <img src="https://newsmartagent.com/newsmartagent.png" width="80" style="margin-bottom: 10px; border-radius: 8px;"><br>
                     <h1>New Smart Agent</h1>
                 </div>
                 <div class="content">
@@ -909,6 +910,7 @@ class SendTransferOTPView(APIView):
         <body>
             <div class="email-container">
                 <div class="header">
+                    <img src="https://newsmartagent.com/newsmartagent.png" width="80" style="margin-bottom: 10px; border-radius: 8px;"><br>
                     <h1>New Smart Agent</h1>
                 </div>
                 <div class="content">

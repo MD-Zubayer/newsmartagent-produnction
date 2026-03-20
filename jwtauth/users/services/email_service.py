@@ -54,7 +54,7 @@ def send_reset_email(to_email, reset_link):
     f"Reset Link: {reset_link}\n\n"
     "⏳ This link expires in 1 hour.\n\n"
     "If you didn’t request this, you can safely ignore this email.\n\n"
-    "— Smart Agent Team"
+    "— New Smart Agent Team"
 )
 
 # প্রিমিয়াম HTML ভার্সন
@@ -76,7 +76,7 @@ def send_reset_email(to_email, reset_link):
               </tr>
             </table>
 
-            <img src="https://yourdomain.com/newsmartagent.jpeg" width="120" style="margin-top: 30px; border-radius: 12px;">
+            <img src="https://newsmartagent.com/newsmartagent.png" width="120" style="margin-top: 30px; border-radius: 12px;">
 
             <h1 style="color:#0f172a; font-size:32px; font-weight:900; line-height:1.2; margin: 30px 0 20px 0; letter-spacing:-1px;">
               Automate Your <span style="color:#4f46e5;">Access</span> <br> & Grow Faster
@@ -95,7 +95,7 @@ def send_reset_email(to_email, reset_link):
             </table>
 
             <p style="color:#94a3b8; font-size:11px; margin-top:40px; text-transform:uppercase; letter-spacing:1.5px; font-weight:800;">
-              🛡 Secured by SSL • ✅ Smart Automation
+              🛡 Secured by SSL • ✅ New Smart Agent
             </p>
           </td>
         </tr>
@@ -135,7 +135,8 @@ def send_verification_email(to_email, verify_link):
           <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width:600px; background-color:#ffffff; border-radius:40px; border: 1px solid #f1f5f9; box-shadow: 0 30px 60px -12px rgba(0,0,0,0.05);">
             <tr>
               <td align="center" style="padding: 50px 40px;">
-                <h1 style="color:#0f172a; font-size:32px; font-weight:900; margin-bottom:20px;">Welcome to <span style="color:#4f46e5;">Smart Agent</span></h1>
+                <img src="https://newsmartagent.com/newsmartagent.png" width="100" style="margin-bottom: 25px; border-radius: 12px;">
+                <h1 style="color:#0f172a; font-size:32px; font-weight:900; margin-bottom:20px;">Welcome to <span style="color:#4f46e5;">New Smart Agent</span></h1>
                 <p style="color:#64748b; font-size:16px; margin-bottom:35px;">অ্যাকাউন্টটি সচল করতে নিচের বাটনে ক্লিক করে আপনার ইমেইল ভেরিফাই করুন।</p>
                 <table border="0" cellspacing="0" cellpadding="0">
                   <tr>
