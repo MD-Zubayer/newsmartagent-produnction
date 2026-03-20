@@ -24,7 +24,9 @@ import {
   FilePlus,
   Trash2,
   X,
-  List as ListIcon 
+  List as ListIcon,
+  Globe,
+  User
 } from "lucide-react";
 
 /* ================= CONFIG ================= */
@@ -211,8 +213,11 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
   
   const [sheetId, setSheetId] = useState(initialSheetId);
   const [sheet, setSheet] = useState({ 
-    rows: 100, cols: 26, data: {}, formatting: {}, title: "Untitled", is_dark_mode: false 
+    rows: 100, cols: 26, data: {}, formatting: {}, title: "Untitled", is_dark_mode: false,
+    scope: 'global', agent: null
   });
+
+  const [agents, setAgents] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const[saving, setSaving] = useState(false);
@@ -261,6 +266,20 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
       }
     };
   },[]);
+
+  /* ---------------- FETCH AGENTS ---------------- */
+  useEffect(() => {
+    const fetchAgents = async () => {
+      try {
+        const res = await api.get('/AgentAI/agents/');
+        // We expect res.data to be the list of agents (AgentAIListSerializer)
+        setAgents(res.data || []);
+      } catch (err) {
+        console.error("Failed to fetch agents", err);
+      }
+    };
+    fetchAgents();
+  }, []);
 
   /* ---------------- AUTO SAVE ON EXIT ---------------- */
   useEffect(() => {
@@ -703,6 +722,42 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
                 ${dark ? "text-slate-100 placeholder-slate-600" : "text-slate-800 placeholder-slate-400"}`}
               placeholder="Untitled spreadsheet"
             />
+          </div>
+
+          <div className="h-8 w-[1px] bg-slate-200 dark:bg-slate-700 mx-1 hidden lg:block"></div>
+
+          {/* SCOPE SELECTOR */}
+          <div className="hidden lg:flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-inner">
+             <div className="flex bg-white dark:bg-slate-900 rounded-xl p-1 shadow-sm border border-slate-100 dark:border-slate-800">
+                <button 
+                  onClick={() => setSheet({...sheet, scope: 'global', agent: null})}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${sheet.scope === 'global' ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"}`}
+                >
+                  <Globe size={14} /> Global
+                </button>
+                <button 
+                  onClick={() => setSheet({...sheet, scope: 'agent_specific'})}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${sheet.scope === 'agent_specific' ? "bg-purple-600 text-white shadow-md shadow-purple-500/20" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"}`}
+                >
+                  <User size={14} /> Agent Specific
+                </button>
+             </div>
+
+             {sheet.scope === 'agent_specific' && (
+               <div className="flex items-center gap-2 px-2 animate-in fade-in slide-in-from-left-2 duration-300">
+                 <div className="w-[1px] h-4 bg-slate-300 dark:bg-slate-600 mx-1"></div>
+                 <select 
+                    value={sheet.agent || ""} 
+                    onChange={(e) => setSheet({...sheet, agent: e.target.value || null})}
+                    className="bg-transparent text-xs font-black text-purple-600 dark:text-purple-400 outline-none cursor-pointer max-w-[120px] truncate"
+                 >
+                    <option value="" className="text-slate-400">Select Agent...</option>
+                    {agents.map(a => (
+                      <option key={a.id} value={a.id} className="text-slate-800 font-sans">{a.name}</option>
+                    ))}
+                 </select>
+               </div>
+             )}
           </div>
         </div>
         <div className="flex items-center gap-3">

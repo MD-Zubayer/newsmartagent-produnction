@@ -99,16 +99,46 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
             logger.info("Using existing query_vector passed to perform_rag_search")
         
         if query_vector:
-            # Search Spreadsheet Knowledge
-            related_sheets = SpreadsheetKnowledge.objects.filter(
+            # 🔍 Scope Filtering logic:
+            # - Global (সব এজেন্ট পাবে)
+            # - Agent Specific (শুধু এই নির্দিষ্ট এজেন্ট পাবে)
+            
+            from django.db.models import Q
+            from datasheet.models import Spreadsheet
+            from embedding.models import Document
+            
+            # ১. ভ্যালিড স্প্রেডশিট আইডি বের করা (Scope অনুযায়ী)
+            valid_sheet_ids = Spreadsheet.objects.filter(
                 user=agent_config.user
-            ).annotate(
-                distance=CosineDistance('embedding', query_vector)
-            ).filter(distance__lt=0.65).order_by('distance')[:3]
+            ).filter(
+                Q(scope='global') | Q(scope='agent_specific', agent=agent_config)
+            ).values_list('id', flat=True)
+            
+            # ২. ভ্যালিড ডকুমেন্ট আইডি বের করা (Scope অনুযায়ী)
+            valid_doc_ids = Document.objects.filter(
+                user=agent_config.user
+            ).filter(
+                Q(scope='global') | Q(scope='agent_specific', agent=agent_config)
+            ).values_list('id', flat=True)
+
+            # Search Spreadsheet Knowledge (Row IDs Prefix filtering)
+            # SpreadsheetKnowledge-এর row_id ফর্মেট: "sheet_{id}_row_{r_idx}"
+            sheet_query = Q()
+            for s_id in valid_sheet_ids:
+                sheet_query |= Q(row_id__startswith=f"sheet_{s_id}_")
+
+            related_sheets = SpreadsheetKnowledge.objects.none()
+            if valid_sheet_ids:
+                related_sheets = SpreadsheetKnowledge.objects.filter(
+                    user=agent_config.user
+                ).filter(sheet_query).annotate(
+                    distance=CosineDistance('embedding', query_vector)
+                ).filter(distance__lt=0.65).order_by('distance')[:3]
 
             # Search Document Knowledge
             related_docs = DocumentKnowledge.objects.filter(
-                user=agent_config.user
+                user=agent_config.user,
+                document_id__in=valid_doc_ids
             ).select_related('document').annotate(
                 distance=CosineDistance('embedding', query_vector)
             ).filter(distance__lt=0.65).order_by('distance')[:3]

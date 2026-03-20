@@ -469,42 +469,48 @@ export default function RankingReportPage() {
 
       {/* Beautiful Delete Confirmation Modal */}
       {deleteModal.isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-slate-900/40 backdrop-blur-sm transition-all duration-300">
-          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-slate-100">
-            <div className="bg-gradient-to-b from-rose-50 to-white p-8 flex flex-col items-center">
-              <div className="w-20 h-20 bg-white rounded-full shadow-lg shadow-rose-100 flex items-center justify-center mb-5 border border-rose-50 relative">
-                <div className="absolute inset-0 bg-rose-400 rounded-full animate-ping opacity-20"></div>
-                <AlertTriangle className="text-rose-500 w-10 h-10 relative z-10" />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-slate-900/60 backdrop-blur-md transition-all duration-500">
+          <div className="bg-white/90 backdrop-blur-xl rounded-[3rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-300 border border-white/40 ring-1 ring-black/5">
+            <div className="bg-gradient-to-br from-rose-50/50 via-white to-white p-10 flex flex-col items-center relative overflow-hidden">
+               {/* Decorative background circle */}
+               <div className="absolute -top-10 -right-10 w-32 h-32 bg-rose-100/30 rounded-full blur-3xl"></div>
+               
+              <div className="w-24 h-24 bg-white rounded-[2rem] shadow-xl shadow-rose-100/50 flex items-center justify-center mb-6 border border-rose-50/50 relative group">
+                <div className="absolute inset-0 bg-rose-400 rounded-[2rem] animate-ping opacity-10 group-hover:opacity-20 transition-opacity"></div>
+                <Trash2 className="text-rose-500 w-10 h-10 relative z-10 transform group-hover:scale-110 transition-transform duration-500" />
               </div>
-              <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Delete Cache?</h3>
+              
+              <h3 className="text-3xl font-black text-slate-800 uppercase tracking-tighter italic">Flush Cache?</h3>
+              <div className="h-1.5 w-12 bg-rose-500 rounded-full mt-3 shadow-sm shadow-rose-200"></div>
             </div>
             
-            <div className="px-8 pb-8 text-center bg-white">
-              <p className="text-slate-500 font-bold text-sm leading-relaxed">
-                Are you absolutely sure you want to remove this message from the cache? 
+            <div className="px-10 pb-10 text-center bg-transparent">
+              <p className="text-slate-500 font-bold text-base leading-relaxed">
+                This item will be <span className="text-rose-600 underline decoration-rose-200 decoration-2 underline-offset-4">permanently removed</span> from the active AI memory.
               </p>
-              <div className="mt-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 inline-block">
-                <p className="text-slate-400 font-black text-[10px] uppercase tracking-widest flex items-center gap-2">
-                  <Zap size={12} className="text-yellow-500" />
-                  Triggers fresh AI response next time
+              
+              <div className="mt-8 p-4 bg-pink-50/50 rounded-2xl border border-pink-100 inline-block shadow-inner backdrop-blur-sm">
+                <p className="text-rose-500 font-black text-[10px] uppercase tracking-[0.2em] flex items-center gap-2">
+                  <Zap size={14} className="fill-rose-500" />
+                  Triggers Fresh Intelligence
                 </p>
               </div>
             </div>
-
-            <div className="p-4 bg-slate-50 flex gap-3 border-t border-slate-100">
+    
+            <div className="p-6 bg-slate-50/50 flex gap-4 border-t border-slate-100/50 backdrop-blur-md">
               <button 
                 onClick={() => setDeleteModal({ isOpen: false, msg_hash: null, isProcessing: false })}
                 disabled={deleteModal.isProcessing}
-                className="flex-1 px-4 py-3.5 bg-white text-slate-500 font-black uppercase text-xs tracking-wider rounded-xl border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all disabled:opacity-50"
+                className="flex-1 px-6 py-4 bg-white text-slate-400 font-black uppercase text-xs tracking-widest rounded-2xl border border-slate-200 hover:border-slate-300 hover:text-slate-600 hover:bg-slate-50 transition-all shadow-sm active:scale-95 disabled:opacity-50"
               >
-                Cancel
+                Keep it
               </button>
               <button 
                 onClick={confirmDelete}
                 disabled={deleteModal.isProcessing}
-                className="flex-1 px-4 py-3.5 bg-gradient-to-r from-rose-500 to-red-500 hover:from-rose-600 hover:to-red-600 text-white font-black uppercase text-xs tracking-wider rounded-xl shadow-md shadow-rose-200 hover:shadow-lg transition-all flex justify-center items-center gap-2 disabled:opacity-70"
+                className="flex-1 px-6 py-4 bg-[#1e293b] hover:bg-slate-800 text-white font-black uppercase text-xs tracking-widest rounded-2xl shadow-xl shadow-slate-200 hover:shadow-slate-300 transition-all flex justify-center items-center gap-2 active:scale-95 disabled:opacity-70"
               >
-                {deleteModal.isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Yes, Delete'}
+                {deleteModal.isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Flush Now'}
               </button>
             </div>
           </div>

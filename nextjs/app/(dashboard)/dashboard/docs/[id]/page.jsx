@@ -23,7 +23,9 @@ import {
   List as ListIcon,
   Upload,
   Download,
-  FileDown
+  FileDown,
+  Globe,
+  User
 } from "lucide-react";
 import toast from "react-hot-toast";
 import * as mammoth from "mammoth";
@@ -150,6 +152,9 @@ export default function DocumentPage() {
   const [showFileMenu, setShowFileMenu] = useState(false);
   const fileInputRef = useRef(null);
   const [downloadDropdown, setDownloadDropdown] = useState(false);
+  const [scope, setScope] = useState("global");
+  const [agent, setAgent] = useState(null);
+  const [agents, setAgents] = useState([]);
   
   // Real multi-page state
   const [pages, setPages] = useState([""]);
@@ -171,6 +176,18 @@ export default function DocumentPage() {
     }
   }, [docId]);
 
+  useEffect(() => {
+    const fetchAgents = async () => {
+      try {
+        const res = await api.get('/AgentAI/agents/');
+        setAgents(res.data || []);
+      } catch (err) {
+        console.error("Failed to fetch agents", err);
+      }
+    };
+    fetchAgents();
+  }, []);
+
   const execCommand = (command, value = null) => {
     document.execCommand(command, false, value);
   };
@@ -180,6 +197,8 @@ export default function DocumentPage() {
     try {
       const res = await api.get(`/embedding/documents/${id}/`);
       setDocTitle(res.data.title);
+      setScope(res.data.scope || "global");
+      setAgent(res.data.agent || null);
       const text = res.data.full_content || "";
       if (text) {
         const chunks = [];
@@ -228,12 +247,16 @@ export default function DocumentPage() {
         await api.put(`/embedding/documents/${docId}/`, {
           doc_title: docTitle,
           text: textContent,
+          scope: scope,
+          agent: agent,
         });
         toast.success("Saved and updated!");
       } else {
         const res = await api.post("/embedding/documents/", {
           doc_title: docTitle,
           text: textContent,
+          scope: scope,
+          agent: agent,
         });
         toast.success("New document created!");
         router.push(`/dashboard/docs/${res.data.id}`);
@@ -342,6 +365,39 @@ export default function DocumentPage() {
             className="bg-transparent border-b border-transparent hover:border-white/50 focus:border-white outline-none text-sm md:text-lg font-medium px-1 placeholder-white/70 w-32 md:w-64 transition-colors text-white"
             placeholder="Document Title"
           />
+          <div className="h-6 w-[1px] bg-white/20 mx-2 hidden lg:block"></div>
+          
+          {/* SCOPE SELECTOR */}
+          <div className="hidden lg:flex items-center gap-2 bg-white/10 p-1 rounded-xl border border-white/10">
+             <button 
+               onClick={() => { setScope('global'); setAgent(null); }}
+               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${scope === 'global' ? "bg-white text-[#2B579A] shadow-sm" : "text-white/60 hover:text-white"}`}
+             >
+               <Globe size={12} /> Global
+             </button>
+             <button 
+               onClick={() => setScope('agent_specific')}
+               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${scope === 'agent_specific' ? "bg-white text-purple-600 shadow-sm" : "text-white/60 hover:text-white"}`}
+             >
+               <User size={12} /> Agent Specific
+             </button>
+
+             {scope === 'agent_specific' && (
+               <div className="flex items-center gap-2 px-1 animate-in fade-in slide-in-from-left-1">
+                 <div className="w-[1px] h-3 bg-white/20 mx-1"></div>
+                 <select 
+                    value={agent || ""} 
+                    onChange={(e) => setAgent(e.target.value || null)}
+                    className="bg-transparent text-[10px] font-black text-white outline-none cursor-pointer max-w-[100px] truncate"
+                 >
+                    <option value="" className="text-slate-800">Select Agent...</option>
+                    {agents.map(a => (
+                      <option key={a.id} value={a.id} className="text-slate-800">{a.name}</option>
+                    ))}
+                 </select>
+               </div>
+             )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".docx,.pdf" className="hidden" />
