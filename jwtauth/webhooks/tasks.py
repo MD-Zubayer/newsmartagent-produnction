@@ -421,6 +421,7 @@ def process_ai_reply_task(self, data):
                 logger.info(f">>> User {user_profile.user.email} has no tokens for model {effective_model}. Aborting.")
                 return
 
+            order_instr = get_order_instructions(agent_config.user)
             sheet_ctx, extra_instr, query_vector = perform_rag_search(
                 agent_config, text, post_context, order_instr, existing_vector=query_vector
             )
