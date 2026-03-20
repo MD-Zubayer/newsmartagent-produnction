@@ -291,7 +291,8 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: payload,
-          keepalive: true 
+          keepalive: true,
+          credentials: 'include' // 🔥 সেশ ককি পাঠানোর জন্য এটি বাধ্যতামূলক
         }).catch(err => console.error("Exit save failed", err));
       }
     };

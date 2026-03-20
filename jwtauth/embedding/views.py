@@ -36,7 +36,12 @@ class DocumentListCreateView(APIView):
 
         try:
             with transaction.atomic(): # ট্রানজ্যাকশন শুরু
-                document = Document.objects.create(user=request.user, title=title)
+                document = Document.objects.create(
+                    user=request.user, 
+                    title=title,
+                    scope=request.data.get('scope', 'global'),
+                    agent_id=request.data.get('agent')
+                )
                 chunks_saved = process_document_text(request.user, text, document)
                 
                 return Response({
@@ -77,7 +82,14 @@ class DocumentDetailView(APIView):
 
         if title:
             document.title = title
-            document.save()
+        
+        # 🔥 Scope & Agent Update
+        if 'scope' in request.data:
+            document.scope = request.data.get('scope')
+        if 'agent' in request.data:
+            document.agent_id = request.data.get('agent')
+            
+        document.save()
 
         if text:
             try:
