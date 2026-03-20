@@ -28,14 +28,10 @@ class AgentAIListSerializer(serializers.ModelSerializer):
             'greeting_message',
             'ai_model',
             'selected_model', 'selected_model_detail',
-            'temperature',
-            'max_tokens',
             'token_expires_at',
             'is_active',
             'created_at',
             'access_token',
-            'skip_history',
-            'history_skip_keywords',
             'is_special_agent',
             'special_agent_status'
         ]
@@ -63,12 +59,8 @@ class AgentAISerializer(serializers.ModelSerializer):
             'greeting_message',
             'ai_model',
             'selected_model',
-            'temperature',
-            'max_tokens',
             'token_expires_at',
             'is_active',
-            'skip_history',
-            'history_skip_keywords',
             'is_special_agent',
             'special_agent_status'
         ]
@@ -79,29 +71,6 @@ class AgentAISerializer(serializers.ModelSerializer):
             'selected_model': {'required': False, 'allow_null': True},
             'special_agent_status': {'read_only': True},
         }
-
-       # set validation serializer 
-       # 
-    def validate_temperature(self, value):
-
-
-        """
-        Temperature must be between 0.0 and 2.0.
-         """
-        if not (0.0 <= value <= 2.0):
-
-            raise serializers.ValidationError("Temperature must be between 0.0 and 2.0.")
-
-        return value
-
-    def validate_max_tokens(self, value):
-
-        """
-        Max tokens must be at least 1.
-        """
-        if value < 1:
-             raise serializers.ValidationError("Max tokens must be at least 1.")
-        return value
 
     def validate_platform(self, value):
         """
