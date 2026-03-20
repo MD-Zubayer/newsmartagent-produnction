@@ -222,9 +222,11 @@ export default function RootLayout({ children }) {
 
 <Script 
   src="https://newsmartagent.com/widget.js" 
-  data-key="3a7d8586-a1eb-4c93-907f-bf8ac128bfa8" 
+  data-key="9d94fbd8-167a-42d2-b3e8-389062ca8b49" 
   strategy="afterInteractive" // পেজ লোড হওয়ার পর স্ক্রিপ্টটি রান করবে
 />
+
+
       </body>
     </html>
   );
