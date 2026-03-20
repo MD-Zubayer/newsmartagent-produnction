@@ -237,6 +237,14 @@ export default function OrderDashboard() {
           padding-bottom: 25px;
           margin-bottom: 30px;
         }
+        .company-logo {
+          width: 80px;
+          height: 80px;
+          object-fit: cover;
+          border-radius: 12px;
+          margin-bottom: 12px;
+          border: 1px solid #e5e7eb;
+        }
 
         .company-details h1 {
           font-size: 28px;
@@ -281,9 +289,6 @@ export default function OrderDashboard() {
           border-radius: 8px;
           border-left: 4px solid #3b82f6;
           width: 60%;
-          display: flex;
-          gap: 20px;
-          align-items: center;
         }
 
         .customer-avatar {
@@ -425,6 +430,7 @@ export default function OrderDashboard() {
           
           <div class="invoice-header">
             <div class="company-details">
+              ${o.customer_profile_photo ? `<img src="${o.customer_profile_photo}" class="company-logo" alt="Logo" />` : ''}
               <h1>${shopName}</h1>
               <p>Your Trusted Shopping Partner</p>
             </div>
@@ -439,7 +445,6 @@ export default function OrderDashboard() {
 
           <div class="billing-grid">
             <div class="bill-to-section">
-              ${o.customer_profile_photo ? `<img src="${o.customer_profile_photo}" class="customer-avatar" alt="Customer Photo" />` : ''}
               <div class="bill-to-details">
                 <h3>Billed To</h3>
                 <h4>${o.customer_name}</h4>

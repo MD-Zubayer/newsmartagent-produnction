@@ -220,8 +220,12 @@ class CustomerOrderSerializer(serializers.ModelSerializer):
 
     def get_customer_profile_photo(self, obj):
         try:
+            request = self.context.get('request')
             if obj.user.profile.profile_photo:
-                return obj.user.profile.profile_photo.url
+                url = obj.user.profile.profile_photo.url
+                if request:
+                    return request.build_absolute_uri(url)
+                return url
         except Exception:
             pass
         return None

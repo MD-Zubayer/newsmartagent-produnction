@@ -500,7 +500,7 @@ class OrderSubmitView(viewsets.ModelViewSet):
             user = order_form.user
             profile_photo_url = None
             if hasattr(user, 'profile') and user.profile.profile_photo:
-                profile_photo_url = user.profile.profile_photo.url
+                profile_photo_url = request.build_absolute_uri(user.profile.profile_photo.url)
 
             return Response({
                 'name': user.name or user.email,
