@@ -17,6 +17,34 @@ class AgentSettings(models.Model):
         return f"Settings for {self.user.name}"
 
 
+class AgentAISettings(models.Model):
+    """
+    Per-Agent specific settings.
+    Stored in the 'settings' app to separate configuration from core agent logic.
+    """
+    agent = models.OneToOneField(
+        'aiAgent.AgentAI', 
+        on_delete=models.CASCADE, 
+        related_name='agent_settings'
+    )
+    history_limit = models.PositiveIntegerField(
+        default=3, 
+        help_text="কয়টি পুরনো মেসেজ এআই-এর কাছে হিস্টোরি হিসেবে পাঠানো হবে? (Default: 3)"
+    )
+    temperature = models.FloatField(default=0.7)
+    max_tokens = models.IntegerField(default=200)
+    skip_history = models.BooleanField(default=False)
+    history_skip_keywords = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Settings for Agent: {self.agent.id}"
+
+    @classmethod
+    def get_for_agent(cls, agent):
+        obj, created = cls.objects.get_or_create(agent=agent)
+        return obj
+
+
 class GlobalSettings(models.Model):
     """
     Singleton model to hold system-wide settings that apply globally,

@@ -1,5 +1,9 @@
-from django.contrib import admin
-from .models import AgentSettings, GlobalSettings
+from .models import AgentSettings, GlobalSettings, AgentAISettings
+
+@admin.register(AgentAISettings)
+class AgentAISettingsAdmin(admin.ModelAdmin):
+    list_display = ('agent', 'history_limit', 'temperature', 'max_tokens', 'skip_history')
+    search_fields = ('agent__name', 'agent__page_id')
 
 admin.site.register(AgentSettings)
 

@@ -421,26 +421,24 @@ def process_ai_reply_task(self, data):
                 logger.info(f">>> User {user_profile.user.email} has no tokens for model {effective_model}. Aborting.")
                 return
 
-            order_instr = get_order_instructions(agent_config.user)
             sheet_ctx, extra_instr, query_vector = perform_rag_search(
                 agent_config, text, post_context, order_instr, existing_vector=query_vector
             )
-            full_prompt, history = build_ai_context(agent_config, sender_id, text, extra_instr, sheet_ctx, platform=request_type)
+            system_instruction, history, current_msg = build_ai_context(agent_config, sender_id, text, extra_instr, sheet_ctx, platform=request_type)
 
             # ---- Cache Classification Instruction (JSON suffix) ----
-            # logic_handler.py-তে কোনো পরিবর্তন নেই। Prompt suffix এখানেই যোগ হয়।
             classify_instruction = (
-                'Return ONLY a valid JSON object: {"reply": "...", "cache_type": "..."}. '
+                '\n\nReturn ONLY a valid JSON object: {"reply": "...", "cache_type": "..."}. '
                 'Use "no_cache" for context-dependent words (it/this/that/ঐটা/সেটা) or very specific conversation flow. '
                 'Use "sender_specific" for user-only info (my,amar,etc any language, name/order/status/আমি/আমার/ব্যক্তিগত তথ্য). '
                 'Use "agent_specific" ONLY for information extracted from [KNOWLEDGE BASE DATA] or business-specific details like specific products/prices. '
                 'Use "global" for general knowledge, universal greetings (Salam/Hi), and any answer based on your pre-trained general intelligence rather than the provided knowledge base.'
                 'STRICT: No markdown blocks, no preamble, and ensure JSON syntax is perfect.'
             )
-            full_prompt = full_prompt + classify_instruction
+            system_instruction = system_instruction + classify_instruction
 
             # --- AI Call ---
-            ai_data = get_ai_response(agent_config, full_prompt, history)
+            ai_data = get_ai_response(agent_config, system_instruction, history, current_msg)
 
             # ---- Parse JSON from AI reply ----
             raw_ai_reply = ai_data.get('reply', '')

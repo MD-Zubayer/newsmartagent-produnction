@@ -9,21 +9,27 @@ logger = logging.getLogger('aiAgent')
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
 
-def generate_openai_reply(system_promt, messages, agent_config, memory_context=""):
+def generate_openai_reply(system_promt, messages, current_message, agent_config, memory_context=""):
     model_name = agent_config.ai_model
-    full_text = system_promt + memory_context + str(messages)
+    full_text = system_promt + memory_context + str(messages) + current_message
     input_tokens = count_openai_tokens(full_text, agent_config.ai_model)
     
     try:
-        formatted_messages = []
+        formatted_messages = [
+            {'role': 'system', 'content': system_promt}
+        ]
+        
+        # Add history
         for m in messages:
             formatted_messages.append({
                 'role': m['role'],
                 'content': m['content']
             })
-        formatted_messages.append({'role': 'user', 'content': system_promt})
+            
+        # Add current message
+        formatted_messages.append({'role': 'user', 'content': current_message})
 
-        # --- পে-লোড তৈরি (একবারই করা ভালো) ---
+        # --- পে-লোড তৈরি ---
         payload = {
             "model": agent_config.ai_model,
             "messages": formatted_messages,
@@ -37,13 +43,14 @@ def generate_openai_reply(system_promt, messages, agent_config, memory_context="
         force_temp_one = any(x in model_lower for x in ["mini", "nano", "o1", "o3"])
 
         # ১. Temperature সেট করা
+        ai_settings = agent_config.get_settings
         if force_temp_one:
             payload["temperature"] = 1.0
         else:
-            payload["temperature"] = agent_config.temperature if agent_config.temperature is not None else 0.7
+            payload["temperature"] = ai_settings.temperature if ai_settings.temperature is not None else 0.7
 
-        # ২. টোকেন লিমিট সেট করা (নতুন মডেলে max_completion_tokens ব্যবহার হয়)
-        max_t = agent_config.max_tokens if agent_config.max_tokens else 500
+        # ২. টোকেন লিমিট সেট করা
+        max_t = ai_settings.max_tokens if ai_settings.max_tokens else 500
         if is_new_model:
             payload["max_completion_tokens"] = max_t
         else:

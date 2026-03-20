@@ -10,7 +10,7 @@ client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
 
 
-def generate_gemini_reply(prompt, history, agent_config):
+def generate_gemini_reply(prompt, history, current_message, agent_config):
 
     model_name = agent_config.ai_model if 'gemini' in agent_config.ai_model else 'models/gemini-1.5-flash'
 
@@ -24,10 +24,10 @@ def generate_gemini_reply(prompt, history, agent_config):
             "parts": [{"text": m["content"]}]
         })
 
-    # 2. Always push current prompt as USER message
+    # 2. Add current message
     formatted_history.append({
         "role": "user",
-        "parts": [{"text": prompt}]
+        "parts": [{"text": current_message}]
     })
 
     # 🚨 Safety guard
@@ -46,7 +46,8 @@ def generate_gemini_reply(prompt, history, agent_config):
     ]
 
     try:
-        base_max_token = int(agent_config.max_tokens) if agent_config.max_tokens else 500
+        ai_settings = agent_config.get_settings
+        base_max_token = int(ai_settings.max_tokens) if ai_settings.max_tokens else 500
         # JSON wrapper overhead: {"reply":"...","cache_type":"agent_specific"} ≈ 20 tokens
         # Extra safety buffer to prevent mid-JSON truncation
         JSON_CACHE_BUFFER = 60
@@ -60,7 +61,8 @@ def generate_gemini_reply(prompt, history, agent_config):
             model=model_name,
             contents=formatted_history,
             config=types.GenerateContentConfig(
-                temperature=agent_config.temperature or 0.7,
+                system_instruction=prompt,
+                temperature=ai_settings.temperature or 0.7,
                 max_output_tokens=max_token,
                 safety_settings=safety_settings,
                 candidate_count=1

@@ -66,12 +66,20 @@ class AIProviderModelAdmin(admin.ModelAdmin):
     )
 
 
+from settings.models import AgentAISettings
+
+class AgentAISettingsInline(admin.StackedInline):
+    model = AgentAISettings
+    can_delete = False
+    verbose_name_plural = 'Agent AI Settings'
+    extra = 1
+
 @admin.register(AgentAI)
 class AgentAIAdmin(ModelAdmin):
     list_display = [ 'id', 'name', 'user', 'platform', 'number', 'page_id', 'ai_agent_type', 'special_agent_status', 'is_special_agent', 'is_active','custom_keywords', 'created_at']
     list_filter = ['platform', 'special_agent_status', 'is_active', 'is_special_agent', 'user', 'ai_agent_type',]
     search_fields = ['name', 'page_id', 'number', 'user__username']
-    # readonly_fields = ['create_at', 'access_token', 'webhook_secret']
+    inlines = [AgentAISettingsInline]
 
     def created_short(self, obj):
         return obj.created_at.strftime('%Y-%m-%d %H:%M')

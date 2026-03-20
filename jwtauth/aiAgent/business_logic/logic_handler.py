@@ -306,35 +306,35 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
     except Exception as e:
         logger.error(f"Error fetching contact settings: {e}")
 
-    prompt_parts = [
+    system_prompt_parts = [
         f"Role: {custom_role}",
         f"Instructions: {contact_instructions}"
     ]
 
-    if sheet_context: prompt_parts.append(sheet_context)
-    if memory_context: prompt_parts.append(memory_context)
+    if sheet_context: system_prompt_parts.append(sheet_context)
+    if memory_context: system_prompt_parts.append(memory_context)
 
-    prompt_parts.append(f"\nUser: {text}")
-    prompt_parts.append("Assistant:")
-    full_prompt = "\n\n".join(prompt_parts)
+    system_instruction = "\n\n".join(system_prompt_parts)
 
-    logger.info(f"\n======= FINAL PROMPT SENT TO AI =======\n{full_prompt}\n=======================================")
+    logger.info(f"\n======= SYSTEM INSTRUCTION =======\n{system_instruction}\n=======================================")
+    logger.info(f"\n======= CURRENT USER MSG =======\n{text}\n=======================================")
 
-    raw_history = get_last_message(agent_config, sender_id, limit=5, platform=platform)
+    raw_history = get_last_message(agent_config, sender_id, limit=agent_config.get_settings.history_limit, platform=platform)
     
+    settings = agent_config.get_settings
     skip_history = False
-    if agent_config.skip_history:
+    if settings.skip_history:
         # Check global smart keywords
         matched_global = check_keyword_match(text, 'history_skip')
         
         # Check per-agent custom history skip keywords
-        custom_skips = [k.strip().lower() for k in (agent_config.history_skip_keywords or "").split(',') if k.strip()]
+        custom_skips = [k.strip().lower() for k in (settings.history_skip_keywords or "").split(',') if k.strip()]
         matched_custom = [k for k in custom_skips if k in text.lower()]
         
         if matched_global or matched_custom:
             skip_history = True
             logger.info(f"⏭️ Skipping history: Keyword found. Global: {matched_global}, Custom: {matched_custom}")
-    
+
     if skip_history:
         history = []
     else:
@@ -342,9 +342,9 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
             msg for msg in raw_history
             if msg.get("content") and msg.get("content").strip()
         ]
-    return full_prompt, history
+    return system_instruction, history, text
 
-def get_ai_response(agent_config, full_prompt, history):
+def get_ai_response(agent_config, system_instruction, history, current_message):
     """
     Unified AI handler that dispatches to specific providers.
     """
@@ -375,22 +375,22 @@ def get_ai_response(agent_config, full_prompt, history):
     try:
         # 2. Dispatch based on provider
         if provider == 'openai':
-            ai_response = generate_openai_reply(full_prompt, history, agent_config=agent_config)
+            ai_response = generate_openai_reply(system_instruction, history, current_message, agent_config=agent_config)
         elif provider == 'grok':
             logger.info("🔥 CALLING GROK PROVIDER...")
-            ai_response = generate_grok_reply(full_prompt, history, agent_config=agent_config)
+            ai_response = generate_grok_reply(system_instruction, history, current_message, agent_config=agent_config)
         elif provider == 'openrouter':
             logger.info("🌐 CALLING OPENROUTER PROVIDER...")
-            ai_response = generate_openrouter_reply(full_prompt, history, agent_config=agent_config)
+            ai_response = generate_openrouter_reply(system_instruction, history, current_message, agent_config=agent_config)
         elif provider == 'gemini':
             logger.info("♊ CALLING GEMINI PROVIDER...")
-            ai_response = generate_gemini_reply(full_prompt, history, agent_config=agent_config)
+            ai_response = generate_gemini_reply(system_instruction, history, current_message, agent_config=agent_config)
         else:
             logger.error(f"🚨 UNKNOWN PROVIDER '{provider}'. Defaulting to Gemini/OpenAI logic.")
             if 'gpt' in model_name.lower():
-                ai_response = generate_openai_reply(full_prompt, history, agent_config=agent_config)
+                ai_response = generate_openai_reply(system_instruction, history, current_message, agent_config=agent_config)
             else:
-                ai_response = generate_gemini_reply(full_prompt, history, agent_config=agent_config)
+                ai_response = generate_gemini_reply(system_instruction, history, current_message, agent_config=agent_config)
             
         logger.info(f"🔍 [Provider: {provider}] AI Raw Data: {ai_response}")
 

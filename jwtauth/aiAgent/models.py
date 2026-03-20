@@ -71,14 +71,9 @@ class AgentAI(models.Model):
         related_name='agents_memory_extraction',
         help_text="এজেন্ট মেমোরি এক্সট্রাকশনের জন্য কোন মডেল ব্যবহার হবে? (শুধুমাত্র অ্যাডমিন)"
     )
-    temperature = models.FloatField(default=0.7)
-    max_tokens = models.IntegerField(default=200)
-
     token_expires_at = models.DateTimeField(null=True, blank=True)
 
     is_active = models.BooleanField(default=True)
-    skip_history = models.BooleanField(default=False, help_text="AI call এ মেমোরি/হিস্টোরি ব্যবহার করবে কিনা?")
-    history_skip_keywords = models.TextField(blank=True, null=True, help_text="কমা দিয়ে হিস্টোরি স্কিপ কি-ওয়ার্ডগুলো লিখুন")
     is_special_agent = models.BooleanField(default=False, help_text="বিশেষ এজেন্টদের ডাটা দীর্ঘক্ষণ (১ বছর) ক্যাশে থাকবে")
 
     SPECIAL_AGENT_STATUS_CHOICES = [
@@ -115,6 +110,12 @@ class AgentAI(models.Model):
     
     def __str__(self):
         return f'{self.name} ({self.user})'
+
+    @property
+    def get_settings(self):
+        from settings.models import AgentAISettings
+        settings, created = AgentAISettings.objects.get_or_create(agent=self)
+        return settings
 
 
 
