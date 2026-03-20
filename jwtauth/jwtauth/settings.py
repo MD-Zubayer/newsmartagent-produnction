@@ -73,7 +73,7 @@ INSTALLED_APPS = [
     'embedding',
     'blog',
     'django.contrib.postgres',
-    'settings',
+    'settings.apps.SettingsConfig',
     'man_agent',
     "aiAgent.apps.AiagentConfig",
     'ckeditor',
@@ -357,6 +357,7 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Asia/Dhaka'
 
+# Use django-celery-beat so schedules live in the database/admin.
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 # ─── Google Drive Log Sync Config ────────────────────────────────────────────
@@ -388,6 +389,10 @@ CELERY_BEAT_SCHEDULE = {
     'backup-redis-to-google-drive': {
         'task': 'log_service.backup_redis_to_drive',
         'schedule': crontab(hour=2, minute=0),  # প্রতিদিন রাত ২টায়
+    },
+    'delete-unverified-accounts': {
+        'task': 'users.delete_unverified_accounts',
+        'schedule': crontab(minute='*/10'),  # প্রতি ১০ মিনিটে ১ ঘণ্টা পুরনো unverifed user মুছে দেবে
     },
 }
 
