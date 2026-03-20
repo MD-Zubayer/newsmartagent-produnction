@@ -14,8 +14,8 @@ class WidgetSettingsSerializer(serializers.ModelSerializer):
     class Meta:
         model = WidgetSettings
         fields = [
-            'primary_color', 'bubble_icon', 'bubble_icon_url', 'bubble_size', 'widget_position',
-            'header_title', 'header_subtitle', 'placeholder_text', 'is_enabled', 'allowed_domains'
+            'primary_color', 'bubble_icon', 'bubble_icon_url', 'bubble_size', 'bubble_roundness', 'show_bubble_background',
+            'widget_position', 'header_title', 'header_subtitle', 'placeholder_text', 'is_enabled', 'allowed_domains'
         ]
 
 

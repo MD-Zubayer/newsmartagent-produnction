@@ -32,6 +32,10 @@ class WidgetConfigView(APIView):
         # Resolve effective icon URL (fallback to default logo)
         settings_data['effective_icon_url'] = widget_settings.bubble_icon_url or DEFAULT_BUBBLE_ICON_URL
 
+        # New fields for frontend widget script
+        settings_data['bubble_roundness'] = widget_settings.bubble_roundness
+        settings_data['show_bubble_background'] = widget_settings.show_bubble_background
+
         return Response({
             "name": agent.name,
             "greeting": agent.greeting_message or "Hello! How can I help you?",
@@ -117,6 +121,23 @@ class WidgetIconUploadView(APIView):
             # Save file to storage backend (MinIO in production)
             saved_path = default_storage.save(filename, icon_file)
             icon_url = default_storage.url(saved_path)
+
+            # Cleanup URL if it contains internal hostname (e.g. backend:9000)
+            # This happens if AWS_S3_CUSTOM_DOMAIN is not correctly picked up.
+            minio_ext = getattr(django_settings, 'MINIO_EXTERNAL_ENDPOINT', None) or \
+                        os.environ.get('MINIO_EXTERNAL_ENDPOINT', '')
+            if minio_ext and ('localhost' in icon_url or 'backend' in icon_url or 'newsmartagent-minio' in icon_url):
+                # Manual fix to ensure external access
+                base_ext = minio_ext.rstrip('/')
+                bucket = getattr(django_settings, 'AWS_STORAGE_BUCKET_NAME', 'newsmartagent-media')
+                # S3Boto3Storage typically generates <bucket>/<path> or <custom_domain>/<bucket>/<path>
+                if bucket not in icon_url:
+                     icon_url = f"{base_ext}/{bucket}/{saved_path}"
+                else:
+                     # Replace internal part with external
+                     # This is a bit hacky but ensures the user can see their uploaded image
+                     import re
+                     icon_url = re.sub(r'https?://[^/]+', base_ext, icon_url)
 
             # Update WidgetSettings
             widget_settings, _ = WidgetSettings.objects.get_or_create(agent=agent)

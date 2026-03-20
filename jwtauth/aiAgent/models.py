@@ -298,6 +298,14 @@ class WidgetSettings(models.Model):
         default=60,
         help_text="Bubble size in pixels (e.g. 52, 60, 72)."
     )
+    bubble_roundness = models.IntegerField(
+        default=28,
+        help_text="Bubble corner roundness in percentage (0-100)."
+    )
+    show_bubble_background = models.BooleanField(
+        default=True,
+        help_text="Whether to show the primary color background for the bubble."
+    )
     widget_position = models.CharField(
         max_length=20,
         default='bottom-right',

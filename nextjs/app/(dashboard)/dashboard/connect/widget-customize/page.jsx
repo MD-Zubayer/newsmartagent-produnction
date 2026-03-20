@@ -39,6 +39,8 @@ export default function WidgetCustomizePage() {
     header_title: "Chat with AI",
     header_subtitle: "Online | Powered by Smart Agent",
     placeholder_text: "Type a message...",
+    bubble_roundness: 28,
+    show_bubble_background: true,
     is_enabled: true,
     allowed_domains: ""
   });
@@ -323,6 +325,35 @@ export default function WidgetCustomizePage() {
                   className="w-full accent-indigo-600" />
               </div>
 
+              {/* Bubble Roundness */}
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                  <HiOutlineSparkles className="text-indigo-600" /> Roundness — <span className="text-indigo-600">{settings.bubble_roundness}%</span>
+                </label>
+                <input type="range" min={0} max={100} step={2} value={settings.bubble_roundness}
+                  onChange={e => set('bubble_roundness', Number(e.target.value))}
+                  className="w-full accent-indigo-600" />
+                <div className="flex justify-between text-[8px] font-black text-slate-300 uppercase tracking-widest">
+                  <span>Square</span>
+                  <span>Rounded</span>
+                  <span>Circle</span>
+                </div>
+              </div>
+
+              {/* Bubble Background Toggle */}
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                <div>
+                   <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight">Show Bubble Background</p>
+                   <p className="text-[9px] text-slate-400 font-medium">Use primary color for bubble</p>
+                </div>
+                <button 
+                  onClick={() => set('show_bubble_background', !settings.show_bubble_background)}
+                  className={`w-12 h-6 rounded-full transition-all relative ${settings.show_bubble_background ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                >
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${settings.show_bubble_background ? 'right-1' : 'left-1'}`} />
+                </button>
+              </div>
+
               {/* Widget Position — 2x2 grid */}
               <div className="space-y-3">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Widget Position</label>
@@ -426,10 +457,11 @@ export default function WidgetCustomizePage() {
                     {/* Bubble */}
                     <div
                       style={{
-                        backgroundColor: settings.primary_color,
+                        backgroundColor: settings.show_bubble_background ? settings.primary_color : 'transparent',
                         width: Math.round(settings.bubble_size * 0.65),
                         height: Math.round(settings.bubble_size * 0.65),
-                        borderRadius: Math.round(settings.bubble_size * 0.25),
+                        borderRadius: `${Math.round(settings.bubble_roundness * 0.5)}%`,
+                        border: settings.show_bubble_background ? 'none' : `2px solid ${settings.primary_color}`,
                       }}
                       className={`absolute ${positionClasses[settings.widget_position]} flex items-center justify-center overflow-hidden shadow-xl pointer-events-none`}
                     >
