@@ -153,15 +153,14 @@ class AgentAISerializer(serializers.ModelSerializer):
         agent = AgentAI.objects.create(**validated_data)
         
         from settings.models import AgentAISettings
-        AgentAISettings.objects.update_or_create(
+        agent_settings, created = AgentAISettings.objects.update_or_create(
             agent=agent,
             defaults={
                 'history_limit': history_limit,
                 'temperature': temperature,
                 'max_tokens': max_tokens,
                 'skip_history': skip_history,
-                'history_skip_keywords': history_skip_keywords,
-                'shared_cache_agents': shared_cache_agents
+                'history_skip_keywords': history_skip_keywords
             }
         )
         
@@ -195,12 +194,13 @@ class AgentAISerializer(serializers.ModelSerializer):
         
         if settings_data:
             from settings.models import AgentAISettings
-            AgentAISettings.objects.update_or_create(
+            shared_cache_agents = settings_data.pop('shared_cache_agents', None)
+            agent_settings, created = AgentAISettings.objects.update_or_create(
                 agent=agent,
                 defaults=settings_data
             )
-            if 'shared_cache_agents' in settings_data:
-                agent_settings.shared_cache_agents.set(settings_data['shared_cache_agents'])
+            if shared_cache_agents is not None:
+                agent_settings.shared_cache_agents.set(shared_cache_agents)
         
         if widget_settings_data:
             from aiAgent.models import WidgetSettings
