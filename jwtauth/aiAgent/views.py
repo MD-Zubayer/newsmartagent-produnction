@@ -264,28 +264,36 @@ class RankingAPIView(APIView):
 
             # ২. শেয়ারড এজেন্টদের ডাটা আনা
             shared_agents = agent.get_settings.shared_cache_agents.all()
-            shared_agent_page_ids = [a.page_id for a in shared_agents]
-            
+
+            def _get_redis_id(a):
+                if a.platform == 'web_widget' and a.widget_key:
+                    return f"widget_{a.widget_key}"
+                return a.page_id
+
             # ৩. র‍্যাঙ্কিং ডাটা আনা (db=4 থেকে) - নিজের এবং শেয়ারড সব এজেন্টের
-            all_raw_messages = {} # msg_hash -> {'frequency': 0, 'is_shared': False}
+            all_raw_messages = {} # msg_hash -> {'frequency': 0, 'is_shared': False, 'origin_agent_id': str}
             
             # ক. নিজের ডাটা
-            for msg_hash, frequency in get_top_message(agent_id, top_n=50):
+            my_redis_id = _get_redis_id(agent)
+            for msg_hash, frequency in get_top_message(my_redis_id, top_n=50):
                 all_raw_messages[msg_hash] = {
                     'frequency': int(frequency),
-                    'is_shared': False
+                    'is_shared': False,
+                    'origin_agent_id': my_redis_id
                 }
                 
             # খ. শেয়ারড এজেন্টদের ডাটা
-            for s_page_id in shared_agent_page_ids:
+            for s_agent in shared_agents:
+                s_redis_id = _get_redis_id(s_agent)
                 # শেয়ারড এজেন্টের ক্ষেত্রে আমরা একটু কম টপ মেসেজ নিচ্ছি যাতে ওভারলোড না হয়
-                for msg_hash, frequency in get_top_message(s_page_id, top_n=30):
+                for msg_hash, frequency in get_top_message(s_redis_id, top_n=30):
                     if msg_hash in all_raw_messages:
                         all_raw_messages[msg_hash]['frequency'] += int(frequency)
                     else:
                         all_raw_messages[msg_hash] = {
                             'frequency': int(frequency),
-                            'is_shared': True
+                            'is_shared': True,
+                            'origin_agent_id': s_redis_id
                         }
 
             # ৪. এক্সক্লুশন সেট আনা (শেয়ারিং কন্ট্রোল)
@@ -295,7 +303,6 @@ class RankingAPIView(APIView):
             excluded_hashes = {h.decode() if isinstance(h, bytes) else h for h in excluded_hashes}
 
             ranking_list = []
-            r_db6 = get_redis_client(db=6)
 
             # Frequency অনুযায়ী সর্ট করা
             sorted_hashes = sorted(all_raw_messages.items(), key=lambda x: x[1]['frequency'], reverse=True)
@@ -308,30 +315,42 @@ class RankingAPIView(APIView):
                 total_token_savings = 0
                 
                 # Cache checking logic
-                cache_key = f"agent:{agent_id}:reply:{msg_hash}"
+                origin_redis_id = meta.get('origin_agent_id', my_redis_id)
+                cache_key = f"agent:{origin_redis_id}:reply:{msg_hash}"
                 raw_data = redis_conn.get(cache_key)
-                source = 'agent'
+                source = 'shared_agent' if is_shared else 'agent'
                 
-                # যদি নিজের ক্যাশে না থাকে এবং এটি শেয়ারড মেসেজ হয়, তবে শেয়ারড এজেন্টদের ক্যাশে খুঁজো
-                if not raw_data and is_shared:
-                    for s_page_id in shared_agent_page_ids:
-                        s_cache_key = f"agent:{s_page_id}:reply:{msg_hash}"
-                        raw_data = redis_conn.get(s_cache_key)
-                        if raw_data:
-                            source = 'shared_agent'
-                            break
+                # যদি অরিজিন এজেন্টের ক্যাশে না থাকে এবং এটি শেয়ারড মেসেজ হয়, তবে অন্য শেয়ারড এজেন্টদের ক্যাশে খুঁজো
+                if not raw_data:
+                    # নিজেরটা আগে চেক করো (যদি origin shared agent হয়)
+                    if is_shared:
+                        my_cache_key = f"agent:{my_redis_id}:reply:{msg_hash}"
+                        raw_data = redis_conn.get(my_cache_key)
+                        if raw_data: source = 'agent'
+
+                    # তারপর অন্যান্য শেয়ারড এজেন্ট
+                    if not raw_data:
+                        for s_agent in shared_agents:
+                            s_redis_id = _get_redis_id(s_agent)
+                            if s_redis_id == origin_redis_id: continue
+                            s_cache_key = f"agent:{s_redis_id}:reply:{msg_hash}"
+                            raw_data = redis_conn.get(s_cache_key)
+                            if raw_data:
+                                source = 'shared_agent'
+                                break
                 
                 # যদি DB 2-তে না থাকে তবে DB 6 (Global Cache) চেক করা
                 if not raw_data:
                     global_key = f"global:reply:{msg_hash}"
-                    raw_data = r_db6.get(global_key)
+                    raw_data = r_grouped.get(global_key)
                     source = 'global'
                 
                 # যদি Global-এও না থাকে তবে DB 6 (Sender Specific) চেক করা
                 if not raw_data:
-                    sender_pattern = f"agent:{agent_id}:sender:*:reply:{msg_hash}"
-                    for s_key in r_db6.scan_iter(match=sender_pattern, count=1):
-                        raw_data = r_db6.get(s_key)
+                    # নিজের sender pattern
+                    sender_pattern = f"agent:{my_redis_id}:sender:*:reply:{msg_hash}"
+                    for s_key in r_grouped.scan_iter(match=sender_pattern, count=1):
+                        raw_data = r_grouped.get(s_key)
                         if raw_data:
                             source = 'sender_specific'
                             break
@@ -351,6 +370,9 @@ class RankingAPIView(APIView):
                         input_tokens = data.get('input_tokens', 0)
                         output_tokens = data.get('output_tokens', 0)
                         
+                        # Token Savings Calculation Refinement:
+                        # If a message is from a shared or global source, it means 1 AI call was shared.
+                        # Global savings = (Total Aggregated Frequency - 1) * cost_per_query
                         total_token_savings = (int(input_tokens) + int(output_tokens)) * (int(frequency) - 1)
                         if total_token_savings < 0: total_token_savings = 0
                     except:
