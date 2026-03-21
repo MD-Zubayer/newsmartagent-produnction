@@ -257,69 +257,120 @@ class RankingAPIView(APIView):
     """
     def get(self, request, agent_id, format=None):
         try:
-            # ১. র‍্যাঙ্কিং ডাটা আনা (db=4 থেকে)
-            top_messages_raw = get_top_message(agent_id, top_n=10)
+            # ১. ওনারশিপ ভেরিফিকেশন (page_id ব্যবহার করছি)
             agent = AgentAI.objects.filter(page_id=agent_id).first()
-            is_special_agent = agent.is_special_agent if agent else False
+            if not agent:
+                return Response({"error": "Agent not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            # ২. র‍্যাঙ্কিং ডাটা আনা (db=4 থেকে)
+            top_messages_raw = get_top_message(agent_id, top_n=50) # Increased to 50 for more visibility
             
-            api_data = []
-            
-            # ২. hash থেকে মূল টেক্সট খুঁজে বের করা
+            # ৩. এক্সক্লুশন সেট আনা (শেয়ারিং কন্ট্রোল)
+            r_db4 = get_redis_client(db=4)
+            exclusion_key = f"agent:{agent_id}:sharing_exclusion_set"
+            excluded_hashes = r_db4.smembers(exclusion_key)
+            excluded_hashes = {h.decode() if isinstance(h, bytes) else h for h in excluded_hashes}
+
+            ranking_list = []
+            r_db6 = get_redis_client(db=6)
+
             for msg_hash, frequency in top_messages_raw:
-                # DB 2 (Agent Cache) চেক করা
-                key = f"agent:{agent_id}:reply:{msg_hash}"
-                cached_data = redis_conn.get(key)
+                text = "Unknown Message"
+                current_scope = 'agent_specific'
+                total_token_savings = 0
+                
+                # DB 2 (Agent Specific) চেক করা
+                cache_key = f"agent:{agent_id}:reply:{msg_hash}"
+                raw_data = redis_conn.get(cache_key)
                 source = 'agent'
                 
                 # যদি DB 2-তে না থাকে তবে DB 6 (Global Cache) চেক করা
-                if not cached_data:
+                if not raw_data:
                     global_key = f"global:reply:{msg_hash}"
-                    cached_data = r_grouped.get(global_key)
+                    raw_data = r_db6.get(global_key)
                     source = 'global'
-                    
+                
                 # যদি Global-এও না থাকে তবে DB 6 (Sender Specific) চেক করা
-                if not cached_data:
+                if not raw_data:
                     sender_pattern = f"agent:{agent_id}:sender:*:reply:{msg_hash}"
-                    for s_key in r_grouped.scan_iter(match=sender_pattern, count=10):
-                        cached_data = r_grouped.get(s_key)
-                        if cached_data:
+                    for s_key in r_db6.scan_iter(match=sender_pattern, count=1):
+                        raw_data = r_db6.get(s_key)
+                        if raw_data:
                             source = 'sender_specific'
                             break
 
-                text = "Unknown Message"
-                total_token_savings = 0
-                current_scope = "agent_specific"
-                
-                if cached_data:
-                    data = json.loads(cached_data)
-                    text = data.get('original_normalized', data.get('original_text', 'Unknown Message')) 
-                    if source == 'agent':
-                        current_scope = data.get('cache_scope', 'agent_specific')
-                    elif source == 'global':
-                        current_scope = 'global'
-                    else:
-                        current_scope = 'sender_specific'
-                    
-                    input_tokens = data.get('input_tokens', 0)
-                    output_tokens = data.get('output_tokens', 0)
-                    # ⚡ ক্যালকুলেশন
-                    total_token_savings = (int(input_tokens) + int(output_tokens)) * int(frequency)
-                    total_token_savings -= (input_tokens + output_tokens)
+                if raw_data:
+                    try:
+                        data = json.loads(raw_data)
+                        text = data.get('original_text', data.get('original_normalized', 'Unknown Message'))
+                        
+                        if source == 'agent':
+                            current_scope = data.get('cache_scope', 'agent_specific')
+                        elif source == 'global':
+                            current_scope = 'global'
+                        else:
+                            current_scope = 'sender_specific'
+                        
+                        input_tokens = data.get('input_tokens', 0)
+                        output_tokens = data.get('output_tokens', 0)
+                        
+                        # ১ টোকেন সাশ্রয় = (input_tokens + output_tokens) * frequency - (input_tokens + output_tokens)
+                        # কারণ প্রথমবার জেনারেট করতে টোকেন লেগেছে, পরের বারগুলো সেভ হয়েছে।
+                        total_token_savings = (int(input_tokens) + int(output_tokens)) * (int(frequency) - 1)
+                        if total_token_savings < 0: total_token_savings = 0
+                    except:
+                        pass
 
-                api_data.append({
+                is_shareable = msg_hash not in excluded_hashes
+
+                ranking_list.append({
                     'text': text,
                     'frequency': int(frequency),
                     'token_savings': total_token_savings,
                     'msg_hash': msg_hash,
                     'current_scope': current_scope,
+                    'is_shareable': is_shareable,
                 })
 
             return Response({
-                "data": api_data,
+                "data": ranking_list,
                 "is_staff": request.user.is_staff or request.user.is_superuser,
-                "is_special_agent": is_special_agent,
-                "special_agent_status": agent.special_agent_status if agent else "none"
+                "is_special_agent": agent.is_special_agent,
+                "special_agent_status": agent.special_agent_status,
             }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class ToggleSharingAPIView(APIView):
+    """
+    মেসেজের শেয়ারিং স্ট্যাটাস (On/Off) পরিবর্তন করে।
+    এটি Redis set 'agent:{agent_id}:sharing_exclusion_set'-এ msg_hash যোগ বা রিমুভ করে।
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, agent_id, msg_hash):
+        try:
+            # ১. ওনারশিপ ভেরিফিকেশন
+            agent = AgentAI.objects.filter(page_id=agent_id, user=request.user).first()
+            if not agent:
+                return Response({"error": "Agent not found or unauthorized"}, status=status.HTTP_404_NOT_FOUND)
+            
+            is_shareable = request.data.get('is_shareable', True)
+            
+            r_db4 = get_redis_client(db=4)
+            exclusion_key = f"agent:{agent_id}:sharing_exclusion_set"
+            
+            if is_shareable:
+                # শেয়ারযোগ্য হলে এক্সক্লুশন লিস্ট থেকে রিমুভ করো
+                r_db4.srem(exclusion_key, msg_hash)
+                msg = "Message marked as shareable"
+            else:
+                # শেয়ারযোগ্য না হলে এক্সক্লুশন লিস্টে অ্যাড করো
+                r_db4.sadd(exclusion_key, msg_hash)
+                msg = "Message excluded from sharing"
+                
+            return Response({"status": "success", "message": msg, "is_shareable": is_shareable}, status=status.HTTP_200_OK)
             
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

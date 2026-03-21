@@ -341,16 +341,23 @@ def process_ai_reply_task(self, data):
             cache_hit_scope = "agent_exact"
         
         # --- Layer 1.5: Shared Agent Exact ---
-        if not cached_res and agent_config.get_settings.shared_cache_agent:
-            shared_agent = agent_config.get_settings.shared_cache_agent
-            shared_page_id = shared_agent.page_id
-            cached_res = get_cached_reply(shared_page_id, msg_text=text)
-            if cached_res:
-                cache_hit_scope = "shared_agent_exact"
-                # Also track this hit for the current agent's ranking
-                msg_hash = cached_res.get('msg_hash') or hashlib.md5(normalize_for_cache(text).encode()).hexdigest()
-                incr_message_frequency(page_id, msg_hash)
-                logger.info(f"🔗 SHARED CACHE HIT (Exact) from Agent {shared_agent.name} for '{text[:30]}'")
+        if not cached_res:
+            shared_agents = agent_config.get_settings.shared_cache_agents.all()
+            for shared_agent in shared_agents:
+                shared_page_id = shared_agent.page_id
+                potential_res = get_cached_reply(shared_page_id, msg_text=text)
+                if potential_res:
+                    msg_hash = potential_res.get('msg_hash')
+                    # এক্সক্লুশন চেক (Redis Set)
+                    exclusion_key = f"agent:{shared_page_id}:sharing_exclusion_set"
+                    r_db4 = get_redis_client(db=4)
+                    if not r_db4.sismember(exclusion_key, msg_hash):
+                        cached_res = potential_res
+                        cache_hit_scope = "shared_agent_exact"
+                        # Track this hit for the current agent's ranking
+                        incr_message_frequency(page_id, msg_hash)
+                        logger.info(f"🔗 SHARED CACHE HIT (Exact) from Agent {shared_agent.name} for '{text[:30]}'")
+                        break
 
         # --- Layer 2: Agent Fuzzy ---
         if not cached_res:
@@ -359,16 +366,23 @@ def process_ai_reply_task(self, data):
                 cache_hit_scope = "agent_fuzzy"
             
             # --- Layer 2.5: Shared Agent Fuzzy ---
-            if not cached_res and agent_config.get_settings.shared_cache_agent:
-                shared_agent = agent_config.get_settings.shared_cache_agent
-                shared_page_id = shared_agent.page_id
-                cached_res = fuzzy_match(shared_page_id, text, threshold=80)
-                if cached_res:
-                    cache_hit_scope = "shared_agent_fuzzy"
-                    # Track this hit for the current agent too
-                    msg_hash = cached_res.get('msg_hash') or hashlib.md5(normalize_for_cache(text).encode()).hexdigest()
-                    incr_message_frequency(page_id, msg_hash)
-                    logger.info(f"🔗 SHARED CACHE HIT (Fuzzy) from Agent {shared_agent.name} for '{text[:20]}'")
+            if not cached_res:
+                shared_agents = agent_config.get_settings.shared_cache_agents.all()
+                for shared_agent in shared_agents:
+                    shared_page_id = shared_agent.page_id
+                    potential_res = fuzzy_match(shared_page_id, text, threshold=80)
+                    if potential_res:
+                        msg_hash = potential_res.get('msg_hash')
+                        # এক্সক্লুশন চেক
+                        exclusion_key = f"agent:{shared_page_id}:sharing_exclusion_set"
+                        r_db4 = get_redis_client(db=4)
+                        if not r_db4.sismember(exclusion_key, msg_hash):
+                            cached_res = potential_res
+                            cache_hit_scope = "shared_agent_fuzzy"
+                            # Track this hit for the current agent too
+                            incr_message_frequency(page_id, msg_hash)
+                            logger.info(f"🔗 SHARED CACHE HIT (Fuzzy) from Agent {shared_agent.name} for '{text[:20]}'")
+                            break
 
         # --- Layer 3: Global Exact ---
         if not cached_res:
@@ -502,10 +516,10 @@ def process_ai_reply_task(self, data):
             # ---- Cache Classification Instruction (JSON suffix) ----
             classify_instruction = (
                 '\n\nReturn ONLY a valid JSON object: {"reply": "...", "cache_type": "..."}. '
-                'Use "no_cache" for context-dependent words (it/this/that/ঐটা/সেটা) or very specific conversation flow or If asked about your identity.'
+                'Use "no_cache" for context-dependent words (it/this/that/ঐটা/সেটা) or very specific conversation flow.'
                 'Use "sender_specific" for user-only info (my,amar,etc any language, name/order/status/আমি/আমার/ব্যক্তিগত তথ্য). '
-                'Use "agent_specific" ONLY for information extracted from [KNOWLEDGE BASE DATA] or business-specific details like specific products/prices.'
-                'Use "global" for general knowledge, universal greetings (Salam/Hi), and any answer based on your pre-trained general intelligence rather than the provided knowledge base.'
+                'Use "agent_specific" for information extracted from [KNOWLEDGE BASE DATA], business details like products/prices, or IF ASKED ABOUT YOUR IDENTITY (who you are, what you do). '
+                'Use "global" ONLY for general world facts, universal greetings (Salam/Hi), or general knowledge. NEVER use "global" for identity, personal info, or specific business details.'
                 'STRICT: No markdown blocks, no preamble, and ensure JSON syntax is perfect.'
             )
             system_instruction = system_instruction + classify_instruction

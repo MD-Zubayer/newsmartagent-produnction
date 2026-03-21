@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 // ⚡ PiggyBank আইকন ইম্পোর্ট করা হলো
-import { Table, Search, AlertTriangle, Zap, BarChart3, Loader2, PiggyBank, Trash2, Clock } from "lucide-react";
+import { Table, Search, AlertTriangle, Zap, BarChart3, Loader2, PiggyBank, Trash2, Clock, Share2, Unlock, Lock } from "lucide-react";
 import api from "@/lib/api";
 import { toast } from "react-hot-toast";
 
@@ -21,6 +21,7 @@ export default function RankingReportPage() {
   const [isSpecialAgent, setIsSpecialAgent] = useState(false);
   const [specialAgentStatus, setSpecialAgentStatus] = useState('none');
   const [isUpdatingCacheSource, setIsUpdatingCacheSource] = useState(false);
+  const [isUpdatingSharing, setIsUpdatingSharing] = useState(null);
 
   // ১. এজেন্ট লিস্ট লোড করা
   useEffect(() => {
@@ -184,27 +185,24 @@ export default function RankingReportPage() {
     }
   };
 
-  // ৬. Cache Source আপডেট লজিক
-  const handleCacheSourceChange = async (sourceAgentId) => {
+  // ৬. Cache Source আপডেট লজিক (Multi-agent Selection)
+  const handleCacheSourceChange = async (sourceAgentIds) => {
     if (!selectedAgent) return;
     try {
       setIsUpdatingCacheSource(true);
+      // backend expects list of IDs for ManyToMany field
       await api.patch(`/AgentAI/agents/${selectedAgent.id}/`, {
-        shared_cache_agent: sourceAgentId || null
+        shared_cache_agents: sourceAgentIds || []
       });
       
       const updatedAgents = agents.map(agent =>
         agent.id === selectedAgent.id
-          ? { ...agent, shared_cache_agent: sourceAgentId ? parseInt(sourceAgentId) : null }
+          ? { ...agent, shared_cache_agents: sourceAgentIds || [] }
           : agent
       );
       setAgents(updatedAgents);
       setSelectedAgent(updatedAgents.find(a => a.id === selectedAgent.id));
-      
-      toast.success("Cache sharing updated!", {
-        icon: '🔗',
-        style: { borderRadius: '16px', background: '#1e293b', color: '#fff', fontWeight: 'bold' }
-      });
+      toast.success("Cache sharing settings updated!");
     } catch (err) {
       console.error("Cache Source Update Error:", err);
       toast.error("Failed to update cache source");
@@ -286,25 +284,37 @@ export default function RankingReportPage() {
               </select>
             </div>
 
-            {/* ⚡ নতুন: ক্যাশ শেয়ারিং ড্রপডাউন */}
-            <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3">
+            {/* ⚡ নতুন: ক্যাশ শেয়ারিং ড্রপডাউন (Multi-select logic using simple tags) */}
+            <div className="mt-4 flex flex-col gap-3">
               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                <PiggyBank size={12} className="text-emerald-500" />
-                Share Cache From:
+                <Share2 size={12} className="text-pink-500" />
+                Share Cache From (Multi-Select):
               </span>
-              <div className="flex items-center gap-2">
-                <select
-                  className="bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-emerald-300 shadow-sm min-w-[200px] border-l-4 border-l-emerald-400"
-                  value={selectedAgent?.shared_cache_agent || ""}
-                  disabled={isUpdatingCacheSource}
-                  onChange={(e) => handleCacheSourceChange(e.target.value)}
-                >
-                  <option value="">None (Standalone)</option>
-                  {agents.filter(a => a.id !== selectedAgent?.id).map(agent => (
-                    <option key={agent.id} value={agent.id}>{agent.name} ({agent.page_id})</option>
-                  ))}
-                </select>
-                {isUpdatingCacheSource && <Loader2 className="animate-spin h-4 w-4 text-emerald-500" />}
+              <div className="flex flex-wrap gap-2">
+                {agents.filter(a => a.id !== selectedAgent?.id).map(agent => {
+                  const isSelected = selectedAgent?.shared_cache_agents?.includes(agent.id);
+                  return (
+                    <button
+                      key={agent.id}
+                      onClick={() => {
+                        const current = selectedAgent?.shared_cache_agents || [];
+                        const updated = isSelected 
+                          ? current.filter(id => id !== agent.id)
+                          : [...current, agent.id];
+                        handleCacheSourceChange(updated);
+                      }}
+                      disabled={isUpdatingCacheSource}
+                      className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tight transition-all border-2 flex items-center gap-2
+                        ${isSelected 
+                          ? 'bg-pink-500 text-white border-pink-400 shadow-md scale-105' 
+                          : 'bg-white text-gray-400 border-gray-100 hover:border-pink-200'}`}
+                    >
+                      {agent.name}
+                      {isSelected ? <Unlock size={10} /> : <Lock size={10} />}
+                    </button>
+                  );
+                })}
+                {isUpdatingCacheSource && <Loader2 className="animate-spin h-4 w-4 text-pink-500 self-center" />}
               </div>
             </div>
           </div>
@@ -430,7 +440,25 @@ export default function RankingReportPage() {
                     </button>
                   </div>
                   
-                  <p className="text-sm font-bold text-slate-800 bg-slate-50/50 p-4 rounded-xl border border-slate-100">{item.text}</p>
+                  <div className="flex items-center justify-between gap-4">
+                    <p className="text-sm font-bold text-slate-800 bg-slate-50/50 p-4 rounded-xl border border-slate-100 flex-1">{item.text}</p>
+                    <button
+                      onClick={() => handleToggleSharing(item.msg_hash, item.is_shareable)}
+                      disabled={isUpdatingSharing === item.msg_hash}
+                      className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all duration-300
+                        ${item.is_shareable 
+                          ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
+                          : 'bg-rose-50 text-rose-600 border border-rose-100'}`}
+                    >
+                      {isUpdatingSharing === item.msg_hash ? (
+                        <Loader2 className="animate-spin" size={20} />
+                      ) : item.is_shareable ? (
+                        <Unlock size={20} />
+                      ) : (
+                        <Lock size={20} />
+                      )}
+                    </button>
+                  </div>
                   
                   <div className="grid grid-cols-2 gap-3">
                     <div className="p-3 bg-white border border-slate-100 rounded-xl flex flex-col items-center">
@@ -475,6 +503,7 @@ export default function RankingReportPage() {
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest">Message Content</th>
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest text-center">Frequency</th>
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest text-center">Savings</th>
+                  <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest text-center">Sharing</th>
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest text-center">Cache Scope</th>
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
                 </tr>
@@ -503,6 +532,25 @@ export default function RankingReportPage() {
                           <span className="text-xl font-black text-emerald-700 tabular-nums">{item.token_savings}</span>
                           <span className="text-[9px] font-black text-emerald-600/60 uppercase tracking-widest underline decoration-dotted decoration-emerald-200">Tokens Saved</span>
                         </div>
+                      </td>
+                      <td className="px-8 py-6 text-center">
+                        <button
+                          onClick={() => handleToggleSharing(item.msg_hash, item.is_shareable)}
+                          disabled={isUpdatingSharing === item.msg_hash}
+                          title={item.is_shareable ? "Mark as non-shareable" : "Mark as shareable"}
+                          className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-300 mx-auto
+                            ${item.is_shareable 
+                              ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 ring-2 ring-emerald-100/50' 
+                              : 'bg-rose-50 text-rose-600 hover:bg-rose-100 ring-2 ring-rose-100/50'}`}
+                        >
+                          {isUpdatingSharing === item.msg_hash ? (
+                            <Loader2 className="animate-spin" size={18} />
+                          ) : item.is_shareable ? (
+                            <Unlock size={18} />
+                          ) : (
+                            <Lock size={18} />
+                          )}
+                        </button>
                       </td>
                       <td className="px-8 py-6 text-center">
                         <select

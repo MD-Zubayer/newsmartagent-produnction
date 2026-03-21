@@ -33,7 +33,7 @@ class AgentAIListSerializer(serializers.ModelSerializer):
     max_tokens = serializers.IntegerField(source='get_settings.max_tokens', read_only=True)
     skip_history = serializers.BooleanField(source='get_settings.skip_history', read_only=True)
     history_skip_keywords = serializers.CharField(source='get_settings.history_skip_keywords', read_only=True)
-    shared_cache_agent = serializers.PrimaryKeyRelatedField(source='get_settings.shared_cache_agent', read_only=True)
+    shared_cache_agents = serializers.PrimaryKeyRelatedField(source='get_settings.shared_cache_agents', many=True, read_only=True)
     widget_settings = WidgetSettingsSerializer(read_only=True)
     
     class Meta:
@@ -60,7 +60,7 @@ class AgentAIListSerializer(serializers.ModelSerializer):
             'access_token',
             'is_special_agent',
             'special_agent_status',
-            'shared_cache_agent',
+            'shared_cache_agents',
             'widget_key',
             'widget_settings'
         ]
@@ -84,7 +84,7 @@ class AgentAISerializer(serializers.ModelSerializer):
     max_tokens = serializers.IntegerField(required=False)
     skip_history = serializers.BooleanField(required=False)
     history_skip_keywords = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    shared_cache_agent = serializers.PrimaryKeyRelatedField(queryset=AgentAI.objects.all(), required=False, allow_null=True)
+    shared_cache_agents = serializers.PrimaryKeyRelatedField(queryset=AgentAI.objects.all(), many=True, required=False)
     widget_settings = WidgetSettingsSerializer(required=False)
 
     class Meta:
@@ -109,7 +109,7 @@ class AgentAISerializer(serializers.ModelSerializer):
             'is_active',
             'is_special_agent',
             'special_agent_status',
-            'shared_cache_agent',
+            'shared_cache_agents',
             'widget_key',
             'widget_settings'
         ]
@@ -140,7 +140,7 @@ class AgentAISerializer(serializers.ModelSerializer):
         max_tokens = validated_data.pop('max_tokens', 200)
         skip_history = validated_data.pop('skip_history', False)
         history_skip_keywords = validated_data.pop('history_skip_keywords', '')
-        shared_cache_agent = validated_data.pop('shared_cache_agent', None)
+        shared_cache_agents = validated_data.pop('shared_cache_agents', [])
         widget_settings_data = validated_data.pop('widget_settings', {})
         
         # Generate widget key if platform is web_widget
@@ -161,9 +161,12 @@ class AgentAISerializer(serializers.ModelSerializer):
                 'max_tokens': max_tokens,
                 'skip_history': skip_history,
                 'history_skip_keywords': history_skip_keywords,
-                'shared_cache_agent': shared_cache_agent
+                'shared_cache_agents': shared_cache_agents
             }
         )
+        
+        if shared_cache_agents:
+            agent_settings.shared_cache_agents.set(shared_cache_agents)
         
         # Create WidgetSettings if platform is web_widget
         from aiAgent.models import WidgetSettings
@@ -176,7 +179,7 @@ class AgentAISerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         settings_data = {}
-        for field in ['history_limit', 'temperature', 'max_tokens', 'skip_history', 'history_skip_keywords', 'shared_cache_agent']:
+        for field in ['history_limit', 'temperature', 'max_tokens', 'skip_history', 'history_skip_keywords', 'shared_cache_agents']:
             if field in validated_data:
                 settings_data[field] = validated_data.pop(field)
         
@@ -196,6 +199,8 @@ class AgentAISerializer(serializers.ModelSerializer):
                 agent=agent,
                 defaults=settings_data
             )
+            if 'shared_cache_agents' in settings_data:
+                agent_settings.shared_cache_agents.set(settings_data['shared_cache_agents'])
         
         if widget_settings_data:
             from aiAgent.models import WidgetSettings
