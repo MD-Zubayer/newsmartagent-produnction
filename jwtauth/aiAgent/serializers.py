@@ -221,12 +221,13 @@ class TokenUsageAnalyticsSerializer(serializers.ModelSerializer):
         model = TokenUsageLog
         fields = '__all__'
 
-
 class ContactSerializer(serializers.ModelSerializer):
+    agent_name = serializers.CharField(source='agent.name', read_only=True)
+
     class Meta:
         model = Contact
         fields = [
-            'id', 'agent', 'identifier', 'name', 'push_name', 
+            'id', 'agent', 'agent_name', 'identifier', 'name', 'push_name', 
             'is_auto_reply_enabled', 'platform', 'created_at', 'updated_at',
             'custom_prompt', 'custom_instructions'
         ]

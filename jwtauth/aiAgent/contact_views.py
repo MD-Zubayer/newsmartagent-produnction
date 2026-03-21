@@ -13,9 +13,14 @@ class ContactListView(APIView):
 
     def get(self, request, agent_id):
         try:
-            agent = AgentAI.objects.get(page_id=agent_id, user=request.user)
             query = request.GET.get('q', '')
-            contacts = Contact.objects.filter(agent=agent).order_by('-updated_at')
+            
+            if agent_id == 'all':
+                # Fetch contacts for all agents of this user
+                contacts = Contact.objects.filter(agent__user=request.user).order_by('-updated_at')
+            else:
+                agent = AgentAI.objects.get(page_id=agent_id, user=request.user)
+                contacts = Contact.objects.filter(agent=agent).order_by('-updated_at')
             
             if query:
                 contacts = contacts.filter(
@@ -24,7 +29,7 @@ class ContactListView(APIView):
                     models.Q(identifier__icontains=query)
                 )
                 
-            serializer = ContactSerializer(contacts[:50], many=True)
+            serializer = ContactSerializer(contacts[:100], many=True)
             return Response({"contacts": serializer.data}, status=status.HTTP_200_OK)
         except AgentAI.DoesNotExist:
             return Response({"error": "Agent not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -92,3 +97,54 @@ class ContactMessageHistoryView(APIView):
             return Response({"error": "Contact not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class UnifiedReplyView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        contact_id = request.data.get('contact_id')
+        message_text = request.data.get('message')
+
+        if not contact_id or not message_text:
+            return Response({"error": "contact_id and message are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            contact = Contact.objects.get(id=contact_id, agent__user=request.user)
+            agent = contact.agent
+            platform = contact.platform
+            identifier = contact.identifier
+
+            from aiAgent.business_logic import logic_handler
+            from chat.services import save_message
+            
+            success = False
+            if platform == 'whatsapp':
+                data = {
+                    'sender_id': identifier,
+                    'delivery_jid': identifier, # Usually same for WA
+                }
+                success = logic_handler.deliver_whatsapp_reply(data, message_text)
+            elif platform == 'messenger' or platform == 'facebook_comment':
+                data = {
+                    'sender_id': identifier,
+                    'type': platform
+                }
+                success = logic_handler.deliver_facebook_reply(data, message_text, agent.page_id, agent.access_token)
+            elif platform == 'web_widget':
+                 # For Web Widget, we might need a different delivery or just save it
+                 # Typically web widget is polling or uses sockets.
+                 # If it's the dashboard reply logic:
+                 success = logic_handler.deliver_dashboard_reply(request.user.id, message_text, str(uuid.uuid4()))
+            
+            if success:
+                # Save the manual reply in history
+                save_message(agent, identifier, message_text, 'assistant', platform=platform)
+                return Response({"success": True}, status=status.HTTP_200_OK)
+            else:
+                return Response({"error": "Failed to deliver message to platform"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Contact.DoesNotExist:
+            return Response({"error": "Contact not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+import uuid

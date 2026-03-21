@@ -30,6 +30,9 @@ export default function Contacts() {
   const [historyPage, setHistoryPage] = useState(1);
   const [hasMoreHistory, setHasMoreHistory] = useState(true);
   
+  const [replyText, setReplyText] = useState("");
+  const [sendingReply, setSendingReply] = useState(false);
+  
   const observer = useRef();
   const lastMessageElementRef = useCallback(node => {
     if (historyLoading) return;
@@ -63,9 +66,8 @@ export default function Contacts() {
       const res = await api.get("/AgentAI/agents/");
       const agentList = Array.isArray(res?.data) ? res.data : [];
       setAgents(agentList);
-      if (agentList.length > 0) {
-        setSelectedAgent(agentList[0].page_id);
-      }
+      // Default to "all" as requested
+      setSelectedAgent("all");
     } catch (err) {
       console.error("Failed to load agents:", err);
       toast.error("Failed to load agents.");
@@ -144,6 +146,30 @@ export default function Contacts() {
     }
   };
 
+  const handleSendReply = async () => {
+    if (!replyText.trim() || !historyContact) return;
+    
+    setSendingReply(true);
+    try {
+      const res = await api.post("/AgentAI/contacts/unified/reply/", {
+        contact_id: historyContact.id,
+        message: replyText
+      });
+      
+      if (res.data.success) {
+        toast.success("Reply sent successfully!");
+        setReplyText("");
+        // Refresh history to show the new message
+        fetchHistory(historyContact.id, 1);
+      }
+    } catch (err) {
+      console.error("Failed to send reply:", err);
+      toast.error(err.response?.data?.error || "Failed to send reply.");
+    } finally {
+      setSendingReply(false);
+    }
+  };
+
   const filteredContacts = contacts.filter(c => 
     (c.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
      c.identifier?.includes(searchQuery))
@@ -173,6 +199,7 @@ export default function Contacts() {
                 onChange={(e) => setSelectedAgent(e.target.value)}
                 className="w-full pl-12 pr-4 py-4 bg-white border border-gray-100 rounded-2xl font-bold text-gray-700 outline-none shadow-sm focus:ring-2 focus:ring-indigo-500/20"
               >
+                <option value="all">All Platforms (Unified)</option>
                 {agents.map(agent => (
                   <option key={agent.id} value={agent.page_id}>
                     {agent.name} ({agent.platform})
@@ -247,8 +274,8 @@ export default function Contacts() {
                   </button>
 
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 bg-gray-50 px-2 py-1 rounded-lg">
-                      {contact.platform}
+                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400 bg-indigo-50 px-2 py-1 rounded-lg">
+                      {contact.agent_name || contact.platform}
                     </span>
                     <div className="flex items-center gap-1.5">
                       <div className={`w-2 h-2 rounded-full ${contact.is_auto_reply_enabled ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>
@@ -339,6 +366,43 @@ export default function Contacts() {
               <div className="p-8 border-t border-gray-50 bg-gray-50/50 flex justify-center">
                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">
                   Total {historyMessages.length} messages loaded
+                </p>
+              </div>
+
+              {/* Reply Section */}
+              <div className="p-6 border-t border-gray-50 bg-white">
+                <div className="relative flex items-end gap-4 bg-gray-50 p-2 rounded-[2rem] border border-gray-100 focus-within:border-indigo-200 transition-all">
+                  <textarea
+                    placeholder="Type your reply here..."
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    rows={2}
+                    className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-bold text-gray-700 p-4 resize-none"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendReply();
+                      }
+                    }}
+                  />
+                  <button
+                    onClick={handleSendReply}
+                    disabled={sendingReply || !replyText.trim()}
+                    className={`p-4 rounded-2xl transition-all ${
+                      replyText.trim() && !sendingReply
+                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100'
+                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    }`}
+                  >
+                    {sendingReply ? (
+                      <ArrowPathIcon className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <ChatBubbleLeftRightIcon className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
+                <p className="mt-3 text-[9px] font-black uppercase tracking-widest text-gray-400 text-center">
+                  Press Enter to send • Shift + Enter for new line
                 </p>
               </div>
             </div>

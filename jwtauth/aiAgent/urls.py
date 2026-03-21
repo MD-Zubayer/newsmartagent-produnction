@@ -26,6 +26,7 @@ urlpatterns = [
     path('contacts/detail/<int:contact_id>/', ContactDetailView.as_view(), name='contact-detail'),
     path('contacts/toggle-reply/<int:contact_id>/', ToggleAutoReplyView.as_view(), name='toggle-auto-reply'),
     path('contacts/<int:contact_id>/messages/', ContactMessageHistoryView.as_view(), name='contact-messages'),
+    path('contacts/unified/reply/', UnifiedReplyView.as_view(), name='unified-reply'),
     
     # Web Widget Public API
     path('widget/config/<str:widget_key>/', WidgetConfigView.as_view(), name='widget-config'),
