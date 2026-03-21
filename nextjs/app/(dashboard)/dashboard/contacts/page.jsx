@@ -214,7 +214,7 @@ export default function Contacts() {
       <div className="relative z-10 max-w-6xl mx-auto w-full px-4 py-8 flex-1 flex flex-col h-full overflow-hidden">
         <div className="bg-white shadow-lg rounded-t-lg flex-1 flex flex-col overflow-hidden border border-gray-200">
           {/* Dashboard Left Sidebar Header */}
-          <div className="flex flex-col md:flex-row border-b border-gray-200">
+          <div className="flex flex-col md:flex-row flex-1 overflow-hidden pointer-events-auto">
             <div className="w-full md:w-96 border-r border-gray-200 flex flex-col bg-white">
               <div className="p-4 bg-[#f0f2f5] flex items-center justify-between">
                 <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold">
