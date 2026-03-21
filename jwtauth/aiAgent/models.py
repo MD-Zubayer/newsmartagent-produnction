@@ -321,6 +321,10 @@ class WidgetSettings(models.Model):
     is_enabled = models.BooleanField(default=True)
     allowed_domains = models.TextField(blank=True, help_text="Comma separated domains (e.g. example.com). Leave blank for all.")
     
+    # Multi-Channel
+    whatsapp_number = models.CharField(max_length=20, blank=True, null=True, help_text="WhatsApp number with country code")
+    messenger_link = models.CharField(max_length=255, blank=True, null=True, help_text="Facebook Messenger link (e.g. m.me/yourpage)")
+    
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
