@@ -32,6 +32,7 @@
 
     // ── Build Widget ──────────────────────────────────────────────────────────
     function initWidget() {
+        if (window.location.pathname.includes('dashboard')) return;
         var s          = config.settings;
         var color      = s.primary_color || '#4f46e5';
         var size       = parseInt(s.bubble_size) || 60;
