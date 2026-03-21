@@ -154,9 +154,14 @@ def process_ai_reply_task(self, data):
     msg_id = data.get('message_id')
     incoming_ts = data.get('timestamp')
 
-    if not all([sender_id, text, page_id]):
-        logger.error(f"Aborting: Missing core data in task. sender: {sender_id}, text: {text}")
-        return
+    if request_type == 'web_widget':
+        if not all([sender_id, text, data.get('widget_key')]):
+            logger.error(f"Aborting: Missing core data. sender: {sender_id}, text: {text}")
+            return
+    else:
+        if not all([sender_id, text, page_id]):
+            logger.error(f"Aborting: Missing core data in task. sender: {sender_id}, text: {text}")
+            return
 
     # ২. এজেন্ট ও প্রোফাইল লোড
     try:
@@ -205,9 +210,9 @@ def process_ai_reply_task(self, data):
         if not agent_config:
             logger.error(f'❌ [Task] No active agent found for identifiers {lookup_ids if lookup_ids else [page_id]}. identifiers checked: {lookup_ids}')
             return
-        logger.info(f"✅ [Task] Agent found: ID {agent_config.id}, page_id {agent_config.page_id}, User {agent_config.user.email}")
+        logger.info(f"✅ [Task] Agent found: ID {agent_config.id}, User {agent_config.user.email}")
         # Use matched agent page_id for downstream operations/cache keys
-        page_id = agent_config.page_id
+        page_id = agent_config.page_id or f"widget_{agent_config.id}"
         user_profile = agent_config.user.profile
 
         from users.models import FacebookPage
