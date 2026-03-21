@@ -149,7 +149,7 @@ export default function RootLayout({ children }) {
         />
 
         {children}
-        <MessengerButton />
+  
         <script
           dangerouslySetInnerHTML={{
             __html: `
