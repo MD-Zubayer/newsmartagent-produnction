@@ -2,7 +2,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from aiAgent.views import AgentAIViewSet, TokenUsageAnalyticsView, dashboard_chat_view, RankingAPIView, UserAvailableModelsView, AgentMetricsAPIView, DeleteRankingDataAPIView, UpdateCacheScopeAPIView, RequestSpecialAgentAPIView, ClearGlobalCacheAPIView, ToggleSharingAPIView
-from aiAgent.contact_views import ContactListView, ToggleAutoReplyView, ContactMessageHistoryView, ContactDetailView
+from aiAgent.contact_views import ContactListView, ToggleAutoReplyView, ContactMessageHistoryView, ContactDetailView, UnifiedReplyView
 from aiAgent.widget_views import WidgetConfigView, WidgetChatView, WidgetIconUploadView
 from chat.views import facebook_data_deletion_callback
 router = DefaultRouter()
