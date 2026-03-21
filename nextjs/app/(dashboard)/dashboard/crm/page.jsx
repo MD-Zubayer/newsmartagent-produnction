@@ -127,7 +127,7 @@ export default function SmartCRMPage() {
           >
             <option value="all">🌐 All Channels & Agents</option>
             {agents.map(a => (
-              <option key={a.id} value={a.id}>{a.name}</option>
+              <option key={a.id} value={a.page_id}>{a.name}</option>
             ))}
           </select>
         </div>
