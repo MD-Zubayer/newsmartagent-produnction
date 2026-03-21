@@ -160,7 +160,14 @@ def process_ai_reply_task(self, data):
 
     # ২. এজেন্ট ও প্রোফাইল লোড
     try:
-        if request_type == 'whatsapp':
+        if request_type == 'web_widget':
+            agent_config = AgentAI.objects.filter(
+                is_active=True,
+                widget_key=data.get('widget_key'),
+                platform='web_widget'
+            ).first()
+            lookup_ids = []
+        elif request_type == 'whatsapp':
             # Priority: Bot's phone number, excluding sender or generic session strings
             candidates = [
                 data.get('receiver'),
@@ -204,7 +211,7 @@ def process_ai_reply_task(self, data):
         user_profile = agent_config.user.profile
 
         from users.models import FacebookPage
-        fb_page = FacebookPage.objects.filter(page_id=page_id, is_active=True).first()
+        fb_page = FacebookPage.objects.filter(page_id=page_id, is_active=True).first() if page_id else None
         effective_access_token = fb_page.access_token if fb_page else agent_config.access_token
 
         # ── WhatsApp Message Logging (Incoming) ──
@@ -237,7 +244,7 @@ def process_ai_reply_task(self, data):
         Contact.objects.update_or_create(
             agent=agent_config,
             identifier=sender_id,
-            platform=request_type if request_type in ['whatsapp', 'messenger'] else 'messenger',
+            platform=request_type if request_type in ['whatsapp', 'messenger', 'web_widget'] else 'messenger',
             defaults={
                 'name': contact_name if contact_name else None,
                 'push_name': incoming_push_name if incoming_push_name else None
@@ -251,6 +258,7 @@ def process_ai_reply_task(self, data):
             if msg_id:
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)
                 r.delete(f'processing_msg:{msg_id}')
+            if request_type == 'web_widget': return "Auto-reply is currently disabled by the agent."
             return
     except Exception as e:
         logger.error(f'Error: Agent not found for page_id {page_id} - {e}')
@@ -393,7 +401,12 @@ def process_ai_reply_task(self, data):
             if agent_config.platform == 'whatsapp':
                 request_type = 'whatsapp'
 
-            if request_type == 'dashboard':
+            if request_type == 'web_widget':
+                if msg_id:
+                    r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                    r.delete(f'processing_msg:{msg_id}')
+                return clean_reply
+            elif request_type == 'dashboard':
                 delivered = deliver_dashboard_reply(agent_config.user.id, clean_reply, msg_id)
             elif request_type == 'whatsapp':
                 delivered = deliver_whatsapp_reply(data, clean_reply)
@@ -421,6 +434,7 @@ def process_ai_reply_task(self, data):
 
             if not check_token_availability(user_profile, effective_model):
                 logger.info(f">>> User {user_profile.user.email} has no tokens for model {effective_model}. Aborting.")
+                if request_type == 'web_widget': return "Sorry, token limit reached for this agent."
                 return
 
             order_instr = get_order_instructions(agent_config.user)
@@ -551,7 +565,13 @@ def process_ai_reply_task(self, data):
             log_token_usage(agent_config, sender_id, ai_data, duration, request_type)
             clean_reply = reply.strip()
             
-            if request_type == 'dashboard':
+            if request_type == 'web_widget':
+                delivered = True
+                if msg_id:
+                    r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                    r.delete(f'processing_msg:{msg_id}')
+                return clean_reply
+            elif request_type == 'dashboard':
                 delivered = deliver_dashboard_reply(agent_config.user.id, clean_reply, msg_id)
             elif request_type == 'whatsapp':
                 delivered = deliver_whatsapp_reply(data, clean_reply)

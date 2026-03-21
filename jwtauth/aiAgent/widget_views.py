@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from aiAgent.models import AgentAI, WidgetSettings
 from aiAgent.serializers import WidgetSettingsSerializer
-from aiAgent.business_logic.logic_handler import handle_ai_response
+from webhooks.tasks import process_ai_reply_task
 import logging
 import uuid
 import os
@@ -72,12 +72,24 @@ class WidgetChatView(APIView):
             return Response({"error": "Message and sender_id are required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            response_text = handle_ai_response(
-                agent_id=agent.id,
-                sender_id=sender_uuid,
-                message_text=message,
-                platform='web_widget'
-            )
+            import time
+            import uuid
+            
+            data = {
+                'widget_key': widget_key,
+                'sender_id': sender_uuid,
+                'message': message,
+                'type': 'web_widget',
+                'message_id': str(uuid.uuid4()),
+                'timestamp': int(time.time() * 1000)
+            }
+            
+            # Call the unified pipeline synchronously
+            response_text = process_ai_reply_task(data)
+            
+            if not response_text:
+                response_text = "I'm sorry, I am unable to reply at the moment. Please try again later."
+                
             return Response({"response": response_text})
         except Exception as e:
             logger.error(f"Error in WidgetChatView: {e}", exc_info=True)
