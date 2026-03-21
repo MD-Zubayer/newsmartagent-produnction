@@ -42,6 +42,7 @@ class AgentAIListSerializer(serializers.ModelSerializer):
             'name',
             'platform',
             'page_id',
+            'number',
             'webhook_secret',
             'system_prompt',
             'greeting_message',

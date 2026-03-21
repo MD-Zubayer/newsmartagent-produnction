@@ -20,6 +20,7 @@ const SIZE_PRESETS = [
 ];
 
 export default function WidgetCustomizePage() {
+  const [allAgents, setAllAgents] = useState([]);
   const [agents, setAgents] = useState([]);
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -41,6 +42,8 @@ export default function WidgetCustomizePage() {
     placeholder_text: "Type a message...",
     bubble_roundness: 28,
     show_bubble_background: true,
+    whatsapp_number: "",
+    messenger_link: "",
     is_enabled: true,
     allowed_domains: ""
   });
@@ -52,6 +55,7 @@ export default function WidgetCustomizePage() {
   const fetchAgents = async () => {
     try {
       const res = await api.get("/AgentAI/agents/");
+      setAllAgents(res.data);
       const widgetAgents = res.data.filter(a => a.platform === 'web_widget');
       setAgents(widgetAgents);
       if (widgetAgents.length > 0) {
@@ -384,6 +388,64 @@ export default function WidgetCustomizePage() {
                     className="w-full p-3 bg-slate-50 rounded-xl font-medium text-sm outline-none border border-slate-100" />
                 </div>
               ))}
+            </div>
+
+            {/* Multi-Channel */}
+            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4 mt-6">
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                <FaLayerGroup className="text-indigo-600" /> Multi-Channel Integration
+              </h3>
+              <p className="text-[10px] text-slate-400 font-medium pb-2 border-b border-slate-50 mb-4">
+                Auto-fill your external agent links below, or type them manually. Leave blank to disable.
+              </p>
+
+              {/* WhatsApp Auto-fill */}
+              {allAgents.filter(a => a.platform === 'whatsapp').length > 0 && (
+                <select 
+                  onChange={e => {
+                    const agent = allAgents.find(a => a.id == e.target.value);
+                    if (agent && agent.number) set('whatsapp_number', agent.number);
+                    e.target.value = ""; // Reset dropdown to placeholder
+                  }}
+                  className="w-full p-3 bg-indigo-50 text-indigo-700 rounded-xl font-bold text-[10px] uppercase tracking-widest border border-indigo-100 outline-none hover:bg-indigo-100 cursor-pointer transition-all"
+                >
+                  <option value="">-- Choose WhatsApp Agent to Auto-Fill --</option>
+                  {allAgents.filter(a => a.platform === 'whatsapp').map(a => (
+                    <option key={a.id} value={a.id}>{a.name} ({a.number || "No number saved"})</option>
+                  ))}
+                </select>
+              )}
+              
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">WhatsApp Number (with country code, e.g. 88017...)</label>
+                <input type="text" value={settings.whatsapp_number || ""} onChange={e => set('whatsapp_number', e.target.value)}
+                  className="w-full p-3 bg-slate-50 rounded-xl font-medium text-sm outline-none border border-slate-100" />
+              </div>
+
+              <div className="h-px bg-slate-100 my-4"></div>
+
+              {/* Messenger Auto-fill */}
+              {allAgents.filter(a => a.platform === 'messenger').length > 0 && (
+                <select 
+                  onChange={e => {
+                    const agent = allAgents.find(a => a.id == e.target.value);
+                    if (agent && agent.page_id) set('messenger_link', `m.me/${agent.page_id}`);
+                    e.target.value = ""; // Reset dropdown to placeholder
+                  }}
+                  className="w-full p-3 bg-indigo-50 text-indigo-700 rounded-xl font-bold text-[10px] uppercase tracking-widest border border-indigo-100 outline-none hover:bg-indigo-100 cursor-pointer transition-all"
+                >
+                  <option value="">-- Choose Messenger Agent to Auto-Fill --</option>
+                  {allAgents.filter(a => a.platform === 'messenger').map(a => (
+                    <option key={a.id} value={a.id}>{a.name} (Page ID: {a.page_id || "None"})</option>
+                  ))}
+                </select>
+              )}
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Messenger Link (e.g. m.me/yourpage)</label>
+                <input type="text" value={settings.messenger_link || ""} onChange={e => set('messenger_link', e.target.value)}
+                  className="w-full p-3 bg-slate-50 rounded-xl font-medium text-sm outline-none border border-slate-100" />
+              </div>
             </div>
 
           </div>
