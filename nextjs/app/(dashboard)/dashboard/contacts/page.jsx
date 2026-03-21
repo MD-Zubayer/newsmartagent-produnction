@@ -35,13 +35,15 @@ export default function Contacts() {
   const [replyText, setReplyText] = useState("");
   const [sendingReply, setSendingReply] = useState(false);
   
-  const messagesEndRef = useRef(null);
+  const messagesEndRefDesktop = useRef(null);
+  const messagesEndRefMobile = useRef(null);
   const observer = useRef();
 
   const scrollToBottom = () => {
     requestAnimationFrame(() => {
       setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+        messagesEndRefDesktop.current?.scrollIntoView({ behavior: "auto" });
+        messagesEndRefMobile.current?.scrollIntoView({ behavior: "auto" });
       }, 100);
     });
   };
@@ -416,7 +418,7 @@ export default function Contacts() {
                         </div>
                       </div>
                     ))}
-                    <div ref={messagesEndRef} />
+                    <div ref={messagesEndRefDesktop} />
                   </div>
 
                   {/* Reply Section */}
@@ -487,7 +489,7 @@ export default function Contacts() {
                    </div>
                 </div>
               ))}
-              <div ref={messagesEndRef} />
+              <div ref={messagesEndRefMobile} />
            </div>
 
            <div className="p-3 bg-[#f0f2f5] flex items-center gap-3">
