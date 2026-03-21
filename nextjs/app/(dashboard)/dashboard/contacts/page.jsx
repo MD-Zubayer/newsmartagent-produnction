@@ -24,7 +24,6 @@ export default function Contacts() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // History Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [historyContact, setHistoryContact] = useState(null);
   const [historyMessages, setHistoryMessages] = useState([]);
@@ -34,6 +33,15 @@ export default function Contacts() {
   
   const [replyText, setReplyText] = useState("");
   const [sendingReply, setSendingReply] = useState(false);
+
+  // Contact Settings Modal State
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [settingsForm, setSettingsForm] = useState({
+    custom_prompt: "",
+    custom_instructions: "",
+    is_auto_reply_enabled: true
+  });
+  const [savingSettings, setSavingSettings] = useState(false);
   
   const messagesEndRefDesktop = useRef(null);
   const messagesEndRefMobile = useRef(null);
@@ -197,6 +205,33 @@ export default function Contacts() {
       toast.error(err.response?.data?.error || "Failed to send reply.");
     } finally {
       setSendingReply(false);
+    }
+  };
+
+  const openSettings = (contact) => {
+    setSettingsForm({
+      custom_prompt: contact.custom_prompt || "",
+      custom_instructions: contact.custom_instructions || "",
+      is_auto_reply_enabled: contact.is_auto_reply_enabled
+    });
+    setIsSettingsModalOpen(true);
+  };
+
+  const handleSaveSettings = async () => {
+    setSavingSettings(true);
+    try {
+      const res = await api.patch(`/AgentAI/contacts/detail/${historyContact.id}/`, settingsForm);
+      // Update contact list
+      setContacts(prev => prev.map(c => c.id === historyContact.id ? { ...c, ...res.data } : c));
+      // Update active history contact
+      setHistoryContact(prev => ({ ...prev, ...res.data }));
+      toast.success("Settings saved successfully!");
+      setIsSettingsModalOpen(false);
+    } catch (err) {
+      console.error("Failed to save settings:", err);
+      toast.error("Failed to save contact settings.");
+    } finally {
+      setSavingSettings(false);
     }
   };
 
@@ -376,7 +411,10 @@ export default function Contacts() {
                     </div>
                     <div className="flex items-center gap-6 text-gray-500">
                       <MagnifyingGlassIcon className="h-5 w-5 cursor-pointer" />
-                      <EllipsisVerticalIcon className="h-5 w-5 cursor-pointer" />
+                      <EllipsisVerticalIcon 
+                        className="h-5 w-5 cursor-pointer hover:text-gray-900 transition-colors" 
+                        onClick={() => openSettings(historyContact)} 
+                      />
                       <button onClick={() => setIsModalOpen(false)}>
                         <XMarkIcon className="h-6 w-6 text-gray-400 hover:text-rose-500" />
                       </button>
@@ -477,6 +515,10 @@ export default function Contacts() {
                  </div>
                  <h3 className="font-bold truncate">{historyContact?.name || historyContact?.identifier}</h3>
               </div>
+              <EllipsisVerticalIcon 
+                className="h-6 w-6 cursor-pointer" 
+                onClick={() => openSettings(historyContact)} 
+              />
            </div>
            
            <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-[url('https://w0.peakpx.com/wallpaper/580/650/wallpaper-whatsapp-background.jpg')] bg-repeat bg-[size:300px]">
@@ -504,6 +546,91 @@ export default function Contacts() {
                  <PaperAirplaneIcon className="h-6 w-6" />
               </button>
            </div>
+        </div>
+      )}
+
+      {/* Contact Settings Modal */}
+      {isSettingsModalOpen && (
+        <div className="fixed inset-0 z-[300] bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+              <h2 className="font-bold text-gray-900">User Settings</h2>
+              <button 
+                onClick={() => setIsSettingsModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <XMarkIcon className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-6 overflow-y-auto">
+              {/* Auto Reply Toggle */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900">Auto Reply (AI Block)</h3>
+                    <p className="text-xs text-gray-500">Allow AI to automatically reply to this user.</p>
+                  </div>
+                  <button
+                    onClick={() => setSettingsForm(prev => ({ ...prev, is_auto_reply_enabled: !prev.is_auto_reply_enabled }))}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                       settingsForm.is_auto_reply_enabled ? 'bg-[#00a884]' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                       settingsForm.is_auto_reply_enabled ? 'translate-x-5' : 'translate-x-0'
+                    }`} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Custom Prompt */}
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-gray-900 flex justify-between">
+                  User Specific System Prompt
+                  <span className="text-xs font-normal text-gray-400">(Optional)</span>
+                </label>
+                <textarea
+                  value={settingsForm.custom_prompt}
+                  onChange={e => setSettingsForm(prev => ({ ...prev, custom_prompt: e.target.value }))}
+                  placeholder="e.g. You are talking to a VIP customer. Be extremely polite."
+                  className="w-full h-24 p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#00a884]/20 focus:border-[#00a884] outline-none resize-none transition-all"
+                />
+              </div>
+
+              {/* Custom Instructions */}
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-gray-900 flex justify-between">
+                  User Specific Additional Instructions
+                  <span className="text-xs font-normal text-gray-400">(Optional)</span>
+                </label>
+                <textarea
+                  value={settingsForm.custom_instructions}
+                  onChange={e => setSettingsForm(prev => ({ ...prev, custom_instructions: e.target.value }))}
+                  placeholder="e.g. Only speak in Spanish with this user."
+                  className="w-full h-24 p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#00a884]/20 focus:border-[#00a884] outline-none resize-none transition-all"
+                />
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-gray-100 flex justify-end gap-3 bg-gray-50">
+              <button
+                onClick={() => setIsSettingsModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+                disabled={savingSettings}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveSettings}
+                disabled={savingSettings}
+                className="px-6 py-2 text-sm font-medium text-white bg-[#00a884] hover:bg-[#009273] rounded-lg transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2"
+              >
+                {savingSettings && <ArrowPathIcon className="w-4 h-4 animate-spin" />}
+                Save Changes
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
