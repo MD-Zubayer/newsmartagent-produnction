@@ -55,8 +55,10 @@ def test_webhook(request):
 @permission_classes([AllowAny])
 def ai_webhook(request):
     print("!!! REQUEST RECEIVED !!!")
-    data = dict(request.data)
-    print(data)
+    # Convert standard DRF request.data to a plain dict
+    # Using .dict() if it's a QueryDict (form-data) to avoid list-values issue
+    data = request.data.dict() if hasattr(request.data, 'dict') else dict(request.data)
+    print("!!! DATA DICT !!!", data)
     # first validation
     logger.info(f"📥 [ai_webhook] Received raw data: {data}")
     
@@ -91,19 +93,39 @@ def ai_webhook(request):
         cleaned_session = None
         if data.get('sessionId'):
             cleaned_session = str(data.get('sessionId')).replace('user_', '')
+        
+        # Expanded candidates for WhatsApp bot identification
         page_candidates = [
+            data.get('page_id'),
+            data.get('pageId'),    # camelCase fallback for some n8n nodes
             data.get('receiver'),
+            data.get('to'),          # Common in Evolution API / Baileys
             data.get('phone'),
-            data.get('from'),
             data.get('sessionId'),
             cleaned_session,
-            page_id,
         ]
-        # pick the first truthy value
+        
+        best_candidate = None
         for candidate in page_candidates:
-            if candidate:
-                page_id = candidate
-                break
+            if not candidate:
+                continue
+            cand_str = str(candidate).strip()
+            if cand_str.lower() in ['undefined', 'null', 'none', '']:
+                continue
+            
+            if not best_candidate:
+                best_candidate = cand_str
+            
+            # If current best is generic (user_X) but this one looks like a phone number (numeric), take it!
+            if best_candidate.startswith('user_') and any(char.isdigit() for char in cand_str):
+                 # Simple heuristic: if it has digits, it's probably a better ID than 'user_2'
+                 best_candidate = cand_str
+                 # If it starts with digits or 88, it's definitely a phone number, we can stop
+                 if cand_str[0].isdigit():
+                     break
+
+        if best_candidate:
+            page_id = best_candidate
 
     # comment or message
 

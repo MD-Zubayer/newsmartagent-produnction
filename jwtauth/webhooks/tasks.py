@@ -3,6 +3,7 @@
 from celery import shared_task
 import re, json, time, uuid, logging, hashlib, redis, requests
 from aiAgent.models import AgentAI
+from django.db.models import Q
 from chat.services import save_message
 from aiAgent.memory_handler import handle_smart_memory_update
 from aiAgent.cache.hybrid_similarity import (
@@ -133,18 +134,32 @@ def process_ai_reply_task(self, data):
         cleaned_session = None
         if data.get('sessionId'):
             cleaned_session = str(data.get('sessionId')).replace('user_', '')
+        
         page_candidates = [
+            data.get('page_id'),
+            data.get('pageId'),
             data.get('receiver'),
+            data.get('to'),
             data.get('phone'),
-            data.get('from'),
             data.get('sessionId'),
             cleaned_session,
-            page_id,
         ]
+
+        best_candidate = None
         for candidate in page_candidates:
-            if candidate:
-                page_id = candidate
-                break
+            if not candidate: continue
+            cand_str = str(candidate).strip()
+            if cand_str.lower() in ['undefined', 'null', 'none', '']: continue
+            
+            if not best_candidate:
+                best_candidate = cand_str
+            
+            if best_candidate.startswith('user_') and any(char.isdigit() for char in cand_str):
+                 best_candidate = cand_str
+                 if cand_str[0].isdigit(): break
+
+        if best_candidate:
+            page_id = best_candidate
 
     if request_type == 'facebook_comment':
         text = data.get('comment_text')
@@ -155,7 +170,7 @@ def process_ai_reply_task(self, data):
     incoming_ts = data.get('timestamp')
 
     if not all([sender_id, text, page_id]):
-        logger.error(f"Aborting: Missing core data in task. sender: {sender_id}, text: {text}")
+        logger.error(f"Aborting: Missing core data in task. sender: {sender_id}, text: {text}, page: {page_id}")
         return
 
     # ২. এজেন্ট ও প্রোফাইল লোড
@@ -170,13 +185,16 @@ def process_ai_reply_task(self, data):
         elif request_type == 'whatsapp':
             # Priority: Bot's phone number, excluding sender or generic session strings
             candidates = [
+                page_id,
                 data.get('receiver'),
-                data.get('phone'), # but careful if this is sender phone
+                data.get('phone'),
+                data.get('to'),
             ]
-            lookup_ids = [str(c).split('@')[0] for c in candidates if c and '@' in str(c)]
-            # Also add raw receiver if digit-only or valid phone format
+            lookup_ids = []
             for c in candidates:
-                val = str(c) if c else ""
+                if not c: continue
+                val = str(c).split('@')[0]
+                lookup_ids.append(val)
                 if val.isdigit() and len(val) > 7:
                     lookup_ids.append(val)
         else:
@@ -185,10 +203,18 @@ def process_ai_reply_task(self, data):
         lookup_ids = list(set([i for i in lookup_ids if i]))
 
         if not agent_config:
-            agent_config = AgentAI.objects.filter(
-                is_active=True,
-                page_id__in=lookup_ids
-            ).order_by('-id').first()
+            # Check both page_id and number fields for WhatsApp
+            if request_type == 'whatsapp':
+                agent_config = AgentAI.objects.filter(
+                    Q(page_id__in=lookup_ids) | Q(number__in=lookup_ids),
+                    is_active=True,
+                    platform='whatsapp'
+                ).order_by('-id').first()
+            else:
+                agent_config = AgentAI.objects.filter(
+                    is_active=True,
+                    page_id__in=lookup_ids
+                ).order_by('-id').first()
 
         # Fallback for WhatsApp: Try lookup by user_id if we have it in sessionId
         if not agent_config and request_type == 'whatsapp' and data.get('sessionId'):
@@ -475,7 +501,7 @@ def process_ai_reply_task(self, data):
             # ---- Cache Classification Instruction (JSON suffix) ----
             classify_instruction = (
                 '\n\nReturn ONLY a valid JSON object: {"reply": "...", "cache_type": "..."}. '
-                'Use "no_cache" for context-dependent words (it/this/that/ঐটা/সেটা) or very specific conversation flow. or If asked about your identity '
+                'Use "no_cache" for context-dependent words (it/this/that/ঐটা/সেটা) or very specific conversation flow or If asked about your identity.'
                 'Use "sender_specific" for user-only info (my,amar,etc any language, name/order/status/আমি/আমার/ব্যক্তিগত তথ্য). '
                 'Use "agent_specific" ONLY for information extracted from [KNOWLEDGE BASE DATA] or business-specific details like specific products/prices.'
                 'Use "global" for general knowledge, universal greetings (Salam/Hi), and any answer based on your pre-trained general intelligence rather than the provided knowledge base.'
