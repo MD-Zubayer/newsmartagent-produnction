@@ -312,12 +312,36 @@ def process_ai_reply_task(self, data):
         cached_res = get_cached_reply(page_id, msg_text=text)
         if cached_res:
             cache_hit_scope = "agent_exact"
+        
+        # --- Layer 1.5: Shared Agent Exact ---
+        if not cached_res and agent_config.get_settings.shared_cache_agent:
+            shared_agent = agent_config.get_settings.shared_cache_agent
+            shared_page_id = shared_agent.page_id
+            cached_res = get_cached_reply(shared_page_id, msg_text=text)
+            if cached_res:
+                cache_hit_scope = "shared_agent_exact"
+                # Also track this hit for the current agent's ranking
+                msg_hash = cached_res.get('msg_hash') or hashlib.md5(normalize_for_cache(text).encode()).hexdigest()
+                incr_message_frequency(page_id, msg_hash)
+                logger.info(f"🔗 SHARED CACHE HIT (Exact) from Agent {shared_agent.name} for '{text[:30]}'")
 
         # --- Layer 2: Agent Fuzzy ---
         if not cached_res:
             cached_res = fuzzy_match(page_id, text, threshold=80)
             if cached_res:
                 cache_hit_scope = "agent_fuzzy"
+            
+            # --- Layer 2.5: Shared Agent Fuzzy ---
+            if not cached_res and agent_config.get_settings.shared_cache_agent:
+                shared_agent = agent_config.get_settings.shared_cache_agent
+                shared_page_id = shared_agent.page_id
+                cached_res = fuzzy_match(shared_page_id, text, threshold=80)
+                if cached_res:
+                    cache_hit_scope = "shared_agent_fuzzy"
+                    # Track this hit for the current agent too
+                    msg_hash = cached_res.get('msg_hash') or hashlib.md5(normalize_for_cache(text).encode()).hexdigest()
+                    incr_message_frequency(page_id, msg_hash)
+                    logger.info(f"🔗 SHARED CACHE HIT (Fuzzy) from Agent {shared_agent.name} for '{text[:20]}'")
 
         # --- Layer 3: Global Exact ---
         if not cached_res:
@@ -453,7 +477,7 @@ def process_ai_reply_task(self, data):
                 '\n\nReturn ONLY a valid JSON object: {"reply": "...", "cache_type": "..."}. '
                 'Use "no_cache" for context-dependent words (it/this/that/ঐটা/সেটা) or very specific conversation flow. '
                 'Use "sender_specific" for user-only info (my,amar,etc any language, name/order/status/আমি/আমার/ব্যক্তিগত তথ্য). '
-                'Use "agent_specific" ONLY for information extracted from [KNOWLEDGE BASE DATA] or business-specific details like specific products/prices. '
+                'Use "agent_specific" ONLY for information extracted from [KNOWLEDGE BASE DATA] or business-specific details like specific products/prices. or indentity of you'
                 'Use "global" for general knowledge, universal greetings (Salam/Hi), and any answer based on your pre-trained general intelligence rather than the provided knowledge base.'
                 'STRICT: No markdown blocks, no preamble, and ensure JSON syntax is perfect.'
             )

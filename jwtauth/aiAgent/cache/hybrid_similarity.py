@@ -383,3 +383,86 @@ def set_sender_cached_reply(agent_id, sender_id, msg_text, reply, model, input_t
         logger.info(f"✅ Sender cache saved for {sender_id}: '{msg_text[:30]}'")
     except Exception as e:
         logger.error(f"Sender Cache Set Error: {e}")
+
+
+# ==================== CACHE DELETION ==================== #
+
+def clear_agent_cache(agent_id):
+    """
+    দেওয়া agent_id-এর জন্য agent-specific cache এবং sender-specific cache ডিলিট করে।
+    """
+    # ১. Agent-specific cache (DB 2) মুছে দেওয়া
+    pattern_agent = f"agent:{agent_id}:reply:*"
+    count_agent = 0
+    for key in r.scan_iter(match=pattern_agent, count=100):
+        r.delete(key)
+        count_agent += 1
+    
+    # ২. Sender-specific cache (DB 6) মুছে দেওয়া
+    pattern_sender = f"agent:{agent_id}:sender:*:reply:*"
+    count_sender = 0
+    for key in r_grouped.scan_iter(match=pattern_sender, count=100):
+        r_grouped.delete(key)
+        count_sender += 1
+        
+    logger.info(f"🗑️ Cache cleared for agent {agent_id} | Agent: {count_agent} | Sender: {count_sender}")
+    return count_agent, count_sender
+
+def clear_global_cache():
+    """
+    Global cache (DB 6) থেকে সব global reply ডিলিট করে।
+    """
+    pattern_global = "global:reply:*"
+    count_global = 0
+    for key in r_grouped.scan_iter(match=pattern_global, count=100):
+        r_grouped.delete(key)
+        count_global += 1
+    
+    logger.info(f"🗑️ Global cache cleared | Total: {count_global}")
+    return count_global
+
+def clear_agent_ranking(agent_id):
+    """
+    DB 4-এ থাকা র‍্যাঙ্কিং ডেটা ডিলিট করে।
+    """
+    from aiAgent.cache.ranking import r as r_ranking
+    key = f"agent:{agent_id}:ranking"
+    r_ranking.delete(key)
+    logger.info(f"📉 Ranking data cleared for agent {agent_id}")
+    return True
+
+def delete_by_message_text(agent_id, text, is_global=False):
+    """
+    মেসেজ টেক্সট থেকে হাশ বের করে সেটি ডিলিট করে।
+    """
+    normalized = normalize_for_cache(text)
+    msg_hash = hashlib.md5(normalized.encode()).hexdigest()
+    
+    if is_global:
+        r_grouped.delete(f"global:reply:{msg_hash}")
+        logger.info(f"🗑️ Global cache entry deleted for text: {text[:30]}")
+        return True
+    
+    return delete_specific_cache_entry(agent_id, msg_hash)
+
+def delete_specific_cache_entry(agent_id, msg_hash):
+    """
+    নির্দিষ্ট agent_id এবং msg_hash-এর জন্য cache এবং ranking ডেটা মুছে দেয়।
+    """
+    # ১. র‍্যাঙ্কিং ও ক্লাস্টার (DB 4)
+    from aiAgent.cache.ranking import r as r_ranking
+    r_ranking.zrem(f"agent:{agent_id}:ranking", msg_hash)
+    r_ranking.hdel(f"agent:{agent_id}:clusters", msg_hash)
+    
+    # ২. এজেন্ট ক্যাশ (DB 2)
+    r.delete(f"agent:{agent_id}:reply:{msg_hash}")
+    
+    # ৩. সেন্ডার ক্যাশ (DB 6)
+    pattern_sender = f"agent:{agent_id}:sender:*:reply:{msg_hash}"
+    count_sender = 0
+    for key in r_grouped.scan_iter(match=pattern_sender, count=100):
+        r_grouped.delete(key)
+        count_sender += 1
+        
+    logger.info(f"🗑️ Specific cache entry deleted | Agent: {agent_id} | Hash: {msg_hash} | Sender keys: {count_sender}")
+    return True

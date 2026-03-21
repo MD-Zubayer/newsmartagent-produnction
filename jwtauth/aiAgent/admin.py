@@ -10,11 +10,13 @@ from django.utils.html import format_html
 from .models import TokenUsageLog
 from .models import AIProviderModel, SmartKeyword, SmartTranslationMap
 from django import forms
-from django.urls import path
-from django.shortcuts import render, redirect
+from django.urls import path, reverse
+from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 import json
 import re
+from .cache.hybrid_similarity import clear_agent_cache, clear_global_cache, clear_agent_ranking, delete_specific_cache_entry, delete_by_message_text
+from .cache.ranking import get_top_message
 
 class KeywordUploadForm(forms.Form):
     category = forms.ChoiceField(choices=SmartKeyword.CATEGORY_CHOICES)
@@ -70,6 +72,7 @@ from settings.models import AgentAISettings
 
 class AgentAISettingsInline(admin.StackedInline):
     model = AgentAISettings
+    fk_name = 'agent'
     can_delete = False
     verbose_name_plural = 'Agent AI Settings'
     extra = 1
@@ -82,7 +85,7 @@ class WidgetSettingsInline(admin.StackedInline):
 
 @admin.register(AgentAI)
 class AgentAIAdmin(ModelAdmin):
-    list_display = [ 'id', 'name', 'user', 'platform', 'number', 'page_id', 'widget_key', 'ai_agent_type', 'special_agent_status', 'is_special_agent', 'is_active','custom_keywords', 'created_at']
+    list_display = [ 'id', 'name', 'user', 'platform', 'number', 'page_id', 'widget_key', 'ai_agent_type', 'special_agent_status', 'is_special_agent', 'is_active','custom_keywords', 'cache_tools', 'created_at']
     list_filter = ['platform', 'special_agent_status', 'is_active', 'is_special_agent', 'user', 'ai_agent_type',]
     search_fields = ['name', 'page_id', 'number', 'user__username']
     inlines = [AgentAISettingsInline, WidgetSettingsInline]
@@ -90,6 +93,83 @@ class AgentAIAdmin(ModelAdmin):
     def created_short(self, obj):
         return obj.created_at.strftime('%Y-%m-%d %H:%M')
     created_short.short_description = "Created"
+
+    actions = ['clear_cache_action', 'clear_ranking_action', 'clear_global_cache_action']
+
+    def clear_cache_action(self, request, queryset):
+        total_cleared = 0
+        for agent in queryset:
+            # We use page_id as the agent_id in cache
+            a, s = clear_agent_cache(agent.page_id)
+            total_cleared += (a + s)
+        self.message_user(request, f"Successfully cleared {total_cleared} cache entries for selected agents.")
+    clear_cache_action.short_description = "🗑️ Clear Agent & Sender Cache"
+
+    def clear_ranking_action(self, request, queryset):
+        for agent in queryset:
+            clear_agent_ranking(agent.page_id)
+        self.message_user(request, f"Successfully cleared ranking data for selected agents.")
+    clear_ranking_action.short_description = "📉 Clear Ranking Data"
+
+    def clear_global_cache_action(self, request, queryset):
+        count = clear_global_cache()
+        self.message_user(request, f"✅ Successfully cleared {count} global cache entries.")
+    clear_global_cache_action.short_description = "🌐 Clear GLOBAL Cache (Universal)"
+
+    def cache_tools(self, obj):
+        from django.utils.html import format_html
+        url = reverse('admin:aiAgent_agentai_manage_cache', args=[obj.pk])
+        return format_html('<a class="button" href="{}" style="padding: 2px 8px; background: #be185d; color: white; border-radius: 6px; font-size: 10px; font-weight: bold; text-transform: uppercase;">Manage Cache</a>', url)
+    cache_tools.short_description = "Cache"
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('<path:object_id>/manage-cache/', self.admin_site.admin_view(self.manage_cache_view), name='aiAgent_agentai_manage_cache'),
+        ]
+        return custom_urls + urls
+
+    def manage_cache_view(self, request, object_id):
+        agent = get_object_or_404(AgentAI, pk=object_id)
+        
+        if request.method == 'POST':
+            action = request.POST.get('action')
+            if action == 'delete_by_hash':
+                msg_hash = request.POST.get('msg_hash')
+                if msg_hash:
+                    delete_specific_cache_entry(agent.page_id, msg_hash)
+                    messages.success(request, f"Successfully deleted cache entry {msg_hash}")
+            elif action == 'delete_by_text':
+                text = request.POST.get('text')
+                if text:
+                    delete_by_message_text(agent.page_id, text)
+                    messages.success(request, f"Successfully purged cache for message: {text[:50]}...")
+            return redirect(request.path)
+
+        top_messages = []
+        try:
+            raw_top = get_top_message(agent.page_id, top_n=30)
+            from .cache.hybrid_similarity import r as r_db2
+            import json
+            for msg_hash, freq in raw_top:
+                key = f"agent:{agent.page_id}:reply:{msg_hash}"
+                cached = r_db2.get(key)
+                text = "Unknown Content"
+                if cached:
+                    data = json.loads(cached)
+                    text = data.get('original_normalized', data.get('original_text', 'Unknown'))
+                top_messages.append({'hash': msg_hash, 'freq': int(freq), 'text': text})
+        except Exception as e:
+            messages.error(request, f"Error loading cache data: {e}")
+
+        context = {
+            **self.admin_site.each_context(request),
+            'agent': agent,
+            'top_messages': top_messages,
+            'opts': self.model._meta,
+            'title': f"Manage Cache: {agent.name}",
+        }
+        return render(request, 'admin/aiAgent/manage_cache.html', context)
 
 
 

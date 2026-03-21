@@ -20,6 +20,7 @@ export default function RankingReportPage() {
   const [isStaff, setIsStaff] = useState(false);
   const [isSpecialAgent, setIsSpecialAgent] = useState(false);
   const [specialAgentStatus, setSpecialAgentStatus] = useState('none');
+  const [isUpdatingCacheSource, setIsUpdatingCacheSource] = useState(false);
 
   // ১. এজেন্ট লিস্ট লোড করা
   useEffect(() => {
@@ -183,6 +184,35 @@ export default function RankingReportPage() {
     }
   };
 
+  // ৬. Cache Source আপডেট লজিক
+  const handleCacheSourceChange = async (sourceAgentId) => {
+    if (!selectedAgent) return;
+    try {
+      setIsUpdatingCacheSource(true);
+      await api.patch(`/AgentAI/agents/${selectedAgent.id}/`, {
+        shared_cache_agent: sourceAgentId || null
+      });
+      
+      const updatedAgents = agents.map(agent =>
+        agent.id === selectedAgent.id
+          ? { ...agent, shared_cache_agent: sourceAgentId ? parseInt(sourceAgentId) : null }
+          : agent
+      );
+      setAgents(updatedAgents);
+      setSelectedAgent(updatedAgents.find(a => a.id === selectedAgent.id));
+      
+      toast.success("Cache sharing updated!", {
+        icon: '🔗',
+        style: { borderRadius: '16px', background: '#1e293b', color: '#fff', fontWeight: 'bold' }
+      });
+    } catch (err) {
+      console.error("Cache Source Update Error:", err);
+      toast.error("Failed to update cache source");
+    } finally {
+      setIsUpdatingCacheSource(false);
+    }
+  };
+
   const filteredData = rankingData.filter((item) =>
     item.text.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -238,6 +268,28 @@ export default function RankingReportPage() {
                   <option key={agent.id} value={agent.id}>{agent.name} ({agent.page_id})</option>
                 ))}
               </select>
+            </div>
+
+            {/* ⚡ নতুন: ক্যাশ শেয়ারিং ড্রপডাউন */}
+            <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-3">
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                <PiggyBank size={12} className="text-emerald-500" />
+                Share Cache From:
+              </span>
+              <div className="flex items-center gap-2">
+                <select
+                  className="bg-white border border-gray-200 rounded-xl px-4 py-2 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-emerald-300 shadow-sm min-w-[200px] border-l-4 border-l-emerald-400"
+                  value={selectedAgent?.shared_cache_agent || ""}
+                  disabled={isUpdatingCacheSource}
+                  onChange={(e) => handleCacheSourceChange(e.target.value)}
+                >
+                  <option value="">None (Standalone)</option>
+                  {agents.filter(a => a.id !== selectedAgent?.id).map(agent => (
+                    <option key={agent.id} value={agent.id}>{agent.name} ({agent.page_id})</option>
+                  ))}
+                </select>
+                {isUpdatingCacheSource && <Loader2 className="animate-spin h-4 w-4 text-emerald-500" />}
+              </div>
             </div>
           </div>
 

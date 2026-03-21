@@ -35,6 +35,14 @@ class AgentAISettings(models.Model):
     max_tokens = models.IntegerField(default=200)
     skip_history = models.BooleanField(default=False)
     history_skip_keywords = models.TextField(blank=True, null=True)
+    shared_cache_agent = models.ForeignKey(
+        'aiAgent.AgentAI',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='shared_by_settings',
+        help_text="অন্য কোনো এজেন্টের ক্যাশ শেয়ার করতে চাইলে সেই এজেন্টটি সিলেক্ট করুন।"
+    )
 
     def __str__(self):
         return f"Settings for Agent: {self.agent.id}"
