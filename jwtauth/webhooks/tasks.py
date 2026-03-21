@@ -184,10 +184,11 @@ def process_ai_reply_task(self, data):
 
         lookup_ids = list(set([i for i in lookup_ids if i]))
 
-        agent_config = AgentAI.objects.filter(
-            is_active=True,
-            page_id__in=lookup_ids
-        ).order_by('-id').first()
+        if not agent_config:
+            agent_config = AgentAI.objects.filter(
+                is_active=True,
+                page_id__in=lookup_ids
+            ).order_by('-id').first()
 
         # Fallback for WhatsApp: Try lookup by user_id if we have it in sessionId
         if not agent_config and request_type == 'whatsapp' and data.get('sessionId'):
