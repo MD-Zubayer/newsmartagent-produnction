@@ -345,15 +345,15 @@ class RankingAPIView(APIView):
                 raw_data = redis_conn.get(cache_key)
                 source = 'shared_agent' if is_shared else 'agent'
                 
-                # যদি অরিজিন এজেন্টের ক্যাশে না থাকে এবং এটি শেয়ারড মেসেজ হয়, তবে অন্য শেয়ারড এজেন্টদের ক্যাশে খুঁজো
+                # যদি অরিজিন এজেন্টের ক্যাশে না থাকে, তবে অন্য সব শেয়ারড এজেন্টদের ক্যাশে খুঁজো
                 if not raw_data:
-                    # নিজেরটা আগে চেক করো (যদি origin shared agent হয়)
-                    if is_shared:
+                    # ১. নিজেরটা চেক করো (যদি origin কোনো শেয়ারড এজেন্ট হয়)
+                    if origin_redis_id != my_redis_id:
                         my_cache_key = f"agent:{my_redis_id}:reply:{msg_hash}"
                         raw_data = redis_conn.get(my_cache_key)
                         if raw_data: source = 'agent'
 
-                    # তারপর অন্যান্য শেয়ারড এজেন্ট
+                    # ২. সব শেয়ারড এজেন্টদের ক্যাশে খুঁজো (এটি সব সময় করা হবে যেন Unknown Message না আসে)
                     if not raw_data:
                         for s_agent in shared_agents:
                             s_redis_id = _get_redis_id(s_agent)

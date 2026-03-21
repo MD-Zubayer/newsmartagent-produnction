@@ -153,6 +153,33 @@ def debug_shared_rankings():
     if not found:
         print("❌ Failure: Blocked message not found in A's ranking aggregation!")
 
+    # Case: Unknown Message Fix (Local Ranking, Shared Cache Only)
+    print("\nVerification of Unknown Message Fix:")
+    unknown_fix_text = "Text only in B cache"
+    unknown_fix_hash = hashlib.md5(unknown_fix_text.encode()).hexdigest()
+    
+    # 1. Add to A's ranking (Local)
+    r_db4.zincrby(f"agent:debug_a:ranking", 1, unknown_fix_hash)
+    # 2. Add to B's cache ONLY (Shared)
+    r_db2.set(f"agent:{b_redis_id}:reply:{unknown_fix_hash}", json.dumps({
+        "original_text": unknown_fix_text,
+        "cache_scope": "agent_specific"
+    }))
+    
+    response = view(request, agent_id="debug_a")
+    data = response.data.get('data', [])
+    found = False
+    for item in data:
+        if item['msg_hash'] == unknown_fix_hash:
+            found = True
+            print(f"Text: {item['text']}")
+            if item['text'] == unknown_fix_text:
+                print("✅ Success: Unknown Message eliminated by searching shared agents!")
+            else:
+                print(f"❌ Failure: Still got '{item['text']}' instead of '{unknown_fix_text}'")
+    if not found:
+        print("❌ Failure: Test message not found in rankings!")
+
 if __name__ == "__main__":
     try:
         from django.db.models.signals import post_save
