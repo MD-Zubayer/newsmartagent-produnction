@@ -76,7 +76,8 @@ class WidgetChatView(APIView):
             import uuid
             
             data = {
-                'widget_key': widget_key,
+                'widget_key': str(widget_key),
+                'page_id': f"widget_{widget_key}",
                 'sender_id': sender_uuid,
                 'message': message,
                 'type': 'web_widget',
