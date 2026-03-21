@@ -1,5 +1,6 @@
 (function() {
     // ── Configuration ─────────────────────────────────────────────────────────
+    if (document.getElementById('nsa-wrap')) return; // Prevent duplicate widgets if script re-executes
     var scriptTag = document.currentScript;
     var widgetKey = scriptTag ? scriptTag.getAttribute('data-key') : null;
     
