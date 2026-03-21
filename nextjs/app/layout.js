@@ -6,7 +6,6 @@ import { Toaster } from "react-hot-toast";
 import MessengerButton from "./(main)/components/MessengerButton";
 // import Footer from "../components/Footer";
 
-import Script from "next/script";
 
 
 const geistSans = Geist({
@@ -220,11 +219,7 @@ export default function RootLayout({ children }) {
         />
 
 
-<Script 
-  src="https://newsmartagent.com/widget.js" 
-  data-key="9d94fbd8-167a-42d2-b3e8-389062ca8b49" 
-  strategy="afterInteractive" // পেজ লোড হওয়ার পর স্ক্রিপ্টটি রান করবে
-/>
+
 
 
       </body>
