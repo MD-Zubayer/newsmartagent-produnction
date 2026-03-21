@@ -9,6 +9,7 @@ import MessengerButton from "./(main)/components/MessengerButton";
 import Script from "next/script";
 
 
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -94,6 +95,12 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }) {
+
+
+  const pathname = usePathname();
+  const isDashboard = pathname?.startsWith('/dashboard');
+
+
   const structuredData = [{
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
@@ -130,7 +137,6 @@ export default function RootLayout({ children }) {
     ]
   }
   ]
-
 
   return (
     <html lang="en">
