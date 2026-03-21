@@ -298,9 +298,19 @@ class RankingAPIView(APIView):
 
             # ৪. এক্সক্লুশন সেট আনা (শেয়ারিং কন্ট্রোল)
             r_db4 = get_redis_client(db=4)
-            exclusion_key = f"agent:{agent_id}:sharing_exclusion_set"
-            excluded_hashes = r_db4.smembers(exclusion_key)
-            excluded_hashes = {h.decode() if isinstance(h, bytes) else h for h in excluded_hashes}
+            
+            # নিজের এক্সক্লুশন সেট
+            my_exclusion_key = f"agent:{agent_id}:sharing_exclusion_set"
+            my_excluded_hashes = r_db4.smembers(my_exclusion_key)
+            my_excluded_hashes = {h.decode() if isinstance(h, bytes) else h for h in my_excluded_hashes}
+            
+            # শেয়ারড এজেন্টদের এক্সক্লুশন সেট প্রি-ফেচ করা
+            shared_exclusions = {} # redis_id -> set of hashes
+            for s_agent in shared_agents:
+                s_id = _get_redis_id(s_agent)
+                ex_key = f"agent:{s_id}:sharing_exclusion_set"
+                hashes = r_db4.smembers(ex_key)
+                shared_exclusions[s_id] = {h.decode() if isinstance(h, bytes) else h for h in hashes}
 
             ranking_list = []
 
@@ -313,9 +323,24 @@ class RankingAPIView(APIView):
                 text = "Unknown Message"
                 current_scope = 'agent_specific'
                 total_token_savings = 0
+                is_shareable = True # Default
+                
+                # ৫. শেয়ারিং স্ট্যাটাস চেক (is_blocked)
+                origin_redis_id = meta.get('origin_agent_id', my_redis_id)
+                is_blocked = False
+                
+                if is_shared:
+                    # যদি শেয়ারড হয়, তবে অরিজিনাল এজেন্টের সেটিং চেক করো
+                    if origin_redis_id in shared_exclusions:
+                        if msg_hash in shared_exclusions[origin_redis_id]:
+                            is_blocked = True
+                            is_shareable = False
+                else:
+                    # নিজের মেসেজ হলে নিজের সেটিং চেক করো
+                    if msg_hash in my_excluded_hashes:
+                        is_shareable = False
                 
                 # Cache checking logic
-                origin_redis_id = meta.get('origin_agent_id', my_redis_id)
                 cache_key = f"agent:{origin_redis_id}:reply:{msg_hash}"
                 raw_data = redis_conn.get(cache_key)
                 source = 'shared_agent' if is_shared else 'agent'
@@ -378,7 +403,7 @@ class RankingAPIView(APIView):
                     except:
                         pass
 
-                is_shareable = msg_hash not in excluded_hashes
+                is_shareable = msg_hash not in my_excluded_hashes
 
                 ranking_list.append({
                     'text': text,
@@ -388,6 +413,7 @@ class RankingAPIView(APIView):
                     'current_scope': current_scope,
                     'is_shareable': is_shareable,
                     'is_shared': is_shared,
+                    'is_blocked': is_blocked,
                 })
 
             return Response({

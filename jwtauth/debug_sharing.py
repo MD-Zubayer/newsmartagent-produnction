@@ -3,6 +3,7 @@ import os
 import django
 import json
 import redis
+import hashlib
 from unittest.mock import MagicMock, patch
 
 # Setup Django
@@ -119,6 +120,38 @@ def debug_shared_rankings():
         print("✅ Success: Sharing toggle is respected for Web Widget!")
     else:
         print("❌ Failure: Sharing toggle ignored!")
+        
+    # Case: API is_blocked flag check
+    print("\nVerification of API is_blocked flag:")
+    # We need a message that is ONLY in B's ranking and is BLOCKED by B
+    blocked_msg_text = "Blocked Shared Message from B"
+    blocked_msg_hash = hashlib.md5(blocked_msg_text.encode()).hexdigest()
+    
+    # 1. Add to B's ranking
+    r_db4.zincrby(f"agent:{b_redis_id}:ranking", 1, blocked_msg_hash)
+    # 2. Add to B's exclusion set
+    r_db4.sadd(f"agent:{b_redis_id}:sharing_exclusion_set", blocked_msg_hash)
+    # 3. Add to B's cache (so it shows up with text)
+    r_db2.set(f"agent:{b_redis_id}:reply:{blocked_msg_hash}", json.dumps({
+        "original_text": blocked_msg_text,
+        "cache_scope": "agent_specific"
+    }))
+    
+    response = view(request, agent_id="debug_a")
+    data = response.data.get('data', [])
+    found = False
+    for item in data:
+        if item['msg_hash'] == blocked_msg_hash:
+            found = True
+            print(f"Text: {item['text']}")
+            print(f"Is Shared: {item['is_shared']}")
+            print(f"Is Blocked: {item['is_blocked']}")
+            if item['is_blocked'] and item['is_shared']:
+                print("✅ Success: API correctly identifies shared blocked message!")
+            else:
+                print("❌ Failure: API missed the blocked status or shared flag!")
+    if not found:
+        print("❌ Failure: Blocked message not found in A's ranking aggregation!")
 
 if __name__ == "__main__":
     try:
