@@ -226,13 +226,14 @@ class ContactSerializer(serializers.ModelSerializer):
     last_message = serializers.SerializerMethodField()
     last_message_time = serializers.SerializerMethodField()
     unread_count = serializers.SerializerMethodField()
+    crm_data = serializers.SerializerMethodField()
 
     class Meta:
         model = Contact
         fields = [
             'id', 'agent', 'agent_name', 'identifier', 'name', 'push_name', 
             'is_auto_reply_enabled', 'platform', 'created_at', 'updated_at',
-            'custom_prompt', 'custom_instructions', 'last_message', 'last_message_time', 'unread_count'
+            'custom_prompt', 'custom_instructions', 'last_message', 'last_message_time', 'unread_count', 'crm_data'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
@@ -258,6 +259,18 @@ class ContactSerializer(serializers.ModelSerializer):
         if conv:
             return conv.messages.filter(role='user', is_read=False).count()
         return 0
+
+    def get_crm_data(self, obj):
+        from aiAgent.models import UserMemory
+        memory = UserMemory.objects.filter(ai_agent=obj.agent, sender_id=obj.identifier).first()
+        if memory and isinstance(memory.data, dict):
+            return {
+                'lead_stage': memory.data.get('lead_stage', 'new'),
+                'phone': memory.data.get('phone_number', ''),
+                'email': memory.data.get('email', ''),
+                'ai_summary': memory.data.get('memory_summary', '')
+            }
+        return {'lead_stage': 'new', 'phone': '', 'email': '', 'ai_summary': ''}
 
 class MessageSerializer(serializers.ModelSerializer):
     class Meta:

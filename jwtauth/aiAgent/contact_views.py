@@ -40,6 +40,19 @@ class ContactDetailView(APIView):
     def patch(self, request, contact_id):
         try:
             contact = Contact.objects.get(id=contact_id, agent__user=request.user)
+            
+            crm_data = request.data.get('crm_data')
+            if crm_data and isinstance(crm_data, dict):
+                from aiAgent.models import UserMemory
+                memory, _ = UserMemory.objects.get_or_create(ai_agent=contact.agent, sender_id=contact.identifier)
+                if not isinstance(memory.data, dict):
+                    memory.data = {}
+                if 'lead_stage' in crm_data: memory.data['lead_stage'] = crm_data['lead_stage']
+                if 'phone' in crm_data: memory.data['phone_number'] = crm_data['phone']
+                if 'email' in crm_data: memory.data['email'] = crm_data['email']
+                if 'ai_summary' in crm_data: memory.data['memory_summary'] = crm_data['ai_summary']
+                memory.save()
+
             serializer = ContactSerializer(contact, data=request.data, partial=True)
             if serializer.is_valid():
                 serializer.save()

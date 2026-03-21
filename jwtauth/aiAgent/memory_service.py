@@ -24,13 +24,14 @@ def extract_and_update_memory(ai_agent, sender_id, chat_history):
     # Optimized prompt for concise extraction and token savings
     extract_prompt = f"""
     Analyze the chat history and extract significant user details. 
-    
+
     CRITICAL Rules:
     - OMIT any field that would be null, empty string, or empty list. 
     - Construct a compact JSON object containing ONLY the discovered data.
     - Fields to look for (if available): name, phone_number, email, location, job, preferences (likes/dislikes), product_interest, order_details, needs_or_cahida, contextual_data (goals/urgency), sentiment, and key_requirements.
-    - Include a "memory_summary" that briefly gists the relationship status.
-    - Return ONLY the JSON object. No preamble.
+    - CRM RULES (MANDATORY): Always evaluate and output a "lead_stage" field. It must be exactly one of: "new", "cold", "warm", "hot", "converted", or "lost".
+    - Include a "memory_summary" that briefly gists the user's core intent or relationship status (e.g., "Wants to buy red shoes, quoted 500 BDT").
+    - Return ONLY the JSON object. No preamble, no markdown formatting.
 
     Chat History:
     {chat_history}
