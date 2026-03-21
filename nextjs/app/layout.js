@@ -5,7 +5,7 @@ import Footer from "./(main)/components/Footer";
 import { Toaster } from "react-hot-toast";
 import MessengerButton from "./(main)/components/MessengerButton";
 // import Footer from "../components/Footer";
-
+import { usePathname } from "next/navigation";
 import Script from "next/script";
 
 
