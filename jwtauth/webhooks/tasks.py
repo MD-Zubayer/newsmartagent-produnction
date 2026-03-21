@@ -174,6 +174,7 @@ def process_ai_reply_task(self, data):
         return
 
     # ২. এজেন্ট ও প্রোফাইল লোড
+    agent_config = None
     try:
         if request_type == 'web_widget':
             agent_config = AgentAI.objects.filter(
