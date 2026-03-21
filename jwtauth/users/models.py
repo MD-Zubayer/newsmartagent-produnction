@@ -62,6 +62,8 @@ class User(AbstractUser):
     )
     
     is_verified = models.BooleanField(default=False)
+    two_factor_enabled = models.BooleanField(default=False)
+    two_factor_secret = models.CharField(max_length=32, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     USERNAME_FIELD = 'email'
