@@ -12,6 +12,7 @@ from .models import AIProviderModel, SmartKeyword, SmartTranslationMap
 from django import forms
 from django.urls import path, reverse
 from django.shortcuts import render, redirect, get_object_or_404
+from unfold.decorators import display
 from django.contrib import messages
 import json
 import re
@@ -85,10 +86,18 @@ class WidgetSettingsInline(admin.StackedInline):
 
 @admin.register(AgentAI)
 class AgentAIAdmin(ModelAdmin):
-    list_display = [ 'id', 'name', 'user', 'platform', 'number', 'page_id', 'widget_key', 'ai_agent_type', 'special_agent_status', 'is_special_agent', 'is_active','custom_keywords', 'cache_tools', 'created_at']
+    list_display = [ 'id', 'name', 'cache_tools', 'user', 'platform', 'number', 'page_id', 'is_active', 'ai_agent_type', 'is_special_agent', 'created_at']
     list_filter = ['platform', 'special_agent_status', 'is_active', 'is_special_agent', 'user', 'ai_agent_type',]
     search_fields = ['name', 'page_id', 'number', 'user__username']
     inlines = [AgentAISettingsInline, WidgetSettingsInline]
+    readonly_fields = ['cache_view_link', 'created_at']
+
+    def cache_view_link(self, obj):
+        from django.utils.html import format_html
+        if not obj.pk: return "-"
+        url = reverse('admin:aiAgent_agentai_manage_cache', args=[obj.pk])
+        return format_html('<a href="{}" style="background: #be185d; color: white; padding: 8px 20px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block;">🧠 OPEN CACHE MANAGER</a>', url)
+    cache_view_link.short_description = "Specific Cache Deletion"
 
     def created_short(self, obj):
         return obj.created_at.strftime('%Y-%m-%d %H:%M')
@@ -116,11 +125,14 @@ class AgentAIAdmin(ModelAdmin):
         self.message_user(request, f"✅ Successfully cleared {count} global cache entries.")
     clear_global_cache_action.short_description = "🌐 Clear GLOBAL Cache (Universal)"
 
+    @display(description="🧠 Intelligence Cache", label=True)
     def cache_tools(self, obj):
         from django.utils.html import format_html
         url = reverse('admin:aiAgent_agentai_manage_cache', args=[obj.pk])
-        return format_html('<a class="button" href="{}" style="padding: 2px 8px; background: #be185d; color: white; border-radius: 6px; font-size: 10px; font-weight: bold; text-transform: uppercase;">Manage Cache</a>', url)
-    cache_tools.short_description = "Cache"
+        return format_html(
+            '<a href="{}" style="padding: 4px 12px; background: #be185d; color: white; border-radius: 9999px; font-size: 11px; font-weight: 800; text-decoration: none; display: inline-block; box-shadow: 0 2px 4px rgba(190, 24, 93, 0.3);">MANAGE CACHE</a>', 
+            url
+        )
 
     def get_urls(self):
         urls = super().get_urls()
@@ -130,6 +142,9 @@ class AgentAIAdmin(ModelAdmin):
         return custom_urls + urls
 
     def manage_cache_view(self, request, object_id):
+        import logging
+        logger = logging.getLogger('django')
+        logger.info(f"📊 Admin Cache Management hit for Agent ID: {object_id}")
         agent = get_object_or_404(AgentAI, pk=object_id)
         
         if request.method == 'POST':
