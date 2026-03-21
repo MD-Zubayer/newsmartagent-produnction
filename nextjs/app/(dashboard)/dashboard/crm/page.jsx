@@ -8,7 +8,7 @@ import {
   EllipsisHorizontalIcon,
   ChevronRightIcon
 } from "@heroicons/react/24/outline";
-import { toast } from "react-toastify";
+import { toast } from "react-hot-toast";
 import api from "@/lib/api";
 
 const STAGES = [
