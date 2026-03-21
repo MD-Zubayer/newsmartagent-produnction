@@ -3,6 +3,7 @@
 
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
+import WidgetWrapper from "./components/WidgetWrapper";
 
 export default function MainLayout({ children }) {
   return (
@@ -10,7 +11,7 @@ export default function MainLayout({ children }) {
       <Navbar />
       <main className="flex-1">{children}
   
-
+      <WidgetWrapper />
       </main>
       <Footer />
     </div>

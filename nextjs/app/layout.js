@@ -5,8 +5,7 @@ import Footer from "./(main)/components/Footer";
 import { Toaster } from "react-hot-toast";
 import MessengerButton from "./(main)/components/MessengerButton";
 // import Footer from "../components/Footer";
-import { usePathname } from "next/navigation";
-import Script from "next/script";
+
 
 
 
@@ -95,12 +94,6 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }) {
-
-
-  const pathname = usePathname();
-  const isDashboard = pathname?.startsWith('/dashboard');
-
-
   const structuredData = [{
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
@@ -138,6 +131,7 @@ export default function RootLayout({ children }) {
   }
   ]
 
+
   return (
     <html lang="en">
       <head>
@@ -147,7 +141,6 @@ export default function RootLayout({ children }) {
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -224,16 +217,6 @@ export default function RootLayout({ children }) {
             },
           }}
         />
-
-
-
-{!isDashboard && (
-          <Script 
-            src="https://newsmartagent.com/widget.js" 
-            data-key="9d94fbd8-167a-42d2-b3e8-389062ca8b49" 
-            strategy="afterInteractive"
-          />
-        )}
 
       </body>
     </html>
