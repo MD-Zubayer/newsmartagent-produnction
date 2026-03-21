@@ -1,6 +1,5 @@
 (function() {
     // ── Configuration ─────────────────────────────────────────────────────────
-    if (window.location.pathname.includes('dashboard')) return;
     var scriptTag = document.currentScript;
     var widgetKey = scriptTag ? scriptTag.getAttribute('data-key') : null;
     
@@ -32,7 +31,6 @@
 
     // ── Build Widget ──────────────────────────────────────────────────────────
     function initWidget() {
-        if (window.location.pathname.includes('dashboard')) return;
         var s          = config.settings;
         var color      = s.primary_color || '#4f46e5';
         var size       = parseInt(s.bubble_size) || 60;
@@ -109,6 +107,14 @@
         ].join('');
 
         document.body.appendChild(wrap);
+
+        // ── SPA Routing Handle ────────────────────────────────────────────────
+        // Hide widget if on dashboard, show otherwise. 
+        // Checks every 500ms to handle Next.js client-side navigation.
+        setInterval(function() {
+            var isDash = window.location.pathname.includes('dashboard');
+            wrap.style.display = isDash ? 'none' : 'flex';
+        }, 500);
 
         // ── State & Events ────────────────────────────────────────────────────
         var bubble = document.getElementById('nsa-bubble');
