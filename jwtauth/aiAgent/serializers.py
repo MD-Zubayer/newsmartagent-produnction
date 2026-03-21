@@ -264,13 +264,16 @@ class ContactSerializer(serializers.ModelSerializer):
         from aiAgent.models import UserMemory
         memory = UserMemory.objects.filter(ai_agent=obj.agent, sender_id=obj.identifier).first()
         if memory and isinstance(memory.data, dict):
+            # Pass original structured data to front-end for rendering dynamic key-values
+            raw_data = {k: v for k, v in memory.data.items() if k != "_internal"}
             return {
                 'lead_stage': memory.data.get('lead_stage', 'new'),
                 'phone': memory.data.get('phone_number', ''),
                 'email': memory.data.get('email', ''),
-                'ai_summary': memory.data.get('memory_summary', '')
+                'ai_summary': memory.data.get('memory_summary', ''),
+                'raw_data': raw_data
             }
-        return {'lead_stage': 'new', 'phone': '', 'email': '', 'ai_summary': ''}
+        return {'lead_stage': 'new', 'phone': '', 'email': '', 'ai_summary': '', 'raw_data': {}}
 
 class MessageSerializer(serializers.ModelSerializer):
     class Meta:

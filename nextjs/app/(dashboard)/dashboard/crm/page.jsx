@@ -29,6 +29,8 @@ export default function SmartCRMPage() {
   // For drag and drop
   const [draggingContactId, setDraggingContactId] = useState(null);
 
+  const [selectedCard, setSelectedCard] = useState(null);
+
   useEffect(() => {
     fetchAgents();
   }, []);
@@ -54,7 +56,6 @@ export default function SmartCRMPage() {
   const fetchContacts = async () => {
     setLoading(true);
     try {
-      // Re-use the existing contacts API which now includes crm_data via UserMemory
       const res = await api.get(`/AgentAI/contacts/${selectedAgentId}/`);
       setContacts(res.data.contacts || []);
     } catch (err) {
@@ -72,12 +73,11 @@ export default function SmartCRMPage() {
   const handleDragStart = (e, contactId) => {
     setDraggingContactId(contactId);
     e.dataTransfer.effectAllowed = 'move';
-    // Required for Firefox
     e.dataTransfer.setData('text/plain', contactId.toString());
   };
 
   const handleDragOver = (e) => {
-    e.preventDefault(); // Necessary to allow dropping
+    e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
   };
 
@@ -85,7 +85,6 @@ export default function SmartCRMPage() {
     e.preventDefault();
     if (!draggingContactId) return;
 
-    // Optimistically update the UI
     const updatedContacts = contacts.map(c => {
       if (c.id === draggingContactId) {
         return { ...c, crm_data: { ...c.crm_data, lead_stage: stageId } };
@@ -95,15 +94,13 @@ export default function SmartCRMPage() {
     setContacts(updatedContacts);
     setDraggingContactId(null);
 
-    // Persist to backend
     try {
       await api.patch(`/AgentAI/contacts/detail/${draggingContactId}/`, {
         crm_data: { lead_stage: stageId }
       });
-      // toast.success("Stage updated");
     } catch (err) {
       toast.error("Failed to update lead stage");
-      fetchContacts(); // Revert
+      fetchContacts();
     }
   };
 
@@ -180,7 +177,11 @@ export default function SmartCRMPage() {
                             </p>
                           </div>
                         </div>
-                        <button className="text-gray-300 hover:text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={() => setSelectedCard(card)}
+                          className="text-gray-400 hover:text-blue-600 transition-colors p-1 bg-gray-50 hover:bg-blue-50 rounded"
+                          title="View all details"
+                        >
                           <EllipsisHorizontalIcon className="w-5 h-5" />
                         </button>
                       </div>
@@ -221,6 +222,56 @@ export default function SmartCRMPage() {
           </div>
         )}
       </div>
+
+      {/* Dynamic Attributes Modal */}
+      {selectedCard && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSelectedCard(null)}></div>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 z-10 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                Deep Insights <span className="text-sm font-normal text-gray-500 px-2 py-0.5 bg-gray-200 rounded-full">{selectedCard.name || selectedCard.identifier}</span>
+              </h2>
+              <button 
+                onClick={() => setSelectedCard(null)}
+                className="text-gray-400 hover:text-gray-600 bg-white shadow-sm border border-gray-200 rounded-full w-8 h-8 flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+              <p className="text-sm text-gray-500 mb-4">
+                The AI automatically extracted the following dynamic traits and facts from the conversation:
+              </p>
+              
+              <div className="grid grid-cols-1 gap-3">
+                {selectedCard.crm_data?.raw_data && Object.keys(selectedCard.crm_data.raw_data).length > 0 ? (
+                  Object.entries(selectedCard.crm_data.raw_data).map(([key, value]) => {
+                    // Skip standardized keys to avoid visual duplication, though seeing all is fine too
+                    if (["lead_stage", "phone_number", "email"].includes(key) && !value) return null;
+                    
+                    return (
+                      <div key={key} className="bg-white border border-gray-100 rounded-lg p-3 shadow-sm flex flex-col break-words">
+                        <span className="text-[11px] uppercase font-bold text-cyan-600 tracking-wider mb-1">
+                          {key.replace(/_/g, " ")}
+                        </span>
+                        <span className="text-sm text-gray-800 font-medium">
+                          {typeof value === 'object' ? JSON.stringify(value) : value.toString()}
+                        </span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-8 text-gray-400 text-sm">
+                    No artificial intelligence traits extracted yet.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
