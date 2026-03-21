@@ -211,6 +211,28 @@ export default function RankingReportPage() {
     }
   };
 
+  // ৭. Toggle Sharing লজিক
+  const handleToggleSharing = async (msg_hash, currentIsShareable) => {
+    if (!selectedAgent) return;
+    try {
+      setIsUpdatingSharing(msg_hash);
+      const agentId = selectedAgent.page_id;
+      const newIsShareable = !currentIsShareable;
+      
+      await api.post(`/AgentAI/ranking/toggle-sharing/${agentId}/${msg_hash}/`, {
+        is_shareable: newIsShareable
+      });
+      
+      toast.success(newIsShareable ? "Message is now shareable" : "Message excluded from sharing");
+      fetchData(); // Refresh to show new status
+    } catch (err) {
+      console.error("Toggle Sharing Error:", err);
+      toast.error("Failed to update sharing settings");
+    } finally {
+      setIsUpdatingSharing(null);
+    }
+  };
+
   const handleClearGlobalCache = async () => {
     if (!window.confirm("Are you sure you want to CLEAR ALL GLOBAL CACHE? This cannot be undone.")) return;
     
