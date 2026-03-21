@@ -41,7 +41,7 @@ def normalize_for_cache(text):
     return normalized
 
 
-def get_cached_reply(agent_id, msg_text=None, msg_hash=None):                
+def get_cached_reply(agent_id, msg_text=None, msg_hash=None, track_hit=True):                
     if msg_hash:
         key = f"agent:{agent_id}:reply:{msg_hash}"
     elif msg_text:
@@ -54,7 +54,8 @@ def get_cached_reply(agent_id, msg_text=None, msg_hash=None):
     try:
         cached = r.get(key)
         if cached:
-            incr_message_frequency(agent_id, msg_hash)
+            if track_hit:
+                incr_message_frequency(agent_id, msg_hash)
             data = json.loads(cached)
             data['msg_hash'] = msg_hash
             return data
@@ -87,7 +88,7 @@ def set_cached_reply(agent_id, msg_text, reply, model, input_tokens=0, output_to
     incr_message_frequency(agent_id, msg_hash)
     
     
-def fuzzy_match(agent_id, msg_text, threshold=85): # ⚡ RapidFuzz সাধারণত ০-১০০ স্কেলে কাজ করে
+def fuzzy_match(agent_id, msg_text, threshold=85, track_hit=True): # ⚡ RapidFuzz সাধারণত ০-১০০ স্কেলে কাজ করে
     normalized_input = normalize_for_cache(msg_text)
     
     # ১. r.keys() এর বদলে r.scan_iter() ব্যবহার করা হয়েছে (Non-blocking approach)
@@ -131,7 +132,8 @@ def fuzzy_match(agent_id, msg_text, threshold=85): # ⚡ RapidFuzz সাধা�
 
     if best_data:
         # ৩. যদি মিল পাওয়া যায়, তবে র‍্যাঙ্কিং আপডেট করো
-        incr_message_frequency(agent_id, best_hash)
+        if track_hit:
+            incr_message_frequency(agent_id, best_hash)
         logger.info(f"⚡ Fuzzy Match! Score: {best_score}% | '{msg_text[:20]}'")
         best_data['msg_hash'] = best_hash
         return best_data
@@ -265,7 +267,7 @@ SENDER_CACHE_TTL = 86400 * 7    # ৭ দিন
 SPECIAL_CACHE_TTL = 86400 * 365  # ১ বছর (Special Agent)
 
 
-def get_global_cached_reply(agent_id, msg_text):
+def get_global_cached_reply(agent_id, msg_text, track_hit=True):
     """Global cache থেকে exact match করে reply নিয়ে আসে।"""
     if not msg_text:
         return None
@@ -277,7 +279,8 @@ def get_global_cached_reply(agent_id, msg_text):
         if cached:
             logger.info(f"⚡ GLOBAL EXACT HIT: '{msg_text[:30]}'")
             # র‍্যাঙ্কিং ট্র্যাকিং (Agent specific)
-            incr_message_frequency(agent_id, msg_hash)
+            if track_hit:
+                incr_message_frequency(agent_id, msg_hash)
             data = json.loads(cached)
             data['msg_hash'] = msg_hash
             return data
@@ -306,7 +309,7 @@ def set_global_cached_reply(msg_text, reply, model, input_tokens=0, output_token
         logger.error(f"Global Cache Set Error: {e}")
 
 
-def global_fuzzy_match(agent_id, msg_text, threshold=92):
+def global_fuzzy_match(agent_id, msg_text, threshold=92, track_hit=True):
     """
     Global cache-এ fuzzy search করে। Global entries সবার জন্য
     প্রযোজ্য তাই threshold বেশি রাখা হয়েছে (92)।
@@ -343,9 +346,9 @@ def global_fuzzy_match(agent_id, msg_text, threshold=92):
         return None
     if best_data:
         logger.info(f"⚡ GLOBAL FUZZY HIT! Score: {best_score}% | '{msg_text[:20]}'")
-        if best_hash:
+        if best_hash and track_hit:
             incr_message_frequency(agent_id, best_hash)
-            best_data['msg_hash'] = best_hash
+        best_data['msg_hash'] = best_hash
         return best_data
     return None
 

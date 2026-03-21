@@ -22,7 +22,6 @@ def debug_shared_rankings():
     # 1. Setup Redis clients
     r_db2 = get_redis_client(db=2)
     r_db4 = get_redis_client(db=4)
-    r_db6 = get_redis_client(db=6)
     
     # 2. Setup mock data
     user, _ = User.objects.get_or_create(email="debug_sharing@example.com")
@@ -48,19 +47,14 @@ def debug_shared_rankings():
     
     # Use Web Widget logic for B
     b_redis_id = f"widget_{agent_b.widget_key}" if agent_b.platform == 'web_widget' else agent_b.page_id
-    
+    msg_hash = "shared_hash"
+    msg_text = "Shared Message from Web Widget B"
+
     # Clear Redis data
     r_db4.delete(f"agent:debug_a:ranking")
     r_db4.delete(f"agent:{b_redis_id}:ranking")
-    r_db2.delete(f"agent:debug_a:reply:shared_hash")
-    r_db2.delete(f"agent:{b_redis_id}:reply:shared_hash")
-    
-    # Case: Shared message from B (Web Widget)
-    msg_text = "Shared Message from Web Widget B"
-    msg_hash = "shared_hash"
-    
-    # Rankings in B (5 hits)
-    r_db4.zincrby(f"agent:{b_redis_id}:ranking", 5, msg_hash)
+    r_db2.delete(f"agent:debug_a:reply:{msg_hash}")
+    r_db2.delete(f"agent:{b_redis_id}:reply:{msg_hash}")
     
     # Cache in B (DB 2)
     cache_data = {
@@ -72,32 +66,39 @@ def debug_shared_rankings():
     }
     r_db2.set(f"agent:{b_redis_id}:reply:{msg_hash}", json.dumps(cache_data))
     
-    # 3. Call API for Agent A
+    # Case: Double Counting Check
+    # Scenario: Agent A hits Agent B's cache. 
+    # Previously, this incremented BOTH A and B. Now only A.
+    
+    from aiAgent.cache.hybrid_similarity import get_cached_reply
+    from aiAgent.cache.ranking import incr_message_frequency
+    
+    # Simulate what tasks.py does on a shared hit:
+    # 1. Look up B's cache with track_hit=False
+    res = get_cached_reply(b_redis_id, msg_hash=msg_hash, track_hit=False)
+    # 2. Increment A's ranking
+    incr_message_frequency("debug_a", msg_hash)
+    
+    # 3. Call API and verify
     factory = APIRequestFactory()
     view = RankingAPIView.as_view()
     request = factory.get('/api/AgentAI/ranking/debug_a/')
     force_authenticate(request, user=user)
     
     response = view(request, agent_id="debug_a")
-    
-    print(f"Status Code: {response.status_code}")
     data = response.data.get('data', [])
     
-    print("\nDebug results for Agent A (Sharing from B):")
+    print("\nVerification of Double Counting Fix:")
     for item in data:
-        print(f"Text: {item['text']}")
-        print(f"Hash: {item['msg_hash']}")
-        print(f"Frequency: {item['frequency']}")
-        print(f"Tokens Saved: {item['token_savings']}")
-        print(f"Is Shared: {item['is_shared']}")
-        print("-" * 20)
-
-    # Check for failure
-    for item in data:
-        if item['text'] == "Unknown Message":
-             print("\n!!! FAILURE: Found 'Unknown Message'")
-        if item['token_savings'] == 0 and item['frequency'] > 1:
-             print("\n!!! FAILURE: Token savings is 0 but frequency > 1")
+        if item['msg_hash'] == msg_hash:
+            print(f"Text: {item['text']}")
+            print(f"Aggregated Frequency: {item['frequency']} (Expected: 1)")
+            print(f"Token Savings: {item['token_savings']} (Expected: 0 for 1st hit)")
+            
+            if item['frequency'] == 1:
+                print("✅ Success: No double counting!")
+            else:
+                print(f"❌ Failure: Still double counting! Frequency: {item['frequency']}")
 
 if __name__ == "__main__":
     try:

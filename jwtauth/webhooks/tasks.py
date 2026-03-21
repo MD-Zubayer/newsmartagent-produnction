@@ -345,7 +345,7 @@ def process_ai_reply_task(self, data):
             shared_agents = agent_config.get_settings.shared_cache_agents.all()
             for shared_agent in shared_agents:
                 shared_page_id = shared_agent.page_id
-                potential_res = get_cached_reply(shared_page_id, msg_text=text)
+                potential_res = get_cached_reply(shared_page_id, msg_text=text, track_hit=False)
                 if potential_res:
                     msg_hash = potential_res.get('msg_hash')
                     if not msg_hash:
@@ -375,7 +375,7 @@ def process_ai_reply_task(self, data):
                 shared_agents = agent_config.get_settings.shared_cache_agents.all()
                 for shared_agent in shared_agents:
                     shared_page_id = shared_agent.page_id
-                    potential_res = fuzzy_match(shared_page_id, text, threshold=80)
+                    potential_res = fuzzy_match(shared_page_id, text, threshold=80, track_hit=False)
                     if potential_res:
                         msg_hash = potential_res.get('msg_hash')
                         if not msg_hash:
