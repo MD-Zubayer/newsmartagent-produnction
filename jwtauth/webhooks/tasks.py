@@ -475,7 +475,7 @@ def process_ai_reply_task(self, data):
             # ---- Cache Classification Instruction (JSON suffix) ----
             classify_instruction = (
                 '\n\nReturn ONLY a valid JSON object: {"reply": "...", "cache_type": "..."}. '
-                'Use "no_cache" for context-dependent words (it/this/that/ঐটা/সেটা) or very specific conversation flow. or indentity of you '
+                'Use "no_cache" for context-dependent words (it/this/that/ঐটা/সেটা) or very specific conversation flow. or If asked about your identity '
                 'Use "sender_specific" for user-only info (my,amar,etc any language, name/order/status/আমি/আমার/ব্যক্তিগত তথ্য). '
                 'Use "agent_specific" ONLY for information extracted from [KNOWLEDGE BASE DATA] or business-specific details like specific products/prices.'
                 'Use "global" for general knowledge, universal greetings (Salam/Hi), and any answer based on your pre-trained general intelligence rather than the provided knowledge base.'
