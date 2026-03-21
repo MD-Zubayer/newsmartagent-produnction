@@ -1,5 +1,6 @@
 (function() {
     // ── Configuration ─────────────────────────────────────────────────────────
+    if (window.location.pathname.includes('dashboard')) return;
     var scriptTag = document.currentScript;
     var widgetKey = scriptTag ? scriptTag.getAttribute('data-key') : null;
     

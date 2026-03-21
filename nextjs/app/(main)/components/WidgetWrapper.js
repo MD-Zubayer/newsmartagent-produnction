@@ -9,14 +9,22 @@ export default function WidgetWrapper() {
   const isDashboard = pathname?.includes("dashboard");
 
   useEffect(() => {
-    // যদি ড্যাশবোর্ডে থাকে, তবে জোর করে উইজেট এলিমেন্টগুলো রিমুভ করা
-    if (isDashboard) {
-      const widgetElement = document.getElementById("nsa-widget-container") || 
-                           document.getElementById("nsa-wrap"); // আপনার উইজেটের আইডি অনুযায়ী
-      if (widgetElement) {
-        widgetElement.style.display = "none";
-        // অথবা পুরোপুরি রিমুভ করতে চাইলে: widgetElement.remove();
+    // ড্যাশবোর্ডে গেলে উইজেট রিমুভ করার ফাংশন
+    const removeNSAWidget = () => {
+      const wrap = document.getElementById("nsa-wrap");
+      if (wrap) {
+        wrap.remove(); // পুরো উইজেট র‍্যাপার রিমুভ করবে
       }
+      
+      // যদি উইজেটের স্টাইল ট্যাগ থেকে যায় সেটিও রিমুভ করা ভালো
+      const styles = document.querySelectorAll('style');
+      styles.forEach(s => {
+        if (s.textContent.includes('#nsa-wrap')) s.remove();
+      });
+    };
+
+    if (isDashboard) {
+      removeNSAWidget();
     }
   }, [pathname, isDashboard]);
 
