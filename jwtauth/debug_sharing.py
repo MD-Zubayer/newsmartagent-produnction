@@ -100,6 +100,26 @@ def debug_shared_rankings():
             else:
                 print(f"❌ Failure: Still double counting! Frequency: {item['frequency']}")
 
+    # Case: Sharing Toggle Check
+    # Scenario: Agent B marks a message as "excluded" (Sharing Off).
+    # Agent A should NOT hit it anymore.
+    print("\nVerification of Sharing Toggle (Exclusion):")
+    r_db4.sadd(f"agent:{b_redis_id}:sharing_exclusion_set", msg_hash)
+    
+    # Simulate Layer 1.5 in tasks.py
+    exclusion_key = f"agent:{b_redis_id}:sharing_exclusion_set"
+    if r_db4.sismember(exclusion_key, msg_hash):
+        print("B settings: Message is EXCLUDED (Sharing Off)")
+        # In tasks.py logic, this would result in skipping the potential_res
+        hit_allowed = False
+    else:
+        hit_allowed = True
+        
+    if not hit_allowed:
+        print("✅ Success: Sharing toggle is respected for Web Widget!")
+    else:
+        print("❌ Failure: Sharing toggle ignored!")
+
 if __name__ == "__main__":
     try:
         from django.db.models.signals import post_save

@@ -344,8 +344,10 @@ def process_ai_reply_task(self, data):
         if not cached_res:
             shared_agents = agent_config.get_settings.shared_cache_agents.all()
             for shared_agent in shared_agents:
-                shared_page_id = shared_agent.page_id
-                potential_res = get_cached_reply(shared_page_id, msg_text=text, track_hit=False)
+                # Correct identifier logic for shared agents (Web Widget support)
+                shared_redis_id = f"widget_{shared_agent.widget_key}" if shared_agent.platform == 'web_widget' and shared_agent.widget_key else shared_agent.page_id
+                
+                potential_res = get_cached_reply(shared_redis_id, msg_text=text, track_hit=False)
                 if potential_res:
                     msg_hash = potential_res.get('msg_hash')
                     if not msg_hash:
@@ -354,7 +356,7 @@ def process_ai_reply_task(self, data):
                         msg_hash = hashlib.md5(normalized.encode()).hexdigest()
 
                     # এক্সক্লুশন চেক (Redis Set)
-                    exclusion_key = f"agent:{shared_page_id}:sharing_exclusion_set"
+                    exclusion_key = f"agent:{shared_redis_id}:sharing_exclusion_set"
                     r_db4 = get_redis_client(db=4)
                     if not r_db4.sismember(exclusion_key, msg_hash):
                         cached_res = potential_res
@@ -374,8 +376,9 @@ def process_ai_reply_task(self, data):
             if not cached_res:
                 shared_agents = agent_config.get_settings.shared_cache_agents.all()
                 for shared_agent in shared_agents:
-                    shared_page_id = shared_agent.page_id
-                    potential_res = fuzzy_match(shared_page_id, text, threshold=80, track_hit=False)
+                    shared_redis_id = f"widget_{shared_agent.widget_key}" if shared_agent.platform == 'web_widget' and shared_agent.widget_key else shared_agent.page_id
+                    
+                    potential_res = fuzzy_match(shared_redis_id, text, threshold=80, track_hit=False)
                     if potential_res:
                         msg_hash = potential_res.get('msg_hash')
                         if not msg_hash:
@@ -383,7 +386,7 @@ def process_ai_reply_task(self, data):
                             msg_hash = hashlib.md5(stored_text.encode()).hexdigest()
 
                         # এক্সক্লুশন চেক
-                        exclusion_key = f"agent:{shared_page_id}:sharing_exclusion_set"
+                        exclusion_key = f"agent:{shared_redis_id}:sharing_exclusion_set"
                         r_db4 = get_redis_client(db=4)
                         if not r_db4.sismember(exclusion_key, msg_hash):
                             cached_res = potential_res
