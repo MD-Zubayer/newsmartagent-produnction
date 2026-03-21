@@ -207,11 +207,11 @@ export default function Contacts() {
   };
 
   return (
-    <div className="absolute inset-0 bg-[#f0f2f5] font-sans flex flex-col overflow-hidden">
+    <div className="relative w-full h-[calc(100vh-100px)] bg-[#f0f2f5] font-sans flex flex-col overflow-hidden rounded-xl border border-gray-200">
       {/* WhatsApp-Style Header */}
-      <div className="bg-[#00a884] h-32 absolute top-0 left-0 right-0 z-0 pointer-events-none"></div>
+      <div className="bg-[#00a884] h-24 absolute top-0 left-0 right-0 z-0 pointer-events-none"></div>
 
-      <div className="relative z-10 w-full h-full p-0 sm:p-4 flex flex-col overflow-hidden">
+      <div className="relative z-10 w-full h-full p-0 sm:p-2 md:p-4 flex flex-col overflow-hidden">
         <div className="bg-white shadow-xl sm:rounded-lg flex-1 flex flex-col overflow-hidden border border-gray-200">
           {/* Dashboard Left Sidebar Header */}
           <div className="flex flex-col md:flex-row flex-1 overflow-hidden pointer-events-auto">
