@@ -262,10 +262,33 @@ class RankingAPIView(APIView):
             if not agent:
                 return Response({"error": "Agent not found"}, status=status.HTTP_404_NOT_FOUND)
 
-            # ২. র‍্যাঙ্কিং ডাটা আনা (db=4 থেকে)
-            top_messages_raw = get_top_message(agent_id, top_n=50) # Increased to 50 for more visibility
+            # ২. শেয়ারড এজেন্টদের ডাটা আনা
+            shared_agents = agent.get_settings.shared_cache_agents.all()
+            shared_agent_page_ids = [a.page_id for a in shared_agents]
             
-            # ৩. এক্সক্লুশন সেট আনা (শেয়ারিং কন্ট্রোল)
+            # ৩. র‍্যাঙ্কিং ডাটা আনা (db=4 থেকে) - নিজের এবং শেয়ারড সব এজেন্টের
+            all_raw_messages = {} # msg_hash -> {'frequency': 0, 'is_shared': False}
+            
+            # ক. নিজের ডাটা
+            for msg_hash, frequency in get_top_message(agent_id, top_n=50):
+                all_raw_messages[msg_hash] = {
+                    'frequency': int(frequency),
+                    'is_shared': False
+                }
+                
+            # খ. শেয়ারড এজেন্টদের ডাটা
+            for s_page_id in shared_agent_page_ids:
+                # শেয়ারড এজেন্টের ক্ষেত্রে আমরা একটু কম টপ মেসেজ নিচ্ছি যাতে ওভারলোড না হয়
+                for msg_hash, frequency in get_top_message(s_page_id, top_n=30):
+                    if msg_hash in all_raw_messages:
+                        all_raw_messages[msg_hash]['frequency'] += int(frequency)
+                    else:
+                        all_raw_messages[msg_hash] = {
+                            'frequency': int(frequency),
+                            'is_shared': True
+                        }
+
+            # ৪. এক্সক্লুশন সেট আনা (শেয়ারিং কন্ট্রোল)
             r_db4 = get_redis_client(db=4)
             exclusion_key = f"agent:{agent_id}:sharing_exclusion_set"
             excluded_hashes = r_db4.smembers(exclusion_key)
@@ -274,15 +297,29 @@ class RankingAPIView(APIView):
             ranking_list = []
             r_db6 = get_redis_client(db=6)
 
-            for msg_hash, frequency in top_messages_raw:
+            # Frequency অনুযায়ী সর্ট করা
+            sorted_hashes = sorted(all_raw_messages.items(), key=lambda x: x[1]['frequency'], reverse=True)
+
+            for msg_hash, meta in sorted_hashes:
+                frequency = meta['frequency']
+                is_shared = meta['is_shared']
                 text = "Unknown Message"
                 current_scope = 'agent_specific'
                 total_token_savings = 0
                 
-                # DB 2 (Agent Specific) চেক করা
+                # Cache checking logic
                 cache_key = f"agent:{agent_id}:reply:{msg_hash}"
                 raw_data = redis_conn.get(cache_key)
                 source = 'agent'
+                
+                # যদি নিজের ক্যাশে না থাকে এবং এটি শেয়ারড মেসেজ হয়, তবে শেয়ারড এজেন্টদের ক্যাশে খুঁজো
+                if not raw_data and is_shared:
+                    for s_page_id in shared_agent_page_ids:
+                        s_cache_key = f"agent:{s_page_id}:reply:{msg_hash}"
+                        raw_data = redis_conn.get(s_cache_key)
+                        if raw_data:
+                            source = 'shared_agent'
+                            break
                 
                 # যদি DB 2-তে না থাকে তবে DB 6 (Global Cache) চেক করা
                 if not raw_data:
@@ -304,7 +341,7 @@ class RankingAPIView(APIView):
                         data = json.loads(raw_data)
                         text = data.get('original_text', data.get('original_normalized', 'Unknown Message'))
                         
-                        if source == 'agent':
+                        if source == 'agent' or source == 'shared_agent':
                             current_scope = data.get('cache_scope', 'agent_specific')
                         elif source == 'global':
                             current_scope = 'global'
@@ -314,8 +351,6 @@ class RankingAPIView(APIView):
                         input_tokens = data.get('input_tokens', 0)
                         output_tokens = data.get('output_tokens', 0)
                         
-                        # ১ টোকেন সাশ্রয় = (input_tokens + output_tokens) * frequency - (input_tokens + output_tokens)
-                        # কারণ প্রথমবার জেনারেট করতে টোকেন লেগেছে, পরের বারগুলো সেভ হয়েছে।
                         total_token_savings = (int(input_tokens) + int(output_tokens)) * (int(frequency) - 1)
                         if total_token_savings < 0: total_token_savings = 0
                     except:
@@ -330,6 +365,7 @@ class RankingAPIView(APIView):
                     'msg_hash': msg_hash,
                     'current_scope': current_scope,
                     'is_shareable': is_shareable,
+                    'is_shared': is_shared,
                 })
 
             return Response({

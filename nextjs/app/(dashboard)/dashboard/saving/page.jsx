@@ -463,7 +463,14 @@ export default function RankingReportPage() {
                   </div>
                   
                   <div className="flex items-center justify-between gap-4">
-                    <p className="text-sm font-bold text-slate-800 bg-slate-50/50 p-4 rounded-xl border border-slate-100 flex-1">{item.text}</p>
+                    <div className="flex-1 space-y-2">
+                      <p className="text-sm font-bold text-slate-800 bg-slate-50/50 p-4 rounded-xl border border-slate-100">{item.text}</p>
+                      {item.is_shared && (
+                        <span className="inline-flex px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[9px] font-black uppercase tracking-wider rounded-lg border border-indigo-100">
+                           Shared
+                        </span>
+                      )}
+                    </div>
                     <button
                       onClick={() => handleToggleSharing(item.msg_hash, item.is_shareable)}
                       disabled={isUpdatingSharing === item.msg_hash}
@@ -541,7 +548,14 @@ export default function RankingReportPage() {
                         </span>
                       </td>
                       <td className="px-8 py-6 max-w-lg">
-                        <p className="font-bold text-slate-800 text-sm leading-relaxed line-clamp-3">{item.text}</p>
+                        <div className="flex flex-col gap-2">
+                          <p className="font-bold text-slate-800 text-sm leading-relaxed line-clamp-3">{item.text}</p>
+                          {item.is_shared && (
+                            <span className="self-start px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[9px] font-black uppercase tracking-widest rounded-lg border border-indigo-100">
+                               Shared
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-8 py-6 text-center">
                         <div className="inline-flex flex-col items-center">
