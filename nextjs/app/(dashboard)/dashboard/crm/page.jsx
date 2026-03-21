@@ -256,9 +256,28 @@ export default function SmartCRMPage() {
                         <span className="text-[11px] uppercase font-bold text-cyan-600 tracking-wider mb-1">
                           {key.replace(/_/g, " ")}
                         </span>
-                        <span className="text-sm text-gray-800 font-medium">
-                          {typeof value === 'object' ? JSON.stringify(value) : value.toString()}
-                        </span>
+                        <div className="text-sm text-gray-800 font-medium">
+                          {Array.isArray(value) ? (
+                            <ul className="list-disc pl-4 space-y-1 my-1">
+                              {value.map((item, idx) => <li key={idx}>{item}</li>)}
+                            </ul>
+                          ) : typeof value === 'object' && value !== null ? (
+                            <div className="flex flex-col gap-1 mt-1 border-l-2 border-gray-200 pl-3">
+                              {Object.entries(value).map(([k, v]) => (
+                                <div key={k} className="text-xs">
+                                  <span className="text-gray-500 capitalize">{k.replace(/_/g, ' ')}:</span> 
+                                  <span className="ml-1 text-gray-800 font-semibold">{v?.toString()}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : typeof value === 'boolean' ? (
+                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${value ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                              {value ? 'Yes' : 'No'}
+                            </span>
+                          ) : (
+                            <span>{value?.toString() || '-'}</span>
+                          )}
+                        </div>
                       </div>
                     );
                   })
