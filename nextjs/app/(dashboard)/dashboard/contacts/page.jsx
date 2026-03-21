@@ -39,9 +39,11 @@ export default function Contacts() {
   const observer = useRef();
 
   const scrollToBottom = () => {
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
-    }, 50);
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+      }, 100);
+    });
   };
 
   const lastMessageElementRef = useCallback(node => {
@@ -129,6 +131,12 @@ export default function Contacts() {
     setHistoryPage(1);
     setHasMoreHistory(true);
     setIsModalOpen(true);
+    
+    // Optimistically clear unread count since the API marks them as read automatically
+    setContacts(prev => prev.map(c => 
+      c.id === contact.id ? { ...c, unread_count: 0 } : c
+    ));
+    
     fetchHistory(contact.id, 1);
   };
 
@@ -374,7 +382,7 @@ export default function Contacts() {
                   </div>
 
                   {/* Messages Area (Oldest first display, loads more at top) */}
-                  <div className="flex-1 overflow-y-auto p-6 space-y-2 scroll-smooth bg-[url('https://w0.peakpx.com/wallpaper/580/650/wallpaper-whatsapp-background.jpg')] bg-repeat bg-[size:400px]">
+                  <div className="flex-1 overflow-y-auto p-6 space-y-2 bg-[url('https://w0.peakpx.com/wallpaper/580/650/wallpaper-whatsapp-background.jpg')] bg-repeat bg-[size:400px]">
                     {hasMoreHistory && (
                       <div ref={lastMessageElementRef} className="flex justify-center p-4">
                         {historyLoading ? <ArrowPathIcon className="h-5 w-5 text-[#00a884] animate-spin" /> : <span className="text-xs text-indigo-500 cursor-pointer font-bold">Load earlier messages</span>}
