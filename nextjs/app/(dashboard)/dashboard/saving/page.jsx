@@ -213,6 +213,22 @@ export default function RankingReportPage() {
     }
   };
 
+  const handleClearGlobalCache = async () => {
+    if (!window.confirm("Are you sure you want to CLEAR ALL GLOBAL CACHE? This cannot be undone.")) return;
+    
+    setLoading(true);
+    try {
+      await api.post('/AgentAI/ranking/clear-global-cache/');
+      toast.success("Global cache cleared successfully!");
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error || "Failed to clear global cache");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const filteredData = rankingData.filter((item) =>
     item.text.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -294,6 +310,15 @@ export default function RankingReportPage() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full md:w-auto">
+            {isStaff && (
+              <button
+                onClick={handleClearGlobalCache}
+                className="flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-6 py-3 rounded-2xl font-bold text-xs uppercase tracking-widest transition-all shadow-lg shadow-rose-200 active:scale-95"
+              >
+                <Trash2 size={16} />
+                Clear Global Cache
+              </button>
+            )}
             <div className="flex items-center gap-3">
               {isSpecialAgent ? (
                 <div className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-yellow-50 to-yellow-100 border border-yellow-200 rounded-full shadow-sm">

@@ -386,8 +386,31 @@ class DeleteRankingDataAPIView(APIView):
             for key in r_grouped_db6.scan_iter(match=sender_pattern):
                 r_grouped_db6.delete(key)
             
-            return Response({"status": "success", "message": "Message deleted from agent cache layers"}, status=status.HTTP_200_OK)
+            # ৫. গ্লোবাল ক্যাশ (DB 6) থেকে রিমুভ করা (শুধুমাত্র স্টাফ মেম্বার বা ওনারের জন্য - ওনাররা কেবল তাদের ওন করা ডাটা ক্লিয়ার করবে, তবে গ্লোবাল ক্লিয়ারেন্স স্টাফের হাতে থাকাই নিরাপদ)
+            # তবে ইউজার যদি স্টাফ হয় তবে আমরা গ্লোবাল থেকেও মুছে দেব যাতে রি-জেনারেশন হয়।
+            if request.user.is_staff or request.user.is_superuser:
+                global_key = f"global:reply:{msg_hash}"
+                r_grouped_db6.delete(global_key)
             
+            return Response({"status": "success", "message": "Message deleted from cache layers"}, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class ClearGlobalCacheAPIView(APIView):
+    """
+    পুরো গ্লোবাল ক্যাশ ডিলিট করার জন্য (শুধুমাত্র স্টাফদের জন্য)
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        if not (request.user.is_staff or request.user.is_superuser):
+            return Response({"error": "Only staff members can clear global cache."}, status=status.HTTP_403_FORBIDDEN)
+            
+        try:
+            from .cache.hybrid_similarity import clear_global_cache
+            count = clear_global_cache()
+            return Response({"status": "success", "message": f"Successfully cleared {count} global cache entries"}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

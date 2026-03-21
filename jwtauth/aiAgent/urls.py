@@ -1,7 +1,7 @@
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from aiAgent.views import AgentAIViewSet, TokenUsageAnalyticsView, dashboard_chat_view, RankingAPIView, UserAvailableModelsView, AgentMetricsAPIView, DeleteRankingDataAPIView, UpdateCacheScopeAPIView, RequestSpecialAgentAPIView
+from aiAgent.views import AgentAIViewSet, TokenUsageAnalyticsView, dashboard_chat_view, RankingAPIView, UserAvailableModelsView, AgentMetricsAPIView, DeleteRankingDataAPIView, UpdateCacheScopeAPIView, RequestSpecialAgentAPIView, ClearGlobalCacheAPIView
 from aiAgent.contact_views import ContactListView, ToggleAutoReplyView, ContactMessageHistoryView, ContactDetailView
 from aiAgent.widget_views import WidgetConfigView, WidgetChatView, WidgetIconUploadView
 from chat.views import facebook_data_deletion_callback
@@ -15,6 +15,7 @@ urlpatterns = [
     path("dashboard-ai/", dashboard_chat_view, name='dashboard_ai'),
     path("ranking/<str:agent_id>/", RankingAPIView.as_view(), name='ranking-api'),
     path('ranking/delete/<str:agent_id>/<str:msg_hash>/', DeleteRankingDataAPIView.as_view(), name='delete-ranking'),
+    path('ranking/clear-global-cache/', ClearGlobalCacheAPIView.as_view(), name='clear-global-cache'),
     path('ranking/update-scope/<str:agent_id>/<str:msg_hash>/', UpdateCacheScopeAPIView.as_view(), name='update-cache-scope'),
     path('ranking/request-special/<str:agent_id>/', RequestSpecialAgentAPIView.as_view(), name='request-special-agent'),
     path("metrics/<str:agent_id>/", AgentMetricsAPIView.as_view(), name='agent-metrics'),
