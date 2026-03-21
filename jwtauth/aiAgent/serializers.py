@@ -225,13 +225,14 @@ class ContactSerializer(serializers.ModelSerializer):
     agent_name = serializers.CharField(source='agent.name', read_only=True)
     last_message = serializers.SerializerMethodField()
     last_message_time = serializers.SerializerMethodField()
+    unread_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Contact
         fields = [
             'id', 'agent', 'agent_name', 'identifier', 'name', 'push_name', 
             'is_auto_reply_enabled', 'platform', 'created_at', 'updated_at',
-            'custom_prompt', 'custom_instructions', 'last_message', 'last_message_time'
+            'custom_prompt', 'custom_instructions', 'last_message', 'last_message_time', 'unread_count'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
@@ -250,6 +251,13 @@ class ContactSerializer(serializers.ModelSerializer):
             last_msg = conv.messages.order_by('-sent_at').first()
             return last_msg.sent_at if last_msg else None
         return None
+
+    def get_unread_count(self, obj):
+        from chat.models import Conversation
+        conv = Conversation.objects.filter(agentAi=obj.agent, contact_id=obj.identifier).first()
+        if conv:
+            return conv.messages.filter(role='user', is_read=False).count()
+        return 0
 
 class MessageSerializer(serializers.ModelSerializer):
     class Meta:

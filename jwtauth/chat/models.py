@@ -42,6 +42,7 @@ class Message(models.Model):
     platform = models.CharField(max_length=20, choices=Conversation.PLATFORM_CHOICES, default='messenger')
 
     tokens_used = models.IntegerField(default=0)
+    is_read = models.BooleanField(default=False)
 
     sent_at = models.DateTimeField(auto_now_add=True)
 

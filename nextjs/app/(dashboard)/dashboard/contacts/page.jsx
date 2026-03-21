@@ -39,7 +39,9 @@ export default function Contacts() {
   const observer = useRef();
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+    }, 50);
   };
 
   const lastMessageElementRef = useCallback(node => {
@@ -292,17 +294,24 @@ export default function Contacts() {
                               {formatLastSeen(contact.last_message_time || contact.updated_at)}
                             </span>
                           </div>
-                          <div className="flex justify-between items-center group">
-                            <p className="text-sm text-gray-500 truncate pr-2">
+                          <div className="flex justify-between items-center group mt-1">
+                            <p className={`text-sm truncate pr-2 ${contact.unread_count > 0 ? 'text-gray-900 font-bold' : 'text-gray-500'}`}>
                               {contact.last_message || 'No messages yet'}
                             </p>
-                            <button 
-                              onClick={(e) => toggleAutoReply(contact.id, e)}
-                              className={`flex-shrink-0 w-3 h-3 rounded-full ${
-                                contact.is_auto_reply_enabled ? 'bg-[#25d366]' : 'bg-rose-500'
-                              } shadow-sm border border-white`}
-                              title={contact.is_auto_reply_enabled ? "AI Responding" : "AI Blocked"}
-                            />
+                            <div className="flex items-center gap-2">
+                              {contact.unread_count > 0 && (
+                                <span className="bg-[#25d366] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
+                                  {contact.unread_count}
+                                </span>
+                              )}
+                              <button 
+                                onClick={(e) => toggleAutoReply(contact.id, e)}
+                                className={`flex-shrink-0 w-3 h-3 rounded-full ${
+                                  contact.is_auto_reply_enabled ? 'bg-[#25d366]' : 'bg-rose-500'
+                                } shadow-sm border border-white`}
+                                title={contact.is_auto_reply_enabled ? "AI Responding" : "AI Blocked"}
+                              />
+                            </div>
                           </div>
                           <span className="text-[9px] font-black uppercase text-gray-300 tracking-widest mt-1 inline-block">
                             {contact.agent_name || contact.platform}

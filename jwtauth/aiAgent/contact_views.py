@@ -85,6 +85,10 @@ class ContactMessageHistoryView(APIView):
             if not conversation:
                 return Response({"messages": [], "count": 0}, status=status.HTTP_200_OK)
 
+            unread_msgs = Message.objects.filter(conversation=conversation, role='user', is_read=False)
+            if unread_msgs.exists():
+                unread_msgs.update(is_read=True)
+
             messages = Message.objects.filter(conversation=conversation).order_by('-sent_at')
             
             paginator = MessagePagination()
