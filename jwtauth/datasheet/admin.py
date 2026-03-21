@@ -8,6 +8,8 @@ class SpreadsheetAdmin(admin.ModelAdmin):
         'id',
         'title',
         'user',
+        'scope',
+        'agent',
         'rows',
         'cols',
         'is_dark_mode',
@@ -17,6 +19,8 @@ class SpreadsheetAdmin(admin.ModelAdmin):
     ]
     list_filter = (
         'user',
+        'scope',
+        'agent',
         'is_dark_mode',
         'created_at',
         'updated_at',
@@ -40,6 +44,8 @@ class SpreadsheetAdmin(admin.ModelAdmin):
             'fields': (
                 'title',
                 'user',
+                'scope',
+                'agent',
                 'rows',
                 'cols',
                 'is_dark_mode',

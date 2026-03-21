@@ -159,7 +159,7 @@ const [submitting, setSubmitting] = useState(false);
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
-                    <BankDetailItem label="Bank Name" value="DDBL BANK LIMITED" isCopyable />
+                    <BankDetailItem label="Bank Name" value="Dutch-Bangla Bank" isCopyable />
                     <BankDetailItem label="Account Holder" value="MD JONAYED" isCopyable />
                     <BankDetailItem label="Account Number" value="1811580389470" isCopyable />
                     <BankDetailItem label="Card Number" value="4840 6100 2281 7706" isCopyable />

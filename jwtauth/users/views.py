@@ -13,7 +13,7 @@ from rest_framework.views import APIView
 from datetime import datetime, timedelta, timezone
 import jwt
 from django.conf import settings
-from users.services.email_service import send_reset_email, send_verification_email
+from users.services.email_service import send_reset_email, send_verification_email, send_2fa_otp_email
 from users.authentication import CookieJWTAuthentication
 from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -162,8 +162,34 @@ class UserViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['patch', 'put'], url_path='update-me', permission_classes=[IsAuthenticated])
     def update_me(self, request):
         user = request.user
-        serializer = self.get_serializer(user, data=request.data, partial=True)
+        payload = request.data.copy()
+        
+        # Handle profile photo upload or deletion
+        if 'profile_photo' in request.data or 'profile_photo' in request.FILES:
+            profile = user.profile
+            new_photo = request.FILES.get('profile_photo')
+            if new_photo is None:
+                raw_data = request.data.get('profile_photo')
+                if raw_data in ('null', '', None):
+                    new_photo = None
+                else:
+                    new_photo = raw_data
 
+            old_photo = profile.profile_photo
+            if old_photo and (new_photo is None or old_photo != new_photo):
+                try:
+                    old_photo.delete(save=False)
+                except Exception as e:
+                    print(f"File deletion error: {e}")
+
+            if new_photo is None:
+                profile.profile_photo = None
+            else:
+                profile.profile_photo = new_photo
+            profile.save(update_fields=["profile_photo"])
+            payload.pop('profile_photo', None)
+
+        serializer = self.get_serializer(user, data=payload, partial=True)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -231,14 +257,33 @@ class LoginView(APIView):
     def post(self, request):
         email = request.data.get("email")
         password = request.data.get("password")
+        otp_code = request.data.get("otp_code")
 
         user = authenticate(request, email=email, password=password)
         if user is None:
             return Response({"error": "Invalid email or password"}, status=status.HTTP_401_UNAUTHORIZED)
 
         if not user.is_verified:
-            return Response({"error": "Email is not verified. Please check your inbox."
-            }, status=status.HTTP_403_FORBIDDEN)
+            return Response({"error": "Email is not verified. Please check your inbox."}, status=status.HTTP_403_FORBIDDEN)
+
+        # Email OTP-based 2FA (Profile flag)
+        profile = user.profile
+        if getattr(profile, "two_factor_enabled", False):
+            otp = str(random.randint(100000, 999999))
+            profile.otp_code = otp
+            profile.otp_created_at = timezone.now()
+            profile.save(update_fields=["otp_code", "otp_created_at"])
+
+            try:
+                send_2fa_otp_email(user.email, otp)
+            except Exception as e:
+                # ইমেইল না গেলেও কোড সেভ থাকে; ইউজার চাইলে নতুন কোড চেয়ে নিতে পারবে
+                print(f"2FA email send failed: {e}")
+
+            return Response({
+                "two_factor_required": True,
+                "message": "একটি ৬-সংখ্যার কোড ইমেইলে পাঠানো হয়েছে। আবার কোড চাইলে পুনরায় লগইন রিকোয়েস্ট করুন।"
+            }, status=status.HTTP_200_OK)
 
         # JWT Token generation
         refresh = RefreshToken.for_user(user)
@@ -255,14 +300,13 @@ class LoginView(APIView):
         )
 
         # Httponly cookie set
-        response.set_cookie(key='access_token',
-        value=access_token,
-        httponly=True,
-        samesite="Lax", # its in dev, production 'strict' , None
-        secure=settings.DEBUG is False,#HTTPS True, dev False
-        path='/',
-        
-
+        response.set_cookie(
+            key='access_token',
+            value=access_token,
+            httponly=True,
+            samesite="Lax", # its in dev, production 'strict' , None
+            secure=settings.DEBUG is False, # HTTPS True, dev False
+            path='/',
         )
         response.set_cookie(
             key="refresh_token", 
@@ -448,6 +492,31 @@ class OrderSubmitView(viewsets.ModelViewSet):
     
     def perform_update(self, serializer):
         serializer.save()
+
+    @action(detail=False, methods=['get'], url_path='public-profile/(?P<form_id>[^/.]+)', permission_classes=[AllowAny])
+    def public_profile(self, request, form_id=None):
+        try:
+            order_form = OrderForm.objects.get(form_id=form_id)
+            user = order_form.user
+            profile_photo_url = None
+            if hasattr(user, 'profile') and user.profile.profile_photo:
+                profile_photo_url = request.build_absolute_uri(user.profile.profile_photo.url)
+
+            return Response({
+                'name': user.name or user.email,
+                'profile_photo_url': profile_photo_url
+            })
+        except OrderForm.DoesNotExist:
+            return Response({'error': 'Form not found'}, status=404)
+
+    @action(detail=False, methods=['get'], url_path='track', permission_classes=[AllowAny])
+    def track_by_phone(self, request):
+        phone = request.query_params.get('phone', '').strip()
+        if not phone:
+            return Response({'error': 'Phone number is required'}, status=400)
+        orders = CustomerOrder.objects.filter(phone_number__icontains=phone).order_by('-created_at')
+        serializer = self.get_serializer(orders, many=True)
+        return Response(serializer.data)
 
 
 
@@ -692,6 +761,7 @@ class SendPaymentOTPView(APIView):
         <body>
             <div class="email-container">
                 <div class="header">
+                    <img src="https://newsmartagent.com/newsmartagent.png" width="80" style="margin-bottom: 10px; border-radius: 8px;"><br>
                     <h1>New Smart Agent</h1>
                 </div>
                 <div class="content">
@@ -840,6 +910,7 @@ class SendTransferOTPView(APIView):
         <body>
             <div class="email-container">
                 <div class="header">
+                    <img src="https://newsmartagent.com/newsmartagent.png" width="80" style="margin-bottom: 10px; border-radius: 8px;"><br>
                     <h1>New Smart Agent</h1>
                 </div>
                 <div class="content">
@@ -935,3 +1006,87 @@ class FinancialSummaryView(APIView):
             'account_pending': acc_pending_amount,
             'account_failed': acc_failed_amount,
         })
+
+
+class Verify2FALoginView(APIView):
+    """ইমেইল OTP দিয়ে লগইন সম্পন্ন করা।"""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get("email")
+        password = request.data.get("password")
+        otp_code = request.data.get("otp_code")
+
+        if not email or not password or not otp_code:
+            return Response({"error": "email, password আর otp_code লাগবে"}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = authenticate(request, email=email, password=password)
+        if user is None:
+            return Response({"error": "Invalid email or password"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        profile = user.profile
+        if not getattr(profile, "two_factor_enabled", False):
+            return Response({"error": "2FA চালু নেই"}, status=status.HTTP_400_BAD_REQUEST)
+        if not profile.otp_code or str(profile.otp_code) != str(otp_code):
+            return Response({'error': 'কোড ভুল'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not profile.otp_created_at or timezone.now() > profile.otp_created_at + timedelta(minutes=5):
+            return Response({'error': 'কোডের মেয়াদ শেষ'}, status=status.HTTP_400_BAD_REQUEST)
+
+        profile.otp_code = ""
+        profile.save(update_fields=["otp_code"])
+
+        refresh = RefreshToken.for_user(user)
+        access_token = str(refresh.access_token)
+        refresh_token = str(refresh)
+
+        response = Response({
+            "user": {"id": user.id, "email": user.email},
+            "message": "Login successful"
+        }, status=status.HTTP_200_OK)
+
+        response.set_cookie(
+            key='access_token',
+            value=access_token,
+            httponly=True,
+            samesite="Lax",
+            secure=settings.DEBUG is False,
+            path='/',
+        )
+        response.set_cookie(
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            samesite="Lax",
+            secure=settings.DEBUG is False,
+            path='/',
+        )
+        return response
+
+
+class Toggle2FAView(APIView):
+    """ইমেইল OTP 2FA অন/অফ করুন।"""
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        enabled = request.data.get("enabled")
+        if enabled is None:
+            return Response({"error": "enabled true/false পাঠান"}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = request.user
+        try:
+            profile = user.profile
+            profile.two_factor_enabled = bool(enabled)
+            profile.save(update_fields=["two_factor_enabled"])
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).exception("Toggle2FA save failed for user %s: %s", getattr(user, "id", None), e)
+            return Response({"error": "Could not update 2FA. Contact support."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        msg = "2FA চালু করা হয়েছে।" if profile.two_factor_enabled else "2FA বন্ধ করা হয়েছে।"
+
+        return Response({
+            "message": msg,
+            "two_factor_enabled": profile.two_factor_enabled
+        }, status=status.HTTP_200_OK)

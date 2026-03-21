@@ -28,11 +28,12 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profile
-        fields = ["user", "id_type", "unique_id", "created_at", "updated_at", "word_balance", 'acount_balance', 'commission_balance']
+        fields = ["user", "id_type", "unique_id", "profile_photo", "created_at", "updated_at", "two_factor_enabled", "word_balance", 'acount_balance', 'commission_balance']
 
 
 class UserSerializer(serializers.ModelSerializer[User]):
-    profile = ProfileSerializer(read_only=True) # nested serializer
+    profile = ProfileSerializer(required=False) # nested serializer
+    two_factor_enabled = serializers.SerializerMethodField(read_only=True)
 
     man_agent_unique_id = serializers.CharField(write_only=True, required=False,allow_blank=True, allow_null=True)
     man_agent_otp_key = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
@@ -61,6 +62,7 @@ class UserSerializer(serializers.ModelSerializer[User]):
             'man_agent_otp_key',
             'is_staff',
             'is_superuser',
+            'two_factor_enabled',
         ]
 
 
@@ -68,8 +70,14 @@ class UserSerializer(serializers.ModelSerializer[User]):
         extra_kwargs = {
             # "url": {"view_name": "user-detail", "lookup_field": "id"},
             # "email": {"read_only": True},
-            "password": {"write_only": True}
+            "password": {"write_only": True},
           }
+
+    def get_two_factor_enabled(self, obj):
+        try:
+            return getattr(obj.profile, "two_factor_enabled", False)
+        except Exception:
+            return False
 
     def create(self, validated_data):
 
@@ -127,10 +135,24 @@ class UserSerializer(serializers.ModelSerializer[User]):
                 )
             except Exception as e:
                 print(f"Notification Error: {e}")
-        
-
-
         return user
+
+    def update(self, instance, validated_data):
+        profile_data = validated_data.pop('profile', None)
+        
+        # Update user fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        # Update profile fields if provided
+        if profile_data:
+            profile = instance.profile
+            for attr, value in profile_data.items():
+                setattr(profile, attr, value)
+            profile.save()
+            
+        return instance
 
 
 
@@ -189,11 +211,24 @@ class SubscriptionSerializer(serializers.ModelSerializer):
 class CustomerOrderSerializer(serializers.ModelSerializer):
     
     form_id = serializers.UUIDField(write_only=True, required=False)
+    customer_profile_photo = serializers.SerializerMethodField()
 
     class Meta:
         model = CustomerOrder
-        fields = ['id', 'form_id', 'customer_name', 'phone_number', 'district', 'upazila', 'address', 'product_name','status', 'extra_info', 'created_at', 'updated_at']
-        read_only_fields = ['id', 'created_at']
+        fields = ['id', 'form_id', 'customer_name', 'customer_profile_photo', 'phone_number', 'district', 'upazila', 'address', 'product_name', 'price', 'status', 'extra_info', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'customer_profile_photo']
+
+    def get_customer_profile_photo(self, obj):
+        try:
+            request = self.context.get('request')
+            if obj.user.profile.profile_photo:
+                url = obj.user.profile.profile_photo.url
+                if request:
+                    return request.build_absolute_uri(url)
+                return url
+        except Exception:
+            pass
+        return None
 
     def create(self, validated_data):
         form_id = validated_data.pop('form_id', None)

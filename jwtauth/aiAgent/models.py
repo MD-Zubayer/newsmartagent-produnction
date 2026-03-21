@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+from django.core.cache import cache
 from django_cryptography.fields import encrypt
 
 
@@ -26,7 +27,8 @@ class AgentAI(models.Model):
     PLATFORM_CHOICES = [
         ('whatsapp', 'WhatsApp'),
         ('messenger', 'Messenger'),
-        ('facebook_comment', 'Facebook Comment')
+        ('facebook_comment', 'Facebook Comment'),
+        ('web_widget', 'Web Chat Widget')
     ]
     AI_AGENT_CATEGORIES = (
     ('business', 'Business / Commercial'),
@@ -47,10 +49,13 @@ class AgentAI(models.Model):
         null=True, 
         blank=True
     )
-    page_id = models.CharField(max_length=100, unique=True, db_index=True, blank=True)
+    page_id = models.CharField(max_length=100, unique=True, db_index=True, blank=True, null=True)
+    # Primary identifier for WhatsApp agents (phone number without country formatting assumptions)
+    number = models.CharField(max_length=50, blank=True, null=True, db_index=True)
 
-    access_token = encrypt(models.TextField())
+    access_token = encrypt(models.TextField(blank=True, null=True))
     webhook_secret = models.CharField(max_length=255, blank=True)
+    widget_key = models.CharField(max_length=100, unique=True, blank=True, null=True, db_index=True)
 
     system_prompt = models.TextField()
     greeting_message = models.TextField(blank=True, null=True)
@@ -68,9 +73,6 @@ class AgentAI(models.Model):
         related_name='agents_memory_extraction',
         help_text="এজেন্ট মেমোরি এক্সট্রাকশনের জন্য কোন মডেল ব্যবহার হবে? (শুধুমাত্র অ্যাডমিন)"
     )
-    temperature = models.FloatField(default=0.7)
-    max_tokens = models.IntegerField(default=200)
-
     token_expires_at = models.DateTimeField(null=True, blank=True)
 
     is_active = models.BooleanField(default=True)
@@ -110,6 +112,12 @@ class AgentAI(models.Model):
     
     def __str__(self):
         return f'{self.name} ({self.user})'
+
+    @property
+    def get_settings(self):
+        from settings.models import AgentAISettings
+        settings, created = AgentAISettings.objects.get_or_create(agent=self)
+        return settings
 
 
 
@@ -223,3 +231,101 @@ class SmartKeyword(models.Model):
         indexes = [
             models.Index(fields=['category', 'text']),
         ]
+
+class SmartTranslationMap(models.Model):
+    source_text = models.CharField(max_length=255, unique=True, db_index=True)
+    target_text = models.CharField(max_length=255, db_index=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Smart Translation Map"
+        verbose_name_plural = "Smart Translation Maps"
+        ordering = ['source_text']
+
+    def save(self, *args, **kwargs):
+        self.source_text = (self.source_text or "").strip()
+        self.target_text = (self.target_text or "").strip()
+        super().save(*args, **kwargs)
+        cache.delete("smart_translation_map_v1")
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        cache.delete("smart_translation_map_v1")
+
+    def __str__(self):
+        return f"{self.source_text} -> {self.target_text}"
+
+class Contact(models.Model):
+    PLATFORM_CHOICES = [
+        ('whatsapp', 'WhatsApp'),
+        ('messenger', 'Messenger'),
+    ]
+    agent = models.ForeignKey(AgentAI, on_delete=models.CASCADE, related_name='contacts')
+    identifier = models.CharField(max_length=255, db_index=True)  # Phone number or Messenger Sender ID
+    name = models.CharField(max_length=255, blank=True, null=True)
+    push_name = models.CharField(max_length=255, blank=True, null=True)
+    is_auto_reply_enabled = models.BooleanField(default=True)
+    custom_prompt = models.TextField(blank=True, null=True, help_text="Custom system prompt for this specific contact")
+    custom_instructions = models.TextField(blank=True, null=True, help_text="Additional instructions for this contact")
+    platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('agent', 'identifier')
+        verbose_name = "Contact"
+        verbose_name_plural = "Contacts"
+
+    def __str__(self):
+        return f"{self.name or self.identifier} ({self.platform}) - Agent: {self.agent.id}"
+
+
+class WidgetSettings(models.Model):
+    agent = models.OneToOneField(AgentAI, on_delete=models.CASCADE, related_name='widget_settings')
+    
+    # Appearance
+    primary_color = models.CharField(max_length=7, default='#4f46e5')
+    bubble_icon = models.CharField(max_length=50, default='image')  # 'image' or 'chat'
+    bubble_icon_url = models.CharField(
+        max_length=500,
+        blank=True,
+        default='',
+        help_text="Custom bubble icon URL. Leave blank to use the default newsmartagent logo."
+    )
+    bubble_size = models.IntegerField(
+        default=60,
+        help_text="Bubble size in pixels (e.g. 52, 60, 72)."
+    )
+    bubble_roundness = models.IntegerField(
+        default=28,
+        help_text="Bubble corner roundness in percentage (0-100)."
+    )
+    show_bubble_background = models.BooleanField(
+        default=True,
+        help_text="Whether to show the primary color background for the bubble."
+    )
+    widget_position = models.CharField(
+        max_length=20,
+        default='bottom-right',
+        help_text="Corner position: bottom-right, bottom-left, top-right, top-left"
+    )
+    
+    # Text
+    header_title = models.CharField(max_length=100, default='Chat with AI')
+    header_subtitle = models.CharField(max_length=100, default='Online | Powered by Smart Agent')
+    placeholder_text = models.CharField(max_length=100, default='Type a message...')
+    
+    # Advanced
+    is_enabled = models.BooleanField(default=True)
+    allowed_domains = models.TextField(blank=True, help_text="Comma separated domains (e.g. example.com). Leave blank for all.")
+    
+    # Multi-Channel
+    whatsapp_number = models.CharField(max_length=20, blank=True, null=True, help_text="WhatsApp number with country code")
+    messenger_link = models.CharField(max_length=255, blank=True, null=True, help_text="Facebook Messenger link (e.g. m.me/yourpage)")
+    
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Widget Settings for {self.agent.name}"

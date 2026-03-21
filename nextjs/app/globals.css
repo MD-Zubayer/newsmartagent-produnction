@@ -28,22 +28,15 @@ body {
 .input {
   @apply p-3 border rounded-lg border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none;
 }
+
 .btn-primary {
   @apply w-full py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition;
 }
+
 .eye {
   @apply absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-gray-500;
 }
+
 .card {
   @apply bg-white shadow-md rounded-lg p-6;
 }
-
-
-
-
-
-
-
-
-
-

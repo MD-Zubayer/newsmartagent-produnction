@@ -38,6 +38,9 @@ export default function AIAgentPage() {
     selected_model: "",
     temperature: 0.7,
     max_tokens: 300,
+    history_limit: 3,
+    skip_history: false,
+    history_skip_keywords: "",
     is_active: true,
   };
 
@@ -126,6 +129,7 @@ const openModal = (agent = null) => {
     // টাইপ কাস্টিং
     payload.temperature = parseFloat(payload.temperature);
     payload.max_tokens = parseInt(payload.max_tokens);
+    payload.history_limit = parseInt(payload.history_limit);
 
     // অপ্রয়োজনীয় ফিল্ড রিমুভ (যা ডাটাবেজে সরাসরি যায় না)
     delete payload.id;
@@ -296,8 +300,10 @@ const openModal = (agent = null) => {
                 <input type="text" name="name" value={formData.name} onChange={handleChange} required className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" placeholder="Agent Name" />
                 <select name="platform" value={formData.platform} onChange={handleChange} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none">
                   <option value="messenger">Facebook Messenger</option>
-                  {/* <option value="facebook_comment">Facebook Comment</option> */}
-                  <option value="WhatsApp">WhatsApp Business</option>
+                  <option value="facebook_comment">Facebook Comment</option>
+                  <option value="whatsapp">WhatsApp Business</option>
+                  <option value="instagram">Instagram Direct</option>
+                  <option value="instagram_comment">Instagram Comment</option>
                 </select>
               </div>
 
@@ -316,20 +322,35 @@ const openModal = (agent = null) => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <select 
-  name="selected_model" // ai_model এর বদলে selected_model দিন
-  value={formData.selected_model} 
-  onChange={handleChange} 
-  className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none"
->
-  {availableModels.map((model) => (
-    <option key={model.id} value={model.id}> {/* value হিসেবে model.id (Primary Key) ব্যবহার করুন */}
-      {model.name} ({model.provider})
-    </option>
-  ))}
-</select>
-                <input type="number" name="max_tokens" value={formData.max_tokens} onChange={handleChange} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" placeholder="Max Tokens" />
+                  name="selected_model" 
+                  value={formData.selected_model || ''} 
+                  onChange={handleChange} 
+                  className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none"
+                >
+                  {availableModels.map((model) => (
+                    <option key={model.id} value={model.id}> 
+                      {model.name} ({model.provider})
+                    </option>
+                  ))}
+                </select>
+                <input type="number" name="history_limit" value={formData.history_limit ?? ''} onChange={handleChange} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" placeholder="History Limit (e.g. 3)" />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <input type="number" step="0.1" name="temperature" value={formData.temperature ?? ''} onChange={handleChange} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" placeholder="Temperature (e.g. 0.7)" />
+                <input type="number" name="max_tokens" value={formData.max_tokens ?? ''} onChange={handleChange} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" placeholder="Max Tokens" />
+              </div>
+
+              <div className="space-y-4 bg-amber-50/40 p-6 rounded-[2rem] border border-amber-50">
+                <div className="flex items-center gap-4">
+                  <input type="checkbox" name="skip_history" id="skip_history" checked={formData.skip_history || false} onChange={handleChange} className="w-5 h-5 accent-amber-600" />
+                  <label htmlFor="skip_history" className="text-sm font-bold text-amber-900">Skip History in Messages</label>
+                </div>
+                {formData.skip_history && (
+                  <input type="text" name="history_skip_keywords" value={formData.history_skip_keywords || ''} onChange={handleChange} className="w-full p-4 bg-white rounded-xl outline-none font-mono text-xs border border-amber-100 placeholder-amber-200" placeholder="Skip Keywords (comma separated)" />
+                )}
               </div>
 
               <textarea name="system_prompt" value={formData.system_prompt} onChange={handleChange} rows="5" className="w-full p-4 bg-gray-50 rounded-2xl outline-none text-sm font-medium" placeholder="System Instructions..."></textarea>

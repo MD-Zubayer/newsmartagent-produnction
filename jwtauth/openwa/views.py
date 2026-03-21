@@ -1,80 +1,234 @@
-import os
-import requests
 import logging
+import secrets
+import requests
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.decorators import api_view, permission_classes
 
 from .models import WhatsAppInstance, WhatsAppMessage
+from .services import fetch_baileys_status
+from aiAgent.models import Contact, AgentAI
+
+# সঠিক ইউজার মডেল পাওয়ার জন্য
+User = get_user_model()
 
 logger = logging.getLogger('openwa')
 
-BAILEYS_API_URL = os.environ.get('BAILEYS_API_URL', 'http://newsmartagent-baileys:3001')
-BAILEYS_API_SECRET = os.environ.get('BAILEYS_API_SECRET', 'changeme123')
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def whatsapp_sync_agent(request):
+    """
+    Baileys সার্ভিস থেকে কল আসে যখন একটি সেশন কানেক্ট হয়।
+    এটি অটোমেটিক AgentAI তৈরি করে।
+    """
+    data = request.data
+    session_id = data.get('sessionId')
+    phone = data.get('phone')
+    secret = data.get('secret')
+
+    if secret != settings.BAILEYS_API_SECRET:
+        return Response({'error': 'Unauthorized'}, status=401)
+
+    if not all([session_id, phone]):
+        return Response({'error': 'Missing data'}, status=400)
+
+    try:
+        # টাইপ সেফটির জন্য str() ব্যবহার এবং আইডি আলাদা করা
+        user_id = str(session_id).replace('user_', '')
+        user = User.objects.get(id=user_id)
+        
+        from aiAgent.models import AgentAI
+        
+        # AgentAI তৈরি বা আপডেট
+        agent, created = AgentAI.objects.update_or_create(
+            page_id=phone,
+            defaults={
+                'user': user,
+                'platform': 'whatsapp',
+                'name': f"WhatsApp Agent ({phone})",
+                'system_prompt': "You are an AI assistant for WhatsApp. Help users with their queries.",
+                'ai_model': 'gemini-1.5-flash', # বর্তমান স্ট্যাবল ভার্সন
+                'is_active': True,
+                'number': phone,
+                # WhatsApp এজেন্টের জন্য dummy token রাখা হচ্ছে যাতে required field pass করে।
+                'access_token': f"whatsapp-auto-{secrets.token_urlsafe(8)}",
+            }
+        )
+        
+        # WhatsAppInstance আপডেট
+        instance, _ = WhatsAppInstance.objects.update_or_create(
+            user=user,
+            defaults={
+                'phone_number': phone,
+                'status': 'open',
+                'instance_name': data.get('pushName', 'default'),
+                'baileys_api_url': settings.BAILEYS_API_URL,
+            }
+        )
+
+        logger.info("WhatsApp sync successful for user %s (agent %s, created=%s)", user.id, agent.id, created)
+        return Response({
+            'success': True, 
+            'agent_id': agent.id,
+            'created': created
+        })
+    except User.DoesNotExist:
+        return Response({'error': f'User {user_id} not found'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def whatsapp_sync_contacts(request):
+    """
+    Baileys সার্ভিস থেকে কন্টাক্ট লিস্ট রিসিভ করে এবং DB-তে সেভ করে।
+    """
+    data = request.data
+    session_id = data.get('sessionId')
+    contacts = data.get('contacts', [])
+    secret = data.get('secret')
+
+    if secret != settings.BAILEYS_API_SECRET:
+        return Response({'error': 'Unauthorized'}, status=401)
+
+    if not session_id:
+        return Response({'error': 'Missing sessionId'}, status=400)
+
+    try:
+        user_id = str(session_id).replace('user_', '')
+        
+        # এজেন্টের জন্য লুকআপ
+        # নোট: Baileys থেকে পাওয়া কন্টাক্টগুলো এই সেশনের ইউজারের সব এজেন্টের জন্য হতে পারে, 
+        # কিন্তু আমরা আপাতত প্রাইমারি WhatsApp এজেন্টের সাথে লিঙ্ক করবো।
+        agent = AgentAI.objects.filter(user_id=user_id, platform='whatsapp').first()
+        if not agent:
+             return Response({'error': 'Agent not found'}, status=404)
+
+        for c in contacts:
+            jid = c.get('id')
+            if not jid: continue
+            
+            identifier = jid.split('@')[0]
+            # Check various common keys for names
+            name = c.get('name') or c.get('notify') or c.get('pushName') or c.get('push_name') or c.get('verifiedName')
+            push_name_val = c.get('notify') or c.get('pushName') or c.get('push_name') or c.get('name') or ''
+            
+            Contact.objects.update_or_create(
+                agent=agent,
+                identifier=identifier,
+                platform='whatsapp',
+                defaults={
+                    'name': name,
+                    'push_name': push_name_val or None
+                }
+            )
+
+        return Response({'success': True, 'synced_count': len(contacts)})
+    except Exception as e:
+        logger.error(f"Contact sync error: {e}")
+        return Response({'error': str(e)}, status=500)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def whatsapp_init_session(request):
+    """
+    ড্যাশবোর্ড থেকে সেশন ইনিশিয়ালাইজ করতে।
+    """
+    user = request.user
+    session_id = f"user_{user.id}"
+    baileys_url = settings.BAILEYS_API_URL
+
+    try:
+        phone = request.data.get('phone')
+        response = requests.post(
+            f"{baileys_url}/init/{session_id}",
+            json={'phone': phone},
+            timeout=10
+        )
+        return Response(response.json(), status=response.status_code)
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
 
 
 class WhatsAppSendView(APIView):
     """
     n8n থেকে AI reply receive করে Baileys-এ forward করে।
-
-    POST /api/whatsapp/send/
-    Body: { "to": "880XXXXXXXXX", "message": "AI reply..." }
-    Header: X-Api-Secret: <secret>  (optional অতিরিক্ত security layer)
     """
-    permission_classes = [AllowAny]  # n8n থেকে authenticated নয়, তাই AllowAny
+    permission_classes = [AllowAny] 
 
     def post(self, request):
-        to = request.data.get('to')
-        message = request.data.get('message')
+        data = request.data
+        # ১. n8n এবং manual body—উভয় ক্ষেত্র থেকে ডাটা রিসিভ করার ব্যবস্থা
+        to = data.get('to') or data.get('sender_id') or data.get('phone')
+        message = data.get('message') or data.get('reply')
+        session_id = data.get('sessionId')
 
-        if not to or not message:
+        # ২. সেশন আইডি না থাকলে রিকোয়েস্ট ইউজার থেকে নেওয়া (ড্যাশবোর্ড টেস্টের জন্য)
+        if not session_id and request.user.is_authenticated:
+            session_id = f"user_{request.user.id}"
+
+        if not all([to, message, session_id]):
             return Response(
-                {'error': '`to` and `message` are required'},
+                {'error': '`to` (or sender_id), `message`, and `sessionId` are required'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # ৩. গুরুত্বপূর্ণ: নম্বর ফরম্যাটিং
+        to_str = str(to).strip()
+        if '@' in to_str:
+            # যদি অলরেডি JID ফরম্যাটে থাকে (@s.whatsapp.net বা @lid)
+            formatted_to = to_str
+            clean_to = to_str.split('@')[0]
+        else:
+            # যদি শুধু নম্বর থাকে
+            clean_to = to_str
+            formatted_to = f"{clean_to}@s.whatsapp.net"
+        
+        logger.info(f"🔗 [View] Incoming data from n8n: {data}")
+        logger.info(f"🔗 [View] Target: {to}, Formatted: {formatted_to}, Session: {session_id}")
+
         try:
+            logger.info(f"📤 [View] Forwarding to Baileys: {settings.BAILEYS_API_URL}/send-message")
             response = requests.post(
-                f'{BAILEYS_API_URL}/send-message',
-                json={'to': to, 'message': message},
+                f'{settings.BAILEYS_API_URL}/send-message',
+                json={
+                    'sessionId': session_id,
+                    'to': formatted_to, # ফরম্যাটেড নম্বর পাঠানো হচ্ছে
+                    'message': message
+                },
                 headers={
                     'Content-Type': 'application/json',
-                    'x-api-secret': BAILEYS_API_SECRET,
+                    'x-api-secret': settings.BAILEYS_API_SECRET,
                 },
-                timeout=10,
+                timeout=15, # টাইমআউট কিছুটা বাড়ানো হলো
             )
             response.raise_for_status()
-            data = response.json()
+            res_data = response.json()
+            logger.info(f"📊 [View] Baileys response: {res_data}")
 
             # Message log করুন
             WhatsAppMessage.objects.create(
                 direction='outgoing',
                 from_phone='bot',
-                to_phone=to,
+                to_phone=clean_to,
                 message_text=message,
                 ai_reply=message,
             )
 
-            logger.info(f'WhatsApp message sent to {to}')
-            return Response(data, status=status.HTTP_200_OK)
+            logger.info(f'WhatsApp message successfully sent to {formatted_to} (Session: {session_id})')
+            return Response(res_data, status=status.HTTP_200_OK)
 
-        except requests.exceptions.ConnectionError:
-            logger.error('Baileys service not reachable')
+        except requests.exceptions.RequestException as e:
+            logger.error(f'Baileys API Error: {str(e)}')
             return Response(
-                {'error': 'Baileys service is not running'},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-        except requests.exceptions.Timeout:
-            logger.error('Baileys service timeout')
-            return Response(
-                {'error': 'Baileys service timeout'},
-                status=status.HTTP_504_GATEWAY_TIMEOUT,
-            )
-        except requests.exceptions.HTTPError as e:
-            logger.error(f'Baileys error: {e}')
-            return Response(
-                {'error': str(e)},
+                {'error': 'Failed to communicate with Baileys service', 'details': str(e)},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
 
@@ -82,42 +236,65 @@ class WhatsAppSendView(APIView):
 class WhatsAppStatusView(APIView):
     """
     Baileys WhatsApp connection status চেক করে।
-
-    GET /api/whatsapp/status/
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        try:
-            response = requests.get(
-                f'{BAILEYS_API_URL}/status',
-                timeout=5,
-            )
-            data = response.json()
-            return Response(data, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response(
-                {'status': 'unreachable', 'error': str(e)},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
+        session_id = f"user_{request.user.id}"
+        db_instance = WhatsAppInstance.objects.filter(user=request.user).first()
+        db_state = db_instance.status if db_instance else 'close'
+        db_phone = db_instance.phone_number if db_instance else None
+
+        baileys_state, baileys_phone, pairing_code, baileys_status_code = fetch_baileys_status(session_id)
+
+        # Pick the best-known state, preferring live Baileys data when available
+        final_state = baileys_state or db_state
+        final_phone = baileys_phone or db_phone
+
+        if db_instance and (db_instance.status != final_state or (final_phone and db_instance.phone_number != final_phone)):
+            db_instance.status = final_state
+            if final_phone:
+                db_instance.phone_number = final_phone
+            db_instance.save(update_fields=['status', 'phone_number', 'updated_at'])
+
+        # If Baileys says the session is missing but DB thinks it's open, reset DB status
+        if baileys_status_code == 404 and db_instance and db_instance.status != 'close':
+            db_instance.status = 'close'
+            db_instance.save(update_fields=['status', 'updated_at'])
+            final_state = 'close'
+
+        response_payload = {
+            'state': final_state,
+            'phone': final_phone,
+            'pairingCode': pairing_code,
+            'source': {
+                'database': db_state,
+                'baileys': baileys_state or ('unreachable' if baileys_status_code is None else baileys_state)
+            }
+        }
+
+        if baileys_state is None and baileys_status_code is None:
+            # Baileys unreachable but return latest DB state so dashboard stays responsive.
+            response_payload['source']['baileys'] = 'unreachable'
+            return Response(response_payload, status=status.HTTP_200_OK)
+
+        return Response(response_payload, status=status.HTTP_200_OK)
 
 
 class WhatsAppQRView(APIView):
     """
     Baileys QR code দেখায় (browser থেকে scan করার জন্য)।
-
-    GET /api/whatsapp/qr/
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        session_id = f"user_{request.user.id}"
         try:
             response = requests.get(
-                f'{BAILEYS_API_URL}/qr',
+                f'{settings.BAILEYS_API_URL}/qr/{session_id}',
                 timeout=5,
             )
-            data = response.json()
-            return Response(data, status=status.HTTP_200_OK)
+            return Response(response.json(), status=response.status_code)
         except Exception as e:
             return Response(
                 {'error': str(e)},

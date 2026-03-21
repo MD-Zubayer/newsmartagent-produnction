@@ -84,50 +84,41 @@ export default function HistoryPage() {
 
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 p-4 md:p-8 lg:p-12 transition-colors duration-300">
+    <div className="min-h-screen bg-[#f8fafc] text-gray-800 p-3 md:p-10 font-sans overflow-x-hidden transition-colors duration-300">
       
       {/* Header Section */}
-      <div className="max-w-6xl mx-auto mb-10">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-gradient-to-tr from-blue-600 to-indigo-500 rounded-2xl shadow-lg shadow-blue-500/30">
-            <ClockIcon className="h-8 w-8 text-white" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-extrabold tracking-tight">History & Logs</h1>
-            <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mt-1">
-              Track your payments, token usage, and active offers
-            </p>
-          </div>
-        </div>
+      <div className="max-w-7xl mx-auto mb-10 border-l-8 border-pink-500 pl-6 space-y-2">
+        <h1 className="text-2xl md:text-4xl font-black text-gray-900 tracking-tighter italic uppercase">History & Logs</h1>
+        <p className="text-gray-400 font-bold text-sm uppercase tracking-widest">Real-time Activity Intelligence</p>
       </div>
 
-      <div className="max-w-6xl mx-auto flex flex-col lg:flex-row gap-8">
+      <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-8">
         
         {/* Sidebar Tabs */}
-        <div className="w-full lg:w-64 shrink-0">
-          <div className="sticky top-8 flex flex-row lg:flex-col gap-2 overflow-x-auto pb-4 lg:pb-0 scrollbar-hide">
+        <div className="w-full lg:w-72 shrink-0">
+          <div className="sticky top-8 flex flex-row lg:flex-col gap-3 overflow-x-auto pb-4 lg:pb-0 no-scrollbar">
             <TabButton 
               active={activeTab === "all"} 
               onClick={() => setActiveTab("all")}
-              icon={<ClockIcon className="h-5 w-5" />}
+              icon={<ClockIcon className="h-6 w-6" />}
               label="All Activity"
             />
             <TabButton 
               active={activeTab === "payment"} 
               onClick={() => setActiveTab("payment")}
-              icon={<CreditCardIcon className="h-5 w-5" />}
+              icon={<CreditCardIcon className="h-6 w-6" />}
               label="Payments"
             />
             <TabButton 
               active={activeTab === "usage"} 
               onClick={() => setActiveTab("usage")}
-              icon={<CpuChipIcon className="h-5 w-5" />}
+              icon={<CpuChipIcon className="h-6 w-6" />}
               label="Token Usage"
             />
             <TabButton 
               active={activeTab === "offer"} 
               onClick={() => setActiveTab("offer")}
-              icon={<TagIcon className="h-5 w-5" />}
+              icon={<TagIcon className="h-6 w-6" />}
               label="Offers & Plans"
             />
           </div>
@@ -139,35 +130,39 @@ export default function HistoryPage() {
           {loading ? (
             <div className="flex flex-col items-center justify-center p-12">
                <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-               <p className="mt-4 text-gray-500 font-medium">Loading history records...</p>
+               <p className="mt-4 text-slate-500 font-medium">Loading history records...</p>
             </div>
           ) : (
             <>
               {/* --- Offers History --- */}
               {(activeTab === "all" || activeTab === "offer") && (
                 <div className="space-y-4">
-                  <h2 className="text-xl font-bold flex items-center gap-2 mb-4">
-                    <TagIcon className="h-6 w-6 text-purple-500" />
+                  <h2 className="text-xl font-black text-gray-800 flex items-center gap-2 mb-6 italic uppercase">
+                    <TagIcon className="h-6 w-6 text-purple-600" />
                     Offers History
                   </h2>
                   {offerHistory.map((offer) => (
-                    <div key={offer.id} className="group flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-md hover:border-purple-300 dark:hover:border-purple-700 transition-all duration-300 gap-4">
-                      <div className="flex items-center gap-4">
-                        <div className={`p-3 rounded-xl ${offer.status === 'Active' ? 'bg-purple-100 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400' : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}>
-                          <TagIcon className="h-6 w-6" />
+                    <div key={offer.id} className="group relative bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 hover:shadow-2xl transition-all overflow-hidden flex flex-col sm:flex-row justify-between items-center gap-6">
+                      <div className="flex items-center gap-6">
+                        <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg transition-transform duration-500 group-hover:scale-110 ${offer.status === 'Active' ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                          <TagIcon className="h-8 w-8" />
                         </div>
                         <div>
-                          <p className="font-bold text-lg">{offer.name}</p>
-                          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1">{offer.date} • {offer.id}</p>
+                          <p className="text-lg font-black text-slate-800 uppercase tracking-tighter">{offer.name}</p>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{offer.date} • {offer.id}</p>
                         </div>
                       </div>
-                      <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto mt-2 sm:mt-0">
-                        <span className="font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-indigo-500 sm:mb-2 text-lg">
-                          {offer.discount}
-                        </span>
-                        <span className={`text-[10px] uppercase tracking-wider font-bold px-3 py-1 rounded-full ${offer.status === 'Active' ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'}`}>
-                          {offer.status}
-                        </span>
+                      <div className="flex items-center gap-10">
+                        <div className="text-right">
+                          <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">Price</p>
+                          <p className="text-2xl font-black text-gray-900 tracking-tighter">{offer.discount}</p>
+                        </div>
+                        <div className="text-right min-w-[100px]">
+                          <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">Status</p>
+                          <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tighter ${offer.status === 'Active' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
+                            {offer.status}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -176,27 +171,33 @@ export default function HistoryPage() {
 
               {/* --- Payment History --- */}
               {(activeTab === "all" || activeTab === "payment") && (
-                <div className={`space-y-4 ${activeTab === 'all' ? 'pt-8 border-t border-gray-200 dark:border-gray-800' : ''}`}>
-                  <h2 className="text-xl font-bold flex items-center gap-2 mb-4">
-                    <CreditCardIcon className="h-6 w-6 text-emerald-500" />
+                <div className={`space-y-4 ${activeTab === 'all' ? 'pt-12 border-t border-slate-100' : ''}`}>
+                  <h2 className="text-xl font-black text-gray-800 flex items-center gap-2 mb-6 italic uppercase">
+                    <CreditCardIcon className="h-6 w-6 text-emerald-600" />
                     Payment History
                   </h2>
                   {paymentHistory.map((txn) => (
-                    <div key={txn.id} className="group flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-700 transition-all duration-300 gap-4">
-                      <div className="flex items-center gap-4">
-                        <div className={`p-3 rounded-xl ${txn.status === 'Success' ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 'bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400'}`}>
-                          {txn.status === 'Success' ? <CheckCircleIcon className="h-6 w-6" /> : <XCircleIcon className="h-6 w-6" />}
+                    <div key={txn.id} className="group relative bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 hover:shadow-2xl transition-all overflow-hidden flex flex-col sm:flex-row justify-between items-center gap-6">
+                      <div className="flex items-center gap-6">
+                        <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg transition-transform duration-500 group-hover:scale-110 ${txn.status === 'Success' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`}>
+                          {txn.status === 'Success' ? <CheckCircleIcon className="h-8 w-8" /> : <XCircleIcon className="h-8 w-8" />}
                         </div>
                         <div>
-                          <p className="font-bold text-lg uppercase tracking-wide">{txn.id}</p>
-                          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1">{txn.date} • via {txn.method}</p>
+                          <p className="text-lg font-black text-slate-800 uppercase tracking-tighter">{txn.id}</p>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{txn.date} • via {txn.method}</p>
                         </div>
                       </div>
-                      <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto mt-2 sm:mt-0">
-                        <p className="font-black text-xl sm:mb-2">৳{txn.amount}</p>
-                        <span className={`text-[10px] uppercase tracking-wider font-bold px-3 py-1 rounded-full ${txn.status === 'Success' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400'}`}>
-                          {txn.status}
-                        </span>
+                      <div className="flex items-center gap-10">
+                        <div className="text-right">
+                          <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">Amount</p>
+                          <p className="text-2xl font-black text-gray-900 tracking-tighter">৳{txn.amount}</p>
+                        </div>
+                        <div className="text-right min-w-[100px]">
+                          <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">Outcome</p>
+                          <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tighter ${txn.status === 'Success' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+                            {txn.status}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -205,32 +206,35 @@ export default function HistoryPage() {
 
               {/* --- Token Usage History --- */}
               {(activeTab === "all" || activeTab === "usage") && (
-                <div className={`space-y-4 ${activeTab === 'all' ? 'pt-8 border-t border-gray-200 dark:border-gray-800' : ''}`}>
-                  <h2 className="text-xl font-bold flex items-center gap-2 mb-4">
-                    <CpuChipIcon className="h-6 w-6 text-blue-500" />
+                <div className={`space-y-4 ${activeTab === 'all' ? 'pt-12 border-t border-slate-100' : ''}`}>
+                  <h2 className="text-xl font-black text-gray-800 flex items-center gap-2 mb-6 italic uppercase">
+                    <CpuChipIcon className="h-6 w-6 text-blue-600" />
                     Token Usage
                   </h2>
                   {usageHistory.map((log) => (
-                    <div key={log.id} className="group flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white dark:bg-gray-900 p-5 rounded-2xl border border-gray-200 dark:border-gray-800 shadow-sm hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 transition-all duration-300 gap-4">
-                      <div className="flex items-center gap-4">
-                        <div className="p-3 bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 rounded-xl">
-                          <CpuChipIcon className="h-6 w-6" />
+                    <div key={log.id} className="group relative bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 hover:shadow-2xl transition-all overflow-hidden flex flex-col sm:flex-row justify-between items-center gap-6">
+                      <div className="flex items-center gap-6">
+                        <div className="w-16 h-16 rounded-2xl flex items-center justify-center bg-blue-600 text-white shadow-lg transition-transform duration-500 group-hover:scale-110">
+                          <CpuChipIcon className="h-8 w-8" />
                         </div>
                         <div>
-                          <p className="font-bold text-lg">{log.task}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-xs font-medium bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded text-gray-600 dark:text-gray-300">{log.model}</span>
-                            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{log.date} • {log.id}</span>
+                          <p className="text-lg font-black text-slate-800 uppercase tracking-tighter">{log.task}</p>
+                          <div className="flex items-center gap-3 mt-1.5">
+                            <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded-lg uppercase tracking-tight border border-slate-200/50">{log.model}</span>
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{log.date} • {log.id}</span>
                           </div>
                         </div>
                       </div>
-                      <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto mt-2 sm:mt-0">
-                        <div className="flex items-center gap-1.5 sm:mb-2">
-                          <span className="font-black text-xl text-blue-600 dark:text-blue-400">-{log.tokens}</span>
-                          <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">Tokens</span>
+                      <div className="flex items-center gap-6">
+                        <div className="text-right">
+                          <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">Consumption</p>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-black text-2xl text-rose-600 tracking-tighter">-{log.tokens}</span>
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest shrink-0">Tokens</span>
+                          </div>
                         </div>
-                        <button className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          View Details <ArrowRightIcon className="h-3 w-3" />
+                        <button className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-all opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100">
+                          <ArrowRightIcon className="h-5 w-5" />
                         </button>
                       </div>
                     </div>
@@ -244,12 +248,12 @@ export default function HistoryPage() {
                 (activeTab === "offer" && offerHistory.length === 0) ||
                 (activeTab === "all" && paymentHistory.length === 0 && usageHistory.length === 0 && offerHistory.length === 0)
                 ) && (
-                <div className="flex flex-col items-center justify-center p-12 bg-white dark:bg-gray-900 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700">
-                   <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
-                      <ClockIcon className="h-8 w-8 text-gray-400" />
+                <div className="flex flex-col items-center justify-center p-16 bg-white rounded-[2.5rem] border border-dashed border-slate-200">
+                   <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mb-6 shadow-sm">
+                      <ClockIcon className="h-10 w-10 text-slate-300" />
                    </div>
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">No Records Found</h3>
-                  <p className="text-gray-500 dark:text-gray-400 text-sm text-center">There is no history available for this category yet.</p>
+                  <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight mb-2">No Records Found</h3>
+                  <p className="text-slate-400 font-bold text-xs uppercase tracking-widest text-center px-10">There is no history available for this category yet.</p>
                 </div>
               )}
             </>
@@ -265,18 +269,18 @@ function TabButton({ active, onClick, icon, label }) {
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-3 px-5 py-3.5 rounded-xl font-semibold transition-all duration-200 whitespace-nowrap lg:whitespace-normal text-left ${
+      className={`flex items-center gap-4 px-6 py-4 rounded-2xl font-black transition-all duration-300 whitespace-nowrap lg:whitespace-normal text-left group ${
         active 
-        ? "bg-white dark:bg-gray-800 text-blue-600 dark:text-blue-400 shadow-sm border border-gray-200 dark:border-gray-700 scale-[1.02]" 
-        : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 hover:text-gray-900 dark:hover:bg-gray-800/50 dark:hover:text-gray-200 border border-transparent"
+        ? "bg-slate-900 text-white shadow-2xl shadow-slate-900/20 scale-[1.05] translate-x-1" 
+        : "bg-white text-slate-400 hover:bg-slate-50 hover:text-slate-600 border border-slate-100 shadow-sm"
       }`}
     >
-      <div className={`${active ? "animate-pulse" : ""} shrink-0`}>
+      <div className={`${active ? "text-pink-500 animate-pulse" : "group-hover:text-indigo-500 transition-colors"} shrink-0`}>
         {icon}
       </div>
-      <span className="text-sm">{label}</span>
+      <span className="text-[10px] md:text-xs uppercase tracking-[0.1em]">{label}</span>
       {active && (
-        <div className="hidden lg:block ml-auto w-1.5 h-6 bg-blue-500 rounded-full"></div>
+        <div className="hidden lg:block ml-auto w-1 h-6 bg-pink-500 rounded-full" />
       )}
     </button>
   );

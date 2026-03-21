@@ -12,9 +12,20 @@ class DocumentListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        documents = Document.objects.filter(user=request.user)
-        serializer = DocumentSerializer(documents, many=True)
-        return Response({"documents": serializer.data}, status=status.HTTP_200_OK)
+        limit = int(request.query_params.get('limit', 20))
+        offset = int(request.query_params.get('offset', 0))
+        
+        documents = Document.objects.filter(user=request.user).order_by('-created_at')
+        total_count = documents.count()
+        
+        paginated_docs = documents[offset:offset+limit]
+        serializer = DocumentSerializer(paginated_docs, many=True)
+        
+        return Response({
+            "documents": serializer.data,
+            "total_count": total_count,
+            "has_more": offset + limit < total_count
+        }, status=status.HTTP_200_OK)
 
     def post(self, request):
         text = request.data.get('text')
@@ -25,7 +36,12 @@ class DocumentListCreateView(APIView):
 
         try:
             with transaction.atomic(): # ট্রানজ্যাকশন শুরু
-                document = Document.objects.create(user=request.user, title=title)
+                document = Document.objects.create(
+                    user=request.user, 
+                    title=title,
+                    scope=request.data.get('scope', 'global'),
+                    agent_id=request.data.get('agent')
+                )
                 chunks_saved = process_document_text(request.user, text, document)
                 
                 return Response({
@@ -66,7 +82,14 @@ class DocumentDetailView(APIView):
 
         if title:
             document.title = title
-            document.save()
+        
+        # 🔥 Scope & Agent Update
+        if 'scope' in request.data:
+            document.scope = request.data.get('scope')
+        if 'agent' in request.data:
+            document.agent_id = request.data.get('agent')
+            
+        document.save()
 
         if text:
             try:

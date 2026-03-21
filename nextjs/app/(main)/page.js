@@ -5,7 +5,7 @@ import Link from "next/link";
 import { FaPhoneAlt, FaEnvelope, FaMapMarkerAlt, FaPaperPlane, FaWhatsapp } from "react-icons/fa";
 import { FaArrowRight, FaRocket, FaShieldAlt, FaLightbulb } from "react-icons/fa";
 import { FaRobot, FaShareAlt, FaChartBar } from "react-icons/fa";
-import { FaFacebook, FaYoutube, FaCheckCircle  } from "react-icons/fa";
+import { FaFacebook, FaYoutube, FaCheckCircle } from "react-icons/fa";
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "@/lib/api";
@@ -28,7 +28,7 @@ const staggerContainer = {
 const features = [
   {
     title: "Facebook Automation",
-    desc: "আপনার Facebook পোস্ট, পেজ ও অ্যাডের কমেন্টে স্বয়ংক্রিয়ভাবে উত্তর দেবে। এনগেজমেন্ট বাড়বে বহুগুণ।",
+    desc: "আপনার Facebook পোস্ট, পেজ ও অ্যাডের কমেন্টে স্বয়ংক্রিয়ভাবে উত্তর দেবে। এনগেজমেন্ট বাড়বে বহুগুণ।",
     icon: <FaFacebook />,
     gradient: "from-blue-600 to-indigo-600",
     hoverBg: "group-hover:bg-blue-600",
@@ -37,7 +37,7 @@ const features = [
   },
   {
     title: "Messenger & WhatsApp",
-    desc: "মেসেঞ্জার এবং হোয়াটসঅ্যাপ মেসেজ এক জায়গায় ম্যানেজ করুন এবং স্মার্টলি রিপ্লাই সেট করুন।",
+    desc: "মেসেঞ্জার এবং হোয়াটসঅ্যাপ মেসেজ এক জায়গায় ম্যানেজ করুন এবং স্মার্টলি রিপ্লাই সেট করুন।",
     icon: <FaWhatsapp />,
     gradient: "from-green-500 to-teal-600",
     hoverBg: "group-hover:bg-green-600",
@@ -99,18 +99,18 @@ export default function HomePage() {
 
     try {
       await api.post("/contact/create/", formData);
-      setStatus({ 
-        loading: false, 
-        success: "Thank you! Your message has been successfully received.", 
-        error: null 
+      setStatus({
+        loading: false,
+        success: "Thank you! Your message has been successfully received.",
+        error: null
       });
       setFormData({ name: "", email: "", subjects: "", messages: "" });
     } catch (err) {
       console.error(err);
-      setStatus({ 
-        loading: false, 
-        success: null, 
-        error: "Sorry, the message could not be sent due to a technical issue." 
+      setStatus({
+        loading: false,
+        success: null,
+        error: "Sorry, the message could not be sent due to a technical issue."
       });
     }
   };
@@ -123,8 +123,8 @@ export default function HomePage() {
       <section className="relative min-h-[90vh] md:min-h-screen w-full flex items-center justify-center overflow-hidden bg-white">
         {/* Animated Background Blobs */}
         <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
-          <motion.div 
-            animate={{ 
+          <motion.div
+            animate={{
               scale: [1, 1.2, 1],
               rotate: [0, 90, 0],
               opacity: [0.6, 0.4, 0.6]
@@ -132,8 +132,8 @@ export default function HomePage() {
             transition={{ duration: 15, repeat: Infinity }}
             className="absolute top-[-10%] right-[-5%] w-[50%] h-[50%] bg-indigo-100 rounded-full blur-[100px]"
           />
-          <motion.div 
-            animate={{ 
+          <motion.div
+            animate={{
               scale: [1, 1.3, 1],
               x: [0, -30, 0],
               opacity: [0.5, 0.7, 0.5]
@@ -145,77 +145,75 @@ export default function HomePage() {
 
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#4f46e505_1px,transparent_1px),linear-gradient(to_bottom,#4f46e505_1px,transparent_1px)] bg-[size:60px_60px]"></div>
 
-
-
-
-        <motion.div 
+        <motion.div
           variants={staggerContainer}
           initial="hidden"
           animate="visible"
           className="relative z-10 container mx-auto px-6 py-20 flex flex-col items-center"
         >
-          <motion.div 
+          <motion.div
             variants={fadeInUp}
             className="inline-flex items-center gap-2 px-5 py-2 mt-8 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 text-xs md:text-sm font-black mb-10 shadow-sm"
           >
-            <FaRocket className="animate-bounce" /> 
+            <FaRocket className="animate-bounce" />
             <span className="uppercase tracking-widest text-[10px] md:text-xs">The Most Trusted AI Automation in BD</span>
           </motion.div>
 
-          <motion.h1 
+          <motion.h1
             variants={fadeInUp}
             className="text-4xl md:text-7xl font-black text-center text-gray-900 mb-8 leading-[1.1] tracking-tighter max-w-5xl"
           >
-            Automate Your <span className="text-indigo-600">Social Media</span> <br className="hidden md:block" /> 
+            Automate Your <span className="text-indigo-600">Social Media</span> <br className="hidden md:block" />
             <span className="italic text-purple-600">& Grow Faster</span>
           </motion.h1>
 
-          <motion.p 
+          <motion.p
             variants={fadeInUp}
             className="text-gray-500 text-lg md:text-xl text-center max-w-3xl mb-12 leading-relaxed font-medium px-4"
           >
-            <span className="text-indigo-700 font-bold">New Smart Agent</span> নিয়ে এসেছে একটি অল-ইন-ওয়ান প্লাটফর্ম। আপনার ফেসবুক, হোয়াটসঅ্যাপ ও ইউটিউব সংযোগ করুন এবং সময় বাঁচান আমাদের স্মার্ট এআই টুলস দিয়ে।
+            <span className="text-indigo-700 font-bold">New Smart Agent</span> নিয়ে এসেছে একটি অল-ইন-ওয়ান প্লাটফর্ম। আপনার ফেসবুক, হোয়াটসঅ্যাপ ও ইউটিউব সংযোগ করুন এবং সময় বাঁচান আমাদের স্মার্ট এআই টুলস দিয়ে।
           </motion.p>
 
-          <motion.div 
+          <motion.div
             variants={fadeInUp}
             className="flex flex-col sm:flex-row items-center gap-6 mb-20"
           >
             <Link
               href="/signup"
-              className="group relative px-10 py-5 rounded-2xl bg-indigo-600 text-white font-black text-lg shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center gap-3 active:scale-95 overflow-hidden"
+              className="group relative px-10 py-5 rounded-2xl bg-indigo-600 text-white font-black text-lg shadow-xl shadow-indigo-200 hover:bg-indigo-700 active:bg-indigo-800 transition-all flex items-center gap-3 active:scale-95 overflow-hidden"
             >
-              <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+              <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 group-active:translate-y-0 transition-transform duration-300"></div>
               <span className="relative z-10 flex items-center gap-3">
                 Get Started Free
-                <FaArrowRight className="group-hover:translate-x-2 transition-transform" />
+                <FaArrowRight className="group-hover:translate-x-2 group-active:translate-x-2 transition-transform" />
               </span>
             </Link>
 
             <Link
               href="/about"
-              className="px-10 py-5 rounded-2xl border border-gray-200 bg-white/80 backdrop-blur-md text-gray-700 font-bold text-lg hover:bg-white hover:border-gray-300 transition-all shadow-sm active:scale-95"
+              className="px-10 py-5 rounded-2xl border border-gray-200 bg-white/80 backdrop-blur-md text-gray-700 font-bold text-lg hover:bg-white hover:border-gray-300 active:bg-gray-50 active:border-gray-300 transition-all shadow-sm active:scale-95"
             >
               Learn More
             </Link>
           </motion.div>
 
-          <motion.div 
+          <motion.div
             variants={fadeInUp}
             className="w-full max-w-4xl py-10 border-t border-gray-100 flex flex-col items-center gap-8"
           >
-            <div className="flex flex-wrap justify-center items-center gap-8 md:gap-16 opacity-40 grayscale hover:grayscale-0 hover:opacity-100 transition-all duration-700">
+            {/* platform logos — tap toggles grayscale on mobile via active */}
+            <div className="flex flex-wrap justify-center items-center gap-8 md:gap-16 opacity-40 grayscale hover:grayscale-0 hover:opacity-100 active:grayscale-0 active:opacity-100 transition-all duration-700">
               <div className="flex items-center gap-2 text-gray-800 font-black text-xl cursor-default">
-                 <FaFacebook className="text-[#1877F2]" /> <span className="text-sm">Facebook</span>
+                <FaFacebook className="text-[#1877F2]" /> <span className="text-sm">Facebook</span>
               </div>
               <div className="flex items-center gap-2 text-gray-800 font-black text-xl cursor-default">
-                 <FaWhatsapp className="text-[#25D366]" /> <span className="text-sm">WhatsApp</span>
+                <FaWhatsapp className="text-[#25D366]" /> <span className="text-sm">WhatsApp</span>
               </div>
               <div className="flex items-center gap-2 text-gray-800 font-black text-xl cursor-default">
-                 <FaYoutube className="text-[#FF0000]" /> <span className="text-sm">YouTube</span>
+                <FaYoutube className="text-[#FF0000]" /> <span className="text-sm">YouTube</span>
               </div>
             </div>
-            
+
             <div className="flex items-center gap-6 text-[10px] md:text-xs font-black text-gray-400 uppercase tracking-widest">
               <span className="flex items-center gap-1"><FaCheckCircle className="text-green-500" /> No Card Required</span>
               <span className="w-1 h-1 bg-gray-300 rounded-full"></span>
@@ -229,7 +227,7 @@ export default function HomePage() {
       {/* Features Section */}
       <section className="py-24 px-4 md:px-10 bg-white relative">
         <div className="max-w-7xl mx-auto">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
@@ -238,33 +236,39 @@ export default function HomePage() {
           >
             <h2 className="text-indigo-600 font-black uppercase tracking-[0.2em] text-xs">Platform Core Features</h2>
             <h3 className="text-3xl md:text-5xl font-black text-gray-900 tracking-tight leading-tight">
-              স্মার্ট এআই দিয়ে <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">বিজনেস অটোমেশন</span> এখন সহজ
+              স্মার্ট এআই দিয়ে <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">বিজনেস অটোমেশন</span> এখন সহজ
             </h3>
             <p className="text-gray-500 font-medium text-lg leading-relaxed">
-              আপনার ফেসবুক, হোয়াটসঅ্যাপ ও ইউটিউবের এনগেজমেন্ট বাড়াতে প্রয়োজনীয় সব আধুনিক টুলস এখন এক ড্যাশবোর্ডে।
+              আপনার ফেসবুক, হোয়াটসঅ্যাপ ও ইউটিউবের এনগেজমেন্ট বাড়াতে প্রয়োজনীয় সব আধুনিক টুলস এখন এক ড্যাশবোর্ডে।
             </p>
           </motion.div>
 
-          <motion.div 
+          <motion.div
             variants={staggerContainer}
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true }}
             className="relative"
           >
- 
-
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {features.map((feature, index) => (
-                <motion.div 
+                <motion.div
                   key={index}
                   variants={fadeInUp}
+                  // whileHover replaced with whileTap so mobile gets the lift too
                   whileHover={{ y: -10 }}
-                  className="group relative p-8 rounded-[2.5rem] bg-white border border-gray-100 shadow-xl shadow-gray-200/30 transition-all duration-300 overflow-hidden"
+                  whileTap={{ y: -6, scale: 0.98 }}
+                  className="group relative p-8 rounded-[2.5rem] bg-white border border-gray-100 shadow-xl shadow-gray-200/30 transition-all duration-300 overflow-hidden
+                    [&:active_.feature-overlay]:opacity-100
+                    [&:active_h3]:text-white
+                    [&:active_p]:text-white/90
+                    [&:active_button]:text-white
+                    [&:active_.feature-icon]:bg-white"
                 >
-                  <div className={`absolute inset-0 bg-gradient-to-br ${feature.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-500`}></div>
+                  {/* gradient overlay — shows on hover (desktop) and active (mobile) */}
+                  <div className={`feature-overlay absolute inset-0 bg-gradient-to-br ${feature.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-500`}></div>
                   <div className="relative z-10">
-                    <div className={`w-16 h-16 rounded-2xl ${feature.lightBg} ${feature.textColor} flex items-center justify-center text-3xl mb-8 group-hover:bg-white transition-all duration-500 shadow-sm`}>
+                    <div className={`feature-icon w-16 h-16 rounded-2xl ${feature.lightBg} ${feature.textColor} flex items-center justify-center text-3xl mb-8 group-hover:bg-white transition-all duration-500 shadow-sm`}>
                       {feature.icon}
                     </div>
                     <h3 className="text-2xl font-black text-gray-900 mb-4 group-hover:text-white transition-colors duration-500">
@@ -274,11 +278,11 @@ export default function HomePage() {
                       {feature.desc}
                     </p>
                     <button className={`flex items-center gap-3 text-sm font-black uppercase tracking-widest ${feature.textColor} group-hover:text-white transition-colors duration-500`}>
-                      Learn More 
-                      <FaArrowRight className="group-hover:translate-x-2 transition-transform" />
+                      Learn More
+                      <FaArrowRight className="group-hover:translate-x-2 group-active:translate-x-2 transition-transform" />
                     </button>
                   </div>
-                  <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-gray-50 rounded-full group-hover:bg-white/10 transition-colors"></div>
+                  <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-gray-50 rounded-full group-hover:bg-white/10 group-active:bg-white/10 transition-colors"></div>
                 </motion.div>
               ))}
             </div>
@@ -286,11 +290,11 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Services Section with D3-style Glassmorphism */}
+      {/* Services Section */}
       <section className="py-24 px-4 md:px-10 bg-[#fbfbfc] relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-100/30 rounded-full blur-[120px]"></div>
         <div className="max-w-7xl mx-auto relative z-10">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true }}
@@ -303,45 +307,49 @@ export default function HomePage() {
               স্মার্ট ব্যবসার জন্য <span className="text-indigo-600">সেরা সলিউশন</span>
             </h2>
             <p className="text-gray-500 max-w-2xl mx-auto font-medium text-lg leading-relaxed px-4">
-              ব্যবসায়িক প্রবৃদ্ধি নিশ্চিত করতে এবং কাস্টমারদের সাথে নিবিড় সম্পর্ক গড়তে আমরা দিচ্ছি আধুনিক এআই চালিত অল-ইন-ওয়ান অটোমেশন সার্ভিস।
+              ব্যবসায়িক প্রবৃদ্ধি নিশ্চিত করতে এবং কাস্টমারদের সাথে নিবিড় সম্পর্ক গড়তে আমরা দিচ্ছি আধুনিক এআই চালিত অল-ইন-ওয়ান অটোমেশন সার্ভিস।
             </p>
           </motion.div>
 
-          <motion.div 
+          <motion.div
             variants={staggerContainer}
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true }}
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-10 relative"
           >
-           
             {services.map((service, index) => (
-              <motion.div 
+              <motion.div
                 key={index}
                 variants={fadeInUp}
                 whileHover={{ y: -12 }}
-                className="relative group h-full rounded-[2.5rem] bg-white/80 backdrop-blur-md border border-white/50 p-8 md:p-10 shadow-xl shadow-gray-200/40 flex flex-col transition-all duration-300"
+                whileTap={{ y: -6, scale: 0.98 }}
+                className="relative group h-full rounded-[2.5rem] bg-white/80 backdrop-blur-md border border-white/50 p-8 md:p-10 shadow-xl shadow-gray-200/40 flex flex-col transition-all duration-300
+                  [&:active_.service-overlay]:opacity-100
+                  [&:active_h3]:text-white
+                  [&:active_.service-desc]:text-indigo-50
+                  [&:active_.service-cta]:text-white"
               >
-                <div className={`absolute inset-0 bg-gradient-to-br ${service.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-[2.5rem] -z-10`}></div>
+                <div className={`service-overlay absolute inset-0 bg-gradient-to-br ${service.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-[2.5rem] -z-10`}></div>
                 <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${service.gradient} flex items-center justify-center text-white text-3xl mb-8 shadow-lg ${service.shadow} group-hover:bg-white group-hover:from-white group-hover:to-white group-hover:text-gray-900 transition-all duration-300`}>
                   {service.icon}
                 </div>
                 <h3 className="text-2xl font-black text-gray-900 mb-4 group-hover:text-white transition-colors duration-300">
                   {service.title}
                 </h3>
-                <p className="text-gray-500 font-medium leading-relaxed mb-8 group-hover:text-indigo-50 transition-colors duration-300 flex-1">
+                <p className="service-desc text-gray-500 font-medium leading-relaxed mb-8 group-hover:text-indigo-50 transition-colors duration-300 flex-1">
                   {service.desc}
                 </p>
-                <div className="flex items-center gap-3 text-xs font-black uppercase tracking-[0.2em] text-indigo-600 group-hover:text-white transition-all duration-300">
+                <div className="service-cta flex items-center gap-3 text-xs font-black uppercase tracking-[0.2em] text-indigo-600 group-hover:text-white transition-all duration-300">
                   <span>Learn More</span>
-                  <FaArrowRight className="group-hover:translate-x-2 transition-transform" />
+                  <FaArrowRight className="group-hover:translate-x-2 group-active:translate-x-2 transition-transform" />
                 </div>
-                <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-all duration-700"></div>
+                <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:scale-150 group-active:scale-150 transition-all duration-700"></div>
               </motion.div>
             ))}
           </motion.div>
 
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 50 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
@@ -350,17 +358,17 @@ export default function HomePage() {
             <div className="relative z-10 text-center md:text-left space-y-4">
               <h4 className="text-2xl md:text-4xl font-black tracking-tight leading-tight">
                 আপনার ব্যবসার জন্য কি <br />
-                <span className="text-indigo-400 italic">কাস্টম অটোমেশন</span> প্রয়োজন?
+                <span className="text-indigo-400 italic">কাস্টম অটোমেশন</span> প্রয়োজন?
               </h4>
               <p className="text-indigo-200 font-medium max-w-lg text-lg">
-                আমাদের টিমকে জানান আপনার সুনির্দিষ্ট চ্যালেঞ্জের কথা। আমরা আপনার প্রয়োজন অনুযায়ী তৈরি করে দেব সেরা এআই সলিউশন।
+                আমাদের টিমকে জানান আপনার সুনির্দিষ্ট চ্যালেঞ্জের কথা। আমরা আপনার প্রয়োজন অনুযায়ী তৈরি করে দেব সেরা এআই সলিউশন।
               </p>
             </div>
             <Link href="/contact" className="relative z-20">
-              <motion.button 
+              <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="px-12 py-5 bg-white text-indigo-900 rounded-2xl font-black text-lg shadow-xl hover:bg-indigo-50 transition-all whitespace-nowrap"
+                className="px-12 py-5 bg-white text-indigo-900 rounded-2xl font-black text-lg shadow-xl hover:bg-indigo-50 active:bg-indigo-100 transition-all whitespace-nowrap"
               >
                 ফ্রি কনসালটেশন নিন
               </motion.button>
@@ -375,7 +383,7 @@ export default function HomePage() {
       <section className="py-24 px-4 md:px-10 bg-white relative">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, x: -50 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
@@ -387,17 +395,18 @@ export default function HomePage() {
                   <h4 className="font-black text-xl tracking-tight uppercase">Smart Velocity</h4>
                   <p className="text-indigo-100 text-[11px] leading-relaxed mt-2 font-bold italic">অটোমেশনের মাধ্যমে আপনার কাজ হবে চোখের পলকে।</p>
                 </div>
-                <div className="bg-gray-50/80 backdrop-blur-sm p-8 rounded-[2rem] border border-gray-100 flex flex-col items-center text-center group hover:bg-white hover:shadow-xl transition-all duration-300">
+                {/* hover + active both trigger the effect */}
+                <div className="bg-gray-50/80 backdrop-blur-sm p-8 rounded-[2rem] border border-gray-100 flex flex-col items-center text-center group hover:bg-white hover:shadow-xl active:bg-white active:shadow-xl transition-all duration-300">
                   <FaShieldAlt size={32} className="mb-4 text-indigo-600" />
                   <h4 className="font-black text-xl text-gray-800 tracking-tight uppercase">Ironclad Security</h4>
                   <p className="text-gray-400 text-[11px] leading-relaxed mt-2 font-bold">আপনার ডাটা এবং প্রাইভেসি আমাদের সর্বোচ্চ অগ্রাধিকার।</p>
                 </div>
               </div>
               <div className="pt-8 md:pt-12 space-y-4 md:space-y-6">
-                <div className="bg-gray-50/80 backdrop-blur-sm p-8 rounded-[2rem] border border-gray-100 flex flex-col items-center text-center group hover:bg-white hover:shadow-xl transition-all duration-300">
+                <div className="bg-gray-50/80 backdrop-blur-sm p-8 rounded-[2rem] border border-gray-100 flex flex-col items-center text-center group hover:bg-white hover:shadow-xl active:bg-white active:shadow-xl transition-all duration-300">
                   <FaLightbulb size={32} className="mb-4 text-amber-500" />
                   <h4 className="font-black text-xl text-gray-800 tracking-tight uppercase">Adaptive AI</h4>
-                  <p className="text-gray-400 text-[11px] leading-relaxed mt-2 font-bold">স্মার্ট টুলস যা সময়ের সাথে আপনার ব্যবসার সাথে মানিয়ে নেয়।</p>
+                  <p className="text-gray-400 text-[11px] leading-relaxed mt-2 font-bold">স্মার্ট টুলস যা সময়ের সাথে আপনার ব্যবসার সাথে মানিয়ে নেয়।</p>
                 </div>
                 <div className="bg-indigo-50 p-8 rounded-[2rem] border border-indigo-100 flex flex-col items-center text-center">
                   <h3 className="text-4xl font-black text-indigo-600">10X</h3>
@@ -406,7 +415,7 @@ export default function HomePage() {
               </div>
             </motion.div>
 
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, x: 50 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
@@ -422,7 +431,7 @@ export default function HomePage() {
               </div>
               <div className="space-y-6">
                 <p className="text-gray-600 text-lg leading-relaxed font-medium border-l-4 border-indigo-600 pl-6">
-                  <strong className="text-gray-900">New Smart Agent</strong> একটি সম্পূর্ণ স্মার্ট প্ল্যাটফর্ম, যা Facebook, WhatsApp এবং Messenger-এর মাধ্যমে আপনার ব্যবসায়িক ও ব্যক্তিগত জীবন আরও সহজ করতে সাহায্য করে।
+                  <strong className="text-gray-900">New Smart Agent</strong> একটি সম্পূর্ণ স্মার্ট প্ল্যাটফর্ম, যা Facebook, WhatsApp এবং Messenger-এর মাধ্যমে আপনার ব্যবসায়িক ও ব্যক্তিগত জীবন আরও সহজ করতে সাহায্য করে।
                 </p>
                 <p className="text-gray-500 leading-relaxed font-medium">
                   এটি স্বয়ংক্রিয়ভাবে কমেন্ট এবং মেসেজের উত্তর দেয়, লিড ট্র্যাক করে এবং নিরাপদভাবে কাজের রিপোর্ট প্রদান করে। এর মাধ্যমে আপনার মূল্যবান সময় বাঁচে।
@@ -439,13 +448,12 @@ export default function HomePage() {
                 ))}
               </div>
               <div className="pt-4 relative">
-                
                 <Link
                   href="/about"
-                  className="group inline-flex items-center gap-3 px-10 py-4 bg-gray-900 text-white font-black rounded-2xl shadow-xl hover:bg-indigo-600 transition-all duration-300"
+                  className="group inline-flex items-center gap-3 px-10 py-4 bg-gray-900 text-white font-black rounded-2xl shadow-xl hover:bg-indigo-600 active:bg-indigo-700 active:scale-95 transition-all duration-300"
                 >
-                  Learn More 
-                  <FaArrowRight className="text-sm group-hover:translate-x-2 transition-transform" />
+                  Learn More
+                  <FaArrowRight className="text-sm group-hover:translate-x-2 group-active:translate-x-2 transition-transform" />
                 </Link>
               </div>
             </motion.div>
@@ -456,7 +464,7 @@ export default function HomePage() {
       {/* Contact Section */}
       <section className="py-24 px-6 bg-[#FDFDFF] relative overflow-hidden">
         <div className="max-w-7xl mx-auto">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
@@ -466,27 +474,28 @@ export default function HomePage() {
             <h3 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tight">
               যোগাযোগ করুন <span className="text-indigo-600">আমাদের সাথে</span>
             </h3>
-           
           </motion.div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, x: -30 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               className="lg:col-span-5 space-y-6"
             >
               {[
-                { icon: <FaPhoneAlt />, title: "সরাসরি কল", value: "01727358743", bg: "bg-indigo-50", color: "text-indigo-600" },
-                { icon: <FaEnvelope />, title: "ইমেইল করুন", value: "newsmartagentbd@gmail.com", bg: "bg-pink-50", color: "text-pink-600" },
-                { icon: <FaWhatsapp />, title: "WhatsApp Support", value: "Available 24/7 for help", bg: "bg-green-50", color: "text-green-600" }
+                { icon: <FaPhoneAlt />, title: "সরাসরি কল", value: "01727358743", bg: "bg-indigo-50", color: "text-indigo-600", activeBg: "active:bg-indigo-600" },
+                { icon: <FaEnvelope />, title: "ইমেইল করুন", value: "newsmartagentbd@gmail.com", bg: "bg-pink-50", color: "text-pink-600", activeBg: "active:bg-pink-600" },
+                { icon: <FaWhatsapp />, title: "WhatsApp Support", value: "Available 24/7 for help", bg: "bg-green-50", color: "text-green-600", activeBg: "active:bg-green-600" }
               ].map((card, idx) => (
-                <motion.div 
+                <motion.div
                   key={idx}
+                  // whileHover x-shift + whileTap for mobile
                   whileHover={{ x: 10 }}
-                  className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-gray-100 flex items-start gap-6 group cursor-default"
+                  whileTap={{ x: 6, scale: 0.98 }}
+                  className="bg-white py-6 px-3 rounded-[2.5rem] shadow-sm border border-gray-100 flex items-start gap-6 group cursor-default active:shadow-md transition-all duration-200"
                 >
-                  <div className={`w-14 h-14 ${card.bg} rounded-2xl flex items-center justify-center ${card.color} text-xl group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300`}>
+                  <div className={`w-14 h-14 ${card.bg} rounded-2xl flex items-center justify-center ${card.color} text-xl group-hover:bg-indigo-600 group-hover:text-white group-active:bg-indigo-600 group-active:text-white transition-all duration-300`}>
                     {card.icon}
                   </div>
                   <div>
@@ -497,7 +506,7 @@ export default function HomePage() {
               ))}
             </motion.div>
 
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, x: 30 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
@@ -508,33 +517,33 @@ export default function HomePage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="space-y-2">
                       <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Your Name</label>
-                      <input 
+                      <input
                         type="text" name="name" required value={formData.name} onChange={handleChange}
-                        placeholder="Md hamid" 
+                        placeholder="Md hamid"
                         className="w-full p-4 bg-gray-50/50 border border-gray-100 rounded-2xl outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 transition-all font-medium"
                       />
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Email Address</label>
-                      <input 
+                      <input
                         type="email" name="email" required value={formData.email} onChange={handleChange}
-                        placeholder="example@mail.com" 
+                        placeholder="example@mail.com"
                         className="w-full p-4 bg-gray-50/50 border border-gray-100 rounded-2xl outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 transition-all font-medium"
                       />
                     </div>
                   </div>
-                 
+
                   <div className="space-y-2">
                     <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Subject</label>
-                    <input 
+                    <input
                       type="text" name="subjects" required value={formData.subjects} onChange={handleChange}
-                      placeholder="কী বিষয়ে কথা বলতে চান?" 
+                      placeholder="কী বিষয়ে কথা বলতে চান?"
                       className="w-full p-4 bg-gray-50/50 border border-gray-100 rounded-2xl outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 transition-all font-medium"
                     />
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Message</label>
-                    <textarea 
+                    <textarea
                       name="messages" required value={formData.messages} onChange={handleChange}
                       placeholder="আপনার বিস্তারিত বার্তাটি এখানে লিখুন..." rows={5}
                       className="w-full p-4 bg-gray-50/50 border border-gray-100 rounded-2xl outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 transition-all font-medium resize-none"
@@ -542,11 +551,11 @@ export default function HomePage() {
                   </div>
                   {status.success && <p className="text-emerald-500 font-bold text-sm">{status.success}</p>}
                   {status.error && <p className="text-rose-500 font-bold text-sm">{status.error}</p>}
-                  <motion.button 
+                  <motion.button
                     whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                    whileTap={{ scale: 0.97 }}
                     disabled={status.loading}
-                    className={`w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-lg shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3 ${status.loading ? 'opacity-70 cursor-not-allowed' : ''}`}
+                    className={`w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-lg shadow-xl hover:bg-indigo-700 active:bg-indigo-800 transition-all flex items-center justify-center gap-3 ${status.loading ? 'opacity-70 cursor-not-allowed' : ''}`}
                   >
                     <FaPaperPlane className={status.loading ? 'animate-ping' : ''} />
                     {status.loading ? "পাঠানো হচ্ছে..." : "বার্তা পাঠান"}

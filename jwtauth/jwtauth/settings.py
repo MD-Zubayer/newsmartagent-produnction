@@ -30,7 +30,7 @@ SECRET_KEY = 'django-insecure-i6it!d42&fu(j0*&)*53ymr5k+7osf^r__i$+@vds)a#7r-&^^
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ['newsmartagent.com', 'api.newsmartagent.com', 'n8n.newsmartagent.com', 'newsmartagent-django', 'newsmartagent-n8n', 'localhost','127.0.0.1', 'monitor.newsmartagent.com', 'dev.newsmartagent.com', 'dev-api.newsmartagent.com', 'dev.newsmartagent.com', 'dev-n8n.newsmartagent.com' ]
+ALLOWED_HOSTS = ['newsmartagent.com', 'api.newsmartagent.com', 'n8n.newsmartagent.com', 'newsmartagent-django', 'newsmartagent-n8n', 'localhost','127.0.0.1', 'monitor.newsmartagent.com', 'dev.newsmartagent.com', 'dev-api.newsmartagent.com', 'dev.newsmartagent.com', 'dev-n8n.newsmartagent.com', 'backend', 'newsmartagent-baileys']
 CSRF_TRUSTED_ORIGINS = ['https://newsmartagent.com', 'https://api.newsmartagent.com', 'https://n8n.newsmartagent.com', 'http://newsmartagent-django:8000', 'https://monitor.newsmartagent.com', 'https://dev.newsmartagent.com', 'https://dev-api.newsmartagent.com', 'https://dev-n8n.newsmartagent.com']
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 USE_X_FORWARDED_HOST = True
@@ -73,7 +73,7 @@ INSTALLED_APPS = [
     'embedding',
     'blog',
     'django.contrib.postgres',
-    'settings',
+    'settings.apps.SettingsConfig',
     'man_agent',
     "aiAgent.apps.AiagentConfig",
     'ckeditor',
@@ -81,6 +81,8 @@ INSTALLED_APPS = [
     
 
     'ckeditor_uploader',
+    'storages',
+    'minio_management',
 ]
 
 CKEDITOR_UPLOAD_PATH = "uploads/"
@@ -213,6 +215,42 @@ STATIC_ROOT = "/app/static/"
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+# MinIO/S3 Storage Configuration
+if os.environ.get('MINIO_STORAGE_BUCKET_NAME'):
+    DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+    AWS_ACCESS_KEY_ID = os.environ.get('MINIO_ROOT_USER')
+    AWS_SECRET_ACCESS_KEY = os.environ.get('MINIO_ROOT_PASSWORD')
+    AWS_STORAGE_BUCKET_NAME = os.environ.get('MINIO_STORAGE_BUCKET_NAME')
+    AWS_S3_ENDPOINT_URL = os.environ.get('MINIO_ENDPOINT')
+    
+    # Use custom domain for external access
+    minio_ext_endpoint = os.environ.get('MINIO_EXTERNAL_ENDPOINT', '')
+    if minio_ext_endpoint:
+        minio_ext_domain = minio_ext_endpoint.replace('https://', '').replace('http://', '').rstrip('/')
+        # Include bucket name for path-style URLs to work with custom domain
+        AWS_S3_CUSTOM_DOMAIN = f"{minio_ext_domain}/{AWS_STORAGE_BUCKET_NAME}"
+        AWS_S3_URL_PROTOCOL = 'https:' if minio_ext_endpoint.startswith('https') else 'http:'
+    
+    AWS_S3_USE_SSL = AWS_S3_URL_PROTOCOL == 'https'
+    AWS_S3_ENDPOINT_URL = os.environ.get('MINIO_ENDPOINT')
+    AWS_S3_ADDRESSING_STYLE = 'path'
+    AWS_S3_SIGNATURE_VERSION = 's3v4'
+    AWS_S3_FILE_OVERWRITE = False
+    AWS_QUERYSTRING_AUTH = False
+    AWS_DEFAULT_ACL = None 
+    
+    # Optional: static files also on S3
+    # STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+    
+    STORAGES = {
+        "default": {
+            "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+        },
+    }
+
 AUTH_USER_MODEL = 'users.User'
 
 AUTHENTICATION_BACKENDS = [
@@ -321,6 +359,7 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Asia/Dhaka'
 
+# Use django-celery-beat so schedules live in the database/admin.
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 # ─── Google Drive Log Sync Config ────────────────────────────────────────────
@@ -333,6 +372,9 @@ GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE = os.environ.get(
     'GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE',
     '/app/service_account.json'  # BASE_DIR সরিয়ে সরাসরি এই পাথটি দিন
 )
+
+BAILEYS_API_URL = os.getenv('BAILEYS_API_URL', 'http://newsmartagent-baileys:3001')
+BAILEYS_API_SECRET = os.getenv('BAILEYS_API_SECRET', 'nsa-baileys-secret-2024')
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Celery Beat: প্রতি ৫ মিনিটে Drive sync
@@ -349,6 +391,10 @@ CELERY_BEAT_SCHEDULE = {
     'backup-redis-to-google-drive': {
         'task': 'log_service.backup_redis_to_drive',
         'schedule': crontab(hour=2, minute=0),  # প্রতিদিন রাত ২টায়
+    },
+    'delete-unverified-accounts': {
+        'task': 'users.delete_unverified_accounts',
+        'schedule': crontab(minute='*/10'),  # প্রতি ১০ মিনিটে ১ ঘণ্টা পুরনো unverifed user মুছে দেবে
     },
 }
 

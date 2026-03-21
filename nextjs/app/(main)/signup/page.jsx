@@ -17,12 +17,15 @@ import api from '../../lib/api';
 
 export default function AuthPage() {
   const router = useRouter();
-  const [showSignUp, setShowSignUp] = useState(false);
+  const [showSignUp, setShowSignUp] = useState(true);
   const [isRegistered, setIsRegistered] = useState(false);
   const[passwordError, setPasswordError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [alert, setAlert] = useState({show: false, message: "", type: ""});
+  const [is2FARequired, setIs2FARequired] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [loading, setLoading] = useState(false);
 
   // --- ২. ডিফল্ট কান্ট্রি স্টেট (অটো ডিটেকশনের জন্য) ---
   const [defaultCountry, setDefaultCountry] = useState("BD");
@@ -113,17 +116,48 @@ export default function AuthPage() {
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
     try {
       const { email, password } = formData;
       const res = await api.post("/login/", { email, password });
       if (res.status === 200) {
-        showAlert("Login Successful! Redirecting...", "success")
-        window.location.href = "/dashboard";
+        if (res.data.status === "2fa_required") {
+          setIs2FARequired(true);
+          showAlert("Verification code sent to your email", "success");
+        } else {
+          showAlert("Login Successful! Redirecting...", "success")
+          window.location.href = "/dashboard";
+        }
       } 
     } catch (err) {
       const errorData = err.response?.data;
       const msg = errorData ? (typeof errorData === 'object' ? Object.values(errorData).flat().join(", ") : errorData) : "Login failed!";
       showAlert(msg, "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerify2FA = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const { email, password } = formData;
+      const res = await api.post("/auth/2fa/verify/", { 
+        email, 
+        password, 
+        otp_code: otpCode 
+      });
+      if (res.status === 200) {
+        showAlert("Verified! Redirecting...", "success");
+        window.location.href = "/dashboard";
+      }
+    } catch (err) {
+      const errorData = err.response?.data;
+      const msg = errorData?.error || "Invalid verification code!";
+      showAlert(msg, "error");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -305,7 +339,7 @@ export default function AuthPage() {
               <p className="text-gray-500 font-medium px-4 mb-8">
                 আমরা আপনার <b>{formData.email}</b> ঠিকানায় একটি ভেরিফিকেশন লিঙ্ক পাঠিয়েছি। দয়া করে ইনবক্স চেক করুন।
               </p>
-              <button className="text-indigo-600 font-extrabold hover:underline" onClick={() => { setIsRegistered(false); setShowSignUp(false); }}>
+              <button className="text-indigo-600 font-extrabold hover:underline" onClick={() => { setIsRegistered(false); router.push("/login"); }}>
                 Back to Login
               </button>
           </div>
@@ -313,17 +347,48 @@ export default function AuthPage() {
           <>
             <div className="text-center mb-10">
               <div className="inline-block p-4 rounded-3xl bg-indigo-600 text-white shadow-xl shadow-indigo-200 mb-6 animate-bounce-slow">
-                <FaLock size={28} />
+                {is2FARequired ? <FaKey size={28} /> : <FaLock size={28} />}
               </div>
               <h1 className="text-3xl sm:text-4xl font-black text-gray-900 tracking-tight">
-                {showSignUp ? "Create Account" : "Secure Login"}
+                {is2FARequired ? "Verify OTP" : showSignUp ? "Create Account" : "Secure Login"}
               </h1>
-              <p className="text-gray-500 mt-3 font-medium px-4">
-                {showSignUp ? "Join our community today" : "Access your workspace"}
+              <p className="text-gray-500 mt-3 font-medium px-4 leading-tight">
+                {is2FARequired ? `Enter the 6-digit code sent to ${formData.email}` : showSignUp ? "Join our community today" : "Access your workspace"}
               </p>
             </div>
 
-            {!showSignUp ? (
+            {is2FARequired ? (
+              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <form className="space-y-6" onSubmit={handleVerify2FA}>
+                  <div className={inputGroup}>
+                    <FaFingerprint className={iconStyle} />
+                    <input 
+                      name="otp" 
+                      type="text" 
+                      placeholder="000000" 
+                      value={otpCode} 
+                      onChange={(e) => setOtpCode(e.target.value)} 
+                      className={`${inputStyle} text-center tracking-[12px] text-3xl font-black text-indigo-600`} 
+                      maxLength={6}
+                      required 
+                      autoFocus
+                    />
+                  </div>
+                  <button className={btnPrimary} disabled={loading}>
+                    {loading ? "Verifying Code..." : "Verify & Access Dashboard"}
+                  </button>
+                  <div className="text-center pt-4">
+                    <button 
+                      type="button" 
+                      className="text-sm text-gray-400 font-bold hover:text-indigo-600 transition-colors" 
+                      onClick={() => setIs2FARequired(false)}
+                    >
+                      <FaArrowLeft className="inline mr-2 text-[10px]" /> Back to Login
+                    </button>
+                  </div>
+                </form>
+              </div>
+            ) : !showSignUp ? (
               <div className="animate-in fade-in slide-in-from-right-4 duration-500">
                 <form className="space-y-5" onSubmit={handleLoginSubmit}>
                   <div className={inputGroup}>
@@ -337,7 +402,9 @@ export default function AuthPage() {
                       {showPassword ? <FaEyeSlash /> : <FaEye />}
                     </button>
                   </div>
-                  <button className={btnPrimary}>Continue to Dashboard</button>
+                  <button className={btnPrimary} disabled={loading}>
+                    {loading ? "Authenticating..." : "Continue to Dashboard"}
+                  </button>
                   <div className="mt-8 space-y-4 text-center">
                     <span className="text-sm text-indigo-600 font-bold hover:text-indigo-800 transition-colors cursor-pointer" onClick={() => router.push("/forgot-password")}>Reset Password?</span>
                     <div className="pt-4 border-t border-gray-100">
@@ -428,7 +495,7 @@ export default function AuthPage() {
 
                   <button className={btnPrimary}>Register Account</button>
 
-                  <button type="button" className="w-full text-center text-sm font-bold text-gray-400 hover:text-indigo-600 transition-all flex items-center justify-center gap-2 pt-2" onClick={() => setShowSignUp(false)}>
+                  <button type="button" className="w-full text-center text-sm font-bold text-gray-400 hover:text-indigo-600 transition-all flex items-center justify-center gap-2 pt-2" onClick={() => router.push("/login")}>
                     <FaArrowLeft size={12} /> Already have an account? Login
                   </button>
                 </form>

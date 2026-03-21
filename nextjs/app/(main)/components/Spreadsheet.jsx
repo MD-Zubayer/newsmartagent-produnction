@@ -24,7 +24,9 @@ import {
   FilePlus,
   Trash2,
   X,
-  List as ListIcon 
+  List as ListIcon,
+  Globe,
+  User
 } from "lucide-react";
 
 /* ================= CONFIG ================= */
@@ -211,8 +213,11 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
   
   const [sheetId, setSheetId] = useState(initialSheetId);
   const [sheet, setSheet] = useState({ 
-    rows: 100, cols: 26, data: {}, formatting: {}, title: "Untitled", is_dark_mode: false 
+    rows: 100, cols: 26, data: {}, formatting: {}, title: "Untitled", is_dark_mode: false,
+    scope: 'global', agent: null
   });
+
+  const [agents, setAgents] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const[saving, setSaving] = useState(false);
@@ -262,6 +267,20 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
     };
   },[]);
 
+  /* ---------------- FETCH AGENTS ---------------- */
+  useEffect(() => {
+    const fetchAgents = async () => {
+      try {
+        const res = await api.get('/AgentAI/agents/');
+        // We expect res.data to be the list of agents (AgentAIListSerializer)
+        setAgents(res.data || []);
+      } catch (err) {
+        console.error("Failed to fetch agents", err);
+      }
+    };
+    fetchAgents();
+  }, []);
+
   /* ---------------- AUTO SAVE ON EXIT ---------------- */
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -272,7 +291,8 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: payload,
-          keepalive: true 
+          keepalive: true,
+          credentials: 'include' // 🔥 সেশ ককি পাঠানোর জন্য এটি বাধ্যতামূলক
         }).catch(err => console.error("Exit save failed", err));
       }
     };
@@ -498,42 +518,146 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
   },[]);
 
   /* ---------------- IMPORT / EXPORT ---------------- */
-  const handleFileUpload = (e) => {
+  const pushImportedData = (jsonData) => {
+    const currentData = sheet.data || {};
+    let lastUsedRow = -1;
+    Object.keys(currentData).forEach(key => {
+      const [r] = key.split('-').map(Number);
+      if (r > lastUsedRow) lastUsedRow = r;
+    });
+    const startRowIndex = lastUsedRow + 1;
+    const mergedData = { ...currentData };
+    let maxCols = sheet.cols;
+    jsonData.forEach((row, rowIndex) => {
+      if (row.length > maxCols) maxCols = row.length;
+      row.forEach((cellValue, colIndex) => {
+        if (cellValue !== undefined && cellValue !== null && cellValue !== '') {
+          mergedData[`${startRowIndex + rowIndex}-${colIndex}`] = String(cellValue);
+        }
+      });
+    });
+    pushToHistory({
+      ...sheet,
+      data: mergedData,
+      rows: Math.max(sheet.rows, startRowIndex + jsonData.length + 10),
+      cols: Math.max(sheet.cols, maxCols + 5)
+    });
+  };
+
+  const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      const bstr = evt.target.result;
-      const workbook = XLSX.read(bstr, { type: "binary" });
-      const firstSheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[firstSheetName];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-      const currentData = sheet.data || {};
-      let lastUsedRow = -1;
-      Object.keys(currentData).forEach(key => {
-        const [r] = key.split('-').map(Number);
-        if (r > lastUsedRow) lastUsedRow = r;
-      });
-      const startRowIndex = lastUsedRow + 1;
-      const mergedData = { ...currentData }; 
-      let maxCols = sheet.cols;
-      jsonData.forEach((row, rowIndex) => {
-        if (row.length > maxCols) maxCols = row.length;
-        row.forEach((cellValue, colIndex) => {
-          if (cellValue !== undefined && cellValue !== null) {
-            mergedData[`${startRowIndex + rowIndex}-${colIndex}`] = String(cellValue);
-          }
+    const ext = file.name.split('.').pop().toLowerCase();
+
+    if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') {
+      // ---- Excel / CSV ----
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const bstr = evt.target.result;
+        const workbook = XLSX.read(bstr, { type: 'binary' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        pushImportedData(jsonData);
+        e.target.value = null;
+      };
+      reader.readAsBinaryString(file);
+
+    } else if (ext === 'pdf') {
+      // ---- PDF (text-based, supports Unicode including Bangla) ----
+      try {
+        const pdfjsLib = await import('pdfjs-dist');
+        // Use locally hosted worker — avoids CDN version mismatch issues
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+
+        const arrayBuffer = await file.arrayBuffer();
+        const loadingTask = pdfjsLib.getDocument({
+          data: arrayBuffer,
+          // Improves Bangla / complex script rendering by disabling font hinting issues
+          cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/cmaps/`,
+          cMapPacked: true,
+          standardFontDataUrl: `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/standard_fonts/`,
         });
-      });
-      pushToHistory({
-        ...sheet,
-        data: mergedData,
-        rows: Math.max(sheet.rows, startRowIndex + jsonData.length + 10),
-        cols: Math.max(sheet.cols, maxCols + 5)
-      });
-      e.target.value = null; 
-    };
-    reader.readAsBinaryString(file);
+        const pdf = await loadingTask.promise;
+        const allRows = [];
+
+        for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+          const page = await pdf.getPage(pageNum);
+          const content = await page.getTextContent({
+            includeMarkedContent: false,
+            disableNormalization: false,  // normalize Unicode (helps Bangla)
+          });
+
+          // Group text items into visual rows by Y-position (top of page first)
+          const lineMap = {};
+          content.items.forEach(item => {
+            if (!item.str) return;
+            const y = Math.round(item.transform[5]);
+            if (!lineMap[y]) lineMap[y] = [];
+            lineMap[y].push({ x: item.transform[4], text: item.str });
+          });
+
+          // Sort Y descending (top of page first), then X ascending (left to right)
+          const sortedYs = Object.keys(lineMap).map(Number).sort((a, b) => b - a);
+          sortedYs.forEach(y => {
+            const cells = lineMap[y]
+              .sort((a, b) => a.x - b.x)
+              .map(i => i.text.trim())
+              .filter(Boolean);
+            if (cells.length > 0) allRows.push(cells);
+          });
+        }
+
+        if (allRows.length === 0) {
+          alert('No text found in this PDF.\n\nPossible reasons:\n• The PDF is a scanned image (not text)\n• The PDF uses custom/encrypted fonts\n\nTry converting it to Excel or CSV first.');
+        } else {
+          pushImportedData(allRows);
+        }
+      } catch (err) {
+        console.error('PDF parse error:', err);
+        alert(`PDF parsing failed: ${err.message || err}\n\nMake sure the file is a valid, non-encrypted PDF.`);
+      }
+      e.target.value = null;
+
+    } else if (ext === 'docx') {
+      // ---- Word (.docx) ----
+      try {
+        const mammoth = (await import('mammoth')).default;
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.convertToHtml({ arrayBuffer });
+        const html = result.value;
+        // Parse <table> elements from HTML
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const tables = doc.querySelectorAll('table');
+        const allRows = [];
+        if (tables.length > 0) {
+          tables.forEach(table => {
+            table.querySelectorAll('tr').forEach(tr => {
+              const row = [];
+              tr.querySelectorAll('td, th').forEach(cell => row.push(cell.innerText?.trim() || ''));
+              if (row.some(c => c)) allRows.push(row);
+            });
+            allRows.push([]); // blank separator row between tables
+          });
+        } else {
+          // No tables — fall back to paragraph-per-row
+          doc.querySelectorAll('p').forEach(p => {
+            const text = p.innerText?.trim();
+            if (text) allRows.push([text]);
+          });
+        }
+        pushImportedData(allRows);
+      } catch (err) {
+        console.error('Word parse error:', err);
+        alert('Could not read .docx file.');
+      }
+      e.target.value = null;
+
+    } else {
+      alert('Unsupported file type. Please use .xlsx, .xls, .csv, .pdf or .docx');
+      e.target.value = null;
+    }
   };
 
   const exportCSV = () => {
@@ -600,6 +724,42 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
               placeholder="Untitled spreadsheet"
             />
           </div>
+
+          <div className="h-8 w-[1px] bg-slate-200 dark:bg-slate-700 mx-1 hidden lg:block"></div>
+
+          {/* SCOPE SELECTOR */}
+          <div className="hidden lg:flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-inner">
+             <div className="flex bg-white dark:bg-slate-900 rounded-xl p-1 shadow-sm border border-slate-100 dark:border-slate-800">
+                <button 
+                  onClick={() => setSheet({...sheet, scope: 'global', agent: null})}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${sheet.scope === 'global' ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/20" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"}`}
+                >
+                  <Globe size={14} /> Global
+                </button>
+                <button 
+                  onClick={() => setSheet({...sheet, scope: 'agent_specific'})}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${sheet.scope === 'agent_specific' ? "bg-purple-600 text-white shadow-md shadow-purple-500/20" : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"}`}
+                >
+                  <User size={14} /> Agent Specific
+                </button>
+             </div>
+
+             {sheet.scope === 'agent_specific' && (
+               <div className="flex items-center gap-2 px-2 animate-in fade-in slide-in-from-left-2 duration-300">
+                 <div className="w-[1px] h-4 bg-slate-300 dark:bg-slate-600 mx-1"></div>
+                 <select 
+                    value={sheet.agent || ""} 
+                    onChange={(e) => setSheet({...sheet, agent: e.target.value || null})}
+                    className="bg-transparent text-xs font-black text-purple-600 dark:text-purple-400 outline-none cursor-pointer max-w-[120px] truncate"
+                 >
+                    <option value="" className="text-slate-400">Select Agent...</option>
+                    {agents.map(a => (
+                      <option key={a.id} value={a.id} className="text-slate-800 font-sans">{a.name}</option>
+                    ))}
+                 </select>
+               </div>
+             )}
+          </div>
         </div>
         <div className="flex items-center gap-3">
             <button onClick={() => setDark(!dark)} className={`p-2.5 rounded-full transition-all duration-300 ${dark ? "bg-slate-800 hover:bg-slate-700 text-yellow-400 shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)]" : "bg-slate-100 hover:bg-slate-200 text-slate-600 shadow-[inset_0_2px_4px_rgba(0,0,0,0.05)]"}`}>
@@ -654,7 +814,7 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
                 <Star size={16} className={sheet.data[`${selection.start.row}-${selection.start.col}`]?.endsWith('*') ? "fill-rose-500 text-rose-500 transform scale-110 transition-transform" : "transition-transform"} /> <span className="hidden lg:inline">Important</span>
             </button>
             <div className="h-8 w-[1px] bg-slate-300 dark:bg-slate-600 shrink-0"></div>
-            <input type="file" accept=".xlsx, .xls, .csv" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
+            <input type="file" accept=".xlsx,.xls,.csv,.pdf,.docx" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
             <button onClick={() => fileInputRef.current.click()} className="p-2.5 bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-xl border border-slate-200 dark:border-slate-700 transition-all shadow-sm group relative" title="Import File">
               <Upload size={18} className="group-hover:-translate-y-0.5 transition-transform" />
             </button>

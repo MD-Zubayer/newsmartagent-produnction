@@ -1,10 +1,10 @@
 "use client";
-import { useEffect, useState, useMemo, useCallback} from "react";
-import api from "@/lib/api"; 
-import { useAuth } from "app/context/AuthContext"; 
-import { 
-  Package, Phone, CheckSquare, Square, Store, 
-  ChevronRight, Link as LinkIcon, Check, MapPin, 
+import { useEffect, useState, useMemo, useCallback } from "react";
+import api from "@/lib/api";
+import { useAuth } from "app/context/AuthContext";
+import {
+  Package, Phone, CheckSquare, Square, Store,
+  ChevronRight, Link as LinkIcon, Check, MapPin,
   Search, Printer, LayoutDashboard, BarChart3, TrendingUp
 } from "lucide-react";
 
@@ -28,38 +28,38 @@ import { useNotifications } from "@/hooks/useNotifications";
 
 // Chart Register
 ChartJS.register(
-  CategoryScale, LinearScale, PointElement, LineElement, 
+  CategoryScale, LinearScale, PointElement, LineElement,
   BarElement, Title, Tooltip, Legend, ArcElement, Filler
 );
 
 export default function OrderDashboard() {
-  const { user } = useAuth(); 
+  const { user } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [formId, setFormId] = useState("");
   const [apiError, setApiError] = useState(null);
   const [copied, setCopied] = useState(false);
 
-  const [viewMode, setViewMode] = useState("orders"); 
+  const [viewMode, setViewMode] = useState("orders");
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [districtFilter, setDistrictFilter] = useState("all");
   const [selectedOrders, setSelectedOrders] = useState([]);
   const { notifications } = useNotifications(user, setOrders);
-  
- 
+
+
 
   const shopName = user?.name || "Smart Shop BD";
-  
-  const orderLink = formId 
+
+  const orderLink = formId
     ? `${typeof window !== 'undefined' ? window.location.origin : 'https://newsmartagent.com/'}/orders/${formId}`
     : "Generating link...";
 
   // --- ১. কপি লিঙ্ক ফাংশন (প্রিমিয়াম) ---
   const copyLink = () => {
     if (!formId) return toast.error("The link has not been created yet!");
-    
+
     if (copied) return;
 
     navigator.clipboard.writeText(orderLink)
@@ -77,13 +77,13 @@ export default function OrderDashboard() {
 
   useEffect(() => {
     fetchOrders();
-    fetchFormId(); 
+    fetchFormId();
   }, []);
 
   const fetchOrders = async () => {
     try {
       setLoading(true);
-      const response = await api.get('orders/'); 
+      const response = await api.get('orders/');
       setOrders(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       setApiError("The order could not be loaded.");
@@ -101,7 +101,7 @@ export default function OrderDashboard() {
     }
   };
 
-  
+
 
   const analyticsData = useMemo(() => {
     if (!orders.length) return null;
@@ -125,7 +125,7 @@ export default function OrderDashboard() {
 
   const lineChartOptions = {
     responsive: true,
-    maintainAspectRatio: false, 
+    maintainAspectRatio: false,
     plugins: {
       legend: { position: 'top' },
       title: { display: true, text: 'Daily Order Growth' },
@@ -172,7 +172,7 @@ export default function OrderDashboard() {
     try {
       await api.patch(`orders/${id}/`, { status: s });
       setOrders(prev => prev.map(o => o.id === id ? { ...o, status: s } : o));
-      
+
       toast.success(`Order now ${s}`, { id: loadingToast });
     } catch (error) {
       toast.error("Update failed. Check network.", { id: loadingToast });
@@ -183,7 +183,7 @@ export default function OrderDashboard() {
   const handlePrint = (orderList = null) => {
     // ১. অর্ডার লিস্ট ফিল্টার করা
     const ordersToPrint = orderList || orders.filter(o => selectedOrders.includes(o.id));
-    
+
     // ২. সিলেক্ট না করলে এরর টোস্ট
     if (ordersToPrint.length === 0) {
       return toast.error("Select at least one order to print.", {
@@ -205,157 +205,268 @@ export default function OrderDashboard() {
     printWindow.document.write(`
       <html>
     <head>
-      <title>Invoice - ${shopName}</title>
+      <title>Invoice - #${ordersToPrint[0]?.id || 'Print'}</title>
       <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body { 
           font-family: 'Inter', sans-serif; 
-          margin: 0; 
-          padding: 0; 
-          background-color: #f1f5f9; 
-          color: #1e293b;
+          background-color: #f3f4f6; 
+          color: #1f2937;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
         }
 
         .page { 
           background: white;
-          width: 210mm; /* A4 size */
-          min-height: 148mm; /* Half A4 or flexible */
-          padding: 50px; 
-          margin: 20px auto;
-          position: relative;
-          box-shadow: 0 10px 25px rgba(0,0,0,0.05);
-          overflow: hidden;
+          width: 210mm; 
+          min-height: 297mm; 
+          padding: 15mm 20mm; 
+          margin: 10mm auto;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
           page-break-after: always;
         }
 
-        /* ডেকোরেশন এলিমেন্ট */
-        .page::before {
-          content: "";
-          position: absolute;
-          top: 0; left: 0; width: 100%; height: 8px;
-          background: linear-gradient(90deg, #4f46e5 0%, #818cf8 100%);
+        /* Header Segment */
+        .invoice-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          border-bottom: 2px solid #e5e7eb;
+          padding-bottom: 25px;
+          margin-bottom: 30px;
+        }
+        .company-logo {
+          width: 80px;
+          height: 80px;
+          object-fit: cover;
+          border-radius: 12px;
+          margin-bottom: 12px;
+          border: 1px solid #e5e7eb;
         }
 
-        .header { 
-          display: flex; 
-          justify-content: space-between; 
-          align-items: flex-start;
+        .company-details h1 {
+          font-size: 28px;
+          font-weight: 800;
+          color: #111827;
+          margin-bottom: 5px;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+        }
+        .company-details p {
+          color: #6b7280;
+          font-size: 14px;
+        }
+
+        .invoice-title-block {
+          text-align: right;
+        }
+        .invoice-title-block h2 {
+          font-size: 36px;
+          font-weight: 800;
+          color: #3b82f6; /* Professional Blue */
+          text-transform: uppercase;
+          letter-spacing: 2px;
+          margin-bottom: 10px;
+        }
+        .invoice-meta {
+          font-size: 14px;
+          color: #4b5563;
+        }
+        .invoice-meta strong { color: #111827; }
+
+        /* Billing Segment */
+        .billing-grid {
+          display: flex;
+          justify-content: space-between;
           margin-bottom: 40px;
         }
 
-        .shop-info h1 { 
-          color: #4f46e5; 
-          margin: 0; 
-          font-size: 32px; 
-          font-weight: 800; 
-          letter-spacing: -1px;
+        .bill-to-section {
+          background: #f9fafb;
+          padding: 20px;
+          border-radius: 8px;
+          border-left: 4px solid #3b82f6;
+          width: 60%;
         }
-        .shop-info p { color: #64748b; margin: 5px 0; font-size: 14px; }
 
-        .invoice-badge {
-          background: #eef2ff;
-          color: #4f46e5;
-          padding: 10px 20px;
-          border-radius: 12px;
+        .customer-avatar {
+          width: 70px;
+          height: 70px;
+          border-radius: 50%;
+          object-fit: cover;
+          border: 2px solid #d1d5db;
+        }
+
+        .bill-to-section h3 {
+          font-size: 12px;
+          text-transform: uppercase;
+          color: #6b7280;
+          margin-bottom: 8px;
+          letter-spacing: 1px;
+        }
+        .bill-to-details h4 {
+          font-size: 18px;
+          color: #111827;
+          margin-bottom: 4px;
+        }
+        .bill-to-details p {
+          font-size: 14px;
+          color: #4b5563;
+          line-height: 1.5;
+        }
+
+        .payment-info {
+          width: 35%;
+        }
+        .payment-info h3 {
+          font-size: 12px;
+          text-transform: uppercase;
+          color: #6b7280;
+          margin-bottom: 8px;
+          letter-spacing: 1px;
+        }
+        .payment-info-line {
+          display: flex;
+          justify-content: space-between;
+          font-size: 14px;
+          margin-bottom: 8px;
+          padding-bottom: 4px;
+          border-bottom: 1px solid #e5e7eb;
+        }
+        .payment-info-line span { color: #6b7280; }
+        .payment-info-line strong { color: #111827; }
+
+        /* Table Segment */
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          margin-bottom: 40px;
+        }
+        th {
+          background-color: #3b82f6;
+          color: white;
+          font-size: 13px;
+          text-transform: uppercase;
+          padding: 12px 15px;
+          text-align: left;
+          letter-spacing: 1px;
+        }
+        th:last-child {
+          text-align: right;
+          border-top-right-radius: 6px;
+          border-bottom-right-radius: 6px;
+        }
+        th:first-child {
+          border-top-left-radius: 6px;
+          border-bottom-left-radius: 6px;
+        }
+        td {
+          padding: 15px;
+          border-bottom: 1px solid #e5e7eb;
+          font-size: 15px;
+          color: #374151;
+        }
+        td:last-child {
           text-align: right;
         }
-        .invoice-badge span { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; opacity: 0.7; }
-        .invoice-badge strong { font-size: 18px; }
 
-        .details-grid { 
-          display: grid; 
-          grid-template-cols: 1.5fr 1fr; 
-          gap: 30px; 
-          margin-bottom: 40px; 
+        .item-name { font-weight: 600; color: #111827; margin-bottom: 4px; display: block; }
+        .item-desc { font-size: 13px; color: #6b7280; }
+
+        .status-badge {
+          display: inline-block;
+          padding: 4px 12px;
+          border-radius: 20px;
+          font-size: 12px;
+          font-weight: 600;
+          text-transform: uppercase;
         }
+        .status-pending { background: #fef3c7; color: #92400e; }
+        .status-shipped { background: #dbeafe; color: #1e40af; }
+        .status-delivered { background: #d1fae5; color: #065f46; }
 
-        .address-box {
-          border: 1.5px solid #e2e8f0;
-          padding: 20px;
-          border-radius: 16px;
-        }
-        .address-box h3 { margin: 0 0 10px 0; font-size: 14px; text-transform: uppercase; color: #64748b; letter-spacing: 1px; }
-        .address-box p { margin: 0; line-height: 1.6; font-weight: 600; font-size: 16px; }
-
-        .meta-box {
-          display: flex;
-          flex-direction: column;
-          gap: 15px;
-        }
-        .meta-item { display: flex; justify-content: space-between; font-size: 14px; border-bottom: 1px dashed #e2e8f0; padding-bottom: 8px; }
-        .meta-item span { color: #64748b; }
-        .meta-item strong { color: #1e293b; }
-
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th { 
-          background: #f8fafc; 
-          color: #64748b; 
-          padding: 15px; 
-          text-align: left; 
-          font-size: 12px; 
-          text-transform: uppercase; 
-          border-bottom: 2px solid #e2e8f0;
-        }
-        td { padding: 20px 15px; border-bottom: 1px solid #f1f5f9; font-weight: 500; }
-
-        .footer { 
-          margin-top: 60px; 
+        /* Footer Segment */
+        .invoice-footer {
+          margin-top: auto;
+          border-top: 2px solid #e5e7eb;
           padding-top: 20px;
-          text-align: center; 
-          border-top: 1px solid #f1f5f9;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
         }
-        .footer p { font-size: 12px; color: #94a3b8; margin: 5px 0; }
+        .footer-thanks {
+          font-size: 16px;
+          font-weight: 700;
+          color: #111827;
+        }
+        .footer-contact {
+          font-size: 13px;
+          color: #6b7280;
+          text-align: right;
+        }
 
-        /* প্রিন্ট মিডিয়া কোয়েরি */
         @media print {
           body { background: white; }
           .page { 
-            box-shadow: none; 
             margin: 0; 
+            padding: 10mm; 
+            box-shadow: none; 
             width: 100%;
-            padding: 40px;
+            height: auto;
           }
-          .page::before { -webkit-print-color-adjust: exact; }
         }
       </style>
     </head>
     <body>
-      ${ordersToPrint.map(o => `
+      ${ordersToPrint.map(o => {
+      let statusClass = 'status-pending';
+      if (o.status === 'shipped') statusClass = 'status-shipped';
+      if (o.status === 'delivered') statusClass = 'status-delivered';
+
+      return `
         <div class="page">
-          <div class="header">
-            <div class="shop-info">
+          
+          <div class="invoice-header">
+            <div class="company-details">
+              ${o.customer_profile_photo ? `<img src="${o.customer_profile_photo}" class="company-logo" alt="Logo" />` : ''}
               <h1>${shopName}</h1>
-              <p>Trusted Online Shopping Mall</p>
+              <p>Your Trusted Shopping Partner</p>
             </div>
-            <div class="invoice-badge">
-              <span>Invoice Number</span>
-              <strong>#${o.id}</strong>
+            <div class="invoice-title-block">
+              <h2>INVOICE</h2>
+              <div class="invoice-meta">
+                <p>Invoice No: <strong>#INV-${10000 + !!o.id ? o.id : 0}</strong></p>
+                <p>Date: <strong>${new Date(o.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</strong></p>
+              </div>
             </div>
           </div>
 
-          <div class="details-grid">
-            <div class="address-box">
-              <h3>Customer & Shipping</h3>
-              <p>${o.customer_name}</p>
-              <p>${o.phone_number}</p>
-              <p style="font-weight: 400; font-size: 14px; color: #64748b; margin-top: 5px;">
-                ${o.address}, ${o.district}
-              </p>
-            </div>
-            <div class="meta-box">
-              <div class="meta-item">
-                <span>Date</span>
-                <strong>${new Date(o.created_at).toLocaleDateString('en-En')}</strong>
+          <div class="billing-grid">
+            <div class="bill-to-section">
+              <div class="bill-to-details">
+                <h3>Billed To</h3>
+                <h4>${o.customer_name}</h4>
+                <p>${o.phone_number}</p>
+                <p>${o.address}</p>
+                <p>${o.upazila ? o.upazila + ', ' : ''}${o.district}</p>
               </div>
-              <div class="meta-item">
-                <span>Payment</span>
+            </div>
+            
+            <div class="payment-info">
+              <h3>Order Details</h3>
+              <div class="payment-info-line">
+                <span>Payment Method</span>
                 <strong>Cash on Delivery</strong>
               </div>
-              <div class="meta-item">
-                <span>Method</span>
+              <div class="payment-info-line">
+                <span>Delivery Type</span>
                 <strong>Home Delivery</strong>
+              </div>
+              <div class="payment-info-line">
+                <span>Notes/Extra</span>
+                <strong>${o.extra_info ? o.extra_info.substring(0, 20) + (o.extra_info.length > 20 ? '...' : '') : 'N/A'}</strong>
               </div>
             </div>
           </div>
@@ -363,37 +474,67 @@ export default function OrderDashboard() {
           <table>
             <thead>
               <tr>
-                <th style="width: 60%">Product Description</th>
-                <th style="text-align: center">Qty</th>
-                <th style="text-align: right">Status</th>
+                <th style="width: 5%;">#</th>
+                <th style="width: 45%;">Item Description</th>
+                <th style="width: 10%; text-align: center;">Qty</th>
+                <th style="width: 15%; text-align: right;">Unit Price</th>
+                <th style="width: 10%; text-align: center;">Status</th>
+                <th style="width: 15%;">Total</th>
               </tr>
             </thead>
             <tbody>
               <tr>
-                <td>${o.product_name || "Smart Gadget Item"}</td>
-                <td style="text-align: center">01</td>
-                <td style="text-align: right">
-                  <span style="color: #4f46e5; background: #eef2ff; padding: 4px 10px; border-radius: 6px; font-size: 12px;">
-                    ${o.status.toUpperCase()}
-                  </span>
+                <td>1</td>
+                <td>
+                  <span class="item-name">${o.product_name || "Premium Product"}</span>
+                  <span class="item-desc">Product order from ${shopName}</span>
                 </td>
+                <td style="text-align: center; font-weight: 600;">1</td>
+                <td style="text-align: right; font-weight: 500;">৳ ${Number(o.price || 0).toLocaleString()}</td>
+                <td style="text-align: center;">
+                  <span class="status-badge ${statusClass}">${o.status}</span>
+                </td>
+                <td style="text-align: right; font-weight: 700; color: #111827;">৳ ${Number(o.price || 0).toLocaleString()}</td>
               </tr>
             </tbody>
           </table>
 
-          <div class="footer">
-            <p style="color: #4f46e5; font-weight: 700; font-size: 14px;">Thank you for your order!</p>
-            <p>If you have any questions, please contact us at support@${shopName.toLowerCase().replace(/\s/g, '')}.com</p>
-            <p>This is a computer-generated invoice.</p>
+          <div style="display: flex; justify-content: flex-end; margin-bottom: 20px;">
+            <div style="width: 300px; border-top: 2px solid #e5e7eb; padding-top: 15px;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 15px;">
+                <span style="color: #6b7280;">Subtotal:</span>
+                <span style="font-weight: 600;">৳ ${Number(o.price || 0).toLocaleString()}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 15px;">
+                <span style="color: #6b7280;">Shipping:</span>
+                <span style="font-weight: 600;">৳ 0</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; margin-top: 15px; padding-top: 15px; border-top: 1px dashed #e5e7eb; font-size: 18px;">
+                <span style="color: #111827; font-weight: 800;">Total:</span>
+                <span style="color: #3b82f6; font-weight: 800;">৳ ${Number(o.price || 0).toLocaleString()}</span>
+              </div>
+            </div>
           </div>
+
+          <div class="invoice-footer">
+            <div class="footer-thanks">
+              Thank you for your business!
+            </div>
+            <div class="footer-contact">
+              support@${shopName.toLowerCase().replace(/\s/g, '')}.com<br/>
+              www.${shopName.toLowerCase().replace(/\s/g, '')}.com
+            </div>
+          </div>
+
         </div>
-      `).join('')}
+        `;
+    }).join('')}
     </body>
   </html>
     `);
 
     printWindow.document.close();
-    
+
     // ৫. ইমেজ বা ফন্ট লোড হওয়ার জন্য সামান্য বিরতি দিয়ে প্রিন্ট ডায়ালগ ওপেন করা
     printWindow.onload = () => {
       printWindow.print();
@@ -402,16 +543,16 @@ export default function OrderDashboard() {
 
   return (
     <div className="p-2 sm:p-4 md:p-10 max-w-7xl mx-auto bg-gray-50 min-h-screen font-sans overflow-x-hidden">
-      
+
       {/* HEADER & LINK SHARE */}
       <div className="mb-6 flex flex-col lg:flex-row justify-between items-center lg:items-end gap-4 md:gap-6">
         <div className="space-y-1 w-full text-center lg:text-left">
-           <div className="flex items-center gap-2 text-indigo-600 font-bold bg-indigo-50 w-fit px-3 py-1 rounded-full text-[9px] md:text-xs uppercase tracking-widest border border-indigo-100 mx-auto lg:mx-0">
-             <Store className="w-3 md:w-4 h-3 md:h-4" /> {shopName}
-           </div>
-           <h1 className="text-2xl xs:text-3xl md:text-5xl font-black text-gray-900 tracking-tighter leading-tight">
-             Order <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-500">Center</span>
-           </h1>
+          <div className="flex items-center gap-2 text-indigo-600 font-bold bg-indigo-50 w-fit px-3 py-1 rounded-full text-[9px] md:text-xs uppercase tracking-widest border border-indigo-100 mx-auto lg:mx-0">
+            <Store className="w-3 md:w-4 h-3 md:h-4" /> {shopName}
+          </div>
+          <h1 className="text-2xl xs:text-3xl md:text-5xl font-black text-gray-900 tracking-tighter leading-tight">
+            Order <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-500">Center</span>
+          </h1>
         </div>
 
         <div className="w-full lg:w-auto">
@@ -422,7 +563,7 @@ export default function OrderDashboard() {
                 {formId ? orderLink : "Loading..."}
               </p>
             </div>
-            <button 
+            <button
               onClick={copyLink}
               disabled={!formId}
               className={`flex items-center gap-1.5 px-3 md:px-8 py-2.5 md:py-4 rounded-lg md:rounded-[1.8rem] font-black text-[10px] md:text-sm transition-all duration-300 flex-shrink-0 ${copied ? 'bg-emerald-500 text-white' : 'bg-indigo-600 text-white active:scale-95'}`}
@@ -437,13 +578,13 @@ export default function OrderDashboard() {
       {/* TAB SWITCHER */}
       <div className="flex justify-center mb-6">
         <div className="bg-white p-1 rounded-full shadow-md border border-indigo-50 inline-flex gap-1">
-          <button 
+          <button
             onClick={() => setViewMode("orders")}
             className={`flex items-center gap-1.5 px-4 md:px-8 py-2 md:py-3 rounded-full font-bold text-[10px] md:text-sm transition-all ${viewMode === 'orders' ? 'bg-indigo-600 text-white' : 'text-gray-500'}`}
           >
             <LayoutDashboard className="w-3 md:w-4 h-3 md:h-4" /> <span className="whitespace-nowrap">Order List</span>
           </button>
-          <button 
+          <button
             onClick={() => setViewMode("analytics")}
             className={`flex items-center gap-1.5 px-4 md:px-8 py-2 md:py-3 rounded-full font-bold text-[10px] md:text-sm transition-all ${viewMode === 'analytics' ? 'bg-indigo-600 text-white' : 'text-gray-500'}`}
           >
@@ -452,10 +593,10 @@ export default function OrderDashboard() {
         </div>
       </div>
 
-    {/* ANALYTICS VIEW */}
+      {/* ANALYTICS VIEW */}
       {viewMode === "analytics" && (
         <div className="space-y-6 md:space-y-10 animate-in fade-in slide-in-from-bottom-6 duration-700">
-          
+
           {/* TOP STATS CARDS */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
             <div className="relative overflow-hidden bg-gradient-to-br from-indigo-600 to-indigo-700 p-6 md:p-8 rounded-[2rem] shadow-xl shadow-indigo-100 group transition-all hover:-translate-y-1">
@@ -503,79 +644,79 @@ export default function OrderDashboard() {
           {/* CHARTS SECTION */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 bg-white p-6 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] shadow-sm border border-slate-50 relative overflow-hidden">
-               <div className="flex items-center justify-between mb-8">
-                  <div>
-                    <h4 className="text-xl font-black text-slate-900 italic uppercase tracking-tighter">Order Trajectory</h4>
-                    <p className="text-slate-400 text-[10px] font-bold">Timeline of your business growth</p>
-                  </div>
-                  <div className="hidden sm:block bg-indigo-50 px-4 py-2 rounded-2xl text-indigo-600 font-black text-[10px] uppercase">
-                    Daily Analytics
-                  </div>
-               </div>
-               <div className="h-[300px] md:h-[350px] w-full">
-                  {analyticsData && (
-                    <Line 
-                      data={{ 
-                        labels: analyticsData.labels, 
-                        datasets: [{ 
-                          label: 'Orders', 
-                          data: analyticsData.lineData, 
-                          borderColor: '#4f46e5', 
-                          borderWidth: 4,
-                          pointBackgroundColor: '#fff',
-                          pointBorderColor: '#4f46e5',
-                          pointBorderWidth: 2,
-                          pointRadius: 4,
-                          pointHoverRadius: 6,
-                          tension: 0.4, 
-                          fill: true, 
-                          backgroundColor: (context) => {
-                            const ctx = context.chart.ctx;
-                            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-                            gradient.addColorStop(0, 'rgba(79, 70, 229, 0.2)');
-                            gradient.addColorStop(1, 'rgba(79, 70, 229, 0)');
-                            return gradient;
-                          },
-                        }] 
-                      }} 
-                      options={{
-                        ...lineChartOptions,
-                        plugins: { ...lineChartOptions.plugins, title: { display: false }, legend: { display: false } },
-                        scales: {
-                          x: { grid: { display: false }, ticks: { font: { size: 10, weight: 'bold' } } },
-                          y: { grid: { color: '#f8fafc' }, ticks: { font: { size: 10 } } }
-                        }
-                      }} 
-                    />
-                  )}
-               </div>
+              <div className="flex items-center justify-between mb-8">
+                <div>
+                  <h4 className="text-xl font-black text-slate-900 italic uppercase tracking-tighter">Order Trajectory</h4>
+                  <p className="text-slate-400 text-[10px] font-bold">Timeline of your business growth</p>
+                </div>
+                <div className="hidden sm:block bg-indigo-50 px-4 py-2 rounded-2xl text-indigo-600 font-black text-[10px] uppercase">
+                  Daily Analytics
+                </div>
+              </div>
+              <div className="h-[300px] md:h-[350px] w-full">
+                {analyticsData && (
+                  <Line
+                    data={{
+                      labels: analyticsData.labels,
+                      datasets: [{
+                        label: 'Orders',
+                        data: analyticsData.lineData,
+                        borderColor: '#4f46e5',
+                        borderWidth: 4,
+                        pointBackgroundColor: '#fff',
+                        pointBorderColor: '#4f46e5',
+                        pointBorderWidth: 2,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        tension: 0.4,
+                        fill: true,
+                        backgroundColor: (context) => {
+                          const ctx = context.chart.ctx;
+                          const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+                          gradient.addColorStop(0, 'rgba(79, 70, 229, 0.2)');
+                          gradient.addColorStop(1, 'rgba(79, 70, 229, 0)');
+                          return gradient;
+                        },
+                      }]
+                    }}
+                    options={{
+                      ...lineChartOptions,
+                      plugins: { ...lineChartOptions.plugins, title: { display: false }, legend: { display: false } },
+                      scales: {
+                        x: { grid: { display: false }, ticks: { font: { size: 10, weight: 'bold' } } },
+                        y: { grid: { color: '#f8fafc' }, ticks: { font: { size: 10 } } }
+                      }
+                    }}
+                  />
+                )}
+              </div>
             </div>
 
             <div className="bg-slate-900 p-8 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] shadow-2xl flex flex-col items-center justify-center relative overflow-hidden group">
-               {/* Background Glow */}
-               <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full blur-3xl" />
-               <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl" />
-               
-               <div className="text-center mb-8 relative z-10">
-                  <h4 className="text-white text-xl font-black italic uppercase tracking-tighter">Status Split</h4>
-                  <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">Order Distribution</p>
-               </div>
-               
-               <div className="w-full max-w-[200px] md:max-w-[240px] relative z-10 transition-transform group-hover:scale-105 duration-500">
-                 {analyticsData && (
-                   <Doughnut 
-                    data={{ 
-                      labels: ['Pending', 'Shipped', 'Delivered'], 
-                      datasets: [{ 
-                        data: analyticsData.statusData, 
+              {/* Background Glow */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full blur-3xl" />
+              <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl" />
+
+              <div className="text-center mb-8 relative z-10">
+                <h4 className="text-white text-xl font-black italic uppercase tracking-tighter">Status Split</h4>
+                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">Order Distribution</p>
+              </div>
+
+              <div className="w-full max-w-[200px] md:max-w-[240px] relative z-10 transition-transform group-hover:scale-105 duration-500">
+                {analyticsData && (
+                  <Doughnut
+                    data={{
+                      labels: ['Pending', 'Shipped', 'Delivered'],
+                      datasets: [{
+                        data: analyticsData.statusData,
                         backgroundColor: ['#fbbf24', '#6366f1', '#10b981'],
                         borderWidth: 0,
                         hoverOffset: 15
-                      }] 
-                    }} 
-                    options={{ 
-                      cutout: '75%', 
-                      plugins: { 
+                      }]
+                    }}
+                    options={{
+                      cutout: '75%',
+                      plugins: {
                         legend: { display: false },
                         tooltip: {
                           backgroundColor: '#1e293b',
@@ -583,31 +724,31 @@ export default function OrderDashboard() {
                           titleFont: { size: 14, weight: 'bold' },
                           cornerRadius: 12
                         }
-                      } 
-                    }} 
-                   />
-                 )}
-                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <span className="text-white text-3xl font-black">{orders.length}</span>
-                    <span className="text-slate-500 text-[8px] font-black uppercase tracking-widest">Units</span>
-                 </div>
-               </div>
+                      }
+                    }}
+                  />
+                )}
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-white text-3xl font-black">{orders.length}</span>
+                  <span className="text-slate-500 text-[8px] font-black uppercase tracking-widest">Units</span>
+                </div>
+              </div>
 
-               <div className="mt-8 w-full space-y-3 relative z-10">
-                  {[
-                    { label: 'Pending', count: orders.filter(o => o.status === 'pending').length, color: 'bg-amber-400' },
-                    { label: 'Shipped', count: orders.filter(o => o.status === 'shipped').length, color: 'bg-indigo-500' },
-                    { label: 'Delivered', count: orders.filter(o => o.status === 'delivered').length, color: 'bg-emerald-500' }
-                  ].map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between text-white/80">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${item.color}`} />
-                        <span className="text-[10px] font-bold uppercase tracking-widest">{item.label}</span>
-                      </div>
-                      <span className="text-xs font-black">{item.count}</span>
+              <div className="mt-8 w-full space-y-3 relative z-10">
+                {[
+                  { label: 'Pending', count: orders.filter(o => o.status === 'pending').length, color: 'bg-amber-400' },
+                  { label: 'Shipped', count: orders.filter(o => o.status === 'shipped').length, color: 'bg-indigo-500' },
+                  { label: 'Delivered', count: orders.filter(o => o.status === 'delivered').length, color: 'bg-emerald-500' }
+                ].map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-white/80">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-2 h-2 rounded-full ${item.color}`} />
+                      <span className="text-[10px] font-bold uppercase tracking-widest">{item.label}</span>
                     </div>
-                  ))}
-               </div>
+                    <span className="text-xs font-black">{item.count}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -617,92 +758,111 @@ export default function OrderDashboard() {
       {viewMode === "orders" && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
           <div className="mb-4 md:mb-10 flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
-                <input 
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-white shadow-sm rounded-xl text-xs md:text-sm outline-none border border-transparent focus:border-indigo-500" 
-                  placeholder="Search orders..." 
-                />
-              </div>
-              <select onChange={(e) => setDistrictFilter(e.target.value)} className="bg-white shadow-sm rounded-xl px-4 py-3 text-xs md:text-sm font-bold outline-none border-r-8 border-transparent">
-                <option value="all">Districts</option>
-                {districts.filter(d => d !== "all").map(d => <option key={d} value={d}>{d}</option>)}
-              </select>
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
+              <input
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 bg-white shadow-sm rounded-xl text-xs md:text-sm outline-none border border-transparent focus:border-indigo-500"
+                placeholder="Search orders..."
+              />
+            </div>
+            <select onChange={(e) => setDistrictFilter(e.target.value)} className="bg-white shadow-sm rounded-xl px-4 py-3 text-xs md:text-sm font-bold outline-none border-r-8 border-transparent">
+              <option value="all">Districts</option>
+              {districts.filter(d => d !== "all").map(d => <option key={d} value={d}>{d}</option>)}
+            </select>
           </div>
 
-          <div className="sticky top-2 z-20 bg-gray-900 text-white p-2.5 md:p-5 mb-6 rounded-xl md:rounded-[2.5rem] shadow-xl flex items-center justify-between gap-2">
-            <button onClick={toggleSelectAll} className="flex items-center gap-2 ml-2 text-[10px] md:text-sm font-bold">
-              {selectedOrders.length === filteredOrders.length ? <CheckSquare className="w-4 h-4 text-indigo-400" /> : <Square className="w-4 h-4" />} 
-              <span>All</span>
+          <div className="sticky top-4 z-20 bg-white/80 backdrop-blur-md border border-gray-200 text-gray-800 p-3 sm:p-4 mb-6 rounded-2xl shadow-sm flex items-center justify-between gap-4">
+            <button onClick={toggleSelectAll} className="flex items-center gap-2 ml-1 text-sm font-bold text-gray-600 hover:text-indigo-600 transition-colors">
+              {selectedOrders.length === filteredOrders.length && filteredOrders.length > 0 ? <CheckSquare className="w-5 h-5 text-indigo-600" /> : <Square className="w-5 h-5" />}
+              <span>Select All</span>
             </button>
             {selectedOrders.length > 0 && (
-              <button onClick={() => handlePrint()} className="flex items-center gap-1.5 bg-indigo-500 px-4 py-2 rounded-lg text-[10px] md:text-sm font-black active:scale-95">
-                <Printer className="w-3 md:w-4 h-3 md:h-4" /> Print ({selectedOrders.length})
+              <button onClick={() => handlePrint()} className="flex items-center gap-2 bg-indigo-600 px-5 py-2.5 rounded-xl text-sm font-bold text-white shadow-md active:scale-95 hover:bg-indigo-700 transition-all">
+                <Printer className="w-4 h-4" /> Print Selected ({selectedOrders.length})
               </button>
             )}
           </div>
 
-          <div className="grid grid-cols-1 gap-3 md:gap-6">
+          <div className="grid grid-cols-1 gap-4">
             {filteredOrders.map((order) => (
-              <div key={order.id} className={`rounded-2xl md:rounded-[3.5rem] p-0.5 ${selectedOrders.includes(order.id) ? 'bg-indigo-500' : 'bg-gray-100'}`}>
-                <div className="bg-white p-3 xs:p-4 md:p-8 rounded-[1.2rem] md:rounded-[3.3rem] flex flex-col lg:flex-row justify-between gap-4">
-                  
-                  <div className="flex gap-3 md:gap-6 items-start">
-                    <button onClick={() => toggleSelect(order.id)} className="mt-1 flex-shrink-0">
-                      {selectedOrders.includes(order.id) ? <CheckSquare className="text-indigo-600 w-5 h-5 md:w-8 md:h-8" /> : <Square className="text-gray-200 w-5 h-5 md:w-8 md:h-8" />}
+              <div key={order.id} className={`bg-white border rounded-2xl p-4 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-5 transition-all hover:shadow-md ${selectedOrders.includes(order.id) ? 'border-indigo-500 ring-1 ring-indigo-500 bg-indigo-50/10' : 'border-gray-200 hover:border-indigo-300'}`}>
+
+                {/* Left Section: Checkbox & Customer Info */}
+                <div className="flex items-start lg:items-center gap-4 w-full lg:w-4/12">
+                  <div className="mt-1 lg:mt-0">
+                    <button onClick={() => toggleSelect(order.id)} className="text-gray-400 hover:text-indigo-600 transition-colors">
+                      {selectedOrders.includes(order.id) ? <CheckSquare className="w-6 h-6 text-indigo-600" /> : <Square className="w-6 h-6" />}
                     </button>
-                    
-                    <div className="space-y-2 md:space-y-4 flex-1 min-w-0">
-                      <div>
-                        <h3 className="text-base xs:text-lg md:text-3xl font-black text-gray-900 tracking-tight truncate">{order.customer_name}</h3>
-                        <div className="flex items-center gap-1 text-[9px] md:text-sm font-bold text-gray-400">
-                          <MapPin className="w-3 h-3 text-indigo-500" /> {order.district}
-                        </div>
-                      </div>
-                      
-                      <div className="flex flex-wrap gap-1.5">
-                        <span className="flex items-center gap-1 text-[9px] md:text-sm font-bold text-gray-600 bg-gray-50 px-2 py-1 rounded-md border border-gray-100"><Phone className="w-3 h-3 text-indigo-500" /> {order.phone_number}</span>
-                        <span className="flex items-center gap-1 text-[9px] md:text-sm font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md border border-indigo-100 truncate max-w-[120px] xs:max-w-none"><Package className="w-3 h-3" /> {order.product_name || "Item"}</span>
-                      </div>
-
-                        <span className="flex items-center gap-1 text-[9px] md:text-sm font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md border border-indigo-100 truncate max-w-[120px] xs:max-w-none"><Package className="w-3 h-3" /> {order.extra_info || "Item"}</span>
-
-                      <p className="text-[10px] md:text-sm text-gray-500 leading-snug bg-slate-50 p-3 md:p-6 rounded-xl md:rounded-[2rem] border-l-4 md:border-l-8 border-indigo-500 break-words">
-                        {order.address}
-                      </p>
-                    </div>
                   </div>
-
-                  <div className="flex flex-row lg:flex-col justify-between items-center lg:items-end gap-2 pt-3 lg:pt-0 border-t lg:border-t-0 border-gray-50">
-                    <div className="bg-gray-50 px-3 py-1.5 md:py-4 rounded-lg md:rounded-[2rem] border border-gray-100">
-                       <p className="text-[7px] md:text-[10px] font-black text-gray-300 uppercase">Order date</p>
-                       <p className="text-[9px] md:text-sm font-black text-gray-700">{new Date(order.created_at).toLocaleDateString('en-GB')}</p>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <h3 className="font-bold text-gray-900 text-base sm:text-lg truncate">{order.customer_name}</h3>
+                      <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 flex-shrink-0">
+                        #{order.id}
+                      </span>
                     </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => handlePrint([order])} className="p-2.5 md:p-5 bg-indigo-50 text-indigo-600 rounded-lg md:rounded-[2rem]">
-                          <Printer className="w-4 h-4 md:w-6 md:h-6" />
-                      </button>
-                      
-                      <div className="relative">
-                        <select 
-                          value={order.status}
-                          onChange={(e) => updateStatus(order.id, e.target.value)}
-                          className={`appearance-none pl-3 md:pl-8 pr-7 md:pr-12 py-2 md:py-5 rounded-lg md:rounded-[2rem] font-black text-[9px] md:text-xs uppercase cursor-pointer ${
-                            order.status === 'delivered' ? 'bg-emerald-500 text-white' : 
-                            order.status === 'shipped' ? 'bg-indigo-600 text-white' : 'bg-amber-400 text-white'
-                          }`}
-                        >
-                          <option value="pending">Pending</option>
-                          <option value="shipped">Shipped</option>
-                          <option value="delivered">Delivered</option>
-                        </select>
-                        <ChevronRight className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 w-3 md:w-4 h-3 md:h-4 pointer-events-none rotate-90" />
-                      </div>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs text-gray-500 font-medium tracking-wide">
+                      <span className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-gray-400" /> {order.phone_number}</span>
+                      <span className="flex items-center gap-1.5 truncate"><MapPin className="w-3.5 h-3.5 text-gray-400" /> {order.district}, {order.upazila}</span>
                     </div>
                   </div>
                 </div>
+
+                {/* Middle Section: Product Details & Price */}
+                <div className="flex flex-col w-full lg:w-4/12 px-0 lg:px-6 border-t lg:border-t-0 lg:border-l lg:border-r border-gray-100 pt-4 lg:pt-0 pb-4 lg:pb-0">
+                  <div className="font-semibold text-gray-800 flex items-center gap-2 text-sm sm:text-base mb-1.5">
+                    <Package className="w-4.5 h-4.5 text-indigo-500 flex-shrink-0" />
+                    <span className="truncate">{order.product_name || "N/A"}</span>
+                  </div>
+                  <div className="flex items-center flex-wrap gap-3 mb-2">
+                    {order.price > 0 ? (
+                      <span className="text-sm font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100">
+                        ৳ {Number(order.price).toLocaleString()}
+                      </span>
+                    ) : (
+                      <span className="text-sm font-medium text-gray-400 italic">No price set</span>
+                    )}
+                    {order.extra_info && (
+                      <span className="text-xs font-medium text-gray-500 bg-gray-50 px-2 py-1 rounded-md border border-gray-200 truncate max-w-[150px]" title={order.extra_info}>
+                        Info: {order.extra_info}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-gray-500 line-clamp-2 leading-relaxed" title={order.address}>
+                    <span className="font-semibold text-gray-400 uppercase tracking-widest text-[9px] mr-1">Address:</span> {order.address}
+                  </div>
+                </div>
+
+                {/* Right Section: Actions & Status */}
+                <div className="flex flex-col sm:flex-row items-center justify-between lg:justify-end gap-4 w-full lg:w-3/12 pt-4 lg:pt-0 border-t lg:border-t-0 border-gray-100">
+                  <div className="text-left sm:text-right w-full sm:w-auto flex flex-row sm:flex-col justify-between sm:justify-start">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Date Added</p>
+                    <p className="text-xs font-bold text-gray-700">{new Date(order.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                  </div>
+
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <button onClick={() => handlePrint([order])} className="p-2 sm:p-2.5 bg-white text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-200 hover:border-indigo-200 shadow-sm">
+                      <Printer className="w-4 h-4" />
+                    </button>
+
+                    <div className="relative flex-1 sm:flex-none">
+                      <select
+                        value={order.status}
+                        onChange={(e) => updateStatus(order.id, e.target.value)}
+                        className={`w-full appearance-none pl-4 pr-10 py-2 sm:py-2.5 rounded-xl font-bold text-xs uppercase tracking-wide cursor-pointer transition-colors border shadow-sm ${order.status === 'delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 focus:ring-2 focus:ring-emerald-500 focus:outline-none' :
+                            order.status === 'shipped' ? 'bg-indigo-50 text-indigo-700 border-indigo-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none' : 'bg-amber-50 text-amber-700 border-amber-200 focus:ring-2 focus:ring-amber-500 focus:outline-none'
+                          }`}
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="shipped">Shipped</option>
+                        <option value="delivered">Delivered</option>
+                      </select>
+                      <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none rotate-90 opacity-50" />
+                    </div>
+                  </div>
+                </div>
+
               </div>
             ))}
           </div>

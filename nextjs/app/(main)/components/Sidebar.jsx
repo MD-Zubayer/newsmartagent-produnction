@@ -50,6 +50,7 @@ export default function Sidebar({ viewMode, isDesktopMode }) {
 
     { name: "Payment", href: "/dashboard/payment", icon: CreditCardIcon, roles: ["user", "agent"] },
     { name: "Notifications", href: "/dashboard/notifications", icon: BellIcon, roles: ["user", "agent"] },
+    { name: "Contacts", href: "/dashboard/contacts", icon: UsersIcon, roles: ["user", "agent"] },
     { name: "AI Agent", href: "/dashboard/aiAgent", icon: CpuChipIcon, roles: ["user", "agent"], highlight: true },
   ];
 
@@ -66,7 +67,7 @@ export default function Sidebar({ viewMode, isDesktopMode }) {
       await api.post("/logout/", {}, { withCredentials: true });
       setUser(null);
       localStorage.removeItem("active_view");
-      router.push("/signup");
+      router.push("/login");
     } catch (err) {
       console.error("Logout failed", err);
     }
@@ -154,9 +155,21 @@ export default function Sidebar({ viewMode, isDesktopMode }) {
                     pathname === link.href ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-50"
                   }`}
                 >
-                  <Icon className="h-5 w-5 shrink-0" />
-                  <span className="md:inline pl-3 text-sm font-medium">
-                    {link.name === "Profile" && user ? user.name?.split(' ')[0] || "Profile" : link.name}
+                  <div className={`w-5 h-5 rounded-md overflow-hidden flex-shrink-0 flex items-center justify-center transition-colors ${
+                    pathname === link.href ? "bg-white/20" : "bg-gray-100"
+                  }`}>
+                    {link.name === "Profile" && user?.profile?.profile_photo ? (
+                      <img src={user.profile.profile_photo} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <Icon className="h-4 w-4" />
+                    )}
+                  </div>
+                  <span className="md:inline pl-3 text-sm font-medium truncate">
+                    {link.name === "Profile" && user 
+                      ? (user.name?.length > 10
+                          ? user.name.substring(0, user.name.lastIndexOf(' ', 10)) + '...' 
+                          : user.name || "Profile")
+                      : link.name}
                   </span>
                 </div>
               </Link>

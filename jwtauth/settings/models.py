@@ -9,8 +9,46 @@ class AgentSettings(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='agent_settings')
     is_order_enable = models.BooleanField(default=True)
     
+    # Auto Renew Settings
+    auto_renew_enabled = models.BooleanField(default=False)
+    auto_renew_offer = models.ForeignKey('users.Offer', on_delete=models.SET_NULL, null=True, blank=True)
+
     def __str__(self):
         return f"Settings for {self.user.name}"
+
+
+class AgentAISettings(models.Model):
+    """
+    Per-Agent specific settings.
+    Stored in the 'settings' app to separate configuration from core agent logic.
+    """
+    agent = models.OneToOneField(
+        'aiAgent.AgentAI', 
+        on_delete=models.CASCADE, 
+        related_name='agent_settings'
+    )
+    history_limit = models.PositiveIntegerField(
+        default=3, 
+        help_text="কয়টি পুরনো মেসেজ এআই-এর কাছে হিস্টোরি হিসেবে পাঠানো হবে? (Default: 3)"
+    )
+    temperature = models.FloatField(default=0.7)
+    max_tokens = models.IntegerField(default=200)
+    skip_history = models.BooleanField(default=False)
+    history_skip_keywords = models.TextField(blank=True, null=True)
+    shared_cache_agents = models.ManyToManyField(
+        'aiAgent.AgentAI',
+        blank=True,
+        related_name='shared_by_settings',
+        help_text="অন্য কোনো এজেন্টদের ক্যাশ শেয়ার করতে চাইলে সেই এজেন্টগুলো সিলেক্ট করুন।"
+    )
+
+    def __str__(self):
+        return f"Settings for Agent: {self.agent.id}"
+
+    @classmethod
+    def get_for_agent(cls, agent):
+        obj, created = cls.objects.get_or_create(agent=agent)
+        return obj
 
 
 class GlobalSettings(models.Model):

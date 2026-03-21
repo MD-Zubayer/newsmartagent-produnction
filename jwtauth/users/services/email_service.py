@@ -54,7 +54,7 @@ def send_reset_email(to_email, reset_link):
     f"Reset Link: {reset_link}\n\n"
     "⏳ This link expires in 1 hour.\n\n"
     "If you didn’t request this, you can safely ignore this email.\n\n"
-    "— Smart Agent Team"
+    "— New Smart Agent Team"
 )
 
 # প্রিমিয়াম HTML ভার্সন
@@ -76,7 +76,7 @@ def send_reset_email(to_email, reset_link):
               </tr>
             </table>
 
-            <img src="https://yourdomain.com/newsmartagent.jpeg" width="120" style="margin-top: 30px; border-radius: 12px;">
+            <img src="https://newsmartagent.com/newsmartagent.png" width="120" style="margin-top: 30px; border-radius: 12px;">
 
             <h1 style="color:#0f172a; font-size:32px; font-weight:900; line-height:1.2; margin: 30px 0 20px 0; letter-spacing:-1px;">
               Automate Your <span style="color:#4f46e5;">Access</span> <br> & Grow Faster
@@ -95,7 +95,7 @@ def send_reset_email(to_email, reset_link):
             </table>
 
             <p style="color:#94a3b8; font-size:11px; margin-top:40px; text-transform:uppercase; letter-spacing:1.5px; font-weight:800;">
-              🛡 Secured by SSL • ✅ Smart Automation
+              🛡 Secured by SSL • ✅ New Smart Agent
             </p>
           </td>
         </tr>
@@ -135,7 +135,8 @@ def send_verification_email(to_email, verify_link):
           <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width:600px; background-color:#ffffff; border-radius:40px; border: 1px solid #f1f5f9; box-shadow: 0 30px 60px -12px rgba(0,0,0,0.05);">
             <tr>
               <td align="center" style="padding: 50px 40px;">
-                <h1 style="color:#0f172a; font-size:32px; font-weight:900; margin-bottom:20px;">Welcome to <span style="color:#4f46e5;">Smart Agent</span></h1>
+                <img src="https://newsmartagent.com/newsmartagent.png" width="100" style="margin-bottom: 25px; border-radius: 12px;">
+                <h1 style="color:#0f172a; font-size:32px; font-weight:900; margin-bottom:20px;">Welcome to <span style="color:#4f46e5;">New Smart Agent</span></h1>
                 <p style="color:#64748b; font-size:16px; margin-bottom:35px;">অ্যাকাউন্টটি সচল করতে নিচের বাটনে ক্লিক করে আপনার ইমেইল ভেরিফাই করুন।</p>
                 <table border="0" cellspacing="0" cellpadding="0">
                   <tr>
@@ -162,4 +163,164 @@ def send_verification_email(to_email, verify_link):
         [to_email],
         fail_silently=False,
         html_message=html_message
+    )
+
+
+def send_2fa_otp_email(to_email: str, otp_code: str):
+    """Send a simple 6-digit OTP for email-based 2FA."""
+    subject = "Your Login Verification Code"
+    message = (
+        f"Your verification code is: {otp_code}\n\n"
+        "It will expire in 5 minutes. If you didn't try to log in, you can ignore this email."
+    )
+    html_message = f"""
+    <!DOCTYPE html>
+    <html lang="bn">
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            body {{
+                background-color: #f4f7fa;
+                margin: 0;
+                padding: 0;
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            }}
+            .wrapper {{
+                width: 100%;
+                table-layout: fixed;
+                background-color: #f4f7fa;
+                padding-bottom: 40px;
+                padding-top: 40px;
+            }}
+            .main-card {{
+                background-color: #ffffff;
+                max-width: 450px;
+                margin: 0 auto;
+                border-radius: 16px;
+                box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+                overflow: hidden;
+                border: 1px solid #e5e7eb;
+            }}
+            .header-accent {{
+                background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+                height: 6px;
+                width: 100%;
+            }}
+            .content {{
+                padding: 40px 30px;
+                text-align: center;
+            }}
+            .logo-text {{
+                font-size: 22px;
+                font-weight: 800;
+                color: #1f2937;
+                letter-spacing: -0.5px;
+                margin-bottom: 24px;
+                display: block;
+                text-decoration: none;
+            }}
+            .logo-text span {{
+                color: #2563eb;
+            }}
+            h1 {{
+                font-size: 20px;
+                color: #111827;
+                margin-bottom: 8px;
+                font-weight: 700;
+            }}
+            p {{
+                font-size: 14px;
+                line-height: 22px;
+                color: #4b5563;
+                margin-bottom: 24px;
+            }}
+            .otp-container {{
+                background-color: #f8fafc;
+                border: 2px dashed #cbd5e1;
+                border-radius: 12px;
+                padding: 20px;
+                margin: 24px 0;
+            }}
+            .otp-number {{
+                font-size: 36px;
+                font-weight: 800;
+                color: #2563eb;
+                letter-spacing: 8px;
+                margin: 0;
+            }}
+            .timer {{
+                display: inline-flex;
+                align-items: center;
+                font-size: 12px;
+                color: #ef4444;
+                font-weight: 600;
+                background: #fef2f2;
+                padding: 4px 12px;
+                border-radius: 20px;
+                margin-bottom: 10px;
+            }}
+            .footer {{
+                padding: 0 30px 30px;
+                text-align: center;
+            }}
+            .divider {{
+                height: 1px;
+                background-color: #f3f4f6;
+                margin-bottom: 20px;
+            }}
+            .help-text {{
+                font-size: 12px;
+                color: #9ca3af;
+                line-height: 18px;
+            }}
+            .social-links {{
+                margin-top: 15px;
+            }}
+            .social-links a {{
+                color: #2563eb;
+                text-decoration: none;
+                font-size: 12px;
+                font-weight: 600;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="wrapper">
+            <div class="main-card">
+                <div class="header-accent"></div>
+                <div class="content">
+                    <a href="https://newsmartagent.com" class="logo-text">NEW<span>SMART</span>AGENT</a>
+                    <h1>Confirm Your Identity</h1>
+                    <p>Hello! Use the verification code below to securely log into your dashboard.</p>
+                    
+                    <div class="timer">⏱ Expires in 5 minutes</div>
+                    
+                    <div class="otp-container">
+                        <div class="otp-number">{otp_code}</div>
+                    </div>
+                    
+                    <p style="font-size: 13px;">If you didn't request this, you can safely ignore this email. Your account security is our priority.</p>
+                </div>
+                <div class="footer">
+                    <div class="divider"></div>
+                    <div class="help-text">
+                        &copy; 2026 New Smart Agent AI. <br>
+                        Faridpur, Dhaka, Bangladesh.
+                    </div>
+                    <div class="social-links">
+                        <a href="#">Support</a> &nbsp;•&nbsp; <a href="#">Privacy Policy</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    send_mail(
+        subject,
+        message,
+        settings.DEFAULT_FROM_EMAIL,
+        [to_email],
+        fail_silently=True,
+        html_message=html_message,
     )

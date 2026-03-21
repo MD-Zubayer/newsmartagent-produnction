@@ -101,12 +101,18 @@ export default function Topbar({ viewMode, onSwitch }) {
           </div>
 
           <div className="relative group-hover:scale-105 transition-transform duration-300">
-            <div className={`flex items-center justify-center w-11 h-11 rounded-2xl font-black text-xs text-white shadow-xl transition-all duration-500 ${
+            <div className={`flex items-center justify-center w-11 h-11 rounded-2xl font-black text-xs text-white shadow-xl transition-all duration-500 overflow-hidden ${
               viewMode === 'agent' 
               ? 'bg-gradient-to-br from-amber-400 to-orange-600' 
               : 'bg-gradient-to-br from-indigo-500 to-purple-600'
             }`}>
-              {loading ? <RefreshCw size={14} className="animate-spin" /> : initials}
+              {loading ? (
+                <RefreshCw size={14} className="animate-spin" />
+              ) : user?.profile?.profile_photo ? (
+                <img src={user.profile.profile_photo} alt="" className="w-full h-full object-cover" />
+              ) : (
+                initials
+              )}
             </div>
             {/* Online Status Indicator */}
             <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-white rounded-full flex items-center justify-center shadow-md">

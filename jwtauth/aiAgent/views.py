@@ -257,55 +257,120 @@ class RankingAPIView(APIView):
     """
     def get(self, request, agent_id, format=None):
         try:
-            # ১. র‍্যাঙ্কিং ডাটা আনা (db=4 থেকে)
-            top_messages_raw = get_top_message(agent_id, top_n=10)
+            # ১. ওনারশিপ ভেরিফিকেশন (page_id ব্যবহার করছি)
             agent = AgentAI.objects.filter(page_id=agent_id).first()
-            is_special_agent = agent.is_special_agent if agent else False
+            if not agent:
+                return Response({"error": "Agent not found"}, status=status.HTTP_404_NOT_FOUND)
+
+            # ২. র‍্যাঙ্কিং ডাটা আনা (db=4 থেকে)
+            top_messages_raw = get_top_message(agent_id, top_n=50) # Increased to 50 for more visibility
             
-            api_data = []
-            
-            # ২. hash থেকে মূল টেক্সট খুঁজে বের করা
+            # ৩. এক্সক্লুশন সেট আনা (শেয়ারিং কন্ট্রোল)
+            r_db4 = get_redis_client(db=4)
+            exclusion_key = f"agent:{agent_id}:sharing_exclusion_set"
+            excluded_hashes = r_db4.smembers(exclusion_key)
+            excluded_hashes = {h.decode() if isinstance(h, bytes) else h for h in excluded_hashes}
+
+            ranking_list = []
+            r_db6 = get_redis_client(db=6)
+
             for msg_hash, frequency in top_messages_raw:
-                # DB 2 (Agent Cache) চেক করা
-                key = f"agent:{agent_id}:reply:{msg_hash}"
-                cached_data = redis_conn.get(key)
+                text = "Unknown Message"
+                current_scope = 'agent_specific'
+                total_token_savings = 0
+                
+                # DB 2 (Agent Specific) চেক করা
+                cache_key = f"agent:{agent_id}:reply:{msg_hash}"
+                raw_data = redis_conn.get(cache_key)
                 source = 'agent'
                 
                 # যদি DB 2-তে না থাকে তবে DB 6 (Global Cache) চেক করা
-                if not cached_data:
+                if not raw_data:
                     global_key = f"global:reply:{msg_hash}"
-                    cached_data = r_grouped.get(global_key)
+                    raw_data = r_db6.get(global_key)
                     source = 'global'
-
-                text = "Unknown Message"
-                total_token_savings = 0
-                current_scope = "agent_specific"
                 
-                if cached_data:
-                    data = json.loads(cached_data)
-                    text = data.get('original_normalized', data.get('original_text', 'Unknown Message')) 
-                    current_scope = data.get('cache_scope', 'agent_specific') if source == 'agent' else 'global'
-                    
-                    input_tokens = data.get('input_tokens', 0)
-                    output_tokens = data.get('output_tokens', 0)
-                    # ⚡ ক্যালকুলেশন
-                    total_token_savings = (int(input_tokens) + int(output_tokens)) * int(frequency)
-                    total_token_savings -= (input_tokens + output_tokens)
+                # যদি Global-এও না থাকে তবে DB 6 (Sender Specific) চেক করা
+                if not raw_data:
+                    sender_pattern = f"agent:{agent_id}:sender:*:reply:{msg_hash}"
+                    for s_key in r_db6.scan_iter(match=sender_pattern, count=1):
+                        raw_data = r_db6.get(s_key)
+                        if raw_data:
+                            source = 'sender_specific'
+                            break
 
-                api_data.append({
+                if raw_data:
+                    try:
+                        data = json.loads(raw_data)
+                        text = data.get('original_text', data.get('original_normalized', 'Unknown Message'))
+                        
+                        if source == 'agent':
+                            current_scope = data.get('cache_scope', 'agent_specific')
+                        elif source == 'global':
+                            current_scope = 'global'
+                        else:
+                            current_scope = 'sender_specific'
+                        
+                        input_tokens = data.get('input_tokens', 0)
+                        output_tokens = data.get('output_tokens', 0)
+                        
+                        # ১ টোকেন সাশ্রয় = (input_tokens + output_tokens) * frequency - (input_tokens + output_tokens)
+                        # কারণ প্রথমবার জেনারেট করতে টোকেন লেগেছে, পরের বারগুলো সেভ হয়েছে।
+                        total_token_savings = (int(input_tokens) + int(output_tokens)) * (int(frequency) - 1)
+                        if total_token_savings < 0: total_token_savings = 0
+                    except:
+                        pass
+
+                is_shareable = msg_hash not in excluded_hashes
+
+                ranking_list.append({
                     'text': text,
                     'frequency': int(frequency),
                     'token_savings': total_token_savings,
                     'msg_hash': msg_hash,
                     'current_scope': current_scope,
+                    'is_shareable': is_shareable,
                 })
 
             return Response({
-                "data": api_data,
+                "data": ranking_list,
                 "is_staff": request.user.is_staff or request.user.is_superuser,
-                "is_special_agent": is_special_agent,
-                "special_agent_status": agent.special_agent_status if agent else "none"
+                "is_special_agent": agent.is_special_agent,
+                "special_agent_status": agent.special_agent_status,
             }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class ToggleSharingAPIView(APIView):
+    """
+    মেসেজের শেয়ারিং স্ট্যাটাস (On/Off) পরিবর্তন করে।
+    এটি Redis set 'agent:{agent_id}:sharing_exclusion_set'-এ msg_hash যোগ বা রিমুভ করে।
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, agent_id, msg_hash):
+        try:
+            # ১. ওনারশিপ ভেরিফিকেশন
+            agent = AgentAI.objects.filter(page_id=agent_id, user=request.user).first()
+            if not agent:
+                return Response({"error": "Agent not found or unauthorized"}, status=status.HTTP_404_NOT_FOUND)
+            
+            is_shareable = request.data.get('is_shareable', True)
+            
+            r_db4 = get_redis_client(db=4)
+            exclusion_key = f"agent:{agent_id}:sharing_exclusion_set"
+            
+            if is_shareable:
+                # শেয়ারযোগ্য হলে এক্সক্লুশন লিস্ট থেকে রিমুভ করো
+                r_db4.srem(exclusion_key, msg_hash)
+                msg = "Message marked as shareable"
+            else:
+                # শেয়ারযোগ্য না হলে এক্সক্লুশন লিস্টে অ্যাড করো
+                r_db4.sadd(exclusion_key, msg_hash)
+                msg = "Message excluded from sharing"
+                
+            return Response({"status": "success", "message": msg, "is_shareable": is_shareable}, status=status.HTTP_200_OK)
             
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -372,8 +437,31 @@ class DeleteRankingDataAPIView(APIView):
             for key in r_grouped_db6.scan_iter(match=sender_pattern):
                 r_grouped_db6.delete(key)
             
-            return Response({"status": "success", "message": "Message deleted from agent cache layers"}, status=status.HTTP_200_OK)
+            # ৫. গ্লোবাল ক্যাশ (DB 6) থেকে রিমুভ করা (শুধুমাত্র স্টাফ মেম্বার বা ওনারের জন্য - ওনাররা কেবল তাদের ওন করা ডাটা ক্লিয়ার করবে, তবে গ্লোবাল ক্লিয়ারেন্স স্টাফের হাতে থাকাই নিরাপদ)
+            # তবে ইউজার যদি স্টাফ হয় তবে আমরা গ্লোবাল থেকেও মুছে দেব যাতে রি-জেনারেশন হয়।
+            if request.user.is_staff or request.user.is_superuser:
+                global_key = f"global:reply:{msg_hash}"
+                r_grouped_db6.delete(global_key)
             
+            return Response({"status": "success", "message": "Message deleted from cache layers"}, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class ClearGlobalCacheAPIView(APIView):
+    """
+    পুরো গ্লোবাল ক্যাশ ডিলিট করার জন্য (শুধুমাত্র স্টাফদের জন্য)
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        if not (request.user.is_staff or request.user.is_superuser):
+            return Response({"error": "Only staff members can clear global cache."}, status=status.HTTP_403_FORBIDDEN)
+            
+        try:
+            from .cache.hybrid_similarity import clear_global_cache
+            count = clear_global_cache()
+            return Response({"status": "success", "message": f"Successfully cleared {count} global cache entries"}, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -406,6 +494,17 @@ class UpdateCacheScopeAPIView(APIView):
             r_db6 = get_redis_client(db=6) # DB 6
             
             raw_data = r_db2.get(agent_key) or r_db6.get(global_key)
+            sender_keys_to_delete = []
+            
+            if not raw_data:
+                sender_pattern = f"agent:{agent_id}:sender:*:reply:{msg_hash}"
+                for s_key in r_db6.scan_iter(match=sender_pattern):
+                    raw_data = r_db6.get(s_key)
+                    if raw_data:
+                        for key in r_db6.scan_iter(match=sender_pattern):
+                            sender_keys_to_delete.append(key)
+                        break
+
             if not raw_data:
                 return Response({"error": "Original cached message not found"}, status=status.HTTP_404_NOT_FOUND)
             
@@ -419,6 +518,8 @@ class UpdateCacheScopeAPIView(APIView):
                 # Agent -> Global
                 r_db6.set(global_key, json.dumps(data), ex=30*24*60*60) # 30 days
                 r_db2.delete(agent_key)
+                if sender_keys_to_delete:
+                    for k in sender_keys_to_delete: r_db6.delete(k)
             elif new_scope == 'special':
                 # Special Scope (Requires agent to be special)
                 if not agent.is_special_agent:
@@ -427,6 +528,8 @@ class UpdateCacheScopeAPIView(APIView):
                 # DB 2 (same as agent) but 1 year TTL
                 r_db2.set(agent_key, json.dumps(data), ex=365*24*60*60) 
                 r_db6.delete(global_key)
+                if sender_keys_to_delete:
+                    for k in sender_keys_to_delete: r_db6.delete(k)
             else:
                 # Global -> Agent
                 # ১. এজেন্টে সেভ করা
@@ -434,6 +537,8 @@ class UpdateCacheScopeAPIView(APIView):
                 
                 # ২. গ্লোবাল থেকে ডিলিট করা
                 r_db6.delete(global_key)
+                if sender_keys_to_delete:
+                    for k in sender_keys_to_delete: r_db6.delete(k)
                 
             return Response({"status": "success", "message": f"Cache scope updated to {new_scope}"}, status=status.HTTP_200_OK)
             

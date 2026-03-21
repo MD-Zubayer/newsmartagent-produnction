@@ -1,148 +1,152 @@
 "use client";
 
 import Link from "next/link";
-import { 
-  FaFacebookF, FaTwitter, FaLinkedinIn, FaInstagram, 
-  FaCcVisa, FaCcMastercard, FaCcPaypal, FaPhoneAlt, FaEnvelope, FaMapMarkerAlt 
+import {
+  FaFacebookF, FaTwitter, FaLinkedinIn, FaInstagram,
+  FaPhoneAlt, FaEnvelope, FaMapMarkerAlt
 } from "react-icons/fa";
 
-// পেমেন্ট আইকনগুলোর জন্য একটি কাস্টম কম্পোনেন্ট (যেহেতু bKash/Nagad ডিফল্ট আইকন লাইব্রেরিতে থাকে না)
-const PaymentIcon = ({ name, color }) => (
-  <div className={`px-3 py-1 bg-white rounded-lg flex items-center justify-center shadow-sm border border-gray-100 hover:scale-110 transition-transform cursor-pointer`}>
-    <span className={`text-[10px] font-black tracking-tighter ${color}`}>{name}</span>
+const PaymentBadge = ({ name, color, bg }) => (
+  <div className={`px-3 py-1.5 ${bg} rounded-lg flex items-center justify-center border border-white/10 hover:scale-105 active:scale-95 transition-transform cursor-pointer`}>
+    <span className={`text-[11px] font-black tracking-tight ${color}`}>{name}</span>
   </div>
 );
 
 function Footer() {
+  const services = [
+    "Facebook Automation",
+    "Messenger Bot",
+    "WhatsApp Marketing",
+    "Auto Commenter",
+    "Bulk Messaging",
+    "Lead Generation",
+  ];
+
+  const socials = [
+    { icon: <FaFacebookF />, bg: "hover:bg-blue-600", label: "Facebook" },
+    { icon: <FaTwitter />, bg: "hover:bg-sky-500", label: "Twitter" },
+    { icon: <FaInstagram />, bg: "hover:bg-gradient-to-tr hover:from-pink-600 hover:to-orange-400", label: "Instagram" },
+    { icon: <FaLinkedinIn />, bg: "hover:bg-blue-700", label: "LinkedIn" },
+  ];
+
   return (
-    <footer className="relative bg-[#05050a] text-white pt-20 pb-6 overflow-hidden">
-      {/* Background Glows */}
-      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-indigo-600/5 rounded-full blur-[120px] pointer-events-none"></div>
-      <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-pink-600/5 rounded-full blur-[120px] pointer-events-none"></div>
+    <footer className="relative bg-[#08081a] text-white overflow-hidden">
 
-      <div className="max-w-7xl mx-auto px-6 relative z-10">
-        
-        {/* Top Section: CTA / Newsletter */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-16 border-b border-white/5 items-center">
-          <div className="lg:col-span-2">
-            <h2 className="text-2xl md:text-3xl font-black mb-2">Grow your business faster today!</h2>
-            <p className="text-gray-400 font-medium">আমাদের নিউজলেটারে যোগ দিন এবং নতুন সব আপডেট পান সরাসরি আপনার ইনবক্সে।</p>
-          </div>
-          <div className="relative group">
-            <input 
-              type="email" 
-              placeholder="আপনার ইমেইল এড্রেস" 
-              className="w-full bg-white/5 border border-white/10 p-4 rounded-2xl outline-none focus:border-indigo-500/50 transition-all pr-32 font-medium"
-            />
-            <button className="absolute right-2 top-2 bottom-2 px-6 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:to-indigo-800 rounded-xl transition-all font-bold text-sm shadow-lg shadow-indigo-500/20">
-              Subscribe
-            </button>
-          </div>
-        </div>
+      {/* === Decorative top border === */}
+      <div className="h-px w-full bg-gradient-to-r from-transparent via-indigo-500 to-transparent opacity-30" />
 
-        {/* Main Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 py-16">
+      {/* === Ambient Glows === */}
+      <div className="pointer-events-none absolute top-[-100px] left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-indigo-600/10 rounded-full blur-[160px]" />
+      <div className="pointer-events-none absolute bottom-0 left-0 w-[500px] h-[500px] bg-blue-600/5 rounded-full blur-[150px]" />
+      <div className="pointer-events-none absolute bottom-0 right-0 w-[500px] h-[500px] bg-indigo-600/5 rounded-full blur-[150px]" />
 
-          {/* Column 1: Brand */}
-          <div className="space-y-6">
-            <h1 className="text-3xl font-black tracking-tighter italic">
-              New <span className="text-indigo-500">Smart</span> Agent
-            </h1>
-            <p className="text-gray-400 text-sm leading-relaxed font-medium">
-              আমরা দিচ্ছি বাংলাদেশের সেরা অটোমেশন সলিউশন। আমাদের স্মার্ট এজেন্ট টুলস দিয়ে আপনার সোশ্যাল মিডিয়া ম্যানেজমেন্ট হবে আরও সহজ এবং কার্যকর।
-            </p>
-            <div className="flex gap-3">
-              {[
-                { icon: <FaFacebookF />, bg: "hover:bg-blue-600" },
-                { icon: <FaTwitter />, bg: "hover:bg-sky-500" },
-                { icon: <FaInstagram />, bg: "hover:bg-pink-600" },
-                { icon: <FaLinkedinIn />, bg: "hover:bg-blue-700" },
-              ].map((s, i) => (
-                <a key={i} href="#" className={`w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center text-sm border border-white/10 transition-all ${s.bg} hover:-translate-y-1`}>
-                  {s.icon}
-                </a>
-              ))}
+      <div className="relative z-10 max-w-7xl mx-auto px-6 pt-24 pb-12">
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 pb-20">
+          
+          {/* Brand Info */}
+          <div className="lg:col-span-4 space-y-10">
+            <div className="space-y-6">
+              <Link href="/" className="inline-block">
+                <h2 className="text-4xl font-black tracking-tighter">
+                  New <span className="text-gradient">Smart</span> Agent
+                </h2>
+              </Link>
+              <p className="text-gray-400 font-medium text-lg leading-relaxed">
+                বাংলাদেশের ১ নম্বর এআই চালিত সোশ্যাল মিডিয়া অটোমেশন প্লাটফর্ম। আপনার ব্যবসাকে দিন এক নতুন গতি।
+              </p>
             </div>
-          </div>
-
-          {/* Column 2: Quick Links */}
-          <div className="md:pl-10">
-            <h3 className="text-sm font-black uppercase tracking-[0.2em] text-indigo-500 mb-6">সেবাসমূহ</h3>
-            <ul className="space-y-4">
-              {["Facebook Automation", "Auto Commenter", "WhatsApp Marketing", "Bulk Messaging"].map((link) => (
-                <li key={link}>
-                  <Link href="#" className="text-gray-400 hover:text-white transition-colors text-sm font-bold flex items-center group">
-                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mr-2 opacity-0 group-hover:opacity-100 transition-opacity"></span>
-                    {link}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Column 3: Contact */}
-          <div>
-            <h3 className="text-sm font-black uppercase tracking-[0.2em] text-indigo-500 mb-6">যোগাযোগ</h3>
-            <div className="space-y-5">
-              <a href="tel:01727358743" className="flex items-center gap-4 group">
-                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white transition-all">
-                  <FaPhoneAlt size={14} />
-                </div>
-                <span className="text-sm font-bold text-gray-300 group-hover:text-white transition-colors">01727358743</span>
-              </a>
-              <a href="mailto:newsmartagentbd@gmail.com" className="flex items-center gap-4 group">
-                <div className="w-10 h-10 rounded-xl bg-pink-500/10 flex items-center justify-center text-pink-400 group-hover:bg-pink-500 group-hover:text-white transition-all">
-                  <FaEnvelope size={14} />
-                </div>
-                <span className="text-sm font-bold text-gray-300 group-hover:text-white break-all">newsmartagentbd@gmail.com</span>
-              </a>
-              <div className="flex items-center gap-4 group">
-                <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center text-green-400">
-                  <FaMapMarkerAlt size={14} />
-                </div>
-                <span className="text-sm font-bold text-gray-300 italic">Dhaka, Bangladesh</span>
+            
+            <div className="space-y-6">
+              <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400">Connect With Us</h3>
+              <div className="flex flex-wrap gap-4">
+                {socials.map((s) => (
+                  <a
+                    key={s.label}
+                    href="#"
+                    className={`w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-lg text-gray-400 hover:text-white transition-all duration-300 ${s.bg} hover:-translate-y-2 hover:shadow-xl hover:shadow-indigo-500/20`}
+                  >
+                    {s.icon}
+                  </a>
+                ))}
               </div>
             </div>
           </div>
 
-          {/* Column 4: All Payment Methods */}
-          <div className="space-y-6">
-            <h3 className="text-sm font-black uppercase tracking-[0.2em] text-indigo-500">পেমেন্ট মেথড</h3>
-            
-            {/* Local Payments */}
-            <div className="flex flex-wrap gap-2">
-              <PaymentIcon name="bKash" color="text-pink-600" />
-              <PaymentIcon name="Nagad" color="text-orange-500" />
-              <PaymentIcon name="Rocket" color="text-purple-700" />
-              <PaymentIcon name="Upay" color="text-yellow-500" />
+          {/* Links Grid */}
+          <div className="lg:col-span-5 grid grid-cols-2 gap-10">
+            <div className="space-y-8">
+              <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400">Services</h3>
+              <ul className="space-y-4">
+                {services.map((link) => (
+                  <li key={link}>
+                    <Link href="#" className="text-gray-400 hover:text-white font-bold transition-colors flex items-center gap-2 group">
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 scale-0 group-hover:scale-100 transition-transform"></span>
+                      {link}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="space-y-8">
+              <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400">Company</h3>
+              <ul className="space-y-4">
+                {["About Us", "Contact Us", "Privacy Policy", "Terms of Use", "Blog", "Docs"].map((link) => (
+                  <li key={link}>
+                    <Link href="#" className="text-gray-400 hover:text-white font-bold transition-colors">
+                      {link}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* Contact & Support */}
+          <div className="lg:col-span-3 space-y-10">
+            <div className="space-y-8">
+              <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400">Contact</h3>
+              <div className="space-y-5">
+                <a href="tel:01727358743" className="flex items-center gap-4 text-gray-400 hover:text-white transition-colors group">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                    <FaPhoneAlt size={14} />
+                  </div>
+                  <span className="font-bold">01727358743</span>
+                </a>
+                <a href="mailto:newsmartagentbd@gmail.com" className="flex items-center gap-4 text-gray-400 hover:text-white transition-colors group">
+                  <div className="w-10 h-10 rounded-xl bg-pink-500/10 flex items-center justify-center text-pink-400 group-hover:bg-pink-600 group-hover:text-white transition-all">
+                    <FaEnvelope size={14} />
+                  </div>
+                  <span className="font-bold text-sm truncate">newsmartagentbd@gmail.com</span>
+                </a>
+              </div>
             </div>
 
-            {/* Global Payments */}
-            <div className="flex flex-wrap gap-4 pt-4 border-t border-white/5">
-              <FaCcVisa className="text-3xl text-gray-400 hover:text-white transition-colors" />
-              <FaCcMastercard className="text-3xl text-gray-400 hover:text-white transition-colors" />
-              <FaCcPaypal className="text-3xl text-gray-400 hover:text-white transition-colors" />
+            <div className="p-6 rounded-3xl bg-white/5 border border-white/10 space-y-4">
+              <p className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Trusted By Businesses</p>
+              <div className="flex gap-2">
+                {["bKash", "Nagad", "Rocket"].map(p => (
+                   <div key={p} className="px-3 py-1 bg-white/5 rounded-lg text-[9px] font-black">{p}</div>
+                ))}
+              </div>
             </div>
-            
-            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-relaxed">
-              * আমরা সব ধরণের লোকাল এবং ইন্টারন্যাশনাল পেমেন্ট গ্রহণ করি।
-            </p>
           </div>
         </div>
 
-        {/* Footer Bottom */}
-        <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
-          <p className="text-gray-500 text-[12px] font-bold uppercase tracking-widest">
-            © {new Date().getFullYear()} NEW SMART AGENT. অল রাইটস রিজার্ভড।
+        {/* Bottom Bar */}
+        <div className="pt-10 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
+          <p className="text-gray-500 text-xs font-bold">
+            © {new Date().getFullYear()} NEW SMART AGENT. ALL RIGHTS RESERVED.
           </p>
-          <div className="flex gap-8 text-[11px] font-black uppercase tracking-widest text-gray-400">
-            <a href="/privacy-policy" className="hover:text-indigo-400 transition-colors">Privacy Policy</a>
-            <a href="/terms-of-service" className="hover:text-indigo-400 transition-colors">Terms of Use</a>
-          </div>
+          <p className="text-gray-500 text-[10px] font-black tracking-[0.2em] uppercase">
+            Built with ❤️ in Bangladesh
+          </p>
         </div>
       </div>
     </footer>
   );
 }
+
+   
 
 export default Footer;

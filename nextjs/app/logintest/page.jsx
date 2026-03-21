@@ -5,6 +5,8 @@ import Link from "next/link";
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({ email: "", password: "" });
+  const [otpCode, setOtpCode] = useState("");
+  const [is2FARequired, setIs2FARequired] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
@@ -22,7 +24,6 @@ export default function LoginPage() {
       const res = await fetch("http://127.0.0.1:8000/api/login/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // HttpOnly Cookie সেভ করার জন্য credentials: "include" অবশ্যই লাগবে
         credentials: "include", 
         body: JSON.stringify({ 
           email: formData.email, 
@@ -30,15 +31,50 @@ export default function LoginPage() {
         }),
       });
 
+      const data = await res.json();
+
       if (res.ok) {
-        // HttpOnly তে টোকেন ব্রাউজার নিজে সেভ করে নেয়, তাই localStorage এ কিছু করতে হবে না
-        router.push("/dashboard");
+        if (data.status === "2fa_required") {
+          setIs2FARequired(true);
+          setError("");
+        } else {
+          router.push("/dashboard");
+        }
       } else {
-        const data = await res.json();
-        setError(data.detail || "Invalid credentials!");
+        setError(data.error || data.detail || "Invalid credentials!");
       }
     } catch (err) {
       setError("Server connection failed. Check if Django is running.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerify2FA = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    try {
+      const res = await fetch("http://127.0.0.1:8000/api/auth/2fa/verify/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          otp_code: otpCode
+        }),
+      });
+
+      if (res.ok) {
+        router.push("/dashboard");
+      } else {
+        const data = await res.json();
+        setError(data.error || "Invalid verification code!");
+      }
+    } catch (err) {
+      setError("Failed to verify code. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -48,53 +84,99 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 font-sans text-black">
       <div className="w-full max-w-md bg-white p-10 rounded-3xl shadow-xl">
         <div className="text-center mb-10">
-          <h1 className="text-3xl font-bold text-gray-900">Welcome Back!</h1>
-          <p className="text-gray-500 mt-2">Log in using HttpOnly Cookies</p>
+          <h1 className="text-3xl font-bold text-gray-900">
+            {is2FARequired ? "Two-Factor Auth" : "Welcome Back!"}
+          </h1>
+          <p className="text-gray-500 mt-2">
+            {is2FARequired ? `Code sent to ${formData.email}` : "Log in using HttpOnly Cookies"}
+          </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
-            <input
-              name="email"
-              type="email"
-              required
-              value={formData.email}
-              onChange={handleChange}
-              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-              placeholder="you@example.com"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Password</label>
-            <input
-              name="password"
-              type="password"
-              required
-              value={formData.password}
-              onChange={handleChange}
-              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-              placeholder="••••••••"
-            />
-          </div>
-
-          {error && (
-            <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg text-center">
-              {error}
+        {!is2FARequired ? (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
+              <input
+                name="email"
+                type="email"
+                required
+                value={formData.email}
+                onChange={handleChange}
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-black"
+                placeholder="you@example.com"
+              />
             </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className={`w-full py-4 rounded-xl font-bold text-white shadow-lg transition-all ${
-              loading ? "bg-blue-300 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 active:scale-95"
-            }`}
-          >
-            {loading ? "Verifying..." : "Login"}
-          </button>
-        </form>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Password</label>
+              <input
+                name="password"
+                type="password"
+                required
+                value={formData.password}
+                onChange={handleChange}
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-black"
+                placeholder="••••••••"
+              />
+            </div>
+
+            {error && (
+              <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg text-center font-bold">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className={`w-full py-4 rounded-xl font-bold text-white shadow-lg transition-all ${
+                loading ? "bg-blue-300 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 active:scale-95"
+              }`}
+            >
+              {loading ? "Verifying..." : "Login"}
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleVerify2FA} className="space-y-6">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Verification Code</label>
+              <input
+                name="otp"
+                type="text"
+                required
+                value={otpCode}
+                onChange={(e) => setOtpCode(e.target.value)}
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-black text-center text-3xl font-black tracking-[8px]"
+                placeholder="000000"
+                maxLength={6}
+              />
+            </div>
+
+            {error && (
+              <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg text-center font-bold">
+                {error}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className={`w-full py-4 rounded-xl font-bold text-white shadow-lg transition-all ${
+                loading ? "bg-blue-300 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700 active:scale-95"
+              }`}
+            >
+              {loading ? "Verifying OTP..." : "Verify & Login"}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIs2FARequired(false)}
+              className="w-full text-sm font-bold text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              Back to Login
+            </button>
+          </form>
+        )}
 
         <p className="mt-8 text-center text-sm text-gray-600">
           Don't have an account?{" "}

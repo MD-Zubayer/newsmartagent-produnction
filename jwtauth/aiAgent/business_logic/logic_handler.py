@@ -81,10 +81,15 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                 skip_embedding = True
                 logger.info("embedding skipped due to length < 3.")
             else:
-                matched_embedding_skips = check_keyword_match(text, 'embedding_skip')
-                if matched_embedding_skips:
-                    skip_embedding = True
-                    logger.info(f"Keyword '{matched_embedding_skips[0]}' found. Skipping embedding.")
+                from aiAgent.models import SmartKeyword
+                db_skip_keywords = SmartKeyword.objects.filter(category='embedding_skip').values_list('text', flat=True)
+                skip_margin = 6
+                text_len = len(text)
+                for kw in db_skip_keywords:
+                    if kw.lower() in text.lower() and abs(text_len - len(kw)) <= skip_margin:
+                        skip_embedding = True
+                        logger.info(f"Keyword '{kw}' found via substring margin guard. Skipping embedding.")
+                        break
         
             if not skip_embedding:
                 logger.info(f"Generating Gemini Embedding inside perform_rag_search for '{text[:20]}'")
@@ -94,16 +99,46 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
             logger.info("Using existing query_vector passed to perform_rag_search")
         
         if query_vector:
-            # Search Spreadsheet Knowledge
-            related_sheets = SpreadsheetKnowledge.objects.filter(
+            # 🔍 Scope Filtering logic:
+            # - Global (সব এজেন্ট পাবে)
+            # - Agent Specific (শুধু এই নির্দিষ্ট এজেন্ট পাবে)
+            
+            from django.db.models import Q
+            from datasheet.models import Spreadsheet
+            from embedding.models import Document
+            
+            # ১. ভ্যালিড স্প্রেডশিট আইডি বের করা (Scope অনুযায়ী)
+            valid_sheet_ids = Spreadsheet.objects.filter(
                 user=agent_config.user
-            ).annotate(
-                distance=CosineDistance('embedding', query_vector)
-            ).filter(distance__lt=0.65).order_by('distance')[:3]
+            ).filter(
+                Q(scope='global') | Q(scope='agent_specific', agent=agent_config)
+            ).values_list('id', flat=True)
+            
+            # ২. ভ্যালিড ডকুমেন্ট আইডি বের করা (Scope অনুযায়ী)
+            valid_doc_ids = Document.objects.filter(
+                user=agent_config.user
+            ).filter(
+                Q(scope='global') | Q(scope='agent_specific', agent=agent_config)
+            ).values_list('id', flat=True)
+
+            # Search Spreadsheet Knowledge (Row IDs Prefix filtering)
+            # SpreadsheetKnowledge-এর row_id ফর্মেট: "sheet_{id}_row_{r_idx}"
+            sheet_query = Q()
+            for s_id in valid_sheet_ids:
+                sheet_query |= Q(row_id__startswith=f"sheet_{s_id}_")
+
+            related_sheets = SpreadsheetKnowledge.objects.none()
+            if valid_sheet_ids:
+                related_sheets = SpreadsheetKnowledge.objects.filter(
+                    user=agent_config.user
+                ).filter(sheet_query).annotate(
+                    distance=CosineDistance('embedding', query_vector)
+                ).filter(distance__lt=0.65).order_by('distance')[:3]
 
             # Search Document Knowledge
             related_docs = DocumentKnowledge.objects.filter(
-                user=agent_config.user
+                user=agent_config.user,
+                document_id__in=valid_doc_ids
             ).select_related('document').annotate(
                 distance=CosineDistance('embedding', query_vector)
             ).filter(distance__lt=0.65).order_by('distance')[:3]
@@ -243,6 +278,13 @@ def deduct_user_tokens(user_profile, total_tokens, ai_model_name):
 
             # Final sync of global balance
             user_profile.sync_word_balance()
+
+            # Trigger auto-renew if balance is low
+            try:
+                from users.services.auto_renew_service import check_and_trigger_auto_renew
+                check_and_trigger_auto_renew(user_profile)
+            except Exception as e:
+                logger.error(f"Auto-renew Trigger Error: {e}")
             
             if remaining_to_deduct > 0:
                 logger.warning(f"Overdraft! Still needed to deduct {remaining_to_deduct} for {user_profile.user.email}")
@@ -250,7 +292,7 @@ def deduct_user_tokens(user_profile, total_tokens, ai_model_name):
         except Exception as e:
             logger.error(f"Token Deduction Error: {e}")
 
-def build_ai_context(agent_config, sender_id, text, extra_instruction=None, sheet_context=None):
+def build_ai_context(agent_config, sender_id, text, extra_instruction=None, sheet_context=None, platform='messenger'):
     from aiAgent.utils import get_memory_context
     from chat.services import get_last_message
     from aiAgent.memory_handler import calculate_context_score, check_keyword_match
@@ -282,28 +324,53 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
             memory_context = f"\nUser Database Memory [Very Important]:\n{mem_data}"
             logger.info(f"🧠 Injecting Memory Context for {sender_id}. Score: {c_score} | DB Triggers: {matched_intents or matched_targets}")
 
-    prompt_parts = [
-        f"Role: {agent_config.system_prompt}",
-        f"Instructions: {extra_instruction}"
+    # 4. Fetch Contact specific settings
+    from aiAgent.models import Contact
+    custom_role = agent_config.system_prompt
+    contact_instructions = extra_instruction or ""
+
+    try:
+        contact = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
+        if contact:
+            if contact.custom_prompt:
+                custom_role = contact.custom_prompt
+                logger.info(f"🎯 Using Custom Role for {sender_id}")
+            if contact.custom_instructions:
+                contact_instructions = f"{contact_instructions}\n[CONTACT SPECIFIC INSTRUCTIONS]: {contact.custom_instructions}"
+                logger.info(f"📝 Adding Custom Instructions for {sender_id}")
+    except Exception as e:
+        logger.error(f"Error fetching contact settings: {e}")
+
+    system_prompt_parts = [
+        f"Identity: Always identify you are assistant of the {agent_config.name} if asked.",
+        f"Role: {custom_role}",
+        f"Instructions: {contact_instructions}"
     ]
 
-    if sheet_context: prompt_parts.append(sheet_context)
-    if memory_context: prompt_parts.append(memory_context)
+    if sheet_context: system_prompt_parts.append(sheet_context)
+    if memory_context: system_prompt_parts.append(memory_context)
 
-    prompt_parts.append(f"\nUser: {text}")
-    prompt_parts.append("Assistant:")
-    full_prompt = "\n\n".join(prompt_parts)
+    system_instruction = "\n\n".join(system_prompt_parts)
 
-    logger.info(f"\n======= FINAL PROMPT SENT TO AI =======\n{full_prompt}\n=======================================")
+    logger.info(f"\n======= SYSTEM INSTRUCTION =======\n{system_instruction}\n=======================================")
+    logger.info(f"\n======= CURRENT USER MSG =======\n{text}\n=======================================")
 
-    raw_history = get_last_message(agent_config, sender_id, limit=3)
+    raw_history = get_last_message(agent_config, sender_id, limit=agent_config.get_settings.history_limit, platform=platform)
     
+    settings = agent_config.get_settings
     skip_history = False
-    matched_history_skips = check_keyword_match(text, 'history_skip')
-    if matched_history_skips:
-        skip_history = True
-        logger.info(f"⏭️ Skipping history: DB Keyword '{matched_history_skips[0]}' found.")
-            
+    if settings.skip_history:
+        # Check global smart keywords
+        matched_global = check_keyword_match(text, 'history_skip')
+        
+        # Check per-agent custom history skip keywords
+        custom_skips = [k.strip().lower() for k in (settings.history_skip_keywords or "").split(',') if k.strip()]
+        matched_custom = [k for k in custom_skips if k in text.lower()]
+        
+        if matched_global or matched_custom:
+            skip_history = True
+            logger.info(f"⏭️ Skipping history: Keyword found. Global: {matched_global}, Custom: {matched_custom}")
+
     if skip_history:
         history = []
     else:
@@ -311,9 +378,9 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
             msg for msg in raw_history
             if msg.get("content") and msg.get("content").strip()
         ]
-    return full_prompt, history
+    return system_instruction, history, text
 
-def get_ai_response(agent_config, full_prompt, history):
+def get_ai_response(agent_config, system_instruction, history, current_message):
     """
     Unified AI handler that dispatches to specific providers.
     """
@@ -344,22 +411,22 @@ def get_ai_response(agent_config, full_prompt, history):
     try:
         # 2. Dispatch based on provider
         if provider == 'openai':
-            ai_response = generate_openai_reply(full_prompt, history, agent_config=agent_config)
+            ai_response = generate_openai_reply(system_instruction, history, current_message, agent_config=agent_config)
         elif provider == 'grok':
             logger.info("🔥 CALLING GROK PROVIDER...")
-            ai_response = generate_grok_reply(full_prompt, history, agent_config=agent_config)
+            ai_response = generate_grok_reply(system_instruction, history, current_message, agent_config=agent_config)
         elif provider == 'openrouter':
             logger.info("🌐 CALLING OPENROUTER PROVIDER...")
-            ai_response = generate_openrouter_reply(full_prompt, history, agent_config=agent_config)
+            ai_response = generate_openrouter_reply(system_instruction, history, current_message, agent_config=agent_config)
         elif provider == 'gemini':
             logger.info("♊ CALLING GEMINI PROVIDER...")
-            ai_response = generate_gemini_reply(full_prompt, history, agent_config=agent_config)
+            ai_response = generate_gemini_reply(system_instruction, history, current_message, agent_config=agent_config)
         else:
             logger.error(f"🚨 UNKNOWN PROVIDER '{provider}'. Defaulting to Gemini/OpenAI logic.")
             if 'gpt' in model_name.lower():
-                ai_response = generate_openai_reply(full_prompt, history, agent_config=agent_config)
+                ai_response = generate_openai_reply(system_instruction, history, current_message, agent_config=agent_config)
             else:
-                ai_response = generate_gemini_reply(full_prompt, history, agent_config=agent_config)
+                ai_response = generate_gemini_reply(system_instruction, history, current_message, agent_config=agent_config)
             
         logger.info(f"🔍 [Provider: {provider}] AI Raw Data: {ai_response}")
 
@@ -417,42 +484,37 @@ def get_ai_response(agent_config, full_prompt, history):
             'error': str(e)
         }
 
-def deliver_reply_to_n8n(data, reply, page_id, access_token):
-    """Deliver final reply — routes WhatsApp to Baileys, Facebook to n8n"""
-    import os
-    request_type = str(data.get('type', 'messenger'))
-
-    # ─── WhatsApp: সরাসরি Baileys-এ পাঠান ───────────────────────────────────
-    if request_type == 'whatsapp':
-        baileys_url = os.environ.get('BAILEYS_API_URL', 'http://newsmartagent-baileys:3001')
-        baileys_secret = os.environ.get('BAILEYS_API_SECRET', 'changeme123')
-        sender_id = str(data.get('sender_id', ''))
-
-        # phone format: 880XXXXXXXXX → 880XXXXXXXXX@s.whatsapp.net
-        to = sender_id if '@' in sender_id else f"{sender_id}@s.whatsapp.net"
-
-        payload = {"to": to, "message": str(reply)}
-        try:
-            logger.info(f"📲 Sending WhatsApp reply to {to} via Baileys")
-            response = requests.post(
-                f"{baileys_url}/send-message",
-                json=payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "x-api-secret": baileys_secret,
-                },
-                timeout=15,
-            )
-            if response.status_code != 200:
-                logger.error(f"Baileys error: {response.status_code} - {response.text}")
-                return False
-            return True
-        except Exception as e:
-            logger.error(f"Baileys delivery failure: {e}")
+def deliver_whatsapp_reply(data, reply):
+    """Deliver final reply for WhatsApp via n8n webhook"""
+    webhook_url = "https://n8n.newsmartagent.com/webhook/whatsapp-delivery"
+    final_target = data.get('delivery_jid') or data.get('sender_id', '')
+    payload = {
+        "to": str(final_target),
+        "delivery_jid": str(data.get('delivery_jid', '')),
+        "phone": str(data.get('sender_id', '')),
+        "sender_id": str(data.get('sender_id', '')),
+        "message": str(reply),
+        "reply": str(reply),
+        "type": "whatsapp",
+        "message_id": str(data.get('message_id', '')),
+        "sessionId": str(data.get('sessionId', ''))
+    }
+    try:
+        logger.info(f"🚀 [Logic] Routing WhatsApp reply to n8n delivery. Payload: {payload}")
+        response = requests.post(webhook_url, json=payload, timeout=15)
+        logger.info(f"📥 [Logic] n8n Delivery response: Status {response.status_code}, Body: {response.text}")
+        if response.status_code != 200:
+            logger.error(f"❌ [Logic] n8n WhatsApp delivery error: {response.status_code} - {response.text}")
             return False
+        return True
+    except Exception as e:
+        logger.error(f"❌ [Logic] n8n WhatsApp delivery critical failure: {e}")
+        return False
 
-    # ─── Facebook (Messenger / Comment): n8n-এ পাঠান ────────────────────────
+def deliver_facebook_reply(data, reply, page_id, access_token):
+    """Deliver final reply for Facebook (Messenger / Comment) via n8n webhook"""
     webhook_url = "https://n8n.newsmartagent.com/webhook/fb-comment-message-delivery"
+    request_type = str(data.get('type', 'messenger'))
     payload = {
         "sender_id": str(data.get('sender_id', '')),
         "reply": str(reply),
@@ -464,18 +526,18 @@ def deliver_reply_to_n8n(data, reply, page_id, access_token):
     }
 
     try:
-        logger.info(f"Sending payload to n8n: {payload}")
+        logger.info(f"Sending Facebook payload to n8n: {payload}")
         response = requests.post(
             webhook_url,
             json=payload,
             timeout=15
         )
         if response.status_code != 200:
-            logger.error(f"n8n returned error: {response.status_code} - {response.text}")
+            logger.error(f"n8n Facebook delivery error: {response.status_code} - {response.text}")
             return False
         return True
     except Exception as e:
-        logger.error(f"Webhook delivery critical failure: {e}")
+        logger.error(f"n8n Facebook delivery critical failure: {e}")
         return False
 
 def deliver_dashboard_reply(user_id, reply_text, message_id):
@@ -507,9 +569,10 @@ def deliver_dashboard_reply(user_id, reply_text, message_id):
         logger.error(f"Dashboard WebSocket delivery failure: {e}")
         return False
 
-def log_token_usage(agent_config, sender_id, ai_data, duration, request_type):
+def log_token_usage(agent_config, sender_id, ai_data, duration, request_type, platform=None):
     try:
         effective_model = agent_config.selected_model.model_id if agent_config.selected_model else agent_config.ai_model
+        platform_value = platform or request_type or agent_config.platform or "messenger"
         TokenUsageLog.objects.create(
             user=agent_config.user,
             ai_agent=agent_config,
@@ -518,6 +581,7 @@ def log_token_usage(agent_config, sender_id, ai_data, duration, request_type):
             input_tokens=ai_data.get('input_tokens', 0),
             output_tokens=ai_data.get('output_tokens', 0),
             total_tokens=ai_data.get('total_tokens', 0),
+            platform=platform_value,
             response_time=duration,
             success=ai_data.get('success', False),
             error_message=ai_data.get('error', ''),
@@ -578,3 +642,54 @@ def handle_public_comment_logic(data, agent_config, r):
             deliver_public_comment_reply(comment_id, reply_text, agent_config.access_token)
             return True, "public_reply_sent"
     return True, "continue"
+
+def handle_ai_response(agent_id, sender_id, message_text, platform='web_widget'):
+    """
+    Unified synchronous handler for direct AI responses (like Web Widget).
+    Handles context, RAG, AI call, token deduction, and logging.
+    """
+    start_time = time.time()
+    try:
+        agent_config = AgentAI.objects.get(id=agent_id)
+        user_profile = agent_config.user.profile
+        
+        # 1. Token Check
+        effective_model = agent_config.selected_model.model_id if agent_config.selected_model else agent_config.ai_model
+        if not check_token_availability(user_profile, effective_model):
+            return "Sorry, the agent has run out of tokens. Please contact the site owner."
+
+        # 2. Context & RAG
+        order_instr = get_order_instructions(agent_config.user)
+        sheet_ctx, extra_instr, query_vector = perform_rag_search(
+            agent_config, message_text, "", order_instr
+        )
+        system_instruction, history, current_msg = build_ai_context(
+            agent_config, sender_id, message_text, extra_instr, sheet_ctx, platform=platform
+        )
+
+        # 3. AI Call
+        ai_data = get_ai_response(agent_config, system_instruction, history, current_msg)
+        reply = ai_data.get('reply', 'System busy.')
+        success = ai_data.get('success', False)
+        total_tokens = ai_data.get('total_tokens', 0)
+
+        if success:
+            # 4. Token Deduction
+            deduct_user_tokens(user_profile, total_tokens, effective_model)
+            
+            # 5. Save Messages
+            save_message(agent_config, sender_id, message_text, 'user', platform=platform)
+            save_message(agent_config, sender_id, reply, 'assistant', tokens=total_tokens, platform=platform)
+            
+            # 6. Memory Update
+            handle_smart_memory_update(agent_config, sender_id, message_text)
+
+        # 7. Token Usage Log
+        duration = int((time.time() - start_time) * 1000)
+        log_token_usage(agent_config, sender_id, ai_data, duration, 'widget_direct', platform=platform)
+
+        return reply
+
+    except Exception as e:
+        logger.error(f"Error in handle_ai_response: {e}", exc_info=True)
+        return "I'm sorry, I'm having trouble processing your request right now."

@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import api from "@/lib/api";
+import Cropper from 'react-easy-crop';
+import getCroppedImg from './getCroppedImg';
 import { 
   FaUserEdit, FaSignOutAlt, FaEnvelope, FaPhone, 
   FaMapMarkerAlt, FaHashtag, FaGlobeAsia, FaTimes, 
@@ -19,6 +21,13 @@ export default function ProfilePage() {
   const [subscriptions, setSubscriptions] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [fetchingExtras, setFetchingExtras] = useState(true);
+
+  // States for image cropping
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+  const [showCropModal, setShowCropModal] = useState(false);
+  const [cropImage, setCropImage] = useState(null);
   
   const [formData, setFormData] = useState({
     name: "",
@@ -112,16 +121,118 @@ export default function ProfilePage() {
       <div className="bg-white border-b border-slate-200 py-10 px-6 mb-8 shadow-sm">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-8">
           <div className="relative group">
-            <div className="w-32 h-32 md:w-40 md:h-40 rounded-full bg-slate-100 flex items-center justify-center border-4 border-white shadow-xl overflow-hidden group-hover:bg-slate-200 transition-colors">
-              {user?.profile_image ? (
-                <img src={user.profile_image} alt="Profile" className="w-full h-full object-cover" />
+            <div 
+              className="w-32 h-32 md:w-40 md:h-40 rounded-full bg-slate-100 flex items-center justify-center border-4 border-white shadow-xl overflow-hidden group-hover:bg-slate-200 transition-all cursor-pointer relative"
+              onClick={() => document.getElementById('profile-photo-input').click()}
+            >
+              {user?.profile?.profile_photo ? (
+                <img src={user.profile.profile_photo} alt="Profile" className="w-full h-full object-cover" />
               ) : (
                 <span className="text-5xl font-black text-slate-300 italic">{user?.name?.[0]?.toUpperCase() || "U"}</span>
               )}
+              
+              {/* Overly on hover */}
+              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <FaUserEdit className="text-white text-2xl" />
+              </div>
             </div>
+
+            <input 
+              type="file" 
+              id="profile-photo-input" 
+              className="hidden" 
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => {
+                  setCropImage(reader.result);
+                  setShowCropModal(true);
+                };
+                e.target.value = null; // Reset input
+              }}
+            />
+
+            {/* Crop Modal */}
+            {showCropModal && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+                <div className="bg-white rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col h-[80vh] md:h-[600px]">
+                  <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-slate-50">
+                    <h3 className="text-lg font-black text-slate-900 uppercase tracking-widest">Adjust Photo</h3>
+                    <button onClick={() => setShowCropModal(false)} className="text-slate-400 hover:text-slate-900 transition-colors">
+                      <FaTimes size={20} />
+                    </button>
+                  </div>
+                  
+                  <div className="relative flex-1 bg-slate-100">
+                    <Cropper
+                      image={cropImage}
+                      crop={crop}
+                      zoom={zoom}
+                      aspect={1}
+                      onCropChange={setCrop}
+                      onCropComplete={(croppedArea, croppedAreaPixels) => {
+                        setCroppedAreaPixels(croppedAreaPixels)
+                      }}
+                      onZoomChange={setZoom}
+                    />
+                  </div>
+
+                  <div className="p-6 bg-white flex items-center justify-between gap-4">
+                    <div className="flex-1">
+                      <input
+                        type="range"
+                        value={zoom}
+                        min={1}
+                        max={3}
+                        step={0.1}
+                        aria-labelledby="Zoom"
+                        onChange={(e) => setZoom(e.target.value)}
+                        className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                      />
+                    </div>
+                    <div className="flex gap-3">
+                      <button 
+                        onClick={() => setShowCropModal(false)}
+                        className="px-6 py-2.5 text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        onClick={async () => {
+                          const lt = toast.loading("Saving cropped photo...");
+                          try {
+                            const croppedBlob = await getCroppedImg(cropImage, croppedAreaPixels);
+                            const formData = new FormData();
+                            formData.append('profile_photo', croppedBlob, 'profile.jpg');
+
+                            const res = await api.patch("/users/update-me/", formData, {
+                              headers: { 'Content-Type': 'multipart/form-data' }
+                            });
+                            toast.success("Profile updated!", { id: lt });
+                            setUser(res.data);
+                            setShowCropModal(false);
+                          } catch (error) {
+                            console.error(error);
+                            toast.error("Crop failed. Try again.", { id: lt });
+                          }
+                        }}
+                        className="px-8 py-2.5 bg-indigo-600 text-white rounded-2xl text-sm font-black uppercase tracking-widest hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all"
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <button 
               onClick={() => setIsEditModalOpen(true)}
               className="absolute bottom-1 right-1 bg-indigo-600 text-white p-3 rounded-full shadow-lg hover:bg-slate-900 transition-all active:scale-90"
+              title="Edit Profile Details"
             >
               <FaUserEdit size={16} />
             </button>
@@ -140,6 +251,25 @@ export default function ProfilePage() {
                   <FaCopy size={12} />
                 </button>
               </div>
+              
+              {user?.profile?.profile_photo && (
+                <button 
+                  onClick={async () => {
+                    if(!window.confirm("Delete profile photo?")) return;
+                    const lt = toast.loading("Removing photo...");
+                    try {
+                      const res = await api.patch("/users/update-me/", { profile_photo: null });
+                      toast.success("Photo removed", { id: lt });
+                      setUser(res.data);
+                    } catch (err) {
+                      toast.error("Failed to remove photo", { id: lt });
+                    }
+                  }}
+                  className="text-[9px] font-black text-rose-500 uppercase tracking-widest hover:underline"
+                >
+                  Delete Photo
+                </button>
+              )}
             </div>
           </div>
 
@@ -232,7 +362,7 @@ export default function ProfilePage() {
                   <FaShieldAlt className="text-indigo-400" /> Security Node
                 </h3>
                 <p className="text-[10px] font-bold text-slate-400 leading-relaxed mb-8 uppercase tracking-wider">
-                  Your identity is protected by Smart Agent end-to-end encryption. Current Health: <span className="text-emerald-400">{analytics?.summary?.success_rate || "99.9"}%</span>
+                  Your identity is protected by New Smart Agent end-to-end encryption. Current Health: <span className="text-emerald-400">{analytics?.summary?.success_rate || "99.9"}%</span>
                 </p>
                 <div className="space-y-4">
                    <button 
@@ -246,7 +376,7 @@ export default function ProfilePage() {
                    </button>
                    <button 
                     onClick={() => {
-                      if(window.confirm("Are you sure you want to log out of Smart Agent?")) {
+                      if(window.confirm("Are you sure you want to log out of New Smart Agent?")) {
                         api.post('/users/logout/').finally(() => window.location.href = '/signup');
                       }
                     }}

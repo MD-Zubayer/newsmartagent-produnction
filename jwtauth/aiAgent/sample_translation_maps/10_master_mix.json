@@ -1,0 +1,17 @@
+[
+  {"source": "দাম", "target": "price"},
+  {"source": "দাম কত", "target": "price"},
+  {"source": "koto", "target": "price"},
+  {"source": "অর্ডার", "target": "order"},
+  {"source": "অর্ডার করতে চাই", "target": "order"},
+  {"source": "ডেলিভারি", "target": "delivery"},
+  {"source": "ডেলিভারি চার্জ", "target": "delivery_charge"},
+  {"source": "বিকাশ", "target": "bkash"},
+  {"source": "নগদ", "target": "nagad"},
+  {"source": "সাপোর্ট", "target": "support"},
+  {"source": "রিফান্ড", "target": "refund"},
+  {"source": "অফার", "target": "offer"},
+  {"source": "ডিসকাউন্ট", "target": "discount"},
+  {"source": "আসসালামু আলাইকুম", "target": "assalamualaikum"},
+  {"source": "সালাম", "target": "assalamualaikum"}
+]

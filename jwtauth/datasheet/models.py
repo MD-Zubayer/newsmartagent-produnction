@@ -10,6 +10,14 @@ class Spreadsheet(models.Model):
 
     rows = models.PositiveIntegerField(default=20)
     cols = models.PositiveIntegerField(default=20)
+    
+    # 🔥 নতুুন যুক্ত করা হয়েছে (Scope Control)
+    KNOWLEDGE_SCOPE = [
+        ('global', 'Global (All Agents)'),
+        ('agent_specific', 'Agent Specific'),
+    ]
+    scope = models.CharField(max_length=20, choices=KNOWLEDGE_SCOPE, default='global')
+    agent = models.ForeignKey('aiAgent.AgentAI', on_delete=models.SET_NULL, null=True, blank=True, related_name='spreadsheets')
 
     data = models.JSONField(default=dict,help_text="Stores cell values as {'0-1': 'Hello'}", blank=True, null=True)
     colors = models.JSONField(default=dict, help_text="Stores cell colors as {'0-1': '#ffffff'}", blank=True, null=True)

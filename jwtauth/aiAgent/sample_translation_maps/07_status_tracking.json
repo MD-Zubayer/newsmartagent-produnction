@@ -1,0 +1,12 @@
+{
+  "অর্ডার স্ট্যাটাস": "order_status",
+  "স্ট্যাটাস": "status",
+  "ট্র্যাক": "track",
+  "ট্র্যাকিং": "tracking",
+  "কোথায়": "where",
+  "পাইনি": "not_received",
+  "বিলম্ব": "delay",
+  "দেরি": "delay",
+  "pending": "pending",
+  "delivered": "delivered"
+}

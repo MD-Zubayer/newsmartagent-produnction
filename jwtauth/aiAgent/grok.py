@@ -1,7 +1,7 @@
 from openai import OpenAI
 from django.conf import settings
 
-def generate_grok_reply(system_prompt, messages, agent_config):
+def generate_grok_reply(system_prompt, messages, current_message, agent_config):
     """
     xAI Grok handler using OpenAI-compatible API.
     """
@@ -27,12 +27,16 @@ def generate_grok_reply(system_prompt, messages, agent_config):
                 'role': m['role'],
                 'content': m['content']
             })
+        
+        # Add current message
+        formatted_messages.append({'role': 'user', 'content': current_message})
 
+        ai_settings = agent_config.get_settings
         response = client.chat.completions.create(
             model=model_name,
             messages=formatted_messages,
-            temperature=agent_config.temperature,
-            max_tokens=agent_config.max_tokens
+            temperature=ai_settings.temperature,
+            max_tokens=ai_settings.max_tokens
         )
 
         reply = response.choices[0].message.content

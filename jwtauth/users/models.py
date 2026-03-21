@@ -13,6 +13,7 @@ import phonenumbers
 from phonenumbers import geocoder
 from .validators import validate_international_phone
 from aiAgent.models import AIProviderModel
+from minio_management.storages import ProfileStorage
 # Create your models here.
 
 
@@ -61,6 +62,8 @@ class User(AbstractUser):
     )
     
     is_verified = models.BooleanField(default=False)
+    two_factor_enabled = models.BooleanField(default=False)
+    two_factor_secret = models.CharField(max_length=32, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     USERNAME_FIELD = 'email'
@@ -110,6 +113,7 @@ class Profile(models.Model):
 
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
+    profile_photo = models.ImageField(upload_to='photos/', storage=ProfileStorage(), null=True, blank=True)
     id_type = models.CharField(max_length=10, choices=ID_TYPE_CHOICES)
     unique_id = models.CharField(max_length=10, unique=True)
     word_balance = models.PositiveBigIntegerField(default=0)
@@ -117,6 +121,7 @@ class Profile(models.Model):
     acount_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     otp_code = models.CharField(max_length=6, blank=True, null=True)
     otp_created_at = models.DateTimeField(blank=True, null=True)
+    two_factor_enabled = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -322,6 +327,7 @@ class CustomerOrder(models.Model):
     upazila = models.CharField(max_length=30, blank=True, null=True)
     address = models.TextField()
     product_name = models.CharField(max_length=255, null=True, blank=True)
+    price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     extra_info = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=20,choices=STATUS_CHOICES, default='pending')
     created_at = models.DateTimeField(auto_now_add=True)

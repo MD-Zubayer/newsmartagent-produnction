@@ -1,0 +1,115 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static %}
+
+{% block extrahead %}
+{{ block.super }}
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+    .cache-container { padding: 24px; font-family: 'Inter', sans-serif; background: #fdf2f8; min-height: 80vh; border-radius: 20px; margin: 10px; }
+    .card { background: white; border-radius: 24px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); padding: 24px; margin-bottom: 32px; border: 1px solid rgba(219, 39, 119, 0.1); }
+    .title { font-size: 28px; font-weight: 800; color: #1e293b; margin-bottom: 24px; display: flex; align-items: center; gap: 12px; letter-spacing: -0.025em; font-style: italic; text-transform: uppercase; border-left: 6px solid #db2777; padding-left: 15px; }
+    .form-group { margin-bottom: 20px; }
+    .form-group label { display: block; font-weight: 800; font-size: 11px; color: #94a3b8; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.1em; }
+    .form-control { width: 100%; padding: 12px 16px; border: 2px solid #f1f5f9; border-radius: 12px; font-size: 14px; font-weight: 600; outline: none; transition: all 0.2s; }
+    .form-control:focus { border-color: #f9a8d4; box-shadow: 0 0 0 3px rgba(249, 168, 212, 0.2); }
+    .btn { padding: 12px 24px; border-radius: 12px; font-weight: 800; cursor: pointer; border: none; transition: all 0.2s; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; display: inline-flex; align-items: center; gap: 8px; justify-content: center; }
+    .btn-primary { background: linear-gradient(135deg, #db2777 0%, #be185d 100%); color: white; box-shadow: 0 4px 6px -1px rgba(190, 24, 93, 0.3); }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 10px 15px -3px rgba(190, 24, 93, 0.4); }
+    .btn-danger { background: #fee2e2; color: #dc2626; padding: 8px 16px; font-size: 10px; border: 1px solid #fecaca; }
+    .btn-danger:hover { background: #ef4444; color: white; transform: scale(1.05); }
+    
+    .cache-table { width: 100%; border-collapse: separate; border-spacing: 0 8px; margin-top: 10px; }
+    .cache-table th { text-align: left; padding: 12px 16px; background: transparent; color: #94a3b8; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.15em; }
+    .cache-table tr { transition: all 0.2s; }
+    .cache-table td { padding: 16px; background: white; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; }
+    .cache-table td:first-child { border-left: 1px solid #f1f5f9; border-top-left-radius: 16px; border-bottom-left-radius: 16px; }
+    .cache-table td:last-child { border-right: 1px solid #f1f5f9; border-top-right-radius: 16px; border-bottom-right-radius: 16px; }
+    .cache-table tr:hover td { background: #fff1f2; border-color: #ffe4e6; }
+    
+    .msg-text { font-weight: 700; color: #334155; font-size: 14px; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .msg-hash { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: #94a3b8; background: #f8fafc; padding: 4px 8px; border-radius: 6px; }
+    .badge { padding: 4px 10px; border-radius: 10px; font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; gap: 4px; }
+    .badge-freq { background: #fdf2f8; color: #db2777; border: 1px solid #fbcfe8; }
+    
+    .empty-state { padding: 60px; text-align: center; color: #94a3b8; }
+    .empty-state span { font-size: 48px; display: block; margin-bottom: 16px; opacity: 0.5; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cache-container">
+    <div class="title">
+        <span>⚡</span> Manage Intelligence Cache: {{ agent.name }}
+    </div>
+
+    <!-- Quick Delete by Text -->
+    <div class="card">
+        <label style="display: block; font-weight: 800; font-size: 11px; color: #db2777; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.1em;">Targeted Memory Purge</label>
+        <p style="font-size:13px; color:#64748b; margin-bottom:20px; font-weight: 500;">Enter the exact message content to force the AI to rethink its answer next time. This will clear the entry from all agent-specific and sender-specific cache layers.</p>
+        <form method="post" style="display: flex; gap: 12px; align-items: stretch;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete_by_text">
+            <input type="text" name="text" class="form-control" placeholder="Type or paste the message content here..." required>
+            <button type="submit" class="btn btn-primary" style="white-space: nowrap;">
+                <span>🔥</span> Purge Memory
+            </button>
+        </form>
+    </div>
+
+    <!-- Top Messages List -->
+    <div class="card" style="padding-top: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 0 10px;">
+             <h3 style="font-size:14px; font-weight: 900; color:#1e293b; text-transform: uppercase; letter-spacing: 0.05em;">Hot Cache Entries (Top 30)</h3>
+             <span style="font-size: 10px; font-weight: 800; color: #94a3b8; background: #f1f5f9; padding: 4px 12px; border-radius: 20px;">LAST 30 DAYS</span>
+        </div>
+        
+        <table class="cache-table">
+            <thead>
+                <tr>
+                    <th width="120">Impact</th>
+                    <th>Message Content</th>
+                    <th width="150">Identifier (Hash)</th>
+                    <th style="text-align: right;" width="100">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for msg in top_messages %}
+                <tr>
+                    <td>
+                        <span class="badge badge-freq">
+                            <span style="font-size: 12px;">📊</span> {{ msg.freq }} Hits
+                        </span>
+                    </td>
+                    <td>
+                        <div class="msg-text" title="{{ msg.text }}">{{ msg.text }}</div>
+                    </td>
+                    <td>
+                        <div class="msg-hash">{{ msg.hash|truncatechars:12 }}</div>
+                    </td>
+                    <td style="text-align: right;">
+                        <form method="post" onsubmit="return confirm('WARNING: You are about to permanently delete this intelligence entry. The AI will generate a fresh response upon next request. Proceed?');">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="delete_by_hash">
+                            <input type="hidden" name="msg_hash" value="{{ msg.hash }}">
+                            <button type="submit" class="btn btn-danger">
+                                <span>🗑️</span> Flush
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4">
+                        <div class="empty-state">
+                            <span>🧊</span>
+                            <h4 style="margin:0; font-weight: 800; color: #cbd5e1;">CACHE IS EMPTY</h4>
+                            <p style="margin-top:5px; font-size:12px;">This agent hasn't cached any responses in the last 30 days.</p>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

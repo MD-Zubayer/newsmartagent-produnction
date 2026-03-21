@@ -3,25 +3,27 @@
 from celery import shared_task
 import re, json, time, uuid, logging, hashlib, redis, requests
 from aiAgent.models import AgentAI
+from django.db.models import Q
 from chat.services import save_message
 from aiAgent.memory_handler import handle_smart_memory_update
 from aiAgent.cache.hybrid_similarity import (
     get_cached_reply, set_cached_reply, fuzzy_match,
     get_global_cached_reply, set_global_cached_reply, global_fuzzy_match,
     get_sender_cached_reply, set_sender_cached_reply,
+    normalize_for_cache,
 )
 from aiAgent.cache.ranking import incr_message_frequency
 from aiAgent.cache.metrics import incr_counter
 from aiAgent.cache.cluster import get_cluster_map
-from aiAgent.cache.utils import normalize_text
 from chat.utils import get_smart_post_context
 
 from aiAgent.business_logic.logic_handler import (
     is_duplicate_or_outdated, acquire_user_lock, get_order_instructions,
     perform_rag_search, build_ai_context, get_ai_response,
-    log_token_usage, deduct_user_tokens, deliver_reply_to_n8n, handle_public_comment_logic,
+    log_token_usage, deduct_user_tokens, deliver_whatsapp_reply, deliver_facebook_reply, handle_public_comment_logic,
     check_token_availability, deliver_dashboard_reply
 )
+from webhooks.utils import fetch_messenger_profile
 from aiAgent.cache.redis_vector import (
     save_vector_embedding,
     search_similar_vectors
@@ -108,33 +110,188 @@ def process_ai_reply_task(self, data):
 
     start_time = time.time()
 
-    sender_id = data.get('sender_id')
+    # Extract sender_id: from (WhatsApp JID), phone (WA), or sender_id (FB)
+    logger.info(f"🔍 [Task] Raw data received: {data}")
+    sender_id = data.get('sender_id') or data.get('from') or data.get('phone')
+    if sender_id and isinstance(sender_id, str) and '@' in sender_id:
+        if '@lid' in sender_id:
+            # Preserve LID
+            pass
+        else:
+            sender_id = sender_id.split('@')[0]
+    data['sender_id'] = sender_id  # Ensure it's available for delivery functions
+    logger.info(f"🔍 [Task] Extracted sender_id: {sender_id}")
     page_id = data.get('page_id')
-    request_type = data.get('type')
+    request_type = data.get('type') or data.get('platform')
     if not request_type:
-        request_type = 'messenger'
-    text = data.get('comment_text') if request_type == 'facebook_comment' else data.get('message')
+        if data.get('receiver') or data.get('sessionId') or data.get('phone'):
+            request_type = 'whatsapp'
+        else:
+            request_type = 'messenger'
+
+    # WhatsApp: normalize page_id to phone/session for lookup
+    if request_type == 'whatsapp':
+        cleaned_session = None
+        if data.get('sessionId'):
+            cleaned_session = str(data.get('sessionId')).replace('user_', '')
+        
+        page_candidates = [
+            data.get('page_id'),
+            data.get('pageId'),
+            data.get('receiver'),
+            data.get('to'),
+            data.get('phone'),
+            data.get('sessionId'),
+            cleaned_session,
+        ]
+
+        best_candidate = None
+        for candidate in page_candidates:
+            if not candidate: continue
+            cand_str = str(candidate).strip()
+            if cand_str.lower() in ['undefined', 'null', 'none', '']: continue
+            
+            if not best_candidate:
+                best_candidate = cand_str
+            
+            if best_candidate.startswith('user_') and any(char.isdigit() for char in cand_str):
+                 best_candidate = cand_str
+                 if cand_str[0].isdigit(): break
+
+        if best_candidate:
+            page_id = best_candidate
+
+    if request_type == 'facebook_comment':
+        text = data.get('comment_text')
+    else:
+        # messenger or whatsapp
+        text = data.get('message')
     msg_id = data.get('message_id')
     incoming_ts = data.get('timestamp')
 
     if not all([sender_id, text, page_id]):
-        logger.error(f"Aborting: Missing core data in task. sender: {sender_id}, text: {text}")
+        logger.error(f"Aborting: Missing core data in task. sender: {sender_id}, text: {text}, page: {page_id}")
         return
 
     # ২. এজেন্ট ও প্রোফাইল লোড
+    agent_config = None
     try:
-        agent_config = AgentAI.objects.filter(
-            page_id=page_id, is_active=True
-        ).order_by('-id').first()
+        if request_type == 'web_widget':
+            agent_config = AgentAI.objects.filter(
+                is_active=True,
+                widget_key=data.get('widget_key'),
+                platform='web_widget'
+            ).first()
+            lookup_ids = []
+        elif request_type == 'whatsapp':
+            # Priority: Bot's phone number, excluding sender or generic session strings
+            candidates = [
+                page_id,
+                data.get('receiver'),
+                data.get('phone'),
+                data.get('to'),
+            ]
+            lookup_ids = []
+            for c in candidates:
+                if not c: continue
+                val = str(c).split('@')[0]
+                lookup_ids.append(val)
+                if val.isdigit() and len(val) > 7:
+                    lookup_ids.append(val)
+        else:
+            lookup_ids = [str(page_id)]
+
+        lookup_ids = list(set([i for i in lookup_ids if i]))
+
         if not agent_config:
-            logger.error(f'Error: No active agent found for page_id {page_id}')
+            # Check both page_id and number fields for WhatsApp
+            if request_type == 'whatsapp':
+                agent_config = AgentAI.objects.filter(
+                    Q(page_id__in=lookup_ids) | Q(number__in=lookup_ids),
+                    is_active=True,
+                    platform='whatsapp'
+                ).order_by('-id').first()
+            else:
+                agent_config = AgentAI.objects.filter(
+                    is_active=True,
+                    page_id__in=lookup_ids
+                ).order_by('-id').first()
+
+        # Fallback for WhatsApp: Try lookup by user_id if we have it in sessionId
+        if not agent_config and request_type == 'whatsapp' and data.get('sessionId'):
+            try:
+                u_id = str(data.get('sessionId')).replace('user_', '')
+                if u_id.isdigit():
+                    agent_config = AgentAI.objects.filter(
+                        user_id=u_id,
+                        platform='whatsapp',
+                        is_active=True
+                    ).order_by('-id').first()
+            except:
+                pass
+
+        if not agent_config:
+            logger.error(f'❌ [Task] No active agent found for identifiers {lookup_ids if lookup_ids else [page_id]}. identifiers checked: {lookup_ids}')
             return
+        logger.info(f"✅ [Task] Agent found: ID {agent_config.id}, User {agent_config.user.email}")
+        # Use matched agent page_id for downstream operations/cache keys
+        if request_type == 'web_widget':
+            page_id = f"widget_{agent_config.widget_key}"
+        else:
+            page_id = agent_config.page_id
+            
         user_profile = agent_config.user.profile
 
         from users.models import FacebookPage
-        fb_page = FacebookPage.objects.filter(page_id=page_id, is_active=True).first()
+        fb_page = FacebookPage.objects.filter(page_id=page_id, is_active=True).first() if page_id else None
         effective_access_token = fb_page.access_token if fb_page else agent_config.access_token
 
+        # ── WhatsApp Message Logging (Incoming) ──
+        wa_msg_obj = None
+        if request_type == 'whatsapp':
+            try:
+                from openwa.models import WhatsAppInstance, WhatsAppMessage
+                wa_instance, _ = WhatsAppInstance.objects.get_or_create(user=agent_config.user)
+                wa_msg_obj = WhatsAppMessage.objects.create(
+                    instance=wa_instance,
+                    direction='incoming',
+                    from_phone=sender_id,
+                    message_text=text,
+                    message_id=msg_id or '',
+                    push_name=data.get('pushName', '')
+                )
+            except Exception as e:
+                logger.error(f"WhatsApp Logging Error: {e}")
+
+        # ── Contact Sync Logic (Auto-create or Update) ──
+        from aiAgent.models import Contact
+        # Check both camelCase (from Baileys) and snake_case (often from n8n)
+        incoming_push_name = data.get('pushName') or data.get('push_name')
+        contact_name = incoming_push_name or data.get('name')
+        
+        # If Messenger and name is missing, try fetching it from Facebook Graph API
+        if not contact_name and request_type == 'messenger' and effective_access_token:
+            contact_name = fetch_messenger_profile(sender_id, effective_access_token)
+
+        Contact.objects.update_or_create(
+            agent=agent_config,
+            identifier=sender_id,
+            platform=request_type if request_type in ['whatsapp', 'messenger', 'web_widget'] else 'messenger',
+            defaults={
+                'name': contact_name if contact_name else None,
+                'push_name': incoming_push_name if incoming_push_name else None
+            }
+        )
+
+        # ── Auto-Reply Enable/Disable Check ──
+        contact = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
+        if contact and not contact.is_auto_reply_enabled:
+            logger.info(f"🚫 Auto-reply is DISABLED for contact {sender_id} (Agent: {agent_config.id}). Skipping AI response.")
+            if msg_id:
+                r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                r.delete(f'processing_msg:{msg_id}')
+            if request_type == 'web_widget': return "Auto-reply is currently disabled by the agent."
+            return
     except Exception as e:
         logger.error(f'Error: Agent not found for page_id {page_id} - {e}')
         return
@@ -182,12 +339,50 @@ def process_ai_reply_task(self, data):
         cached_res = get_cached_reply(page_id, msg_text=text)
         if cached_res:
             cache_hit_scope = "agent_exact"
+        
+        # --- Layer 1.5: Shared Agent Exact ---
+        if not cached_res:
+            shared_agents = agent_config.get_settings.shared_cache_agents.all()
+            for shared_agent in shared_agents:
+                shared_page_id = shared_agent.page_id
+                potential_res = get_cached_reply(shared_page_id, msg_text=text)
+                if potential_res:
+                    msg_hash = potential_res.get('msg_hash')
+                    # এক্সক্লুশন চেক (Redis Set)
+                    exclusion_key = f"agent:{shared_page_id}:sharing_exclusion_set"
+                    r_db4 = get_redis_client(db=4)
+                    if not r_db4.sismember(exclusion_key, msg_hash):
+                        cached_res = potential_res
+                        cache_hit_scope = "shared_agent_exact"
+                        # Track this hit for the current agent's ranking
+                        incr_message_frequency(page_id, msg_hash)
+                        logger.info(f"🔗 SHARED CACHE HIT (Exact) from Agent {shared_agent.name} for '{text[:30]}'")
+                        break
 
         # --- Layer 2: Agent Fuzzy ---
         if not cached_res:
             cached_res = fuzzy_match(page_id, text, threshold=80)
             if cached_res:
                 cache_hit_scope = "agent_fuzzy"
+            
+            # --- Layer 2.5: Shared Agent Fuzzy ---
+            if not cached_res:
+                shared_agents = agent_config.get_settings.shared_cache_agents.all()
+                for shared_agent in shared_agents:
+                    shared_page_id = shared_agent.page_id
+                    potential_res = fuzzy_match(shared_page_id, text, threshold=80)
+                    if potential_res:
+                        msg_hash = potential_res.get('msg_hash')
+                        # এক্সক্লুশন চেক
+                        exclusion_key = f"agent:{shared_page_id}:sharing_exclusion_set"
+                        r_db4 = get_redis_client(db=4)
+                        if not r_db4.sismember(exclusion_key, msg_hash):
+                            cached_res = potential_res
+                            cache_hit_scope = "shared_agent_fuzzy"
+                            # Track this hit for the current agent too
+                            incr_message_frequency(page_id, msg_hash)
+                            logger.info(f"🔗 SHARED CACHE HIT (Fuzzy) from Agent {shared_agent.name} for '{text[:20]}'")
+                            break
 
         # --- Layer 3: Global Exact ---
         if not cached_res:
@@ -210,7 +405,7 @@ def process_ai_reply_task(self, data):
         # --- Layer 6: Cluster Match ---
         if not cached_res:
             cluster_map = get_cluster_map(page_id)
-            normalized = normalize_text(text)
+            normalized = normalize_for_cache(text)
             msg_hash = hashlib.md5(normalized.encode()).hexdigest()
             cluster_id = cluster_map.get(msg_hash)
             if cluster_id:
@@ -221,14 +416,16 @@ def process_ai_reply_task(self, data):
 
         # --- Layer 7: Vector Similarity ---
         if not cached_res:
-            from webhooks.constants import embedding_skip_keyword
+            from aiAgent.models import SmartKeyword
             from embedding.models import SpreadsheetKnowledge
 
             has_knowledge = SpreadsheetKnowledge.objects.filter(user=agent_config.user).exists()
-            skip_margin = 10
+            skip_margin = 6
             skip_embedding = False
             text_len = len(text)
-            for kw in embedding_skip_keyword:
+            
+            db_skip_keywords = SmartKeyword.objects.filter(category='embedding_skip').values_list('text', flat=True)
+            for kw in db_skip_keywords:
                 if kw.lower() in text.lower() and abs(text_len - len(kw)) <= skip_margin:
                     skip_embedding = True
                     break
@@ -261,19 +458,39 @@ def process_ai_reply_task(self, data):
             logger.info(f"⚡ CACHE HIT [{cache_hit_scope}] → '{text[:30]}'")
             send_cache_update_ws(agent_config.user.id, page_id)
 
-            save_message(agent_config, sender_id, text, 'user')
-            save_message(agent_config, sender_id, reply, 'assistant', tokens=0)
+            save_message(agent_config, sender_id, text, 'user', platform=agent_config.platform)
+            save_message(agent_config, sender_id, reply, 'assistant', tokens=0, platform=agent_config.platform)
             handle_smart_memory_update(agent_config, sender_id, text)
 
             clean_reply = reply.strip()
-            if request_type == 'dashboard':
+            # Force platform-based routing: if agent is WhatsApp, send via WhatsApp delivery
+            if agent_config.platform == 'whatsapp':
+                request_type = 'whatsapp'
+
+            # Force platform-based routing: if agent is WhatsApp, send via WhatsApp delivery
+            if agent_config.platform == 'whatsapp':
+                request_type = 'whatsapp'
+
+            if request_type == 'web_widget':
+                if msg_id:
+                    r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                    r.delete(f'processing_msg:{msg_id}')
+                return clean_reply
+            elif request_type == 'dashboard':
                 delivered = deliver_dashboard_reply(agent_config.user.id, clean_reply, msg_id)
+            elif request_type == 'whatsapp':
+                delivered = deliver_whatsapp_reply(data, clean_reply)
             else:
-                delivered = deliver_reply_to_n8n(data, clean_reply, page_id, effective_access_token)
+                delivered = deliver_facebook_reply(data, clean_reply, page_id, effective_access_token)
 
             if delivered and msg_id:
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)
                 r.delete(f'processing_msg:{msg_id}')
+
+            # ── Update WhatsApp Log (Cache Hit) ──
+            if wa_msg_obj:
+                wa_msg_obj.ai_reply = reply
+                wa_msg_obj.save()
 
             return  # 🔥 HARD STOP — AI call skip
 
@@ -287,28 +504,28 @@ def process_ai_reply_task(self, data):
 
             if not check_token_availability(user_profile, effective_model):
                 logger.info(f">>> User {user_profile.user.email} has no tokens for model {effective_model}. Aborting.")
+                if request_type == 'web_widget': return "Sorry, token limit reached for this agent."
                 return
 
             order_instr = get_order_instructions(agent_config.user)
             sheet_ctx, extra_instr, query_vector = perform_rag_search(
                 agent_config, text, post_context, order_instr, existing_vector=query_vector
             )
-            full_prompt, history = build_ai_context(agent_config, sender_id, text, extra_instr, sheet_ctx)
+            system_instruction, history, current_msg = build_ai_context(agent_config, sender_id, text, extra_instr, sheet_ctx, platform=request_type)
 
             # ---- Cache Classification Instruction (JSON suffix) ----
-            # logic_handler.py-তে কোনো পরিবর্তন নেই। Prompt suffix এখানেই যোগ হয়।
             classify_instruction = (
-                'Return ONLY a valid JSON object: {"reply": "...", "cache_type": "..."}. '
-                'Use "no_cache" for context-dependent words (it/this/that/ঐটা/সেটা) or very specific conversation flow. '
+                '\n\nReturn ONLY a valid JSON object: {"reply": "...", "cache_type": "..."}. '
+                'Use "no_cache" for context-dependent words (it/this/that/ঐটা/সেটা) or very specific conversation flow.'
                 'Use "sender_specific" for user-only info (my,amar,etc any language, name/order/status/আমি/আমার/ব্যক্তিগত তথ্য). '
-                'Use "agent_specific" ONLY for information extracted from [KNOWLEDGE BASE DATA] or business-specific details like specific products/prices. '
-                'Use "global" for general knowledge, universal greetings (Salam/Hi), and any answer based on your pre-trained general intelligence rather than the provided knowledge base.'
+                'Use "agent_specific" for information extracted from [KNOWLEDGE BASE DATA], business details like products/prices, or IF ASKED ABOUT YOUR IDENTITY (who you are, what you do). '
+                'Use "global" ONLY for general world facts, universal greetings (Salam/Hi), or general knowledge. NEVER use "global" for identity, personal info, or specific business details.'
                 'STRICT: No markdown blocks, no preamble, and ensure JSON syntax is perfect.'
             )
-            full_prompt = full_prompt + classify_instruction
+            system_instruction = system_instruction + classify_instruction
 
             # --- AI Call ---
-            ai_data = get_ai_response(agent_config, full_prompt, history)
+            ai_data = get_ai_response(agent_config, system_instruction, history, current_msg)
 
             # ---- Parse JSON from AI reply ----
             raw_ai_reply = ai_data.get('reply', '')
@@ -394,29 +611,42 @@ def process_ai_reply_task(self, data):
                     from aiAgent.cache.cluster import assign_to_cluster
                     from aiAgent.cache.hybrid_similarity import find_best_cached_hash
                     best_cluster_hash = find_best_cached_hash(page_id, text, threshold=70)
-                    target_hash = best_cluster_hash if best_cluster_hash else hashlib.md5(normalize_text(text).encode()).hexdigest()
+                    target_hash = best_cluster_hash if best_cluster_hash else hashlib.md5(normalize_for_cache(text).encode()).hexdigest()
                     assign_to_cluster(page_id, text, target_hash)
                 except Exception as e:
                     logger.error(f"Failed to assign cluster: {e}")
 
                 # ---- Vector Embedding Save (unchanged) ----
                 if query_vector:
-                    msg_hash_for_vector = hashlib.md5(normalize_text(text).encode()).hexdigest()
+                    msg_hash_for_vector = hashlib.md5(normalize_for_cache(text).encode()).hexdigest()
                     save_vector_embedding(page_id, text, msg_hash_for_vector, query_vector)
                     logger.info(f"✅ Saved vector embedding for '{text[:30]}'")
 
-                save_message(agent_config, sender_id, text, 'user')
-                save_message(agent_config, sender_id, reply, 'assistant', tokens=total_tokens)
+                save_message(agent_config, sender_id, text, 'user', platform=agent_config.platform)
+                save_message(agent_config, sender_id, reply, 'assistant', tokens=total_tokens, platform=agent_config.platform)
                 handle_smart_memory_update(agent_config, sender_id, text)
+
+                # ── Update WhatsApp Log (AI Call) ──
+                if wa_msg_obj:
+                    wa_msg_obj.ai_reply = reply
+                    wa_msg_obj.save()
 
             duration = int((time.time() - start_time) * 1000)
             log_token_usage(agent_config, sender_id, ai_data, duration, request_type)
             clean_reply = reply.strip()
             
-            if request_type == 'dashboard':
+            if request_type == 'web_widget':
+                delivered = True
+                if msg_id:
+                    r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                    r.delete(f'processing_msg:{msg_id}')
+                return clean_reply
+            elif request_type == 'dashboard':
                 delivered = deliver_dashboard_reply(agent_config.user.id, clean_reply, msg_id)
+            elif request_type == 'whatsapp':
+                delivered = deliver_whatsapp_reply(data, clean_reply)
             else:
-                delivered = deliver_reply_to_n8n(data, clean_reply, page_id, effective_access_token)
+                delivered = deliver_facebook_reply(data, clean_reply, page_id, effective_access_token)
 
             if delivered and msg_id:
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)

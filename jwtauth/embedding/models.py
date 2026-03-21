@@ -32,6 +32,15 @@ class SpreadsheetKnowledge(models.Model):
 class Document(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='documents')
     title = models.CharField(max_length=255, default='Untitled Document')
+    
+    # 🔥 নতুুন যুক্ত করা হয়েছে (Scope Control)
+    KNOWLEDGE_SCOPE = [
+        ('global', 'Global (All Agents)'),
+        ('agent_specific', 'Agent Specific'),
+    ]
+    scope = models.CharField(max_length=20, choices=KNOWLEDGE_SCOPE, default='global')
+    agent = models.ForeignKey('aiAgent.AgentAI', on_delete=models.SET_NULL, null=True, blank=True, related_name='knowledge_documents')
+
     full_content = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

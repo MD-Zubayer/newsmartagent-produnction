@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 // ⚡ PiggyBank আইকন ইম্পোর্ট করা হলো
-import { Table, Search, AlertTriangle, Zap, BarChart3, Loader2, PiggyBank, Trash2, Clock } from "lucide-react";
+import { Table, Search, AlertTriangle, Zap, BarChart3, Loader2, PiggyBank, Trash2, Clock, Share2, Unlock, Lock } from "lucide-react";
 import api from "@/lib/api";
 import { toast } from "react-hot-toast";
 
@@ -14,12 +14,14 @@ export default function RankingReportPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [isDeleting, setIsDeleting] = useState(null);
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, msg_hash: null, isProcessing: false });
   const [isUpdatingScope, setIsUpdatingScope] = useState(null);
   const [isRequestingSpecial, setIsRequestingSpecial] = useState(false);
   const [isStaff, setIsStaff] = useState(false);
   const [isSpecialAgent, setIsSpecialAgent] = useState(false);
   const [specialAgentStatus, setSpecialAgentStatus] = useState('none');
+  const [isUpdatingCacheSource, setIsUpdatingCacheSource] = useState(false);
+  const [isUpdatingSharing, setIsUpdatingSharing] = useState(null);
 
   // ১. এজেন্ট লিস্ট লোড করা
   useEffect(() => {
@@ -108,20 +110,30 @@ export default function RankingReportPage() {
   }, [selectedAgent]);
 
   // ৩. ডিলিট লজিক
-  const handleDelete = async (msg_hash) => {
-    if (!selectedAgent || !confirm("Are you sure you want to delete this message from cache? The next time this message is sent, it will trigger a fresh AI response.")) return;
+  const handleDeleteClick = (msg_hash) => {
+    if (!selectedAgent) return;
+    setDeleteModal({ isOpen: true, msg_hash, isProcessing: false });
+  };
+
+  const confirmDelete = async () => {
+    const { msg_hash } = deleteModal;
+    if (!msg_hash || !selectedAgent) return;
 
     try {
-      setIsDeleting(msg_hash);
+      setDeleteModal(prev => ({ ...prev, isProcessing: true }));
       const agentId = selectedAgent.page_id;
       await api.delete(`/AgentAI/ranking/delete/${agentId}/${msg_hash}/`);
-      toast.success("Message removed from cache successfully");
+      
+      toast.success("Cache cleared!", {
+        icon: '🗑️',
+        style: { borderRadius: '16px', background: '#1e293b', color: '#fff', fontWeight: 'bold' }
+      });
       fetchData(); // Refresh list
     } catch (err) {
       console.error("Delete Error:", err);
       toast.error("Failed to delete message from cache");
     } finally {
-      setIsDeleting(null);
+      setDeleteModal({ isOpen: false, msg_hash: null, isProcessing: false });
     }
   };
 
@@ -170,6 +182,48 @@ export default function RankingReportPage() {
       toast.error(err.response?.data?.error || "Failed to submit request.");
     } finally {
       setIsRequestingSpecial(false);
+    }
+  };
+
+  // ৬. Cache Source আপডেট লজিক (Multi-agent Selection)
+  const handleCacheSourceChange = async (sourceAgentIds) => {
+    if (!selectedAgent) return;
+    try {
+      setIsUpdatingCacheSource(true);
+      // backend expects list of IDs for ManyToMany field
+      await api.patch(`/AgentAI/agents/${selectedAgent.id}/`, {
+        shared_cache_agents: sourceAgentIds || []
+      });
+      
+      const updatedAgents = agents.map(agent =>
+        agent.id === selectedAgent.id
+          ? { ...agent, shared_cache_agents: sourceAgentIds || [] }
+          : agent
+      );
+      setAgents(updatedAgents);
+      setSelectedAgent(updatedAgents.find(a => a.id === selectedAgent.id));
+      toast.success("Cache sharing settings updated!");
+    } catch (err) {
+      console.error("Cache Source Update Error:", err);
+      toast.error("Failed to update cache source");
+    } finally {
+      setIsUpdatingCacheSource(false);
+    }
+  };
+
+  const handleClearGlobalCache = async () => {
+    if (!window.confirm("Are you sure you want to CLEAR ALL GLOBAL CACHE? This cannot be undone.")) return;
+    
+    setLoading(true);
+    try {
+      await api.post('/AgentAI/ranking/clear-global-cache/');
+      toast.success("Global cache cleared successfully!");
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.error || "Failed to clear global cache");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -229,9 +283,52 @@ export default function RankingReportPage() {
                 ))}
               </select>
             </div>
+
+            {/* ⚡ নতুন: ক্যাশ শেয়ারিং ড্রপডাউন (Multi-select logic using simple tags) */}
+            <div className="mt-4 flex flex-col gap-3">
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                <Share2 size={12} className="text-pink-500" />
+                Share Cache From (Multi-Select):
+              </span>
+              <div className="flex flex-wrap gap-2">
+                {agents.filter(a => a.id !== selectedAgent?.id).map(agent => {
+                  const isSelected = selectedAgent?.shared_cache_agents?.includes(agent.id);
+                  return (
+                    <button
+                      key={agent.id}
+                      onClick={() => {
+                        const current = selectedAgent?.shared_cache_agents || [];
+                        const updated = isSelected 
+                          ? current.filter(id => id !== agent.id)
+                          : [...current, agent.id];
+                        handleCacheSourceChange(updated);
+                      }}
+                      disabled={isUpdatingCacheSource}
+                      className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tight transition-all border-2 flex items-center gap-2
+                        ${isSelected 
+                          ? 'bg-pink-500 text-white border-pink-400 shadow-md scale-105' 
+                          : 'bg-white text-gray-400 border-gray-100 hover:border-pink-200'}`}
+                    >
+                      {agent.name}
+                      {isSelected ? <Unlock size={10} /> : <Lock size={10} />}
+                    </button>
+                  );
+                })}
+                {isUpdatingCacheSource && <Loader2 className="animate-spin h-4 w-4 text-pink-500 self-center" />}
+              </div>
+            </div>
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full md:w-auto">
+            {isStaff && (
+              <button
+                onClick={handleClearGlobalCache}
+                className="flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-6 py-3 rounded-2xl font-bold text-xs uppercase tracking-widest transition-all shadow-lg shadow-rose-200 active:scale-95"
+              >
+                <Trash2 size={16} />
+                Clear Global Cache
+              </button>
+            )}
             <div className="flex items-center gap-3">
               {isSpecialAgent ? (
                 <div className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-yellow-50 to-yellow-100 border border-yellow-200 rounded-full shadow-sm">
@@ -335,15 +432,33 @@ export default function RankingReportPage() {
                       <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Query ID: {item.msg_hash?.slice(-6)}</p>
                     </div>
                     <button
-                      onClick={() => handleDelete(item.msg_hash)}
-                      disabled={isDeleting === item.msg_hash}
-                      className="p-2 text-rose-500 bg-rose-50 rounded-lg active:scale-95"
+                      onClick={() => handleDeleteClick(item.msg_hash)}
+                      disabled={deleteModal.isProcessing}
+                      className="p-2 text-rose-500 bg-rose-50 rounded-lg active:scale-95 hover:bg-rose-100 transition-colors"
                     >
-                      {isDeleting === item.msg_hash ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
+                      {deleteModal.isProcessing && deleteModal.msg_hash === item.msg_hash ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
                     </button>
                   </div>
                   
-                  <p className="text-sm font-bold text-slate-800 bg-slate-50/50 p-4 rounded-xl border border-slate-100">{item.text}</p>
+                  <div className="flex items-center justify-between gap-4">
+                    <p className="text-sm font-bold text-slate-800 bg-slate-50/50 p-4 rounded-xl border border-slate-100 flex-1">{item.text}</p>
+                    <button
+                      onClick={() => handleToggleSharing(item.msg_hash, item.is_shareable)}
+                      disabled={isUpdatingSharing === item.msg_hash}
+                      className={`w-12 h-12 flex items-center justify-center rounded-xl transition-all duration-300
+                        ${item.is_shareable 
+                          ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
+                          : 'bg-rose-50 text-rose-600 border border-rose-100'}`}
+                    >
+                      {isUpdatingSharing === item.msg_hash ? (
+                        <Loader2 className="animate-spin" size={20} />
+                      ) : item.is_shareable ? (
+                        <Unlock size={20} />
+                      ) : (
+                        <Lock size={20} />
+                      )}
+                    </button>
+                  </div>
                   
                   <div className="grid grid-cols-2 gap-3">
                     <div className="p-3 bg-white border border-slate-100 rounded-xl flex flex-col items-center">
@@ -369,6 +484,7 @@ export default function RankingReportPage() {
                       <option value="agent_specific">Agent Only</option>
                       <option value="global">Global</option>
                       {isSpecialAgent && <option value="special">Special Agent</option>}
+                      {item.current_scope === 'sender_specific' && <option value="sender_specific">Sender Specific</option>}
                     </select>
                   </div>
                 </div>
@@ -387,6 +503,7 @@ export default function RankingReportPage() {
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest">Message Content</th>
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest text-center">Frequency</th>
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest text-center">Savings</th>
+                  <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest text-center">Sharing</th>
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest text-center">Cache Scope</th>
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
                 </tr>
@@ -417,6 +534,25 @@ export default function RankingReportPage() {
                         </div>
                       </td>
                       <td className="px-8 py-6 text-center">
+                        <button
+                          onClick={() => handleToggleSharing(item.msg_hash, item.is_shareable)}
+                          disabled={isUpdatingSharing === item.msg_hash}
+                          title={item.is_shareable ? "Mark as non-shareable" : "Mark as shareable"}
+                          className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-300 mx-auto
+                            ${item.is_shareable 
+                              ? 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 ring-2 ring-emerald-100/50' 
+                              : 'bg-rose-50 text-rose-600 hover:bg-rose-100 ring-2 ring-rose-100/50'}`}
+                        >
+                          {isUpdatingSharing === item.msg_hash ? (
+                            <Loader2 className="animate-spin" size={18} />
+                          ) : item.is_shareable ? (
+                            <Unlock size={18} />
+                          ) : (
+                            <Lock size={18} />
+                          )}
+                        </button>
+                      </td>
+                      <td className="px-8 py-6 text-center">
                         <select
                           value={item.current_scope}
                           disabled={!isStaff || isUpdatingScope === item.msg_hash}
@@ -426,21 +562,24 @@ export default function RankingReportPage() {
                               ? 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:border-indigo-300'
                               : item.current_scope === 'special'
                                 ? 'bg-amber-50 text-amber-700 border-amber-100 hover:border-amber-300'
-                                : 'bg-pink-50 text-pink-700 border-pink-100 hover:border-pink-300'
+                                : item.current_scope === 'sender_specific'
+                                  ? 'bg-purple-50 text-purple-700 border-purple-100 hover:border-purple-300'
+                                  : 'bg-pink-50 text-pink-700 border-pink-100 hover:border-pink-300'
                             } ${(!isStaff || isUpdatingScope === item.msg_hash) ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:scale-105'}`}
                         >
                           <option value="agent_specific">Agent Specific</option>
                           <option value="global">Global Sync</option>
                           {isSpecialAgent && <option value="special">Specialized</option>}
+                          {item.current_scope === 'sender_specific' && <option value="sender_specific">Sender Specific</option>}
                         </select>
                       </td>
                       <td className="px-8 py-6 text-right">
                         <button
-                          onClick={() => handleDelete(item.msg_hash)}
-                          disabled={isDeleting === item.msg_hash}
+                          onClick={() => handleDeleteClick(item.msg_hash)}
+                          disabled={deleteModal.isProcessing}
                           className="w-10 h-10 flex items-center justify-center text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all duration-300 ml-auto"
                         >
-                          {isDeleting === item.msg_hash ? <Loader2 className="animate-spin" size={18} /> : <Trash2 size={18} />}
+                          {deleteModal.isProcessing && deleteModal.msg_hash === item.msg_hash ? <Loader2 className="animate-spin text-rose-500" size={18} /> : <Trash2 size={18} />}
                         </button>
                       </td>
                     </tr>
@@ -452,6 +591,56 @@ export default function RankingReportPage() {
         </div>
 
       </div>
+
+      {/* Beautiful Delete Confirmation Modal */}
+      {deleteModal.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-slate-900/60 backdrop-blur-md transition-all duration-500">
+          <div className="bg-white/90 backdrop-blur-xl rounded-[3rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-300 border border-white/40 ring-1 ring-black/5">
+            <div className="bg-gradient-to-br from-rose-50/50 via-white to-white p-10 flex flex-col items-center relative overflow-hidden">
+               {/* Decorative background circle */}
+               <div className="absolute -top-10 -right-10 w-32 h-32 bg-rose-100/30 rounded-full blur-3xl"></div>
+               
+              <div className="w-24 h-24 bg-white rounded-[2rem] shadow-xl shadow-rose-100/50 flex items-center justify-center mb-6 border border-rose-50/50 relative group">
+                <div className="absolute inset-0 bg-rose-400 rounded-[2rem] animate-ping opacity-10 group-hover:opacity-20 transition-opacity"></div>
+                <Trash2 className="text-rose-500 w-10 h-10 relative z-10 transform group-hover:scale-110 transition-transform duration-500" />
+              </div>
+              
+              <h3 className="text-3xl font-black text-slate-800 uppercase tracking-tighter italic">Flush Cache?</h3>
+              <div className="h-1.5 w-12 bg-rose-500 rounded-full mt-3 shadow-sm shadow-rose-200"></div>
+            </div>
+            
+            <div className="px-10 pb-10 text-center bg-transparent">
+              <p className="text-slate-500 font-bold text-base leading-relaxed">
+                This item will be <span className="text-rose-600 underline decoration-rose-200 decoration-2 underline-offset-4">permanently removed</span> from the active AI memory.
+              </p>
+              
+              <div className="mt-8 p-4 bg-pink-50/50 rounded-2xl border border-pink-100 inline-block shadow-inner backdrop-blur-sm">
+                <p className="text-rose-500 font-black text-[10px] uppercase tracking-[0.2em] flex items-center gap-2">
+                  <Zap size={14} className="fill-rose-500" />
+                  Triggers Fresh Intelligence
+                </p>
+              </div>
+            </div>
+    
+            <div className="p-6 bg-slate-50/50 flex gap-4 border-t border-slate-100/50 backdrop-blur-md">
+              <button 
+                onClick={() => setDeleteModal({ isOpen: false, msg_hash: null, isProcessing: false })}
+                disabled={deleteModal.isProcessing}
+                className="flex-1 px-6 py-4 bg-white text-slate-400 font-black uppercase text-xs tracking-widest rounded-2xl border border-slate-200 hover:border-slate-300 hover:text-slate-600 hover:bg-slate-50 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+              >
+                Keep it
+              </button>
+              <button 
+                onClick={confirmDelete}
+                disabled={deleteModal.isProcessing}
+                className="flex-1 px-6 py-4 bg-[#1e293b] hover:bg-slate-800 text-white font-black uppercase text-xs tracking-widest rounded-2xl shadow-xl shadow-slate-200 hover:shadow-slate-300 transition-all flex justify-center items-center gap-2 active:scale-95 disabled:opacity-70"
+              >
+                {deleteModal.isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Flush Now'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

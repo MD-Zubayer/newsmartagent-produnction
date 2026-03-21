@@ -1,11 +1,11 @@
 from django.urls import path
-from .views import WhatsAppSendView, WhatsAppStatusView, WhatsAppQRView
+from . import views
 
 urlpatterns = [
-    # n8n এই endpoint call করবে AI reply পাঠাতে
-    path('whatsapp/send/', WhatsAppSendView.as_view(), name='whatsapp-send'),
-    # Connection status check
-    path('whatsapp/status/', WhatsAppStatusView.as_view(), name='whatsapp-status'),
-    # QR code retrieve (প্রথমবার connect করতে)
-    path('whatsapp/qr/', WhatsAppQRView.as_view(), name='whatsapp-qr'),
+    path('init/', views.whatsapp_init_session, name='whatsapp-init'),
+    path('status/', views.WhatsAppStatusView.as_view(), name='whatsapp-status'),
+    path('qr/', views.WhatsAppQRView.as_view(), name='whatsapp-qr'),
+    path('send/', views.WhatsAppSendView.as_view(), name='whatsapp-send'),
+    path('sync-agent/', views.whatsapp_sync_agent, name='whatsapp-sync-agent'),
+    path('sync-contacts/', views.whatsapp_sync_contacts, name='whatsapp-sync-contacts'),
 ]

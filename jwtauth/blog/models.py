@@ -2,6 +2,7 @@ from django.db import models
 from django.utils.text import slugify
 from django.contrib.auth import get_user_model
 from ckeditor.fields import RichTextField
+from minio_management.storages import BlogStorage
 
 User = get_user_model()
 
@@ -33,7 +34,7 @@ class BlogPost(models.Model):
     slug = models.SlugField(max_length=300, unique=True, blank=True)
     author = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='blog_posts')
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='posts')
-    thumbnail = models.ImageField(upload_to='blog/thumbnails/', null=True, blank=True)
+    thumbnail = models.ImageField(upload_to='blog/thumbnails/', storage=BlogStorage(), null=True, blank=True)
     content = RichTextField()
     views_count = models.PositiveIntegerField(default=0)
     meta_description = models.CharField(max_length=160, help_text="Used for SEO meta description tag.")
