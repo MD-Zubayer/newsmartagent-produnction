@@ -55,7 +55,9 @@ def get_cached_reply(agent_id, msg_text=None, msg_hash=None):
         cached = r.get(key)
         if cached:
             incr_message_frequency(agent_id, msg_hash)
-            return json.loads(cached)
+            data = json.loads(cached)
+            data['msg_hash'] = msg_hash
+            return data
     except Exception as e:
         logger.error(f"Redis Cache Error: {e}")
         return None # ক্যাশ এরর হলে সরাসরি AI কল করার সুযোগ থাকবে
@@ -131,6 +133,7 @@ def fuzzy_match(agent_id, msg_text, threshold=85): # ⚡ RapidFuzz সাধা�
         # ৩. যদি মিল পাওয়া যায়, তবে র‍্যাঙ্কিং আপডেট করো
         incr_message_frequency(agent_id, best_hash)
         logger.info(f"⚡ Fuzzy Match! Score: {best_score}% | '{msg_text[:20]}'")
+        best_data['msg_hash'] = best_hash
         return best_data
 
     return None
@@ -275,7 +278,9 @@ def get_global_cached_reply(agent_id, msg_text):
             logger.info(f"⚡ GLOBAL EXACT HIT: '{msg_text[:30]}'")
             # র‍্যাঙ্কিং ট্র্যাকিং (Agent specific)
             incr_message_frequency(agent_id, msg_hash)
-            return json.loads(cached)
+            data = json.loads(cached)
+            data['msg_hash'] = msg_hash
+            return data
     except Exception as e:
         logger.error(f"Global Cache Get Error: {e}")
     return None
@@ -340,6 +345,7 @@ def global_fuzzy_match(agent_id, msg_text, threshold=92):
         logger.info(f"⚡ GLOBAL FUZZY HIT! Score: {best_score}% | '{msg_text[:20]}'")
         if best_hash:
             incr_message_frequency(agent_id, best_hash)
+            best_data['msg_hash'] = best_hash
         return best_data
     return None
 

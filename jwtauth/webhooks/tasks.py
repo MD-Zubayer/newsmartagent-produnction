@@ -348,6 +348,11 @@ def process_ai_reply_task(self, data):
                 potential_res = get_cached_reply(shared_page_id, msg_text=text)
                 if potential_res:
                     msg_hash = potential_res.get('msg_hash')
+                    if not msg_hash:
+                        # Fallback for old cache entries
+                        normalized = normalize_for_cache(text)
+                        msg_hash = hashlib.md5(normalized.encode()).hexdigest()
+
                     # এক্সক্লুশন চেক (Redis Set)
                     exclusion_key = f"agent:{shared_page_id}:sharing_exclusion_set"
                     r_db4 = get_redis_client(db=4)
@@ -373,6 +378,10 @@ def process_ai_reply_task(self, data):
                     potential_res = fuzzy_match(shared_page_id, text, threshold=80)
                     if potential_res:
                         msg_hash = potential_res.get('msg_hash')
+                        if not msg_hash:
+                            stored_text = potential_res.get('original_normalized') or text
+                            msg_hash = hashlib.md5(stored_text.encode()).hexdigest()
+
                         # এক্সক্লুশন চেক
                         exclusion_key = f"agent:{shared_page_id}:sharing_exclusion_set"
                         r_db4 = get_redis_client(db=4)
