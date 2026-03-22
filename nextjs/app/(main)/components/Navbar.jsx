@@ -94,7 +94,7 @@ export default function Navbar() {
                 className="h-20w-20 object-contain rounded-lg"
               />
             </div>
-            <span className="text-xl font-black tracking-tighter flex items-center">
+            <span className="text-xl md:block hidden font-black tracking-tighter flex items-center">
               <span className="text-indigo-600">New</span>
               <span className="text-gray-900 ml-1">Smart</span>
               <span className="text-indigo-600 ml-1">Agent</span>
