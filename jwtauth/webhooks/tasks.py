@@ -2,6 +2,7 @@
 
 from celery import shared_task
 import re, json, time, uuid, logging, hashlib, redis, requests
+from datetime import timedelta
 from aiAgent.models import AgentAI
 from django.db.models import Q
 from chat.services import save_message
@@ -34,6 +35,7 @@ from aiAgent.business_logic import logic_handler
 from celery.signals import after_setup_logger, after_setup_task_logger
 import logging.config
 from django.conf import settings
+from django.utils import timezone
 from aiAgent.cache.client import get_redis_client
 
 @after_setup_logger.connect
@@ -44,6 +46,56 @@ def setup_celery_logging(logger, **kwargs):
 logger = logging.getLogger(__name__)
 
 r = get_redis_client(db=0)
+
+
+def refresh_fb_page_token(fb_page):
+    """Refresh long-lived user token and derive new page token when close to expiry."""
+    if not fb_page or not fb_page.user_access_token:
+        return None
+
+    fb_app_id = getattr(settings, 'FB_APP_ID', None)
+    fb_app_secret = getattr(settings, 'FB_APP_SECRET', None)
+    if not fb_app_id or not fb_app_secret:
+        logger.warning("FB app credentials missing; skip token refresh")
+        return None
+
+    try:
+        # Refresh long-lived user token
+        exchange_url = (
+            "https://graph.facebook.com/v17.0/oauth/access_token?"
+            f"grant_type=fb_exchange_token&client_id={fb_app_id}&client_secret={fb_app_secret}"
+            f"&fb_exchange_token={fb_page.user_access_token}"
+        )
+        resp = requests.get(exchange_url, timeout=10).json()
+        new_user_token = resp.get("access_token")
+        expires_in = resp.get("expires_in")
+
+        if new_user_token:
+            fb_page.user_access_token = new_user_token
+            fb_page.token_expires_at = timezone.now() + timedelta(seconds=expires_in) if expires_in else None
+        else:
+            logger.warning(f"FB user token refresh failed: {resp}")
+            return None
+
+        # Derive fresh page token using refreshed user token
+        page_url = (
+            f"https://graph.facebook.com/v17.0/{fb_page.page_id}?"
+            f"fields=access_token&access_token={fb_page.user_access_token}"
+        )
+        page_resp = requests.get(page_url, timeout=10).json()
+        new_page_token = page_resp.get("access_token")
+
+        if new_page_token:
+            fb_page.access_token = new_page_token
+            fb_page.save(update_fields=["access_token", "user_access_token", "token_expires_at", "updated_at"])
+            AgentAI.objects.filter(page_id=fb_page.page_id).update(access_token=new_page_token)
+            logger.info(f"FB page token refreshed for page {fb_page.page_id}")
+            return new_page_token
+        else:
+            logger.warning(f"FB page token refresh failed: {page_resp}")
+    except Exception as e:
+        logger.error(f"FB token refresh error: {e}")
+    return None
 
 def send_cache_update_ws(user_id, agent_id):
     try:
@@ -265,6 +317,15 @@ def process_ai_reply_task(self, data):
 
         from users.models import FacebookPage
         fb_page = FacebookPage.objects.filter(page_id=page_id, is_active=True).first() if page_id else None
+
+        # Refresh token if close to expiry (<=5 days)
+        if fb_page and fb_page.token_expires_at:
+            remaining = fb_page.token_expires_at - timezone.now()
+            if remaining <= timedelta(days=5):
+                refreshed = refresh_fb_page_token(fb_page)
+                if refreshed:
+                    logger.info(f"FB token auto-refreshed for page {page_id}")
+
         effective_access_token = fb_page.access_token if fb_page else agent_config.access_token
 
         # ── WhatsApp Message Logging (Incoming) ──

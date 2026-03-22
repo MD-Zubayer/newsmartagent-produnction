@@ -1,7 +1,9 @@
 import requests
+from datetime import timedelta
 from django.shortcuts import redirect
 from django.conf import settings
 from django.http import JsonResponse
+from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from .models import FacebookPage
@@ -79,6 +81,8 @@ def facebook_callback(request):
     )
     resp_long = requests.get(long_lived_url).json()
     long_lived_token = resp_long.get("access_token", short_lived_token) # Fallback to short if failed
+    expires_in = resp_long.get("expires_in")  # seconds; typically ~60 days
+    token_expires_at = timezone.now() + timedelta(seconds=expires_in) if expires_in else None
 
     # 3. Fetch connected pages for this token
     pages_url = f"https://graph.facebook.com/v17.0/me/accounts?access_token={long_lived_token}"
@@ -106,6 +110,8 @@ def facebook_callback(request):
                 'user': user,
                 'page_name': page_name,
                 'access_token': page_access_token,
+                'user_access_token': long_lived_token,
+                'token_expires_at': token_expires_at,
                 'is_active': True
             }
         )
@@ -194,4 +200,3 @@ def facebook_data_deletion(request):
 
     except Exception as e:
         return JsonResponse({"error": "Invalid format", "details": str(e)}, status=400)
-

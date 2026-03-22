@@ -370,12 +370,20 @@ class FacebookPage(models.Model):
     page_id = models.CharField(max_length=255, unique=True)
     page_name = models.CharField(max_length=255)
     access_token = models.CharField(max_length=500)
+    user_access_token = models.CharField(max_length=500, blank=True, null=True)
+    token_expires_at = models.DateTimeField(blank=True, null=True, help_text="Expiry of the user long-lived token, if provided")
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.page_name} ({self.page_id}) - {self.user.email}"
+
+    @property
+    def is_token_valid(self):
+        if not self.token_expires_at:
+            return True
+        return self.token_expires_at > timezone.now()
 
 
 class WithdrawMethod(models.Model):
@@ -438,4 +446,3 @@ class CashoutRequest(models.Model):
 
     def __str__(self):
         return f"{self.profile.unique_id} - {self.balance_type.upper()} - {self.amount} BDT - {self.status}"
-
