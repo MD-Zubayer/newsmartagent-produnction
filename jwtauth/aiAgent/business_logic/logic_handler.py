@@ -11,6 +11,7 @@ from aiAgent.memory_handler import (
     get_keywords_by_category, 
     check_keyword_match
 )
+from aiAgent.models import WebsiteVisitor
 from webhooks.constants import TARGET_KEYWORDS
 from aiAgent.data_processor import processor_spreadsheet_data
 import json
@@ -324,6 +325,24 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
             memory_context = f"\nUser Database Memory [Very Important]:\n{mem_data}"
             logger.info(f"🧠 Injecting Memory Context for {sender_id}. Score: {c_score} | DB Triggers: {matched_intents or matched_targets}")
 
+    # 3.5 Visitor Tracking Context
+    visitor_context = ""
+    try:
+        visitor = WebsiteVisitor.objects.filter(visitor_uuid=sender_id).first()
+        if visitor:
+            v_info = []
+            if visitor.location: v_info.append(f"Location: {visitor.location}")
+            v_info.append(f"Total Visits: {visitor.view_count}")
+            if visitor.captured_email: v_info.append(f"Email: {visitor.captured_email}")
+            if visitor.captured_phone: v_info.append(f"Phone: {visitor.captured_phone}")
+            
+            if v_info:
+                visitor_context = "\n[VISITOR TRACKING DATA]:\n" + " | ".join(v_info)
+                visitor_context += "\nDirective: Use this data for a personalized greeting if this is a returning visitor or if location/contact info is relevant. Be natural."
+                logger.info(f"📊 Injecting Visitor Context for {sender_id}")
+    except Exception as e:
+        logger.error(f"Error fetching visitor context: {e}")
+
     # 4. Fetch Contact specific settings
     from aiAgent.models import Contact
     custom_role = agent_config.system_prompt
@@ -349,6 +368,7 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
 
     if sheet_context: system_prompt_parts.append(sheet_context)
     if memory_context: system_prompt_parts.append(memory_context)
+    if visitor_context: system_prompt_parts.append(visitor_context)
 
     system_instruction = "\n\n".join(system_prompt_parts)
 

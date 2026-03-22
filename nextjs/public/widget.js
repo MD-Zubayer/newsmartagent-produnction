@@ -16,8 +16,15 @@
     }
 
     var senderId = localStorage.getItem('nsa_widget_sender_id');
+    var visitorUuid = localStorage.getItem('visitor_uuid');
+    
+    // Priority: visitor_uuid (from tracker) > existing nsa_widget_sender_id > new generated ID
     if (!senderId) {
-        senderId = 'v_' + Math.random().toString(36).substr(2, 9) + Date.now();
+        if (visitorUuid) {
+            senderId = visitorUuid;
+        } else {
+            senderId = 'v_' + Math.random().toString(36).substr(2, 9) + Date.now();
+        }
         localStorage.setItem('nsa_widget_sender_id', senderId);
     }
 
@@ -107,8 +114,7 @@
             '    <div><h3>' + esc(s.header_title) + '</h3><p>' + esc(s.header_subtitle) + '</p></div>',
             '  </div>',
             '  <div class="nsa-body" id="nsa-body">',
-            '    <div class="nsa-msg nsa-ai">' + esc(config.greeting) + '</div>',
-            '  </div>',
+            '  </div>', // Initial greeting will be added by loadHistory or addMsg
             '  <div class="nsa-foot-inp">',
             '    <input type="text" id="nsa-inp" placeholder="' + esc(s.placeholder_text) + '">',
             '    <button class="nsa-send" id="nsa-send">',
@@ -188,14 +194,34 @@
             });
         }
 
-        function addMsg(text, type) {
+        function addMsg(text, type, skipSave) {
             var el = document.createElement('div');
             el.className = 'nsa-msg nsa-' + type;
             el.textContent = text;
             body.appendChild(el);
             body.scrollTop = body.scrollHeight;
+
+            if (!skipSave) {
+                var history = JSON.parse(localStorage.getItem('nsa_chat_history_' + widgetKey) || '[]');
+                history.push({ text: text, type: type });
+                if (history.length > 20) history.shift(); // Keep last 20 messages for better context
+                localStorage.setItem('nsa_chat_history_' + widgetKey, JSON.stringify(history));
+            }
+
             return el;
         }
+
+        // Load history
+        (function() {
+            var history = JSON.parse(localStorage.getItem('nsa_chat_history_' + widgetKey) || '[]');
+            if (history.length > 0) {
+                history.forEach(function(m) {
+                    addMsg(m.text, m.type, true);
+                });
+            } else {
+                addMsg(config.greeting, 'ai', false);
+            }
+        })();
 
         async function sendMessage() {
             var val = inp.value.trim();
