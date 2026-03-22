@@ -115,21 +115,17 @@ def facebook_callback(request):
                 'is_active': True
             }
         )
-        # If existing, ensure tokens are refreshed and active status/name synced
-        if not created:
-            fb_page.access_token = page_access_token
-            fb_page.user_access_token = long_lived_token
-            fb_page.token_expires_at = token_expires_at
-            fb_page.page_name = page_name
-            fb_page.is_active = True
-            fb_page.save(update_fields=["access_token", "user_access_token", "token_expires_at", "page_name", "is_active", "updated_at"])
 
         # Ensure AgentAI stays in sync with latest token
+        # Using a loop and .save() because access_token is an encrypted field 
+        # (django-cryptography bypasses encryption on .update())
         from aiAgent.models import AgentAI
-        AgentAI.objects.filter(page_id=page_id).update(
-            access_token=page_access_token,
-            token_expires_at=token_expires_at
-        )
+        agents = AgentAI.objects.filter(page_id=page_id)
+        for agent in agents:
+            agent.access_token = page_access_token
+            agent.token_expires_at = token_expires_at
+            agent.save(update_fields=['access_token', 'token_expires_at'])
+            
         saved_pages.append({"page_name": page_name, "page_id": page_id})
 
     # Redirect user back to the dashboard connect page (or return JSON if frontend handles popup)
