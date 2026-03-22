@@ -85,7 +85,7 @@ class AgentAISerializer(serializers.ModelSerializer):
     skip_history = serializers.BooleanField(required=False)
     history_skip_keywords = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     shared_cache_agents = serializers.PrimaryKeyRelatedField(queryset=AgentAI.objects.all(), many=True, required=False)
-    widget_settings = WidgetSettingsSerializer(required=False)
+    widget_settings = WidgetSettingsSerializer(required=False, allow_null=True)
 
     class Meta:
         model = AgentAI
@@ -141,7 +141,7 @@ class AgentAISerializer(serializers.ModelSerializer):
         skip_history = validated_data.pop('skip_history', False)
         history_skip_keywords = validated_data.pop('history_skip_keywords', '')
         shared_cache_agents = validated_data.pop('shared_cache_agents', [])
-        widget_settings_data = validated_data.pop('widget_settings', {})
+        widget_settings_data = validated_data.pop('widget_settings', {}) or {}
         
         # Generate widget key if platform is web_widget
         if validated_data.get('platform') == 'web_widget':
@@ -202,7 +202,7 @@ class AgentAISerializer(serializers.ModelSerializer):
             if shared_cache_agents is not None:
                 agent_settings.shared_cache_agents.set(shared_cache_agents)
         
-        if widget_settings_data:
+        if widget_settings_data is not None:
             from aiAgent.models import WidgetSettings
             # Ensure we update or create the settings for this agent
             WidgetSettings.objects.update_or_create(
