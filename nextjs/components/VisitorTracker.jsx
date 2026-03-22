@@ -151,15 +151,14 @@ export default function VisitorTracker() {
         {done ? (
           <div style={{ textAlign: "center", padding: "12px 0" }}>
             <div style={{ fontSize: "36px", marginBottom: "8px" }}>🎉</div>
-            <p style={{ fontWeight: 700, color: "#111", fontSize: "16px" }}>আপনাকে ধন্যবাদ!</p>
-            <p style={{ color: "#6b7280", fontSize: "13px", marginTop: "4px" }}>আপনার তথ্য সেভ হয়েছে।</p>
+            <p style={{ fontWeight: 700, color: "#111", fontSize: "16px" }}>Thank you!</p>
+            <p style={{ color: "#6b7280", fontSize: "13px", marginTop: "4px" }}>Your information has been saved.</p>
           </div>
         ) : (
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
               <div>
-                <p style={{ fontWeight: 700, fontSize: "15px", color: "#111", margin: 0 }}>🔔 আমাদের সাথে থাকুন!</p>
-                <p style={{ color: "#6b7280", fontSize: "12px", margin: "4px 0 0" }}>আপনার ব্রাউজারে যে তথ্য পাওয়া গেছে:</p>
+                <p style={{ fontWeight: 700, fontSize: "15px", color: "#111", margin: 0 }}>🔔 Stay with us!</p>
               </div>
               <button onClick={handleDismiss} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: "18px", padding: "0 0 0 8px" }}>✕</button>
             </div>
@@ -189,10 +188,10 @@ export default function VisitorTracker() {
                 marginTop: "4px", transition: "all 0.2s",
               }}
             >
-              {submitting ? "সেভ হচ্ছে..." : "✅ সাবস্ক্রাইব করুন"}
+              {submitting ? "Saving..." : "✅ Subscribe"}
             </button>
             <p style={{ textAlign: "center", fontSize: "10px", color: "#d1d5db", marginTop: "8px" }}>
-              আপনার তথ্য সম্পূর্ণ নিরাপদ থাকবে।
+              Your information will stay completely safe.
             </p>
           </>
         )}
