@@ -579,37 +579,48 @@ def process_ai_reply_task(self, data):
                         json_parse_success = True
                         
                         # --- Human Handoff Check ---
-                        if parsed.get('human_handoff') is True or str(parsed.get('human_handoff')).lower() == 'true':
-                            # Override reply with friendly handoff message
-                            parsed_reply = "অনুগ্রহ করে একটু অপেক্ষা করুন। আমাদের একজন human agent শীঘ্রই আপনার সাথে যোগাযোগ করবেন। 🙏"
+                        is_handoff = False
+                        if json_parse_success and (parsed.get('human_handoff') is True or str(parsed.get('human_handoff')).lower() == 'true'):
+                            is_handoff = True
+                        
+                        # Keyword fallback (if JSON fails or AI hints at handoff in text)
+                        handoff_keywords = ['human agent', 'representative', 'support person', 'admin', 'সাপোর্ট', 'এজেন্ট', 'মানুষ', 'কথা বলতে চাই']
+                        if not is_handoff:
+                            lower_reply = raw_ai_reply.lower()
+                            if any(kw in lower_reply for kw in handoff_keywords):
+                                is_handoff = True
+                                logger.info(f"🔍 Text-based handoff detected for {sender_id}")
+
+                        if is_handoff:
+                            # Override reply with friendly handoff message if it was a JSON-detected handoff
+                            if json_parse_success and parsed.get('human_handoff'):
+                                parsed_reply = "অনুগ্রহ করে একটু অপেক্ষা করুন। আমাদের একজন human agent শীঘ্রই আপনার সাথে যোগাযোগ করবেন। 🙏"
+                            
                             cache_type = 'no_cache'  # এই message কখনো cache হবে না
                             try:
-                                from aiAgent.models import Contact
                                 platform_for_lookup = request_type if request_type in ['whatsapp', 'messenger', 'web_widget', 'facebook_comment'] else 'messenger'
                                 
-                                # Update is_human_needed
+                                # Update is_human_needed with platform filter
                                 updated = Contact.objects.filter(
                                     agent=agent_config,
                                     identifier=sender_id,
                                     platform=platform_for_lookup
                                 ).update(is_human_needed=True)
                                 
-                                # If no contact found with platform filter, try without
                                 if not updated:
-                                    updated = Contact.objects.filter(
-                                        agent=agent_config,
-                                        identifier=sender_id
-                                    ).update(is_human_needed=True)
-                                
-                                logger.info(f"🚨 Human handoff: Updated {updated} contact(s) for {sender_id} [{platform_for_lookup}]")
-                                
-                                # Get contact for WS payload
-                                contact_obj = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
+                                    Contact.objects.filter(agent=agent_config, identifier=sender_id).update(is_human_needed=True)
+
+                                # Get contact for WS payload (platform specific)
+                                contact_obj = Contact.objects.filter(
+                                    agent=agent_config, 
+                                    identifier=sender_id,
+                                    platform=platform_for_lookup
+                                ).first() or Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
+
                                 if contact_obj:
                                     contact_name = contact_obj.name or contact_obj.push_name or sender_id
-                                    # MUST use contact_obj.id (integer), not sender_id (string phone number)
                                     send_human_handoff_ws(agent_config.user.id, agent_config.id, contact_obj.id, contact_name)
-                                    logger.info(f"🚨 Human Handoff WS sent for {sender_id}")
+                                    logger.info(f"🚨 Human Handoff WS sent for {sender_id} (Platform: {platform_for_lookup})")
                                 else:
                                     logger.warning(f"⚠️ Could not find Contact object to send WS for {sender_id}")
                             except Exception as handoff_err:

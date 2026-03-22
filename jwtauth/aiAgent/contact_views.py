@@ -136,8 +136,10 @@ class UnifiedReplyView(APIView):
 
             # ── Auto-Reply Pause Logic ──
             # When a human agent replies manually, we pause the AI to prevent overlapping
-            if contact.is_auto_reply_enabled:
+            # Also clear the is_human_needed flag as the human has now responded.
+            if contact.is_auto_reply_enabled or contact.is_human_needed:
                 contact.is_auto_reply_enabled = False
+                contact.is_human_needed = False
                 contact.save()
 
             from aiAgent.business_logic import logic_handler
