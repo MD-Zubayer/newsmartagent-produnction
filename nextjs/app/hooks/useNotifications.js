@@ -12,7 +12,8 @@ export const useNotifications = (user, setOrders = null) => {
   
   // ১. অডিও রিফারেন্স তৈরি (যাতে বারবার লোড না হয়)
   const audioRef = useRef(null);
-  const orderAudioRef = useRef(null)
+  const orderAudioRef = useRef(null);
+  const handoffAudioRef = useRef(null);
 
   useEffect(() => {
     // ব্রাউজারে অডিও অবজেক্ট ইনিশিয়ালাইজ করা
@@ -20,6 +21,7 @@ export const useNotifications = (user, setOrders = null) => {
     audioRef.current = new Audio("/sounds/nextjs_ringe_1.mp3");
 
     orderAudioRef.current = new Audio("/sounds/nextjs_ringe_2.mp3");
+    handoffAudioRef.current = new Audio("/sounds/human_audio_alart.wav");
   }, []);
 
   // ২. পুরানো নোটিফিকেশন ফেচ করা
@@ -70,10 +72,19 @@ export const useNotifications = (user, setOrders = null) => {
               id: `order-${data.order_data.id}`
             });
 
+        } else if (data.action === "HUMAN_HANDOFF") {
+          if (handoffAudioRef.current) {
+            handoffAudioRef.current.play().catch(err => console.log("Handoff audio play blocked:", err));
+          }
+          toast.error(`Human Help: ${data.contact_name} needs assistance!`, {
+            duration: 8000,
+            icon: "🚨",
+            id: `handoff-${data.contact_id}`
+          });
         } else if (data.action === "CACHE_UPDATE") {
            // Ignore CACHE_UPDATE here, dashboard handles it silently
            console.log("CACHE_UPDATE received in background hook, ignoring audio/toast.");
-        } else{
+        } else {
           if (audioRef.current) {
             audioRef.current.play().catch(err => console.log("Audio play blocked:", err));
 

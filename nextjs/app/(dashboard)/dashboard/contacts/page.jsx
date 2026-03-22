@@ -135,6 +135,25 @@ export default function Contacts() {
     }
   };
 
+  const resolveHandoff = async (contactId, e) => {
+    if (e) e.stopPropagation();
+    try {
+      const res = await api.post(`/AgentAI/contacts/resolve-handoff/${contactId}/`);
+      if (res.data.success) {
+        setContacts(prev => prev.map(c => 
+          c.id === contactId ? { ...c, is_human_needed: false } : c
+        ));
+        if (historyContact?.id === contactId) {
+          setHistoryContact(prev => ({ ...prev, is_human_needed: false }));
+        }
+        toast.success("Human handoff resolved.");
+      }
+    } catch (err) {
+      console.error("Failed to resolve handoff:", err);
+      toast.error("Failed to resolve handoff.");
+    }
+  };
+
   const openHistory = (contact) => {
     setHistoryContact(contact);
     setHistoryMessages([]);
@@ -332,8 +351,13 @@ export default function Contacts() {
                         </div>
                         <div className="flex-1 min-w-0 border-b border-gray-100 pb-2">
                           <div className="flex justify-between items-baseline mb-1">
-                            <h3 className="font-bold text-gray-900 truncate">
+                            <h3 className="font-bold text-gray-900 truncate flex items-center gap-2">
                               {contact.name || contact.identifier}
+                              {contact.is_human_needed && (
+                                <span className="bg-rose-100 text-rose-600 text-[9px] font-black px-1.5 py-0.5 rounded-md animate-pulse border border-rose-200">
+                                  🚨 HUMAN HELP
+                                </span>
+                              )}
                             </h3>
                             <span className="text-[10px] text-gray-400 whitespace-nowrap ml-2">
                               {formatLastSeen(contact.last_message_time || contact.updated_at)}
@@ -401,11 +425,24 @@ export default function Contacts() {
                         {historyContact?.name?.charAt(0) || historyContact?.identifier.charAt(0)}
                       </div>
                       <div>
-                        <h3 className="text-sm font-bold text-gray-900 leading-tight">
+                        <h3 className="text-sm font-bold text-gray-900 leading-tight flex items-center gap-2">
                           {historyContact?.name || historyContact?.push_name || historyContact?.identifier}
+                          {historyContact?.is_human_needed && (
+                            <span className="bg-rose-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full shadow-lg animate-bounce">
+                              HUMAN NEEDED
+                            </span>
+                          )}
                         </h3>
-                        <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">
+                        <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest flex items-center gap-2">
                           {historyContact?.is_auto_reply_enabled ? 'AI Auto-Reply Active' : 'Manual Mode Only'}
+                          {historyContact?.is_human_needed && (
+                             <button 
+                               onClick={(e) => resolveHandoff(historyContact.id, e)}
+                               className="text-indigo-600 hover:text-indigo-800 underline decoration-dotted transition-colors"
+                             >
+                               Mark Resolved
+                             </button>
+                          )}
                         </p>
                       </div>
                     </div>

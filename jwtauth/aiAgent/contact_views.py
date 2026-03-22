@@ -164,4 +164,16 @@ class UnifiedReplyView(APIView):
             return Response({"error": "Contact not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+class ResolveHumanHandoffView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, contact_id):
+        try:
+            contact = Contact.objects.get(id=contact_id, agent__user=request.user)
+            contact.is_human_needed = False
+            contact.save()
+            return Response({"success": True, "is_human_needed": False}, status=status.HTTP_200_OK)
+        except Contact.DoesNotExist:
+            return Response({"error": "Contact not found"}, status=status.HTTP_404_NOT_FOUND)
+
 import uuid

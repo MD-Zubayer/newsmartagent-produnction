@@ -63,6 +63,27 @@ def send_cache_update_ws(user_id, agent_id):
     except Exception as e:
         logger.error(f"WebSocket broadcast error: {e}")
 
+def send_human_handoff_ws(user_id, agent_id, contact_id, contact_name):
+    try:
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"user_{user_id}",
+            {
+                "type": "send_notification",
+                "content": {
+                    "action": "HUMAN_HANDOFF",
+                    "agent_id": agent_id,
+                    "contact_id": contact_id,
+                    "contact_name": contact_name
+                }
+            }
+        )
+        logger.info(f"🔊 Human handoff WebSocket notification sent for user_{user_id}")
+    except Exception as e:
+        logger.error(f"Human handoff WebSocket error: {e}")
+
 def deliver_dashboard_reply(user_id, reply, msg_id):
     try:
         from channels.layers import get_channel_layer
@@ -527,12 +548,13 @@ def process_ai_reply_task(self, data):
 
             # ---- Cache Classification Instruction (JSON suffix) ----
             classify_instruction = (
-                '\n\nReturn ONLY a valid JSON object: {"reply": "...", "cache_type": "..."}. '
+                '\n\nReturn ONLY a valid JSON object: {"reply": "...", "cache_type": "...", "human_handoff": "..."}. '
                 'Use "no_cache" for context-dependent words (it/this/that/ঐটা/সেটা) or very specific conversation flow.'
                 'Use "sender_specific" for user-only info (my,amar,etc any language, name/order/status/আমি/আমার/ব্যক্তিগত তথ্য). '
                 'Use "agent_specific" for information extracted from [KNOWLEDGE BASE DATA], business details like products/prices, or IF ASKED ABOUT YOUR IDENTITY (who you are, what you do). '
                 'Use "global" ONLY for general world facts, universal greetings (Salam/Hi), or general knowledge. NEVER use "global" for identity, personal info, or specific business details.'
-                'STRICT: No markdown blocks, no preamble, and ensure JSON syntax is perfect.'
+                '\nCRITICAL: If you cannot answer a question based on provided data, OR if the user explicitly asks for a human/admin/support representative, set "human_handoff": true. Otherwise, set it to false.'
+                '\nSTRICT: No markdown blocks, no preamble, and ensure JSON syntax is perfect.'
             )
             system_instruction = system_instruction + classify_instruction
 
@@ -554,6 +576,21 @@ def process_ai_reply_task(self, data):
                         parsed_reply = extracted_reply
                         cache_type = parsed.get('cache_type', 'agent_specific').strip().lower()
                         json_parse_success = True
+                        
+                        # --- Human Handoff Check ---
+                        if parsed.get('human_handoff') is True or str(parsed.get('human_handoff')).lower() == 'true':
+                            try:
+                                from aiAgent.models import Contact
+                                Contact.objects.filter(agent=agent_config, identifier=sender_id).update(is_human_needed=True)
+                                
+                                # Send WS Notification
+                                contact_obj = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
+                                contact_name = contact_obj.name or contact_obj.push_name or sender_id
+                                send_human_handoff_ws(agent_config.user.id, agent_config.id, sender_id, contact_name)
+                                logger.info(f"🚨 Human Handoff triggered for {sender_id}")
+                            except Exception as handoff_err:
+                                logger.error(f"Error handling human handoff: {handoff_err}")
+
                         logger.info(f"📋 AI cache_type classified as: '{cache_type}' for '{text[:30]}'")
                     else:
                         logger.warning(f"⚠️ JSON parsed but reply field is empty. Using raw.")

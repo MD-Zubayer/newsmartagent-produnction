@@ -304,6 +304,7 @@ class Contact(models.Model):
     custom_prompt = models.TextField(blank=True, null=True, help_text="Custom system prompt for this specific contact")
     custom_instructions = models.TextField(blank=True, null=True, help_text="Additional instructions for this contact")
     platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES)
+    is_human_needed = models.BooleanField(default=False, help_text="Set to True if the user needs human assistance.")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

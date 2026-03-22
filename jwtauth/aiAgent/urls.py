@@ -2,7 +2,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from aiAgent.views import AgentAIViewSet, TokenUsageAnalyticsView, dashboard_chat_view, RankingAPIView, UserAvailableModelsView, AgentMetricsAPIView, DeleteRankingDataAPIView, UpdateCacheScopeAPIView, RequestSpecialAgentAPIView, ClearGlobalCacheAPIView, ToggleSharingAPIView, VisitorSubscribeView, VisitorTrackView
-from aiAgent.contact_views import ContactListView, ToggleAutoReplyView, ContactMessageHistoryView, ContactDetailView, UnifiedReplyView
+from aiAgent.contact_views import ContactListView, ToggleAutoReplyView, ContactMessageHistoryView, ContactDetailView, UnifiedReplyView, ResolveHumanHandoffView
 from aiAgent.widget_views import WidgetConfigView, WidgetChatView, WidgetIconUploadView
 from chat.views import facebook_data_deletion_callback
 router = DefaultRouter()
@@ -25,6 +25,7 @@ urlpatterns = [
     path('contacts/<str:agent_id>/', ContactListView.as_view(), name='contact-list'),
     path('contacts/detail/<int:contact_id>/', ContactDetailView.as_view(), name='contact-detail'),
     path('contacts/toggle-reply/<int:contact_id>/', ToggleAutoReplyView.as_view(), name='toggle-auto-reply'),
+    path('contacts/resolve-handoff/<int:contact_id>/', ResolveHumanHandoffView.as_view(), name='resolve-human-handoff'),
     path('contacts/<int:contact_id>/messages/', ContactMessageHistoryView.as_view(), name='contact-messages'),
     path('contacts/unified/reply/', UnifiedReplyView.as_view(), name='unified-reply'),
     
