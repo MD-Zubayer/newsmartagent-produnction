@@ -1,7 +1,7 @@
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from aiAgent.views import AgentAIViewSet, TokenUsageAnalyticsView, dashboard_chat_view, RankingAPIView, UserAvailableModelsView, AgentMetricsAPIView, DeleteRankingDataAPIView, UpdateCacheScopeAPIView, RequestSpecialAgentAPIView, ClearGlobalCacheAPIView, ToggleSharingAPIView
+from aiAgent.views import AgentAIViewSet, TokenUsageAnalyticsView, dashboard_chat_view, RankingAPIView, UserAvailableModelsView, AgentMetricsAPIView, DeleteRankingDataAPIView, UpdateCacheScopeAPIView, RequestSpecialAgentAPIView, ClearGlobalCacheAPIView, ToggleSharingAPIView, VisitorSubscribeView
 from aiAgent.contact_views import ContactListView, ToggleAutoReplyView, ContactMessageHistoryView, ContactDetailView, UnifiedReplyView
 from aiAgent.widget_views import WidgetConfigView, WidgetChatView, WidgetIconUploadView
 from chat.views import facebook_data_deletion_callback
@@ -34,7 +34,8 @@ urlpatterns = [
     # Widget Icon Upload (authenticated)
     path('widget/upload-icon/<int:agent_id>/', WidgetIconUploadView.as_view(), name='widget-icon-upload'),
     
-
+    # Visitor Tracking (Public - No Auth Required)
+    path('visitor/subscribe/', VisitorSubscribeView.as_view(), name='visitor-subscribe'),
 
 ]
 

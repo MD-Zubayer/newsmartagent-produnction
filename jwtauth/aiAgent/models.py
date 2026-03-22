@@ -131,6 +131,40 @@ class UserMemory(models.Model):
     class Meta:
         unique_together = ('ai_agent', 'sender_id')
 
+import uuid
+from django.conf import settings
+User = settings.AUTH_USER_MODEL
+
+class ApiConfig(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    gemini_api_key = models.CharField(max_length=255, blank=True, null=True)
+    openai_api_key = models.CharField(max_length=255, blank=True, null=True)
+    
+    def __str__(self):
+        return f"{self.user.email} - API Config"
+
+class WebsiteVisitor(models.Model):
+    visitor_uuid = models.UUIDField(unique=True, editable=False, default=uuid.uuid4)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=512, null=True, blank=True)
+    device_type = models.CharField(max_length=50, null=True, blank=True)
+    location = models.CharField(max_length=255, null=True, blank=True)
+    
+    first_visited = models.DateTimeField(auto_now_add=True)
+    last_visited = models.DateTimeField(auto_now=True)
+    view_count = models.IntegerField(default=1)
+    
+    user = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='visitors')
+    captured_email = models.EmailField(null=True, blank=True)
+    captured_phone = models.CharField(max_length=50, null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Website Visitor"
+        verbose_name_plural = "Website Visitors"
+        
+    def __str__(self):
+        return f"Visitor {self.visitor_uuid} (V: {self.view_count})"
+
 class MissingRequirement(models.Model):
     ai_agent = models.ForeignKey(AgentAI, on_delete=models.CASCADE)
     sender_id = models.CharField(max_length=255)

@@ -109,11 +109,11 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     # "users.middleware.TokenMiddleware",
-
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-        # Add the account middleware:
+    # Add the account middleware:
     "allauth.account.middleware.AccountMiddleware",
-
+    # Visitor Tracking - records anonymous site visitors
+    'aiAgent.middleware.VisitorTrackingMiddleware',
 ]
 
 ROOT_URLCONF = 'jwtauth.urls'

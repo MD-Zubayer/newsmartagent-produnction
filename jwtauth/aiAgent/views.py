@@ -655,3 +655,47 @@ class RequestSpecialAgentAPIView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class VisitorSubscribeView(APIView):
+    """
+    Public endpoint — no auth required.
+    Receives visitor_uuid + email/phone from the browser subscribe popup
+    and saves them to the WebsiteVisitor record.
+    """
+    permission_classes = []  # Public endpoint
+
+    def post(self, request):
+        visitor_uuid = request.data.get('visitor_uuid') or request.COOKIES.get('VISITOR_ID')
+        email = request.data.get('email', '').strip()
+        phone = request.data.get('phone', '').strip()
+
+        if not visitor_uuid:
+            return Response({"error": "Visitor ID missing"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not email and not phone:
+            return Response({"error": "Email or phone is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            from aiAgent.models import WebsiteVisitor
+            visitor = WebsiteVisitor.objects.filter(visitor_uuid=visitor_uuid).first()
+
+            if not visitor:
+                # Create visitor if somehow not tracked yet
+                visitor = WebsiteVisitor.objects.create(visitor_uuid=visitor_uuid)
+
+            if email:
+                visitor.captured_email = email
+            if phone:
+                visitor.captured_phone = phone
+
+            # Link to user if they are logged in
+            if request.user.is_authenticated:
+                visitor.user = request.user
+
+            visitor.save()
+
+            return Response({"status": "subscribed", "message": "Thank you for subscribing!"}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
