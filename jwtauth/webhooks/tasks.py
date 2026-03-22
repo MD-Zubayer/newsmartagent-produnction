@@ -604,9 +604,13 @@ def process_ai_reply_task(self, data):
                                 
                                 # Get contact for WS payload
                                 contact_obj = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
-                                contact_name = (contact_obj.name or contact_obj.push_name or sender_id) if contact_obj else sender_id
-                                send_human_handoff_ws(agent_config.user.id, agent_config.id, sender_id, contact_name)
-                                logger.info(f"🚨 Human Handoff WS sent for {sender_id}")
+                                if contact_obj:
+                                    contact_name = contact_obj.name or contact_obj.push_name or sender_id
+                                    # MUST use contact_obj.id (integer), not sender_id (string phone number)
+                                    send_human_handoff_ws(agent_config.user.id, agent_config.id, contact_obj.id, contact_name)
+                                    logger.info(f"🚨 Human Handoff WS sent for {sender_id}")
+                                else:
+                                    logger.warning(f"⚠️ Could not find Contact object to send WS for {sender_id}")
                             except Exception as handoff_err:
                                 logger.error(f"Error handling human handoff: {handoff_err}", exc_info=True)
 
