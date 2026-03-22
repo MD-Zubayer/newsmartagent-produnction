@@ -230,7 +230,7 @@
             inp.value = '';
             inp.disabled = true;
             send.disabled = true;
-            var loading = addMsg('· · ·', 'ai');
+            var loading = addMsg('· · ·', 'ai', true);
             try {
                 var res = await fetch(apiBase + '/chat/' + widgetKey + '/', {
                     method: 'POST',
@@ -238,7 +238,14 @@
                     body: JSON.stringify({ message: val, sender_id: senderId })
                 });
                 var data = await res.json();
-                loading.textContent = data.response || "Sorry, something went wrong.";
+                var responseText = data.response || "Sorry, something went wrong.";
+                loading.textContent = responseText;
+                
+                // Manually save the final response to history
+                var history = JSON.parse(localStorage.getItem('nsa_chat_history_' + widgetKey) || '[]');
+                history.push({ text: responseText, type: 'ai' });
+                if (history.length > 20) history.shift();
+                localStorage.setItem('nsa_chat_history_' + widgetKey, JSON.stringify(history));
             } catch (e) {
                 loading.textContent = "Sorry, I can't connect right now.";
             } finally {
