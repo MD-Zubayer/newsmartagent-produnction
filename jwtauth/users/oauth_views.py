@@ -122,7 +122,7 @@ def facebook_callback(request):
             fb_page.token_expires_at = token_expires_at
             fb_page.page_name = page_name
             fb_page.is_active = True
-            fb_page.save(update_fields=[\"access_token\", \"user_access_token\", \"token_expires_at\", \"page_name\", \"is_active\", \"updated_at\"])
+            fb_page.save(update_fields=["access_token", "user_access_token", "token_expires_at", "page_name", "is_active", "updated_at"])
 
         # Ensure AgentAI stays in sync with latest token
         from aiAgent.models import AgentAI
