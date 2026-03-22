@@ -567,6 +567,8 @@ def process_ai_reply_task(self, data):
             cache_type = 'agent_specific'  # ডিফাল্ট
             parsed_reply = raw_ai_reply    # ডিফাল্ট: raw reply
             json_parse_success = False
+            is_handoff = False
+            is_json_handoff_override = False
 
             json_match = re.search(r'\{.*\}', raw_ai_reply, re.DOTALL)
             if json_match:
@@ -579,58 +581,58 @@ def process_ai_reply_task(self, data):
                         json_parse_success = True
                         
                         # --- Human Handoff Check ---
-                        is_handoff = False
-                        if json_parse_success and (parsed.get('human_handoff') is True or str(parsed.get('human_handoff')).lower() == 'true'):
+                        if parsed.get('human_handoff') is True or str(parsed.get('human_handoff')).lower() == 'true':
                             is_handoff = True
+                            is_json_handoff_override = True
                         
-                        # Keyword fallback (if JSON fails or AI hints at handoff in text)
-                        handoff_keywords = ['human agent', 'representative', 'support person', 'admin', 'সাপোর্ট', 'এজেন্ট', 'মানুষ', 'কথা বলতে চাই']
-                        if not is_handoff:
-                            lower_reply = raw_ai_reply.lower()
-                            if any(kw in lower_reply for kw in handoff_keywords):
-                                is_handoff = True
-                                logger.info(f"🔍 Text-based handoff detected for {sender_id}")
-
-                        if is_handoff:
-                            # Override reply with friendly handoff message if it was a JSON-detected handoff
-                            if json_parse_success and parsed.get('human_handoff'):
-                                parsed_reply = "অনুগ্রহ করে একটু অপেক্ষা করুন। আমাদের একজন human agent শীঘ্রই আপনার সাথে যোগাযোগ করবেন। 🙏"
-                            
-                            cache_type = 'no_cache'  # এই message কখনো cache হবে না
-                            try:
-                                platform_for_lookup = request_type if request_type in ['whatsapp', 'messenger', 'web_widget', 'facebook_comment'] else 'messenger'
-                                
-                                # Update is_human_needed with platform filter
-                                updated = Contact.objects.filter(
-                                    agent=agent_config,
-                                    identifier=sender_id,
-                                    platform=platform_for_lookup
-                                ).update(is_human_needed=True)
-                                
-                                if not updated:
-                                    Contact.objects.filter(agent=agent_config, identifier=sender_id).update(is_human_needed=True)
-
-                                # Get contact for WS payload (platform specific)
-                                contact_obj = Contact.objects.filter(
-                                    agent=agent_config, 
-                                    identifier=sender_id,
-                                    platform=platform_for_lookup
-                                ).first() or Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
-
-                                if contact_obj:
-                                    contact_name = contact_obj.name or contact_obj.push_name or sender_id
-                                    send_human_handoff_ws(agent_config.user.id, agent_config.id, contact_obj.id, contact_name)
-                                    logger.info(f"🚨 Human Handoff WS sent for {sender_id} (Platform: {platform_for_lookup})")
-                                else:
-                                    logger.warning(f"⚠️ Could not find Contact object to send WS for {sender_id}")
-                            except Exception as handoff_err:
-                                logger.error(f"Error handling human handoff: {handoff_err}", exc_info=True)
-
                         logger.info(f"📋 AI cache_type classified as: '{cache_type}' for '{text[:30]}'")
                     else:
                         logger.warning(f"⚠️ JSON parsed but reply field is empty. Using raw.")
                 except (json.JSONDecodeError, AttributeError) as e:
                     logger.warning(f"⚠️ JSON parse failed from AI reply, using raw. Error: {e}")
+
+            # Keyword fallback (if JSON fails or AI hints at handoff in text)
+            handoff_keywords = ['human agent', 'representative', 'support person', 'admin', 'সাপোর্ট', 'এজেন্ট', 'মানুষ', 'কথা বলতে চাই']
+            if not is_handoff:
+                lower_reply = raw_ai_reply.lower()
+                if any(kw in lower_reply for kw in handoff_keywords):
+                    is_handoff = True
+                    logger.info(f"🔍 Text-based handoff detected for {sender_id}")
+
+            if is_handoff:
+                # Override reply with friendly handoff message if it was a JSON-detected handoff
+                if is_json_handoff_override:
+                    parsed_reply = "অনুগ্রহ করে একটু অপেক্ষা করুন। আমাদের একজন human agent শীঘ্রই আপনার সাথে যোগাযোগ করবেন। 🙏"
+                
+                cache_type = 'no_cache'  # এই message কখনো cache হবে না
+                try:
+                    platform_for_lookup = request_type if request_type in ['whatsapp', 'messenger', 'web_widget', 'facebook_comment'] else 'messenger'
+                    
+                    # Update is_human_needed with platform filter
+                    updated = Contact.objects.filter(
+                        agent=agent_config,
+                        identifier=sender_id,
+                        platform=platform_for_lookup
+                    ).update(is_human_needed=True)
+                    
+                    if not updated:
+                        Contact.objects.filter(agent=agent_config, identifier=sender_id).update(is_human_needed=True)
+
+                    # Get contact for WS payload (platform specific)
+                    contact_obj = Contact.objects.filter(
+                        agent=agent_config, 
+                        identifier=sender_id,
+                        platform=platform_for_lookup
+                    ).first() or Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
+
+                    if contact_obj:
+                        contact_name = contact_obj.name or contact_obj.push_name or sender_id
+                        send_human_handoff_ws(agent_config.user.id, agent_config.id, contact_obj.id, contact_name)
+                        logger.info(f"🚨 Human Handoff WS sent for {sender_id} (Platform: {platform_for_lookup})")
+                    else:
+                        logger.warning(f"⚠️ Could not find Contact object to send WS for {sender_id}")
+                except Exception as handoff_err:
+                    logger.error(f"Error handling human handoff: {handoff_err}", exc_info=True)
 
             # 🛡️ Safety Guard: Broken/Truncated JSON Detection
             # যদি json_match না পাওয়া যায় AND raw reply দেখতে JSON-এর মতো হয়
