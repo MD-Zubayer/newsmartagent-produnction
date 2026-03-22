@@ -9,8 +9,11 @@ import {
   ChartBarIcon,
   LifebuoyIcon
 } from "@heroicons/react/24/outline";
+import { useLanguage } from "@/context/LanguageContext";
 
 export default function AboutPage() {
+  const { lang } = useLanguage();
+  const tr = (en, bn) => (lang === "bn" ? bn : en);
 
     const organizationSchema = {
     "@context": "https://schema.org",
@@ -51,8 +54,10 @@ export default function AboutPage() {
           </h1>
 
           <p className="text-lg md:text-xl text-gray-500 font-medium leading-relaxed">
-            ৫ মিনিটে চালু করুন আপনার AI অটো-রিপ্লাই সিস্টেম। 
-          প্রয়োজন নাই কোন ইঞ্জিনিয়ার,নাই কোন ঝামেলা, শুধু রেজাল্ট।
+            {tr(
+              "Launch your AI auto-reply system in 5 minutes. No engineers, no hassle—just results.",
+              "৫ মিনিটে চালু করুন আপনার AI অটো-রিপ্লাই সিস্টেম। প্রয়োজন নাই কোন ইঞ্জিনিয়ার, নাই কোন ঝামেলা, শুধু রেজাল্ট।"
+            )}
           </p>
         </div>
       </div>
@@ -66,25 +71,37 @@ export default function AboutPage() {
           <Feature
             Icon={RocketLaunchIcon}
             title="Instant Setup"
-            text="শুধু Page ID + Access Token দিলেই ৫ মিনিটে সার্ভিস চালু। কোন টেক ঝামেলা নেই।"
+            text={tr(
+              "Go live in 5 minutes with just Page ID + Access Token. Zero tech hassle.",
+              "শুধু Page ID + Access Token দিলেই ৫ মিনিটে সার্ভিস চালু। কোন টেক ঝামেলা নেই।"
+            )}
           />
 
           <Feature
             Icon={ShieldCheckIcon}
             title="No Engineer Cost"
-            text="ইঞ্জিনিয়ার ভাড়া, মেইনটেনেন্স খরচ, বাগ ফিক্স—কিছুই দিতে হবে না। সব আমরা হ্যান্ডেল করি।"
+            text={tr(
+              "No engineer hiring, maintenance cost, or bug-fix overhead. We handle it all.",
+              "ইঞ্জিনিয়ার ভাড়া, মেইনটেনেন্স খরচ, বাগ ফিক্স—কিছুই দিতে হবে না। সব আমরা হ্যান্ডেল করি।"
+            )}
           />
 
           <Feature
             Icon={CpuChipIcon}
             title="AI Hyper Performance"
-            text="কম টোকেনে দ্রুত রিপ্লাই। হাই-স্পিড, লো-কস্ট, স্মার্ট অটোমেশন।"
+            text={tr(
+              "Fast replies with fewer tokens. High speed, low cost, smart automation.",
+              "কম টোকেনে দ্রুত রিপ্লাই। হাই-স্পিড, লো-কস্ট, স্মার্ট অটোমেশন।"
+            )}
           />
 
           <Feature
             Icon={ChartBarIcon}
             title="Smart Analytics"
-            text="রিয়েল-টাইম ডাটা, কমেন্ট, মেসেজ, রিপ্লাই—সব ড্যাশবোর্ডে ক্লিয়ার রিপোর্ট।"
+            text={tr(
+              "Real-time data for comments, messages, and replies with clear dashboards.",
+              "রিয়েল-টাইম ডাটা, কমেন্ট, মেসেজ, রিপ্লাই—সব ড্যাশবোর্ডে ক্লিয়ার রিপোর্ট।"
+            )}
           />
 
         </div>
@@ -95,21 +112,21 @@ export default function AboutPage() {
 
           <div className="space-y-6">
             <h2 className="text-3xl md:text-4xl font-black text-gray-900 leading-tight">
-              ছোট ব্যবসা থেকে বড় এজেন্সি —
-              <span className="text-indigo-600"> সবার জন্য অটোমেশন।</span>
+              Automate for everyone —<span className="text-indigo-600"> from small business to big agencies.</span>
             </h2>
 
             <p className="text-gray-600 leading-8 font-medium">
-              সত্য কথা বলি —
-              আজকাল ফেসবুক অটোমেশন করতে গেলে ডেভেলপার লাগে,
-              সার্ভার লাগে, মেইনটেনেন্স লাগে, খরচ লাগে।
-              কয়েকদিন পরপর সমস্যা আসেই।
+              {tr(
+                "Let’s be honest—traditional Facebook automation needs developers, servers, maintenance, and recurring costs. Issues keep showing up.",
+                "সত্য কথা বলি — আজকাল ফেসবুক অটোমেশন করতে গেলে ডেভেলপার লাগে, সার্ভার লাগে, মেইনটেনেন্স লাগে, খরচ লাগে। কয়েকদিন পরপর সমস্যা আসেই।"
+              )}
             </p>
 
             <p className="text-gray-600 leading-8 font-medium">
-              আমরা ওই পুরা ঝামেলাটা কেটে দিছি।
-              Plug & Play সিস্টেম। আপনি শুধু ব্যবহার করবেন।
-              বাকিটা আমরা দেখবো।
+              {tr(
+                "We removed that entire hassle. Plug & Play system—you just use it, we handle the rest.",
+                "আমরা ওই পুরা ঝামেলাটা কেটে দিছি। Plug & Play সিস্টেম। আপনি শুধু ব্যবহার করবেন। বাকিটা আমরা দেখবো।"
+              )}
             </p>
           </div>
 
@@ -147,8 +164,9 @@ export default function AboutPage() {
                     </div>
                   </div>
                   <div className="flex flex-col">
-                    <span className="text-sm font-black text-gray-900 uppercase tracking-tight">{item.en}</span>
-                    <span className="text-xs font-medium text-gray-500">{item.bn}</span>
+                    <span className="text-sm font-black text-gray-900 uppercase tracking-tight">
+                      {tr(item.en, item.bn)}
+                    </span>
                   </div>
                 </li>
               ))}
@@ -163,19 +181,28 @@ export default function AboutPage() {
           <Feature
             Icon={BoltIcon}
             title="Lightning Fast"
-            text="মেসেজ বা কমেন্ট আসার সাথে সাথে ইনস্ট্যান্ট রিপ্লাই।"
+            text={tr(
+              "Instant replies the moment a message or comment arrives.",
+              "মেসেজ বা কমেন্ট আসার সাথে সাথে ইনস্ট্যান্ট রিপ্লাই।"
+            )}
           />
 
           <Feature
             Icon={UserGroupIcon}
             title="Built for Teams"
-            text="মার্কেটার, এজেন্সি, উদ্যোক্তা—সবাই সহজে ব্যবহার করতে পারবে।"
+            text={tr(
+              "Made for marketers, agencies, and founders—everyone can use it easily.",
+              "মার্কেটার, এজেন্সি, উদ্যোক্তা—সবাই সহজে ব্যবহার করতে পারবে।"
+            )}
           />
 
           <Feature
             Icon={LifebuoyIcon}
             title="24/7 Support"
-            text="যেকোন সমস্যা? আমরা আছি সবসময়। রিয়েল মানুষ, রিয়েল হেল্প।"
+            text={tr(
+              "Any issue? We are here 24/7—real humans, real help.",
+              "যেকোন সমস্যা? আমরা আছি সবসময়। রিয়েল মানুষ, রিয়েল হেল্প।"
+            )}
           />
 
         </div>

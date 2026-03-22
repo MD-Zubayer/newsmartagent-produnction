@@ -7,20 +7,14 @@ import Image from 'next/image';
 import { ChevronDown, Package, Wrench } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
 
-const navLabels = {
-  en: { home: 'Home', docs: 'Docs', services: 'Services', contact: 'Contact', about: 'About', blog: 'Blog', signin: 'Sign In', tools: 'Tools' },
-  bn: { home: 'হোম', docs: 'ডকস', services: 'সেবাসমূহ', contact: 'যোগাযোগ', about: 'আমাদের সম্পর্কে', blog: 'ব্লগ', signin: 'সাইন ইন', tools: 'টুলস' },
-};
-
-const toolsLabels = {
-  en: { name: 'Order Tracking', desc: 'Track orders by phone number' },
-  bn: { name: 'অর্ডার ট্র্যাকিং', desc: 'ফোন নম্বর দিয়ে অর্ডার দেখুন' },
-};
+// Navbar copy stays English even when the site language is Bengali
+const navLabels = { home: 'Home', docs: 'Docs', services: 'Services', contact: 'Contact', about: 'About', blog: 'Blog', signin: 'Sign In', tools: 'Tools' };
+const toolsLabels = { name: 'Order Tracking', desc: 'Track orders by phone number' };
 
 export default function Navbar() {
   const { lang, setLang } = useLanguage();
-  const l = navLabels[lang];
-  const tl = toolsLabels[lang];
+  const l = navLabels;
+  const tl = toolsLabels;
 
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);

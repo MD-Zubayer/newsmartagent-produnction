@@ -32,9 +32,12 @@ import React, { useState } from "react";
 import Navbar from "@/(main)/components/Navbar";
 import Link from "next/link";
 import api from "@/lib/api";
+import { useLanguage } from "@/context/LanguageContext";
 
 
 export default function ServicesPage() {
+  const { lang } = useLanguage();
+  const tr = (en, bn) => (lang === "bn" ? bn : en);
   return (
     <section className="min-h-screen py-24 bg-[#fcfcfd] overflow-hidden">
       <div className="max-w-7xl mx-auto px-6">
@@ -49,8 +52,10 @@ export default function ServicesPage() {
           </h2>
 
           <p className="text-gray-500 font-medium text-lg leading-relaxed">
-            শুধু অটোমেশন না — পুরো বিজনেস গ্রোথ সিস্টেম।
-            কমেন্ট, মেসেঞ্জার, অ্যানালিটিক্স, AI রিপ্লাই — সব এক প্ল্যাটফর্মে।
+            {tr(
+              "Not just automation—an end-to-end business growth system. Comments, Messenger, analytics, AI replies—all in one platform.",
+              "শুধু অটোমেশন না — পুরো বিজনেস গ্রোথ সিস্টেম। কমেন্ট, মেসেঞ্জার, অ্যানালিটিক্স, AI রিপ্লাই — সব এক প্ল্যাটফর্মে।"
+            )}
           </p>
         </div>
 
@@ -60,21 +65,30 @@ export default function ServicesPage() {
           <ServiceCard
             icon={<ChatBubbleLeftRightIcon className="h-7 w-7" />}
             title="Comment Automation"
-            desc="প্রতিটি কমেন্টে অটো রিপ্লাই দিন, কাস্টমারকে ইনবক্সে আনুন এবং সেল কনভার্ট করুন অটোভাবে।"
+            desc={tr(
+              "Auto-reply to every comment, pull customers into inbox, and convert sales automatically.",
+              "প্রতিটি কমেন্টে অটো রিপ্লাই দিন, কাস্টমারকে ইনবক্সে আনুন এবং সেল কনভার্ট করুন অটোভাবে।"
+            )}
             color="bg-indigo-600"
           />
 
           <ServiceCard
             icon={<CpuChipIcon className="h-7 w-7" />}
             title="Messenger Bot"
-            desc="২৪/৭ AI চ্যাটবট। FAQ, অর্ডার, লিড কালেকশন — সবকিছু নিজে নিজে হ্যান্ডেল করবে।"
+            desc={tr(
+              "24/7 AI chatbot. Handles FAQ, orders, and lead collection automatically.",
+              "২৪/৭ AI চ্যাটবট। FAQ, অর্ডার, লিড কালেকশন — সবকিছু নিজে নিজে হ্যান্ডেল করবে।"
+            )}
             color="bg-purple-600"
           />
 
           <ServiceCard
             icon={<ChartBarIcon className="h-7 w-7" />}
             title="Analytics Dashboard"
-            desc="কতজন রিপ্লাই দিলো, কত লিড এলো, কত সেল হলো — লাইভ ডেটা দেখুন এক ক্লিকে।"
+            desc={tr(
+              "See live data: replies sent, leads captured, sales closed—one click.",
+              "কতজন রিপ্লাই দিলো, কত লিড এলো, কত সেল হলো — লাইভ ডেটা দেখুন এক ক্লিকে।"
+            )}
             color="bg-emerald-600"
           />
 
@@ -82,7 +96,10 @@ export default function ServicesPage() {
           <ServiceCard
             icon={<CpuChipIcon className="h-7 w-7" />}
             title="Custom Auto Machine"
-            desc="আপনার বিজনেসের জন্য স্পেশাল অটোমেশন বা মেশিন লার্নিং সলিউশন লাগবে? আমরা আছি আপনার পাশে।"
+            desc={tr(
+              "Need special automation or ML for your business? We’ll build it for you.",
+              "আপনার বিজনেসের জন্য স্পেশাল অটোমেশন বা মেশিন লার্নিং সলিউশন লাগবে? আমরা আছি আপনার পাশে।"
+            )}
             color="bg-blue-700"
           />
 
@@ -90,14 +107,20 @@ export default function ServicesPage() {
           <ServiceCard
             icon={<CodeBracketIcon className="h-7 w-7" />}
             title="Web Development"
-            desc="আপনার বিজনেসের জন্য প্রিমিয়াম এবং ফাস্ট ওয়েবসাইট তৈরি করে দিচ্ছি লেটেস্ট টেকনোলজি দিয়ে।"
+            desc={tr(
+              "Premium, fast websites for your business built with the latest tech.",
+              "আপনার বিজনেসের জন্য প্রিমিয়াম এবং ফাস্ট ওয়েবসাইট তৈরি করে দিচ্ছি লেটেস্ট টেকনোলজি দিয়ে।"
+            )}
             color="bg-slate-800"
           />
 
           <ServiceCard
             icon={<BoltIcon className="h-7 w-7" />}
             title="Instant Setup"
-            desc="শুধু Page ID + Token দিলেই ৫ মিনিটে লাইভ। কোন কোডিং বা ডেভেলপার লাগবে না।"
+            desc={tr(
+              "Live in 5 minutes with just Page ID + Token. No coding or developers needed.",
+              "শুধু Page ID + Token দিলেই ৫ মিনিটে লাইভ। কোন কোডিং বা ডেভেলপার লাগবে না।"
+            )}
             color="bg-amber-500"
           />
         </div>
@@ -111,14 +134,14 @@ export default function ServicesPage() {
                         <RocketLaunchIcon className="h-10 w-10 text-indigo-600" />
                     </div>
                     <div>
-                        <h4 className="text-2xl font-black text-gray-900">এজেন্ট হতে চান?</h4>
-                        <p className="text-gray-500 font-medium mt-1">আমাদের agent হিসেবে জয়েন করুন আর আয় শুরু করুন আজই।</p>
+                        <h4 className="text-2xl font-black text-gray-900">{tr("Want to be an agent?", "এজেন্ট হতে চান?")}</h4>
+                        <p className="text-gray-500 font-medium mt-1">{tr("Join as our agent and start earning today.", "আমাদের agent হিসেবে জয়েন করুন আর আয় শুরু করুন আজই।")}</p>
                     </div>
                 </div>
                 <div className="bg-indigo-600 text-white px-8 py-6 rounded-[2rem] text-center transform group-hover:scale-105 transition-all">
-                    <span className="block text-sm font-bold uppercase tracking-widest opacity-80">ধামাকা অফার</span>
-                    <span className="text-3xl font-black italic underline decoration-amber-400">২০% কমিশন</span>
-                    <span className="block text-xs font-medium mt-1 leading-tight">প্রথম ৫ মাস পর্যন্ত!</span>
+                    <span className="block text-sm font-bold uppercase tracking-widest opacity-80">{tr("Special Offer", "ধামাকা অফার")}</span>
+                    <span className="text-3xl font-black italic underline decoration-amber-400">{tr("20% Commission", "২০% কমিশন")}</span>
+                    <span className="block text-xs font-medium mt-1 leading-tight">{tr("For the first 5 months!", "প্রথম ৫ মাস পর্যন্ত!")}</span>
                 </div>
             </div>
         </div>
@@ -141,42 +164,42 @@ export default function ServicesPage() {
             <Benefit 
               icon={<FaShieldAlt className="text-indigo-600" />}
               title="Full Control" 
-              text="আপনার ব্যবসার প্রতিটি সেটিংসের ওপর থাকবে আপনার পূর্ণ নিয়ন্ত্রণ।" 
+              text={tr("Full control over every setting of your business.", "আপনার ব্যবসার প্রতিটি সেটিংসের ওপর থাকবে আপনার পূর্ণ নিয়ন্ত্রণ।")} 
             />
             <Benefit 
               icon={<FaRocket className="text-rose-500" />}
               title="Instant Deployment" 
-              text="কোনো টেকনিক্যাল নলেজ ছাড়াই মাত্র ৫ মিনিটে লাইভ সেটআপ।" 
+              text={tr("Go live in 5 minutes without any technical knowledge.", "কোনো টেকনিক্যাল নলেজ ছাড়াই মাত্র ৫ মিনিটে লাইভ সেটআপ।")} 
             />
             <Benefit 
               icon={<FaRobot className="text-blue-500" />}
               title="AI Auto-Reply" 
-              text="মানুষের মতো নিখুঁত এবং স্মার্ট এআই অটো রিপ্লাই সিস্টেম।" 
+              text={tr("Human-like, smart AI auto-reply system.", "মানুষের মতো নিখুঁত এবং স্মার্ট এআই অটো রিপ্লাই সিস্টেম।")} 
             />
             <Benefit 
               icon={<FaChartBar className="text-emerald-500" />}
               title="Token Optimized" 
-              text="অত্যাধুনিক প্রযুক্তিতে আপনার টোকেন খরচ কমিয়ে আনুন।" 
+              text={tr("Reduce token costs with advanced optimization.", "অত্যাধুনিক প্রযুক্তিতে আপনার টোকেন খরচ কমিয়ে আনুন।")} 
             />
             <Benefit 
               icon={<FaLightbulb className="text-amber-500" />}
               title="Advanced Analytics" 
-              text="ফুল ড্যাশবোর্ড এবং ডিটেইলড রিপোর্ট পাবেন এক জায়গায়।" 
+              text={tr("Full dashboard and detailed reports in one place.", "ফুল ড্যাশবোর্ড এবং ডিটেইলড রিপোর্ট পাবেন এক জায়গায়।")} 
             />
             <Benefit 
               icon={<FaPhoneAlt className="text-indigo-500" />}
               title="24/7 Priority Support" 
-              text="যেকোনো সমস্যায় আমরা আছি ২৪ ঘণ্টা আপনার পাশে।" 
+              text={tr("We’re by your side 24/7 for any issue.", "যেকোনো সমস্যায় আমরা আছি ২৪ ঘণ্টা আপনার পাশে।")} 
             />
             <Benefit 
               icon={<FaArrowRight className="text-purple-600" />}
               title="Guided Tutorials" 
-              text="সিস্টেম বুঝতে আমাদের রয়েছে সহজ ভিডিও গাইড ও ডকুমেন্টেশন।" 
+              text={tr("Easy video guides and documentation to learn the system.", "সিস্টেম বুঝতে আমাদের রয়েছে সহজ ভিডিও গাইড ও ডকুমেন্টেশন।")} 
             />
             <Benefit 
               icon={<FaCheckCircle className="text-green-500" />}
               title="Affordable Pricing" 
-              text="মার্কেটে সবচেয়ে সাশ্রয়ী প্রাইস এবং সেরা ডিল আমরাই দিচ্ছি।" 
+              text={tr("Best value and most affordable pricing in the market.", "মার্কেটে সবচেয়ে সাশ্রয়ী প্রাইস এবং সেরা ডিল আমরাই দিচ্ছি।")} 
             />
 
           </div>
@@ -192,7 +215,7 @@ export default function ServicesPage() {
           </h3>
 
           <p className="opacity-90 mb-8 relative z-10 font-medium">
-            আজই শুরু করুন। ৫ মিনিটে লাইভ হয়ে যান।
+            {tr("Start today. Go live in 5 minutes.", "আজই শুরু করুন। ৫ মিনিটে লাইভ হয়ে যান।")}
           </p>
 
 <Link href="/signup">
