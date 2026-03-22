@@ -19,7 +19,10 @@ class ContactListView(APIView):
                 # Fetch contacts for all agents of this user
                 contacts = Contact.objects.filter(agent__user=request.user).order_by('-updated_at')
             else:
-                agent = AgentAI.objects.get(page_id=agent_id, user=request.user)
+                if agent_id.isdigit():
+                    agent = AgentAI.objects.get(id=int(agent_id), user=request.user)
+                else:
+                    agent = AgentAI.objects.get(models.Q(page_id=agent_id) | models.Q(number=agent_id), user=request.user)
                 contacts = Contact.objects.filter(agent=agent).order_by('-updated_at')
             
             if query:
@@ -131,6 +134,12 @@ class UnifiedReplyView(APIView):
             platform = contact.platform
             identifier = contact.identifier
 
+            # ── Auto-Reply Pause Logic ──
+            # When a human agent replies manually, we pause the AI to prevent overlapping
+            if contact.is_auto_reply_enabled:
+                contact.is_auto_reply_enabled = False
+                contact.save()
+
             from aiAgent.business_logic import logic_handler
             from chat.services import save_message
             
@@ -148,9 +157,8 @@ class UnifiedReplyView(APIView):
                 }
                 success = logic_handler.deliver_facebook_reply(data, message_text, agent.page_id, agent.access_token)
             elif platform == 'web_widget':
-                 # For Web Widget, we might need a different delivery or just save it
-                 # Typically web widget is polling or uses sockets.
-                 # If it's the dashboard reply logic:
+                 # For Web Widget, save the message to history. The visitor sees it on next fetch/message.
+                 # Also update the dashboard context via WebSocket.
                  success = logic_handler.deliver_dashboard_reply(request.user.id, message_text, str(uuid.uuid4()))
             
             if success:

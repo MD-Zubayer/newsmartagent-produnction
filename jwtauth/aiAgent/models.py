@@ -295,6 +295,8 @@ class Contact(models.Model):
     PLATFORM_CHOICES = [
         ('whatsapp', 'WhatsApp'),
         ('messenger', 'Messenger'),
+        ('web_widget', 'Web Chat Widget'),
+        ('facebook_comment', 'Facebook Comment'),
     ]
     agent = models.ForeignKey(AgentAI, on_delete=models.CASCADE, related_name='contacts')
     identifier = models.CharField(max_length=255, db_index=True)  # Phone number or Messenger Sender ID

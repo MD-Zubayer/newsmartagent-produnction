@@ -297,7 +297,7 @@ def process_ai_reply_task(self, data):
         Contact.objects.update_or_create(
             agent=agent_config,
             identifier=sender_id,
-            platform=request_type if request_type in ['whatsapp', 'messenger', 'web_widget'] else 'messenger',
+            platform=request_type if request_type in ['whatsapp', 'messenger', 'web_widget', 'facebook_comment'] else 'messenger',
             defaults={
                 'name': contact_name if contact_name else None,
                 'push_name': incoming_push_name if incoming_push_name else None
@@ -306,12 +306,13 @@ def process_ai_reply_task(self, data):
 
         # ── Auto-Reply Enable/Disable Check ──
         contact = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
-        if contact and not contact.is_auto_reply_enabled:
-            logger.info(f"🚫 Auto-reply is DISABLED for contact {sender_id} (Agent: {agent_config.id}). Skipping AI response.")
+        if contact and (not contact.is_auto_reply_enabled or contact.is_human_needed):
+            reason = "DISABLED" if not contact.is_auto_reply_enabled else "HUMAN_HANDOFF_ACTIVE"
+            logger.info(f"🚫 Auto-reply is {reason} for contact {sender_id} (Agent: {agent_config.id}). Skipping AI response.")
             if msg_id:
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)
                 r.delete(f'processing_msg:{msg_id}')
-            if request_type == 'web_widget': return "Auto-reply is currently disabled by the agent."
+            if request_type == 'web_widget': return f"Auto-reply is currently {reason.lower()}."
             return
     except Exception as e:
         logger.error(f'Error: Agent not found for page_id {page_id} - {e}')
