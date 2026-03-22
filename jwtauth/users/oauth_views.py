@@ -125,15 +125,16 @@ def facebook_callback(request):
             fb_page.is_active = True
             fb_page.save()
 
-        # Ensure AgentAI stays in sync with latest token
-        # Using a loop and .save() without update_fields, because django-cryptography
-        # can fail or encrypt improperly if update_fields is present.
+        # Ensure AgentAI stays in sync with latest token.
+        # We MUST use .defer('access_token') because previous .update() calls saved 
+        # plaintext tokens into the encrypted field. Fetching them normally would 
+        # cause django-cryptography to throw an InvalidToken exception!
         from aiAgent.models import AgentAI
-        agents = AgentAI.objects.filter(page_id=page_id)
+        agents = AgentAI.objects.filter(page_id=page_id).defer('access_token')
         for agent in agents:
             agent.access_token = page_access_token
             agent.token_expires_at = token_expires_at
-            agent.save()
+            agent.save(update_fields=['access_token', 'token_expires_at'])
             
         saved_pages.append({"page_name": page_name, "page_id": page_id})
 
