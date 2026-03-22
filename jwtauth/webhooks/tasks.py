@@ -579,6 +579,9 @@ def process_ai_reply_task(self, data):
                         
                         # --- Human Handoff Check ---
                         if parsed.get('human_handoff') is True or str(parsed.get('human_handoff')).lower() == 'true':
+                            # Override reply with friendly handoff message
+                            parsed_reply = "অনুগ্রহ করে একটু অপেক্ষা করুন। আমাদের একজন human agent শীঘ্রই আপনার সাথে যোগাযোগ করবেন। 🙏"
+                            cache_type = 'no_cache'  # এই message কখনো cache হবে না
                             try:
                                 from aiAgent.models import Contact
                                 Contact.objects.filter(agent=agent_config, identifier=sender_id).update(is_human_needed=True)
