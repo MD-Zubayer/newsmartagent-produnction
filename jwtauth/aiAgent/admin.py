@@ -622,3 +622,114 @@ class WidgetSettingsAdmin(ModelAdmin):
     list_display = ['agent', 'primary_color', 'widget_position', 'is_enabled', 'updated_at']
     list_filter = ['is_enabled', 'widget_position']
     search_fields = ['agent__name', 'header_title']
+
+
+# ─── Website Visitor Tracking Admin ──────────────────────────────────────────
+from .models import WebsiteVisitor
+from django.core.mail import send_mail, EmailMessage
+from django.conf import settings as django_settings
+
+
+class BulkEmailForm(forms.Form):
+    subject = forms.CharField(max_length=255, label="Subject")
+    message = forms.CharField(widget=forms.Textarea(attrs={"rows": 8}), label="Message Body")
+
+
+@admin.register(WebsiteVisitor)
+class WebsiteVisitorAdmin(ModelAdmin):
+    list_display = [
+        'visitor_uuid_short', 'ip_address', 'device_type', 
+        'captured_email', 'captured_phone', 'user', 
+        'view_count', 'first_visited', 'last_visited'
+    ]
+    list_filter = ['device_type', 'first_visited', 'last_visited']
+    search_fields = ['ip_address', 'captured_email', 'captured_phone', 'user__email']
+    readonly_fields = ['visitor_uuid', 'first_visited', 'last_visited', 'view_count', 'ip_address', 'user_agent', 'device_type']
+    ordering = ['-last_visited']
+    list_per_page = 30
+    date_hierarchy = 'first_visited'
+
+    actions = ['send_bulk_email_action', 'export_emails_action']
+
+    def visitor_uuid_short(self, obj):
+        return str(obj.visitor_uuid)[:8] + "..."
+    visitor_uuid_short.short_description = "Visitor ID"
+
+    def has_add_permission(self, request):
+        return False  # Visitors are auto-created, not manually
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                'send-bulk-email/',
+                self.admin_site.admin_view(self.send_bulk_email_view),
+                name='aiAgent_websitevisitor_send_bulk_email'
+            ),
+        ]
+        return custom_urls + urls
+
+    def send_bulk_email_action(self, request, queryset):
+        """Opens a form to send a bulk email to selected visitors who have emails."""
+        emails = list(queryset.filter(captured_email__isnull=False).exclude(captured_email="").values_list('captured_email', flat=True).distinct())
+        if not emails:
+            self.message_user(request, "⚠️ No email addresses found in selected visitors.", level='warning')
+            return
+        # Store emails in session for the form
+        request.session['bulk_email_recipients'] = emails
+        from django.http import HttpResponseRedirect
+        return HttpResponseRedirect(reverse('admin:aiAgent_websitevisitor_send_bulk_email'))
+    send_bulk_email_action.short_description = "📧 Send Bulk Email to Selected Visitors"
+
+    def send_bulk_email_view(self, request):
+        recipients = request.session.get('bulk_email_recipients', [])
+        
+        if request.method == 'POST':
+            form = BulkEmailForm(request.POST)
+            if form.is_valid():
+                subject = form.cleaned_data['subject']
+                message = form.cleaned_data['message']
+                sent_count = 0
+                failed = []
+                
+                for email in recipients:
+                    try:
+                        send_mail(
+                            subject=subject,
+                            message=message,
+                            from_email=django_settings.DEFAULT_FROM_EMAIL,
+                            recipient_list=[email],
+                            fail_silently=False,
+                        )
+                        sent_count += 1
+                    except Exception as e:
+                        failed.append(f"{email} ({e})")
+
+                if sent_count:
+                    messages.success(request, f"✅ Email sent to {sent_count} recipients successfully.")
+                if failed:
+                    messages.error(request, f"❌ Failed to send to: {', '.join(failed)}")
+                
+                del request.session['bulk_email_recipients']
+                return redirect('admin:aiAgent_websitevisitor_changelist')
+        else:
+            form = BulkEmailForm()
+
+        context = {
+            **self.admin_site.each_context(request),
+            'form': form,
+            'recipients': recipients,
+            'recipient_count': len(recipients),
+            'opts': WebsiteVisitor._meta,
+            'title': f"Send Bulk Email to {len(recipients)} Visitors",
+        }
+        return render(request, 'admin/aiAgent/websitevisitor/send_bulk_email.html', context)
+
+    def export_emails_action(self, request, queryset):
+        """Shows a message listing all email addresses of selected visitors."""
+        emails = list(queryset.filter(captured_email__isnull=False).exclude(captured_email="").values_list('captured_email', flat=True).distinct())
+        if emails:
+            self.message_user(request, f"📋 {len(emails)} emails: {', '.join(emails)}")
+        else:
+            self.message_user(request, "No emails found in selection.", level='warning')
+    export_emails_action.short_description = "📋 Show Email List of Selected"
