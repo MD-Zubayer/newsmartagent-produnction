@@ -115,6 +115,14 @@ def facebook_callback(request):
                 'is_active': True
             }
         )
+        # If existing, ensure tokens are refreshed and active status/name synced
+        if not created:
+            fb_page.access_token = page_access_token
+            fb_page.user_access_token = long_lived_token
+            fb_page.token_expires_at = token_expires_at
+            fb_page.page_name = page_name
+            fb_page.is_active = True
+            fb_page.save(update_fields=[\"access_token\", \"user_access_token\", \"token_expires_at\", \"page_name\", \"is_active\", \"updated_at\"])
 
         # Ensure AgentAI stays in sync with latest token
         from aiAgent.models import AgentAI
