@@ -115,6 +115,13 @@ def facebook_callback(request):
                 'is_active': True
             }
         )
+
+        # Ensure AgentAI stays in sync with latest token
+        from aiAgent.models import AgentAI
+        AgentAI.objects.filter(page_id=page_id).update(
+            access_token=page_access_token,
+            token_expires_at=token_expires_at
+        )
         saved_pages.append({"page_name": page_name, "page_id": page_id})
 
     # Redirect user back to the dashboard connect page (or return JSON if frontend handles popup)
