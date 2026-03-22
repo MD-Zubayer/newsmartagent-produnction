@@ -98,45 +98,53 @@ def facebook_callback(request):
         return JsonResponse({"error": "Invalid user state."}, status=400)
     
     saved_pages = []
-    for page in pages_data:
-        page_id = page.get("id")
-        page_name = page.get("name")
-        page_access_token = page.get("access_token")
+    try:
+        for page in pages_data:
+            page_id = page.get("id")
+            page_name = page.get("name")
+            page_access_token = page.get("access_token")
 
-        # Create or update the FacebookPage entry
-        fb_page, created = FacebookPage.objects.update_or_create(
-            page_id=page_id,
-            defaults={
-                'user': user,
-                'page_name': page_name,
-                'access_token': page_access_token,
-                'user_access_token': long_lived_token,
-                'token_expires_at': token_expires_at,
-                'is_active': True
-            }
-        )
-        
-        # Explicitly save fb_page to guarantee updated_at and custom signals trigger
-        if not created:
-            fb_page.access_token = page_access_token
-            fb_page.user_access_token = long_lived_token
-            fb_page.token_expires_at = token_expires_at
-            fb_page.page_name = page_name
-            fb_page.is_active = True
-            fb_page.save()
-
-        # Ensure AgentAI stays in sync with latest token.
-        # We MUST use .defer('access_token') because previous .update() calls saved 
-        # plaintext tokens into the encrypted field. Fetching them normally would 
-        # cause django-cryptography to throw an InvalidToken exception!
-        from aiAgent.models import AgentAI
-        agents = AgentAI.objects.filter(page_id=page_id).defer('access_token')
-        for agent in agents:
-            agent.access_token = page_access_token
-            agent.token_expires_at = token_expires_at
-            agent.save(update_fields=['access_token', 'token_expires_at'])
+            # Create or update the FacebookPage entry
+            fb_page, created = FacebookPage.objects.update_or_create(
+                page_id=page_id,
+                defaults={
+                    'user': user,
+                    'page_name': page_name,
+                    'access_token': page_access_token,
+                    'user_access_token': long_lived_token,
+                    'token_expires_at': token_expires_at,
+                    'is_active': True
+                }
+            )
             
-        saved_pages.append({"page_name": page_name, "page_id": page_id})
+            # Explicitly save fb_page to guarantee updated_at and custom signals trigger
+            if not created:
+                fb_page.access_token = page_access_token
+                fb_page.user_access_token = long_lived_token
+                fb_page.token_expires_at = token_expires_at
+                fb_page.page_name = page_name
+                fb_page.is_active = True
+                fb_page.save()
+
+            # Ensure AgentAI stays in sync with latest token.
+            # We MUST use .defer('access_token') because previous .update() calls saved 
+            # plaintext tokens into the encrypted field. Fetching them normally would 
+            # cause django-cryptography to throw an InvalidToken exception!
+            from aiAgent.models import AgentAI
+            agents = AgentAI.objects.filter(page_id=page_id).defer('access_token')
+            for agent in agents:
+                agent.access_token = page_access_token
+                agent.token_expires_at = token_expires_at
+                agent.save(update_fields=['access_token', 'token_expires_at'])
+                
+            saved_pages.append({"page_name": page_name, "page_id": page_id})
+    except Exception as e:
+        import traceback
+        with open("/tmp/fb_callback_error.txt", "w") as f:
+            f.write(traceback.format_exc())
+            f.write(f"\nPages data: {pages_data}")
+        # Re-raise so that the frontend still behaves consistently (i.e. crashes if it's supposed to)
+        raise
 
     # Redirect user back to the dashboard connect page (or return JSON if frontend handles popup)
     # Using window.opener to close the popup and refresh the parent if using popup flow.

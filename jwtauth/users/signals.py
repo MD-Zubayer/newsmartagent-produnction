@@ -45,24 +45,27 @@ def sync_fb_page_to_agent(sender, instance, created, **kwargs):
     # Calculate default name from user profile or email
     user_name = instance.user.name or instance.user.email.split('@')[0]
     
-    agent, agent_created = AgentAI.objects.get_or_create(
-        page_id=instance.page_id,
-        defaults={
-            'user': instance.user,
-            'name': user_name,
-            'platform': 'messenger',
-            'access_token': instance.access_token,
-            'is_active': instance.is_active,
-            'system_prompt': "You are a helpful AI assistant."
-        }
-    )
+    try:
+        agent = AgentAI.objects.defer('access_token').get(page_id=instance.page_id)
+        agent_created = False
+    except AgentAI.DoesNotExist:
+        agent = AgentAI.objects.create(
+            page_id=instance.page_id,
+            user=instance.user,
+            name=user_name,
+            platform='messenger',
+            access_token=instance.access_token,
+            is_active=instance.is_active,
+            system_prompt="You are a helpful AI assistant."
+        )
+        agent_created = True
     
     if not agent_created:
         agent.user = instance.user
         # We don't overwrite agent.name here to allow manual edits
         agent.access_token = instance.access_token
         agent.is_active = instance.is_active
-        agent.save()
+        agent.save(update_fields=['user', 'access_token', 'is_active'])
 @receiver(post_save, sender=User)
 def ensure_user_order_form(sender, instance, **kwargs):
     
