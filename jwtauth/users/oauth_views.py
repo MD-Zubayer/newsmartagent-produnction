@@ -115,16 +115,25 @@ def facebook_callback(request):
                 'is_active': True
             }
         )
+        
+        # Explicitly save fb_page to guarantee updated_at and custom signals trigger
+        if not created:
+            fb_page.access_token = page_access_token
+            fb_page.user_access_token = long_lived_token
+            fb_page.token_expires_at = token_expires_at
+            fb_page.page_name = page_name
+            fb_page.is_active = True
+            fb_page.save()
 
         # Ensure AgentAI stays in sync with latest token
-        # Using a loop and .save() because access_token is an encrypted field 
-        # (django-cryptography bypasses encryption on .update())
+        # Using a loop and .save() without update_fields, because django-cryptography
+        # can fail or encrypt improperly if update_fields is present.
         from aiAgent.models import AgentAI
         agents = AgentAI.objects.filter(page_id=page_id)
         for agent in agents:
             agent.access_token = page_access_token
             agent.token_expires_at = token_expires_at
-            agent.save(update_fields=['access_token', 'token_expires_at'])
+            agent.save()
             
         saved_pages.append({"page_name": page_name, "page_id": page_id})
 
