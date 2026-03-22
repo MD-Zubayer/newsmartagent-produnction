@@ -1,3 +1,4 @@
+"use client";
 // app/about/page.js
 import {
   RocketLaunchIcon,
