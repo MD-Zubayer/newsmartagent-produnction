@@ -584,15 +584,31 @@ def process_ai_reply_task(self, data):
                             cache_type = 'no_cache'  # এই message কখনো cache হবে না
                             try:
                                 from aiAgent.models import Contact
-                                Contact.objects.filter(agent=agent_config, identifier=sender_id).update(is_human_needed=True)
+                                platform_for_lookup = request_type if request_type in ['whatsapp', 'messenger', 'web_widget', 'facebook_comment'] else 'messenger'
                                 
-                                # Send WS Notification
+                                # Update is_human_needed
+                                updated = Contact.objects.filter(
+                                    agent=agent_config,
+                                    identifier=sender_id,
+                                    platform=platform_for_lookup
+                                ).update(is_human_needed=True)
+                                
+                                # If no contact found with platform filter, try without
+                                if not updated:
+                                    updated = Contact.objects.filter(
+                                        agent=agent_config,
+                                        identifier=sender_id
+                                    ).update(is_human_needed=True)
+                                
+                                logger.info(f"🚨 Human handoff: Updated {updated} contact(s) for {sender_id} [{platform_for_lookup}]")
+                                
+                                # Get contact for WS payload
                                 contact_obj = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
-                                contact_name = contact_obj.name or contact_obj.push_name or sender_id
+                                contact_name = (contact_obj.name or contact_obj.push_name or sender_id) if contact_obj else sender_id
                                 send_human_handoff_ws(agent_config.user.id, agent_config.id, sender_id, contact_name)
-                                logger.info(f"🚨 Human Handoff triggered for {sender_id}")
+                                logger.info(f"🚨 Human Handoff WS sent for {sender_id}")
                             except Exception as handoff_err:
-                                logger.error(f"Error handling human handoff: {handoff_err}")
+                                logger.error(f"Error handling human handoff: {handoff_err}", exc_info=True)
 
                         logger.info(f"📋 AI cache_type classified as: '{cache_type}' for '{text[:30]}'")
                     else:
