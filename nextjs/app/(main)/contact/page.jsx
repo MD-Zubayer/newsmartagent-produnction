@@ -53,8 +53,8 @@ export default function ContactPage() {
         {/* Header Section */}
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tighter mb-4">
-            {tr("Let's ", "চলুন ")}
-            <span className="text-indigo-600">{tr("Connect", "যোগাযোগ করি")}</span>
+            Let's 
+            <span className="text-indigo-600"> Connect</span>
           </h2>
           <p className="text-gray-500 font-medium max-w-md mx-auto">
             {tr("Have a question or want to work with us? Send us a message and we'll reply quickly.", "আপনার কোনো প্রশ্ন আছে বা আমাদের সাথে কাজ করতে চান? আমাদের মেসেজ দিন, আমরা দ্রুত উত্তর দেব।")}
