@@ -29,7 +29,7 @@ def facebook_login(request):
         f"client_id={fb_app_id}"
         f"&redirect_uri={fb_redirect_uri}"
         f"&state={state}"
-        f"&scope=pages_messaging,pages_read_engagement,pages_manage_metadata"
+        f"&scope=pages_messaging,pages_read_engagement,pages_manage_metadata,pages_show_list"
     )
     return redirect(fb_login_url)
 
