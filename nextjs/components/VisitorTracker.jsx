@@ -5,12 +5,60 @@ import { useEffect, useState } from "react";
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.newsmartagent.com/api";
 const VISITOR_KEY = "visitor_uuid";
 
-// Helper: get/set visitor uuid in localStorage
 function getStoredUUID() {
   try { return localStorage.getItem(VISITOR_KEY) || ""; } catch { return ""; }
 }
 function setStoredUUID(id) {
   try { localStorage.setItem(VISITOR_KEY, id); } catch {}
+}
+
+/** Scan ALL localStorage + sessionStorage keys for email / phone patterns */
+function detectFromBrowserStorage() {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const phoneRegex = /^\+?[0-9\s\-]{7,15}$/;
+
+  let foundEmail = "";
+  let foundPhone = "";
+
+  const storages = [localStorage, sessionStorage];
+
+  for (const storage of storages) {
+    try {
+      for (let i = 0; i < storage.length; i++) {
+        const key = storage.key(i);
+        if (!key) continue;
+
+        // Skip our own internal keys
+        if (key === VISITOR_KEY || key === "visitor_subscribed" || key === "visitor_popup_dismissed") continue;
+
+        try {
+          let raw = storage.getItem(key) || "";
+
+          // If the value looks like JSON, try to extract email/phone from it
+          if (raw.startsWith("{") || raw.startsWith("[")) {
+            try {
+              const parsed = JSON.parse(raw);
+              const jsonStr = JSON.stringify(parsed);
+              // Pull all email-like strings from JSON blob
+              const emails = jsonStr.match(/[^\s@"',]+@[^\s@"',]+\.[^\s@"',]+/g) || [];
+              const phones = jsonStr.match(/\+?[0-9]{7,15}/g) || [];
+              if (!foundEmail && emails.length) foundEmail = emails[0];
+              if (!foundPhone && phones.length) foundPhone = phones[0];
+            } catch {}
+          }
+
+          // Also test the raw value directly
+          const trimmed = raw.trim().replace(/"/g, "");
+          if (!foundEmail && emailRegex.test(trimmed)) foundEmail = trimmed;
+          if (!foundPhone && phoneRegex.test(trimmed)) foundPhone = trimmed;
+        } catch {}
+      }
+    } catch {}
+
+    if (foundEmail && foundPhone) break;
+  }
+
+  return { foundEmail, foundPhone };
 }
 
 export default function VisitorTracker() {
@@ -21,7 +69,7 @@ export default function VisitorTracker() {
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    // === STEP 1: Always track the visit (fires on every page load) ===
+    // ── STEP 1: Always fire a track call on every page load ──
     const trackVisit = async () => {
       try {
         const existingUUID = getStoredUUID();
@@ -33,34 +81,20 @@ export default function VisitorTracker() {
         });
         if (res.ok) {
           const data = await res.json();
-          if (data.visitor_uuid) {
-            setStoredUUID(data.visitor_uuid);
-          }
+          if (data.visitor_uuid) setStoredUUID(data.visitor_uuid);
         }
-      } catch {
-        // Silently fail — tracking should never break the user experience
-      }
+      } catch {}
     };
     trackVisit();
 
-    // === STEP 2: Check if we should show the subscribe popup ===
+    // ── STEP 2: Check if we should show the subscribe popup ──
     if (
       localStorage.getItem("visitor_subscribed") ||
       localStorage.getItem("visitor_popup_dismissed")
     ) return;
 
-    // Scan common localStorage keys for email/phone
-    const keys = [
-      "email", "userEmail", "user_email",
-      "phone", "userPhone", "user_phone", "mobile", "contactPhone", "contactEmail",
-    ];
-    let foundEmail = "";
-    let foundPhone = "";
-    keys.forEach((k) => {
-      const val = localStorage.getItem(k) || "";
-      if (!foundEmail && val.includes("@")) foundEmail = val;
-      if (!foundPhone && /^\+?[0-9]{7,15}$/.test(val.replace(/\s/g, ""))) foundPhone = val;
-    });
+    // Scan ALL browser storage for any email or phone
+    const { foundEmail, foundPhone } = detectFromBrowserStorage();
 
     if (foundEmail || foundPhone) {
       setEmail(foundEmail);
@@ -84,7 +118,6 @@ export default function VisitorTracker() {
       setDone(true);
       setTimeout(() => setShow(false), 2500);
     } catch {
-      // Silently fail
     } finally {
       setSubmitting(false);
     }
@@ -98,21 +131,13 @@ export default function VisitorTracker() {
   if (!show) return null;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        bottom: "24px",
-        right: "24px",
-        zIndex: 9999,
-        width: "340px",
-        background: "white",
-        borderRadius: "16px",
-        boxShadow: "0 20px 60px rgba(0,0,0,0.18)",
-        overflow: "hidden",
-        animation: "slideUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
-        fontFamily: "Inter, sans-serif",
-      }}
-    >
+    <div style={{
+      position: "fixed", bottom: "24px", right: "24px", zIndex: 9999,
+      width: "340px", background: "white", borderRadius: "16px",
+      boxShadow: "0 20px 60px rgba(0,0,0,0.18)", overflow: "hidden",
+      animation: "slideUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+      fontFamily: "Inter, sans-serif",
+    }}>
       <style>{`
         @keyframes slideUp {
           from { opacity: 0; transform: translateY(40px); }
@@ -120,7 +145,6 @@ export default function VisitorTracker() {
         }
       `}</style>
 
-      {/* Top gradient bar */}
       <div style={{ height: "5px", background: "linear-gradient(90deg, #06b6d4, #3b82f6)" }} />
 
       <div style={{ padding: "20px" }}>
@@ -135,7 +159,7 @@ export default function VisitorTracker() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
               <div>
                 <p style={{ fontWeight: 700, fontSize: "15px", color: "#111", margin: 0 }}>🔔 আমাদের সাথে থাকুন!</p>
-                <p style={{ color: "#6b7280", fontSize: "12px", margin: "4px 0 0" }}>সর্বশেষ অফার ও আপডেট সরাসরি পান।</p>
+                <p style={{ color: "#6b7280", fontSize: "12px", margin: "4px 0 0" }}>আপনার ব্রাউজারে যে তথ্য পাওয়া গেছে:</p>
               </div>
               <button onClick={handleDismiss} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: "18px", padding: "0 0 0 8px" }}>✕</button>
             </div>
