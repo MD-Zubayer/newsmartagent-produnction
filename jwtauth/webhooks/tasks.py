@@ -63,6 +63,30 @@ def send_cache_update_ws(user_id, agent_id):
     except Exception as e:
         logger.error(f"WebSocket broadcast error: {e}")
 
+def send_human_handoff_ws(user_id, contact):
+    """Send a real-time WebSocket notification when AI requests human intervention."""
+    try:
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"user_{user_id}",
+            {
+                "type": "send_notification",
+                "content": {
+                    "action": "HUMAN_HANDOFF",
+                    "contact_id": contact.id,
+                    "contact_name": contact.name or contact.push_name or contact.identifier,
+                    "sender_id": contact.identifier,
+                    "platform": contact.platform,
+                    "message": f"🚨 {contact.name or contact.identifier} needs human assistance!",
+                }
+            }
+        )
+        logger.info(f"🚨 Human handoff WS sent for contact {contact.id}")
+    except Exception as e:
+        logger.error(f"Human handoff WebSocket error: {e}")
+
 def deliver_dashboard_reply(user_id, reply, msg_id):
     try:
         from channels.layers import get_channel_layer
@@ -515,7 +539,8 @@ def process_ai_reply_task(self, data):
 
             # ---- Cache Classification Instruction (JSON suffix) ----
             classify_instruction = (
-                '\n\nReturn ONLY a valid JSON object: {"reply": "...", "cache_type": "..."}. '
+                '\n\nReturn ONLY a valid JSON object: {"reply": "...", "cache_type": "...", "human_handoff": false}. '
+                'Set "human_handoff" to true ONLY if: (1) the user explicitly asks to speak with a human/agent, OR (2) you cannot answer the question at all. Otherwise always false. '
                 'Use "no_cache" for context-dependent words (it/this/that/ঐটা/সেটা) or very specific conversation flow.'
                 'Use "sender_specific" for user-only info (my,amar,etc any language, name/order/status/আমি/আমার/ব্যক্তিগত তথ্য). '
                 'Use "agent_specific" for information extracted from [KNOWLEDGE BASE DATA], business details like products/prices, or IF ASKED ABOUT YOUR IDENTITY (who you are, what you do). '
@@ -543,6 +568,25 @@ def process_ai_reply_task(self, data):
                         cache_type = parsed.get('cache_type', 'agent_specific').strip().lower()
                         json_parse_success = True
                         logger.info(f"📋 AI cache_type classified as: '{cache_type}' for '{text[:30]}'")
+
+                        # 🚨 Human Handoff Check
+                        if parsed.get('human_handoff') is True:
+                            # Override the reply with a friendly handoff message
+                            parsed_reply = "অনুগ্রহ করে একটু অপেক্ষা করুন। আমাদের একজন human agent শীঘ্রই আপনার সাথে যোগাযোগ করবেন। 🙏"
+                            cache_type = 'no_cache'  # এই message cache করা যাবে না
+                            try:
+                                from aiAgent.models import Contact
+                                contact = Contact.objects.filter(
+                                    agent=agent_config, identifier=sender_id
+                                ).first()
+                                if contact:
+                                    contact.is_human_needed = True
+                                    contact.save(update_fields=['is_human_needed'])
+                                    send_human_handoff_ws(agent_config.user.id, contact)
+                                    logger.info(f"🚨 Human handoff triggered for {sender_id}")
+                            except Exception as he:
+                                logger.error(f"Human handoff processing error: {he}")
+
                     else:
                         logger.warning(f"⚠️ JSON parsed but reply field is empty. Using raw.")
                 except (json.JSONDecodeError, AttributeError) as e:

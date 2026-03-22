@@ -204,7 +204,12 @@ export default function Contacts() {
         ) : filteredContacts.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredContacts.map(contact => (
-              <div key={contact.id} className="group bg-white/80 backdrop-blur-md p-6 rounded-[2.5rem] shadow-sm border border-gray-100 hover:border-indigo-200 transition-all hover:shadow-xl flex flex-col">
+              <div key={contact.id} className={`group bg-white/80 backdrop-blur-md p-6 rounded-[2.5rem] shadow-sm border ${contact.is_human_needed ? 'border-rose-500 ring-4 ring-rose-500/10' : 'border-gray-100'} hover:border-indigo-200 transition-all hover:shadow-xl flex flex-col relative`}>
+                {contact.is_human_needed && (
+                  <div className="absolute -top-3 -right-3 w-10 h-10 bg-rose-600 rounded-full flex items-center justify-center text-white shadow-xl animate-bounce border-4 border-white z-10">
+                     <span className="text-lg">🆘</span>
+                  </div>
+                )}
                 <div className="flex justify-between items-start mb-4">
                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-transform duration-500 group-hover:rotate-12 ${
                     contact.platform === 'whatsapp' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'
@@ -229,8 +234,13 @@ export default function Contacts() {
                 </div>
 
                 <div className="flex-1">
-                  <h3 className="text-xl font-black text-gray-900 mb-1 truncate">
+                  <h3 className={`text-xl font-black mb-1 truncate flex items-center gap-2 ${contact.is_human_needed ? 'text-rose-600' : 'text-gray-900'}`}>
                     {contact.name || contact.push_name || contact.identifier}
+                    {contact.is_human_needed && (
+                       <span className="bg-rose-100 text-rose-600 text-[10px] px-2 py-0.5 rounded-full border border-rose-200 uppercase font-black tracking-tighter">
+                          Human Help Needed
+                       </span>
+                    )}
                   </h3>
                   {contact.push_name && contact.name && contact.name !== contact.push_name && (
                     <p className="text-xs font-bold text-indigo-400 mb-1">@{contact.push_name}</p>

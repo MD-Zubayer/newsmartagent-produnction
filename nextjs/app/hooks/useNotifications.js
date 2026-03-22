@@ -8,18 +8,20 @@ import toast from "react-hot-toast";
 export const useNotifications = (user, setOrders = null) => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [handoffContactId, setHandoffContactId] = useState(null); // 🚨 Real-time handoff tracking
   const socketRef = useRef(null);
   
   // ১. অডিও রিফারেন্স তৈরি (যাতে বারবার লোড না হয়)
   const audioRef = useRef(null);
-  const orderAudioRef = useRef(null)
+  const orderAudioRef = useRef(null);
+  const handoffAudioRef = useRef(null);
 
   useEffect(() => {
     // ব্রাউজারে অডিও অবজেক্ট ইনিশিয়ালাইজ করা
     // আপনার public ফোল্ডারে notification.mp3 নামে একটি ফাইল রাখুন
     audioRef.current = new Audio("/sounds/nextjs_ringe_1.mp3");
-
     orderAudioRef.current = new Audio("/sounds/nextjs_ringe_2.mp3");
+    handoffAudioRef.current = new Audio("/sounds/human_audio_alart.wav");
   }, []);
 
   // ২. পুরানো নোটিফিকেশন ফেচ করা
@@ -55,14 +57,11 @@ export const useNotifications = (user, setOrders = null) => {
         const data = JSON.parse(event.data);
         
         if (data.action === "NEW_ORDER") {
-
           if (orderAudioRef.current) {
             orderAudioRef.current.play().catch(err => console.log("Audio play blocked:", err));
-
           }
           if (setOrders) {
             setOrders((prev) => [data.order_data, ...prev]);
-
           }
           toast.success("নতুন অর্ডার আসছে! 💰", { 
               duration: 5000,
@@ -70,20 +69,34 @@ export const useNotifications = (user, setOrders = null) => {
               id: `order-${data.order_data.id}`
             });
 
+        } else if (data.action === "HUMAN_HANDOFF") {
+          // 🚨 Human Handoff Alert — play dedicated alert sound
+          if (handoffAudioRef.current) {
+            handoffAudioRef.current.currentTime = 0;
+            handoffAudioRef.current.play().catch(err => console.log("Handoff audio blocked:", err));
+          }
+          if (data.contact_id) {
+            setHandoffContactId(data.contact_id);
+          }
+          toast(
+            `🚨 Human Help Needed!\n${data.contact_name || data.sender_id || 'A user'} is requesting human assistance.`,
+            { 
+              duration: 10000,
+              style: { background: '#dc2626', color: '#fff', fontWeight: 'bold', borderRadius: '16px' },
+              icon: '🆘',
+              id: `handoff-${data.contact_id}`
+            }
+          );
+
         } else if (data.action === "CACHE_UPDATE") {
-           // Ignore CACHE_UPDATE here, dashboard handles it silently
            console.log("CACHE_UPDATE received in background hook, ignoring audio/toast.");
-        } else{
+        } else {
           if (audioRef.current) {
             audioRef.current.play().catch(err => console.log("Audio play blocked:", err));
-
           }
           setNotifications((prev) => [data, ...prev]);
-            setUnreadCount((prev) => prev + 1);
-            
-            toast.success(data.message || "নতুন নোটিফিকেশন!", { 
-              icon: "🔔" 
-            });
+          setUnreadCount((prev) => prev + 1);
+          toast.success(data.message || "নতুন নোটিফিকেশন!", { icon: "🔔" });
         } 
 
         
@@ -111,5 +124,5 @@ export const useNotifications = (user, setOrders = null) => {
     }
   };
 
-  return { notifications, setNotifications, unreadCount, markAsRead };
+  return { notifications, setNotifications, unreadCount, markAsRead, handoffContactId };
 };
