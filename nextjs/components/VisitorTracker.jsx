@@ -3,6 +3,15 @@
 import { useEffect, useState } from "react";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.newsmartagent.com/api";
+const VISITOR_KEY = "visitor_uuid";
+
+// Helper: get/set visitor uuid in localStorage
+function getStoredUUID() {
+  try { return localStorage.getItem(VISITOR_KEY) || ""; } catch { return ""; }
+}
+function setStoredUUID(id) {
+  try { localStorage.setItem(VISITOR_KEY, id); } catch {}
+}
 
 export default function VisitorTracker() {
   const [show, setShow] = useState(false);
@@ -12,14 +21,41 @@ export default function VisitorTracker() {
   const [done, setDone] = useState(false);
 
   useEffect(() => {
-    // Don't show if already subscribed or dismissed
-    if (localStorage.getItem("visitor_subscribed") || localStorage.getItem("visitor_popup_dismissed")) return;
+    // === STEP 1: Always track the visit (fires on every page load) ===
+    const trackVisit = async () => {
+      try {
+        const existingUUID = getStoredUUID();
+        const res = await fetch(`${BACKEND_URL}/AgentAI/visitor/track/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ visitor_uuid: existingUUID || null }),
+          credentials: "include",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.visitor_uuid) {
+            setStoredUUID(data.visitor_uuid);
+          }
+        }
+      } catch {
+        // Silently fail — tracking should never break the user experience
+      }
+    };
+    trackVisit();
 
-    // Check common keys where email/phone might be stored
-    const keys = ["email", "userEmail", "user_email", "phone", "userPhone", "user_phone", "mobile", "contactEmail", "contactPhone"];
+    // === STEP 2: Check if we should show the subscribe popup ===
+    if (
+      localStorage.getItem("visitor_subscribed") ||
+      localStorage.getItem("visitor_popup_dismissed")
+    ) return;
+
+    // Scan common localStorage keys for email/phone
+    const keys = [
+      "email", "userEmail", "user_email",
+      "phone", "userPhone", "user_phone", "mobile", "contactPhone", "contactEmail",
+    ];
     let foundEmail = "";
     let foundPhone = "";
-
     keys.forEach((k) => {
       const val = localStorage.getItem(k) || "";
       if (!foundEmail && val.includes("@")) foundEmail = val;
@@ -29,22 +65,15 @@ export default function VisitorTracker() {
     if (foundEmail || foundPhone) {
       setEmail(foundEmail);
       setPhone(foundPhone);
-      // Delay popup by 2 seconds to not be jarring
-      const timer = setTimeout(() => setShow(true), 2000);
+      const timer = setTimeout(() => setShow(true), 2500);
       return () => clearTimeout(timer);
     }
   }, []);
 
-  const getVisitorId = () => {
-    // Try to read cookie
-    const cookie = document.cookie.split(";").find((c) => c.trim().startsWith("VISITOR_ID="));
-    return cookie ? cookie.trim().split("=")[1] : null;
-  };
-
   const handleSubscribe = async () => {
     setSubmitting(true);
     try {
-      const visitorId = getVisitorId();
+      const visitorId = getStoredUUID();
       await fetch(`${BACKEND_URL}/AgentAI/visitor/subscribe/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -91,7 +120,7 @@ export default function VisitorTracker() {
         }
       `}</style>
 
-      {/* Header gradient bar */}
+      {/* Top gradient bar */}
       <div style={{ height: "5px", background: "linear-gradient(90deg, #06b6d4, #3b82f6)" }} />
 
       <div style={{ padding: "20px" }}>
@@ -105,19 +134,10 @@ export default function VisitorTracker() {
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
               <div>
-                <p style={{ fontWeight: 700, fontSize: "15px", color: "#111", margin: 0 }}>
-                  🔔 আমাদের সাথে থাকুন!
-                </p>
-                <p style={{ color: "#6b7280", fontSize: "12px", margin: "4px 0 0" }}>
-                  সর্বশেষ অফার ও আপডেট সরাসরি পান।
-                </p>
+                <p style={{ fontWeight: 700, fontSize: "15px", color: "#111", margin: 0 }}>🔔 আমাদের সাথে থাকুন!</p>
+                <p style={{ color: "#6b7280", fontSize: "12px", margin: "4px 0 0" }}>সর্বশেষ অফার ও আপডেট সরাসরি পান।</p>
               </div>
-              <button
-                onClick={handleDismiss}
-                style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: "18px", padding: "0 0 0 8px" }}
-              >
-                ✕
-              </button>
+              <button onClick={handleDismiss} style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: "18px", padding: "0 0 0 8px" }}>✕</button>
             </div>
 
             {email && (
@@ -137,17 +157,12 @@ export default function VisitorTracker() {
               onClick={handleSubscribe}
               disabled={submitting}
               style={{
-                width: "100%",
-                padding: "11px",
-                borderRadius: "10px",
-                border: "none",
+                width: "100%", padding: "11px", borderRadius: "10px", border: "none",
                 background: submitting ? "#e5e7eb" : "linear-gradient(135deg, #06b6d4, #3b82f6)",
                 color: submitting ? "#9ca3af" : "white",
-                fontWeight: 700,
-                fontSize: "14px",
+                fontWeight: 700, fontSize: "14px",
                 cursor: submitting ? "not-allowed" : "pointer",
-                marginTop: "4px",
-                transition: "all 0.2s",
+                marginTop: "4px", transition: "all 0.2s",
               }}
             >
               {submitting ? "সেভ হচ্ছে..." : "✅ সাবস্ক্রাইব করুন"}

@@ -657,6 +657,55 @@ class RequestSpecialAgentAPIView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class VisitorTrackView(APIView):
+    """
+    Public, no-auth. Called from VisitorTracker.jsx on every page load.
+    Creates or updates a WebsiteVisitor record (IP, device, view count).
+    Returns the visitor_uuid so the browser can store it.
+    """
+    permission_classes = []
+
+    def post(self, request):
+        try:
+            from aiAgent.models import WebsiteVisitor
+            import uuid as uuid_module
+
+            # Get visitor uuid from request body or cookie
+            visitor_uuid = request.data.get('visitor_uuid') or request.COOKIES.get('VISITOR_ID')
+
+            # Extract IP
+            x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+            ip = x_forwarded_for.split(',')[0].strip() if x_forwarded_for else request.META.get('REMOTE_ADDR', '')
+
+            user_agent = request.META.get('HTTP_USER_AGENT', '')[:512]
+            device_type = 'Mobile' if 'Mobile' in user_agent else 'Desktop'
+
+            if visitor_uuid:
+                visitor = WebsiteVisitor.objects.filter(visitor_uuid=visitor_uuid).first()
+                if visitor:
+                    visitor.view_count += 1
+                    visitor.ip_address = ip
+                    visitor.user_agent = user_agent
+                    if request.user.is_authenticated and not visitor.user:
+                        visitor.user = request.user
+                    visitor.save(update_fields=['view_count', 'last_visited', 'ip_address', 'user_agent', 'user'])
+                    return Response({'visitor_uuid': str(visitor.visitor_uuid), 'status': 'updated'})
+
+            # New visitor
+            new_uuid = uuid_module.uuid4()
+            visitor = WebsiteVisitor.objects.create(
+                visitor_uuid=new_uuid,
+                ip_address=ip,
+                user_agent=user_agent,
+                device_type=device_type,
+                user=request.user if request.user.is_authenticated else None
+            )
+            return Response({'visitor_uuid': str(new_uuid), 'status': 'created'})
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+
+
 class VisitorSubscribeView(APIView):
     """
     Public endpoint — no auth required.
