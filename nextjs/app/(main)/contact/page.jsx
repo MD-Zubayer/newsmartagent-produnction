@@ -7,8 +7,11 @@ import {
 } from "@heroicons/react/24/outline";
 import api from "@/lib/api";
 import toast from "react-hot-toast";
+import { useLanguage } from "@/context/LanguageContext";
 
 export default function ContactPage() {
+  const { lang } = useLanguage();
+  const tr = (en, bn) => (lang === "bn" ? bn : en);
   // ১. স্টেট ডিক্লেয়ার করা
   const [formData, setFormData] = useState({
     name: "",
@@ -28,16 +31,16 @@ export default function ContactPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    const toastId = toast.loading("Sending your message...");
+    const toastId = toast.loading(tr("Sending your message...", "আপনার মেসেজ পাঠানো হচ্ছে..."));
 
     try {
       // আপনার Django API এন্ডপয়েন্ট
       await api.post("/contact/create/", formData);
       
-      toast.success("Sent successfully! We will be in touch soon.", { id: toastId });
+      toast.success(tr("Sent successfully! We will be in touch soon.", "সফলভাবে পাঠানো হয়েছে! আমরা শীঘ্রই যোগাযোগ করবো।"), { id: toastId });
       setFormData({ name: "", email: "", subjects: "", messages: "" }); // ফর্ম রিসেট
     } catch (err) {
-      toast.error("Sorry, the sending failed. Please try again.", { id: toastId });
+      toast.error(tr("Sorry, the sending failed. Please try again.", "দুঃখিত, পাঠানো যায়নি। আবার চেষ্টা করুন।"), { id: toastId });
     } finally {
       setLoading(false);
     }
@@ -50,10 +53,11 @@ export default function ContactPage() {
         {/* Header Section */}
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tighter mb-4">
-            Let's <span className="text-indigo-600">Connect</span>
+            {tr("Let's ", "চলুন ")}
+            <span className="text-indigo-600">{tr("Connect", "যোগাযোগ করি")}</span>
           </h2>
           <p className="text-gray-500 font-medium max-w-md mx-auto">
-            আপনার কোনো প্রশ্ন আছে বা আমাদের সাথে কাজ করতে চান? আমাদের মেসেজ দিন, আমরা দ্রুত উত্তর দেব।
+            {tr("Have a question or want to work with us? Send us a message and we'll reply quickly.", "আপনার কোনো প্রশ্ন আছে বা আমাদের সাথে কাজ করতে চান? আমাদের মেসেজ দিন, আমরা দ্রুত উত্তর দেব।")}
           </p>
         </div>
 
@@ -67,7 +71,7 @@ export default function ContactPage() {
                 <EnvelopeIcon className="h-6 w-6" />
               </div>
               <div className="overflow-hidden">
-                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Email Us</p>
+                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">{tr("Email Us", "ইমেইল করুন")}</p>
                 <p className="text-gray-900 font-bold truncate">newsmartagentbd@gmail.com</p>
               </div>
             </div>
@@ -78,7 +82,7 @@ export default function ContactPage() {
                 <PhoneIcon className="h-6 w-6" />
               </div>
               <div>
-                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Call Us</p>
+                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">{tr("Call Us", "কল করুন")}</p>
                 <p className="text-gray-900 font-bold">+8801727358743</p>
               </div>
             </div>
@@ -96,8 +100,8 @@ export default function ContactPage() {
                 </svg>
               </div>
               <div>
-                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">WhatsApp Help</p>
-                <p className="text-gray-900 font-bold">Message Us Anytime</p>
+                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">{tr("WhatsApp Help", "হোয়াটসঅ্যাপ সহায়তা")}</p>
+                <p className="text-gray-900 font-bold">{tr("Message Us Anytime", "যেকোনো সময় মেসেজ করুন")}</p>
               </div>
             </a>
           </div>
@@ -107,18 +111,18 @@ export default function ContactPage() {
             <form onSubmit={handleSubmit} className="bg-white shadow-2xl shadow-gray-200 border border-gray-100 py-8 px-5 md:p-10 rounded-[3rem] space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label className="text-sm font-black text-gray-700 ml-1">Your Name</label>
+                  <label className="text-sm font-black text-gray-700 ml-1">{tr("Your Name", "আপনার নাম")}</label>
                   <input 
                     name="name"
                     required
                     value={formData.name}
                     onChange={handleChange}
                     className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:bg-white focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 outline-none transition-all placeholder:text-gray-400 font-medium" 
-                    placeholder="Your Name" 
+                    placeholder={tr("Your Name", "আপনার নাম")} 
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-black text-gray-700 ml-1">Email Address</label>
+                  <label className="text-sm font-black text-gray-700 ml-1">{tr("Email Address", "ইমেইল ঠিকানা")}</label>
                   <input 
                     type="email"
                     name="email"
@@ -126,32 +130,32 @@ export default function ContactPage() {
                     value={formData.email}
                     onChange={handleChange}
                     className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:bg-white focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 outline-none transition-all placeholder:text-gray-400 font-medium" 
-                    placeholder="jahid@example.com" 
+                    placeholder={tr("jahid@example.com", "jahid@example.com")} 
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-black text-gray-700 ml-1">Subject</label>
+                <label className="text-sm font-black text-gray-700 ml-1">{tr("Subject", "বিষয়")}</label>
                 <input 
                   name="subjects"
                   required
                   value={formData.subjects}
                   onChange={handleChange}
                   className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:bg-white focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 outline-none transition-all placeholder:text-gray-400 font-medium" 
-                  placeholder="How can we help you?" 
+                  placeholder={tr("How can we help you?", "কীভাবে আমরা সাহায্য করতে পারি?")} 
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-black text-gray-700 ml-1">Message</label>
+                <label className="text-sm font-black text-gray-700 ml-1">{tr("Message", "বার্তা")}</label>
                 <textarea 
                   name="messages"
                   required
                   value={formData.messages}
                   onChange={handleChange}
                   className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl h-40 focus:bg-white focus:ring-4 focus:ring-indigo-50 focus:border-indigo-500 outline-none transition-all placeholder:text-gray-400 font-medium resize-none" 
-                  placeholder="Write your message here..." 
+                  placeholder={tr("Write your message here...", "আপনার বার্তাটি এখানে লিখুন...")} 
                 />
               </div>
 
@@ -166,9 +170,9 @@ export default function ContactPage() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    <span>Sending...</span>
+                    <span>{tr("Sending...", "পাঠানো হচ্ছে...")}</span>
                   </div>
-                ) : "Send Message"}
+                ) : tr("Send Message", "বার্তা পাঠান")}
               </button>
             </form>
           </div>

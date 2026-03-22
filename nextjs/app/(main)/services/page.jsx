@@ -155,7 +155,7 @@ export default function ServicesPage() {
           <div className="relative z-10 text-center mb-16 space-y-3">
             <span className="text-indigo-600 font-black uppercase tracking-[0.2em] text-xs">Unmatched Advantages</span>
             <h3 className="text-3xl md:text-5xl font-black text-gray-900 tracking-tight">
-              কেন আমাদের <span className="text-indigo-600">সার্ভিস নেবেন?</span>
+              Why choose our <span className="text-indigo-600">services?</span>
             </h3>
           </div>
 
