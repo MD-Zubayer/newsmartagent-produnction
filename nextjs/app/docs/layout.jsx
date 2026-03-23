@@ -60,6 +60,13 @@ function DocsLayoutContent({ children }) {
         {id: 'dashboard-switching-display-mode', title: lang === 'en' ? 'Switching & Display Modes' : 'সুইচিং & ডিসপ্লে মোড', icon: <LightBulbIcon className="h-5 w-5" /> },
         { id: 'dashboard-overview', title: lang === 'en' ? 'Overview' : 'ওভারভিউ', icon: <CpuChipIcon className="h-5 w-5" /> },
         { id: 'dashboard-saving', title: lang === 'en' ? 'Ranking & Caching' : 'র‍্যাঙ্কিং ও ক্যাশিং', icon: <ShieldCheckIcon className="h-5 w-5" /> },
+        { id: 'dashboard-order', title: lang === 'en' ? 'Order Center' : 'অর্ডার সেন্টার', icon: <ShoppingCartIcon className="h-5 w-5" /> },
+        { id: 'dashboard-sheet', title: lang === 'en' ? 'Spreadsheet Sync' : 'স্প্রেডশিট সিঙ্ক', icon: <TableCellsIcon className="h-5 w-5" /> },
+        { id: 'dashboard-docs', title: lang === 'en' ? 'Documents Sync' : 'ডকুমেন্টস সিঙ্ক', icon: <DocumentTextIcon className="h-5 w-5" /> },
+        { id: 'dashboard-offers', title: lang === 'en' ? 'Active Offers' : 'সক্রিয় অফার', icon: <GiftIcon className="h-5 w-5" /> },
+        { id: 'dashboard-payments', title: lang === 'en' ? 'Payment' : 'পেমেন্টস', icon: <BanknotesIcon className="h-5 w-5" /> },
+        { id: 'dashboard-history', title: lang === 'en' ? 'History' : 'হিস্ট্রি', icon: <ClockIcon className="h-5 w-5" /> },
+        { id: 'dashboard-notifications', title: lang === 'en' ? 'Notifications' : 'নোটিফিকেশন', icon: <BellIcon className="h-5 w-5" /> },
       ]
     },
     {
