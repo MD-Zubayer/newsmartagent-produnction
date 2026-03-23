@@ -42,6 +42,7 @@ export default function Sidebar({ viewMode, isDesktopMode }) {
     { name: "Sheet", href: user?.sheet_id ? `/dashboard/sheet/${user.sheet_id}` : "/dashboard/user", icon: TableCellsIcon, roles: ["user"] },
     { name: "Docs", href: "/dashboard/docs", icon: DocumentTextIcon, roles: ["user"] },
     { name: "Offers", href: "/dashboard/offers", icon: TagIcon, roles: ["user"] },
+    { name: "Payments", href: "/dashboard/payment", icon: CreditCardIcon, roles: ["user"] },
     { name: "History", href: "/dashboard/history", icon: ClockIcon, roles: ["user"] },
     
     { name: "Overview", href: "/dashboard/agent", icon: HomeIcon, roles: ["agent"] },

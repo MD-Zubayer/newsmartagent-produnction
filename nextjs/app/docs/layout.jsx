@@ -37,12 +37,7 @@ function DocsLayoutContent({ children }) {
         { id: 'intro', title: lang === 'en' ? 'Introduction' : 'ভূমিকা', icon: <BookOpenIcon className="h-5 w-5" /> },
       ]
     },
-    {
-      title: lang === 'en' ? 'Getting Started' : 'শুরু করা যাক',
-      items: [
-        { id: 'portal-access', title: lang === 'en' ? 'Portal Access' : 'পোর্টালে প্রবেশ', icon: <GlobeAltIcon className="h-5 w-5" /> },
-      ]
-    },
+    
     {
       title: lang === 'en' ? 'Registration' : 'রেজিস্ট্রেশন',
       items: [
@@ -56,7 +51,6 @@ function DocsLayoutContent({ children }) {
         { id: 'login-steps', title: lang === 'en' ? 'Secure Login' : 'সুরক্ষিত লগইন', icon: <LockClosedIcon className="h-5 w-5" /> },
         { id: 'reset-password', title: lang === 'en' ? 'Reset Password' : 'পাসওয়ার্ড রিসেট', icon: <ShieldCheckIcon className="h-5 w-5" /> },
         { id: 'security-passwords', title: lang === 'en' ? 'Password Rules' : 'পাসওয়ার্ড নিয়ম', icon: <ShieldCheckIcon className="h-5 w-5" /> },
-        { id: 'security-sessions', title: lang === 'en' ? 'Session Timeouts' : 'সেশন টাইমআউট', icon: <LockClosedIcon className="h-5 w-5" /> },
         { id: 'security-2fa', title: lang === 'en' ? '2FA Setup' : '2FA সেটআপ', icon: <ShieldCheckIcon className="h-5 w-5" /> },
       ]
     },
