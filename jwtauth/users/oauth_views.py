@@ -102,7 +102,7 @@ def facebook_callback(request):
     # DEBUG TRAP
     try:
         import json
-        with open("/home/md-zubayer/newsmartagent/production/jwtauth/debug_fb.txt", "w") as f:
+        with open("/app/debug_fb.txt", "w") as f:
             f.write(f"pages_data length: {len(pages_data)}\n")
             f.write(json.dumps(pages_resp, indent=2))
     except Exception:
@@ -150,9 +150,12 @@ def facebook_callback(request):
             saved_pages.append({"page_name": page_name, "page_id": page_id})
     except Exception as e:
         import traceback
-        with open("/home/md-zubayer/newsmartagent/production/jwtauth/debug_fb_error.txt", "w") as f:
-            f.write(traceback.format_exc())
-            f.write(f"\nPages data: {pages_data}")
+        try:
+            with open("/app/debug_fb_error.txt", "w") as f:
+                f.write(traceback.format_exc())
+                f.write(f"\nPages data: {pages_data}")
+        except:
+            pass
         # Re-raise so that the frontend still behaves consistently (i.e. crashes if it's supposed to)
         raise
 

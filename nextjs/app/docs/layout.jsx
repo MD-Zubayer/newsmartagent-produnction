@@ -19,8 +19,6 @@ import {
   ArrowsRightLeftIcon,
   HomeIcon
 } from "@heroicons/react/24/outline";
-import { enContent } from './content/en';
-import { bnContent } from './content/bn';
 import { DocsProvider, useDocs } from './DocsContext';
 
 function DocsLayoutContent({ children }) {
@@ -31,7 +29,6 @@ function DocsLayoutContent({ children }) {
   // Extract slug from pathname (e.g., /docs/intro -> intro)
   const activeSlug = pathname.split('/').pop() || 'intro';
 
-  const content = lang === 'en' ? enContent : bnContent;
 
   const groups = [
     {

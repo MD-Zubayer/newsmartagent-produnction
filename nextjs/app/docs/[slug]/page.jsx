@@ -17,7 +17,14 @@ const DocSkeleton = () => (
 
 export default function DocTopicPage({ params }) {
   const { slug } = React.use(params);
-  const { lang } = useDocs();
+  const { lang, supportEmail } = useDocs();
+
+  // Custom component to render the dynamic support email
+  const SupportEmail = () => (
+    <a href={`mailto:${supportEmail}`} className="text-indigo-600 underline font-bold hover:text-indigo-800 transition-colors">
+      {supportEmail}
+    </a>
+  );
 
   // Dynamically import the MDX file based on language and slug
   const Content = dynamic(
@@ -42,7 +49,7 @@ export default function DocTopicPage({ params }) {
     <div className="max-w-4xl mx-auto min-h-[70vh]">
       <section className="mb-24 max-w-none">
         <Suspense fallback={<DocSkeleton />}>
-          <Content />
+          <Content components={{ SupportEmail }} />
         </Suspense>
       </section>
 
