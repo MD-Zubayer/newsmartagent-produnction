@@ -17,7 +17,14 @@ import {
   ArrowRightIcon,
   ClipboardDocumentListIcon,
   ArrowsRightLeftIcon,
-  HomeIcon
+  HomeIcon,
+  ShoppingCartIcon,
+  TableCellsIcon,
+  DocumentTextIcon,
+  GiftIcon,
+  BanknotesIcon,
+  ClockIcon,
+  BellIcon
 } from "@heroicons/react/24/outline";
 import { DocsProvider, useDocs } from './DocsContext';
 
