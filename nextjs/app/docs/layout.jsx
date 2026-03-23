@@ -44,10 +44,9 @@ function DocsLayoutContent({ children }) {
       ]
     },
     {
-      title: lang === 'en' ? 'Account System' : 'অ্যাকাউন্ট সিস্টেম',
+      title: lang === 'en' ? 'Registration' : 'রেজিস্ট্রেশন',
       items: [
-        { id: 'account-manual', title: lang === 'en' ? 'Manual Registration' : 'ম্যানুয়াল রেজিস্ট্রেশন', icon: <UserPlusIcon className="h-5 w-5" /> },
-        { id: 'account-agent', title: lang === 'en' ? 'Agent Assistance' : 'এজেন্ট সহায়তা', icon: <UserPlusIcon className="h-5 w-5" /> },
+        { id: 'registration', title: lang === 'en' ? 'Account Registration' : 'অ্যাকাউন্ট রেজিস্ট্রেশন', icon: <UserPlusIcon className="h-5 w-5" /> },
       ]
     },
     {
@@ -59,6 +58,14 @@ function DocsLayoutContent({ children }) {
         { id: 'security-passwords', title: lang === 'en' ? 'Password Rules' : 'পাসওয়ার্ড নিয়ম', icon: <ShieldCheckIcon className="h-5 w-5" /> },
         { id: 'security-sessions', title: lang === 'en' ? 'Session Timeouts' : 'সেশন টাইমআউট', icon: <LockClosedIcon className="h-5 w-5" /> },
         { id: 'security-2fa', title: lang === 'en' ? '2FA Setup' : '2FA সেটআপ', icon: <ShieldCheckIcon className="h-5 w-5" /> },
+      ]
+    },
+    {
+      title: lang === 'en' ? 'Dashboard' : 'ড্যাশবোর্ড',
+      items: [
+        {id: 'dashboard-switching-display-mode', title: lang === 'en' ? 'Switching & Display Modes' : 'সুইচিং & ডিসপ্লে মোড', icon: <LightBulbIcon className="h-5 w-5" /> },
+        { id: 'dashboard-overview', title: lang === 'en' ? 'Overview' : 'ওভারভিউ', icon: <CpuChipIcon className="h-5 w-5" /> },
+        { id: 'dashboard-saving', title: lang === 'en' ? 'Ranking & Caching' : 'র‍্যাঙ্কিং ও ক্যাশিং', icon: <ShieldCheckIcon className="h-5 w-5" /> },
       ]
     },
     {
