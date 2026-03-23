@@ -5,7 +5,7 @@ import React, { createContext, useContext, useState } from 'react';
 const DocsContext = createContext();
 
 export function DocsProvider({ children }) {
-  const [lang, setLang] = useState('bn');
+  const [lang, setLang] = useState('en');
   const [supportEmail, setSupportEmail] = useState('support@newsmartagent.com');
 
   React.useEffect(() => {
