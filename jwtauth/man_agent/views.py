@@ -5,8 +5,11 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from man_agent.models import ManAgentConfig, ReferralRelation
 from man_agent.serializer import ManAgentConfigSerializer, ReferredUserSerializer
-from users.models import Subscription
+from users.models import Subscription, Payment
 from django.db.models import Max, Q
+from django.utils import timezone
+from dateutil.relativedelta import relativedelta
+from decimal import Decimal
 # Create your views here.
 
 
@@ -52,10 +55,9 @@ class AgentDashboardStatsView(APIView):
         inactive_subs_count = total_unique_subs_count - active_subs_count
 
         # ৪. ৫ মাসের কমিশন ফোরকাস্ট লজিক
-        current_comm = float(profile.commission_balance)
-        # যদি ব্যালেন্স খুব কম হয় বা ০ হয়, তবে একটি বেসলাইন (যেমন ৫০০) ধরা হয়েছে
-        base_val = current_comm if current_comm > 500 else 500
-        forecast = [round((base_val / 4) * (1.15 ** i), 2) for i in range(1, 6)]
+        # বর্তমান কমিশন ব্যালেন্সকেই মাসিক গতি ধরে পরের ৫ মাস সমান রাখছি
+        monthly_commission = Decimal(profile.commission_balance or 0)
+        forecast = [round(monthly_commission, 2) for _ in range(5)]
 
         data = {
             'total_referrals': referrals.count(),
