@@ -39,19 +39,21 @@ export default function AgentDashboard() {
         }
     };
 
-    const monthlyAvgData = (stats?.monthly_forecast && stats.monthly_forecast.length > 0
-        ? stats.monthly_forecast
-        : [0, 0, 0, 0, 0]).map(Number);
+    const monthlyAvgData = (stats?.monthly_history && stats.monthly_history.length > 0
+        ? stats.monthly_history
+        : []).map(Number);
 
     const totalCumulativeData = monthlyAvgData.reduce((acc, curr, i) => 
         [...acc, (Number(curr) || 0) + (acc[i - 1] || 0)], []);
 
-    const monthLabels = monthlyAvgData.map((_, i) => `Month ${i + 1}`);
+    const monthLabels = stats?.monthly_labels && stats.monthly_labels.length === monthlyAvgData.length
+        ? stats.monthly_labels
+        : monthlyAvgData.map((_, i) => `Month ${i + 1}`);
 
     const barData = {
         labels: monthLabels,
         datasets: [{
-            label: 'Avg Monthly Income (৳)',
+            label: 'Monthly Received (৳)',
             data: monthlyAvgData,
             backgroundColor: 'rgba(99, 102, 241, 0.8)',
             borderRadius: 8,

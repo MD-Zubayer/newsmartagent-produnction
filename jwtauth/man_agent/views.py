@@ -6,9 +6,8 @@ from rest_framework.permissions import IsAuthenticated
 from man_agent.models import ManAgentConfig, ReferralRelation
 from man_agent.serializer import ManAgentConfigSerializer, ReferredUserSerializer
 from users.models import Subscription, Payment
-from django.db.models import Max, Q
-from django.utils import timezone
-from dateutil.relativedelta import relativedelta
+from django.db.models import Max, Q, Sum
+from django.db.models.functions import TruncMonth
 from decimal import Decimal
 # Create your views here.
 
@@ -54,10 +53,19 @@ class AgentDashboardStatsView(APIView):
         total_unique_subs_count = latest_subs.count() # কতজন ইউজার অন্তত একবার সাবস্ক্রিপশন নিয়েছে
         inactive_subs_count = total_unique_subs_count - active_subs_count
 
-        # ৪. ৫ মাসের কমিশন ফোরকাস্ট লজিক
-        # বর্তমান কমিশন ব্যালেন্সকেই মাসিক গতি ধরে পরের ৫ মাস সমান রাখছি
-        monthly_commission = Decimal(profile.commission_balance or 0)
-        forecast = [round(monthly_commission, 2) for _ in range(5)]
+        # ৪. মাসভিত্তিক কমিশন ইতিহাস (সকল মাস)
+        payments = Payment.objects.filter(
+            profile__user_id__in=referred_user_ids,
+            status='paid',
+            paid_at__isnull=False,
+        ).annotate(month=TruncMonth('paid_at')).values('month').annotate(total=Sum('amount')).order_by('month')
+
+        monthly_labels = []
+        monthly_history = []
+        for p in payments:
+            monthly_labels.append(p['month'].strftime("%b %Y"))
+            # মোট প্রাপ্ত অর্থ (কমিশন হার ধরে না নিয়ে) মাসভিত্তিক মোট
+            monthly_history.append(round(Decimal(p['total']), 2))
 
         data = {
             'total_referrals': referrals.count(),
@@ -70,7 +78,8 @@ class AgentDashboardStatsView(APIView):
             'total_subscriptions': total_unique_subs_count,
             'active_subscriptions': active_subs_count,
             'inactive_subscriptions': inactive_subs_count,
-            'monthly_forecast': forecast,
+            'monthly_history': monthly_history,
+            'monthly_labels': monthly_labels,
             
             # রেফারেল লিস্ট (Serializer এখন শুধু লেটেস্ট স্ট্যাটাস দেখাবে)
             'recent_users': ReferredUserSerializer(
