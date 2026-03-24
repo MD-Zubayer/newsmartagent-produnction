@@ -7,7 +7,7 @@ from man_agent.models import ManAgentConfig, ReferralRelation
 from man_agent.serializer import ManAgentConfigSerializer, ReferredUserSerializer
 from users.models import Subscription, Payment
 from django.db.models import Max, Q, Sum
-from django.db.models.functions import TruncMonth
+from django.db.models.functions import TruncMonth, Coalesce
 from decimal import Decimal
 # Create your views here.
 
@@ -57,8 +57,11 @@ class AgentDashboardStatsView(APIView):
         payments = Payment.objects.filter(
             profile__user_id__in=referred_user_ids,
             status='paid',
-            paid_at__isnull=False,
-        ).annotate(month=TruncMonth('paid_at')).values('month').annotate(total=Sum('amount')).order_by('month')
+        ).annotate(
+            pay_time=Coalesce('paid_at', 'created_at')
+        ).annotate(
+            month=TruncMonth('pay_time')
+        ).values('month').annotate(total=Sum('amount')).order_by('month')
 
         monthly_labels = []
         monthly_history = []
@@ -66,6 +69,11 @@ class AgentDashboardStatsView(APIView):
             monthly_labels.append(p['month'].strftime("%b %Y"))
             # মোট প্রাপ্ত অর্থ (কমিশন হার ধরে না নিয়ে) মাসভিত্তিক মোট
             monthly_history.append(round(Decimal(p['total']), 2))
+
+        # যদি কোনো ইতিহাস না থাকে, অন্তত বর্তমান কমিশন ব্যালেন্স দেখানো হবে
+        if not monthly_history and profile.commission_balance:
+            monthly_history = [round(Decimal(profile.commission_balance), 2)]
+            monthly_labels = ['Current Balance']
 
         data = {
             'total_referrals': referrals.count(),
