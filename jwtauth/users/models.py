@@ -372,6 +372,8 @@ class FacebookPage(models.Model):
     access_token = models.CharField(max_length=500)
     user_access_token = models.CharField(max_length=500, blank=True, null=True)
     token_expires_at = models.DateTimeField(blank=True, null=True, help_text="Expiry of the user long-lived token, if provided")
+    instagram_business_account_id = models.CharField(max_length=255, blank=True, null=True)
+    instagram_username = models.CharField(max_length=255, blank=True, null=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

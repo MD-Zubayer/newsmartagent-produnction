@@ -85,7 +85,7 @@ def facebook_callback(request):
     token_expires_at = timezone.now() + timedelta(seconds=expires_in) if expires_in else None
 
     # 3. Fetch connected pages for this token
-    pages_url = f"https://graph.facebook.com/v17.0/me/accounts?access_token={long_lived_token}"
+    pages_url = f"https://graph.facebook.com/v17.0/me/accounts?fields=name,access_token,instagram_business_account&access_token={long_lived_token}"
     pages_resp = requests.get(pages_url).json()
     pages_data = pages_resp.get("data", [])
 
@@ -113,6 +113,15 @@ def facebook_callback(request):
             page_id = page.get("id")
             page_name = page.get("name")
             page_access_token = page.get("access_token")
+            insta_info = page.get("instagram_business_account")
+            insta_id = insta_info.get("id") if insta_info else None
+            insta_username = None
+
+            if insta_id:
+                # Fetch Instagram username
+                insta_url = f"https://graph.facebook.com/v17.0/{insta_id}?fields=username&access_token={page_access_token}"
+                insta_resp = requests.get(insta_url).json()
+                insta_username = insta_resp.get("username")
 
             # Create or update the FacebookPage entry
             fb_page, created = FacebookPage.objects.update_or_create(
@@ -123,6 +132,8 @@ def facebook_callback(request):
                     'access_token': page_access_token,
                     'user_access_token': long_lived_token,
                     'token_expires_at': token_expires_at,
+                    'instagram_business_account_id': insta_id,
+                    'instagram_username': insta_username,
                     'is_active': True
                 }
             )
@@ -133,21 +144,56 @@ def facebook_callback(request):
                 fb_page.user_access_token = long_lived_token
                 fb_page.token_expires_at = token_expires_at
                 fb_page.page_name = page_name
+                fb_page.instagram_business_account_id = insta_id
+                fb_page.instagram_username = insta_username
                 fb_page.is_active = True
                 fb_page.save()
 
-            # Ensure AgentAI stays in sync with latest token.
-            # We MUST use .defer('access_token') because previous .update() calls saved 
-            # plaintext tokens into the encrypted field. Fetching them normally would 
-            # cause django-cryptography to throw an InvalidToken exception!
+            # Ensure AgentAI stays in sync with latest token and auto-create if missing
             from aiAgent.models import AgentAI
-            agents = AgentAI.objects.filter(page_id=page_id).defer('access_token')
-            for agent in agents:
-                agent.access_token = page_access_token
-                agent.token_expires_at = token_expires_at
-                agent.save(update_fields=['access_token', 'token_expires_at'])
+            
+            # 1. Messenger Agent
+            messenger_agent, m_created = AgentAI.objects.filter(page_id=page_id, platform='messenger').defer('access_token').get_or_create(
+                page_id=page_id,
+                platform='messenger',
+                defaults={
+                    'user': user,
+                    'name': f"{page_name} (Messenger)",
+                    'access_token': page_access_token,
+                    'token_expires_at': token_expires_at,
+                    'system_prompt': "You are a helpful AI assistant for this business. Answer customer queries based on the available information.",
+                    'is_active': True
+                }
+            )
+            if not m_created:
+                messenger_agent.access_token = page_access_token
+                messenger_agent.token_expires_at = token_expires_at
+                messenger_agent.save(update_fields=['access_token', 'token_expires_at'])
+
+            # 2. Instagram Agent (if applicable)
+            if insta_id:
+                insta_agent, i_created = AgentAI.objects.filter(page_id=insta_id, platform='instagram').defer('access_token').get_or_create(
+                    page_id=insta_id,
+                    platform='instagram',
+                    defaults={
+                        'user': user,
+                        'name': f"{insta_username or page_name} (Instagram)",
+                        'access_token': page_access_token,
+                        'token_expires_at': token_expires_at,
+                        'system_prompt': "You are a helpful AI assistant for this business. Answer customer queries based on the available information.",
+                        'is_active': True
+                    }
+                )
+                if not i_created:
+                    insta_agent.access_token = page_access_token
+                    insta_agent.token_expires_at = token_expires_at
+                    insta_agent.save(update_fields=['access_token', 'token_expires_at'])
                 
-            saved_pages.append({"page_name": page_name, "page_id": page_id})
+            saved_pages.append({
+                "page_name": page_name, 
+                "page_id": page_id,
+                "instagram_username": insta_username
+            })
     except Exception as e:
         import traceback
         try:
@@ -186,6 +232,8 @@ def get_connected_pages(request):
         {
             "id": page.page_id,
             "name": page.page_name,
+            "instagram_id": page.instagram_business_account_id,
+            "instagram_username": page.instagram_username,
             "is_active": page.is_active,
             "connected_at": page.created_at
         } 

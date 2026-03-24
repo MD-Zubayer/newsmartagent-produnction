@@ -17,7 +17,7 @@ export default function IntegrationManager() {
   const [isLoadingPages, setIsLoadingPages] = useState(false);
 
   useEffect(() => {
-    if (selectedPlatform?.id === 'facebook') {
+    if (selectedPlatform?.id === 'facebook' || selectedPlatform?.id === 'instagram') {
       setIsLoadingPages(true);
       axiosInstance.get("/facebook/pages/")
         .then(res => {
@@ -273,8 +273,8 @@ export default function IntegrationManager() {
               </div>
             )}
 
-            {/* Platform Specific: Facebook */}
-            {selectedPlatform.id === "facebook" && (
+            {/* Platform Specific: Facebook & Instagram */}
+            {(selectedPlatform.id === "facebook" || selectedPlatform.id === "instagram") && (
               <div className="pt-16 md:pt-24 border-t border-slate-100 space-y-12 md:space-y-16 animate-in slide-in-from-bottom-8 duration-1000">
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 lg:gap-12 text-center lg:text-left">
                   <div className="space-y-2">
@@ -322,7 +322,13 @@ export default function IntegrationManager() {
                               <FaFacebook className="text-2xl md:text-3xl" />
                             </div>
                             <div className="space-y-1 min-w-0">
-                              <p className="font-black text-base md:text-xl text-slate-900 tracking-tight italic truncate">{page.name}</p>
+                              <p className="font-black text-base md:text-xl text-slate-900 tracking-tight italic truncate text-left">{page.name}</p>
+                              {page.instagram_username && (
+                                <div className="flex items-center gap-2 text-pink-600 text-[10px] md:text-xs font-bold">
+                                  <FaInstagram className="shrink-0" />
+                                  <span className="truncate">@{page.instagram_username}</span>
+                                </div>
+                              )}
                               <div className="flex items-center gap-1.5 px-2 md:px-3 py-1 bg-emerald-50 rounded-full border border-emerald-100 w-fit">
                                 <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
                                 <span className="text-[8px] md:text-[9px] font-black text-emerald-600 uppercase tracking-widest truncate">Optimal</span>

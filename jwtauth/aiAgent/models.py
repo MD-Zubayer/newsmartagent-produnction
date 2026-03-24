@@ -28,6 +28,7 @@ class AgentAI(models.Model):
         ('whatsapp', 'WhatsApp'),
         ('messenger', 'Messenger'),
         ('facebook_comment', 'Facebook Comment'),
+        ('instagram', 'Instagram'),
         ('web_widget', 'Web Chat Widget')
     ]
     AI_AGENT_CATEGORIES = (
