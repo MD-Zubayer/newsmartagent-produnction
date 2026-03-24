@@ -99,12 +99,16 @@ def facebook_callback(request):
     
     saved_pages = []
     
-    # DEBUG TRAP
+    # DEBUG TRAP - COMPREHENSIVE LOGGING
+    import json
+    import os
+    debug_log_path = "/app/debug_fb_full.log"
+    print(f"DEBUG: Starting FB callback for USER_ID: {user_id}")
     try:
-        import json
-        with open("/app/debug_fb.txt", "w") as f:
-            f.write(f"pages_data length: {len(pages_data)}\n")
-            f.write(json.dumps(pages_resp, indent=2))
+        with open(debug_log_path, "a") as f:
+            f.write(f"\n--- NEW LOGIN SESSION: {timezone.now()} ---\n")
+            f.write(f"USER_ID: {user_id}\n")
+            f.write(f"PAGES_RESP: {json.dumps(pages_resp, indent=2)}\n")
     except Exception:
         pass
         
@@ -119,9 +123,25 @@ def facebook_callback(request):
 
             if insta_id:
                 # Fetch Instagram username
-                insta_url = f"https://graph.facebook.com/v17.0/{insta_id}?fields=username&access_token={page_access_token}"
-                insta_resp = requests.get(insta_url).json()
-                insta_username = insta_resp.get("username")
+                try:
+                    insta_url = f"https://graph.facebook.com/v17.0/{insta_id}?fields=username&access_token={page_access_token}"
+                    insta_resp = requests.get(insta_url).json()
+                    insta_username = insta_resp.get("username")
+                    print(f"DEBUG: FB Page: {page_name} -> Instagram Business Account: {insta_username} ({insta_id})")
+                    
+                    with open(debug_log_path, "a") as f:
+                        f.write(f"PAGE: {page_name} ({page_id}) | INSTA_ID: {insta_id} | INSTA_RESP: {json.dumps(insta_resp)}\n")
+                except Exception as ex:
+                    print(f"DEBUG: ERROR fetching Instagram username for {page_name}: {str(ex)}")
+                    with open(debug_log_path, "a") as f:
+                        f.write(f"ERROR FETCHING INSTA FOR PAGE {page_name}: {str(ex)}\n")
+            else:
+                print(f"DEBUG: FB Page: {page_name} ({page_id}) has NO connected Instagram account.")
+                try:
+                    with open(debug_log_path, "a") as f:
+                        f.write(f"PAGE: {page_name} ({page_id}) | NO INSTAGRAM ACCOUNT LINKED\n")
+                except:
+                    pass
 
             # Create or update the FacebookPage entry
             fb_page, created = FacebookPage.objects.update_or_create(
