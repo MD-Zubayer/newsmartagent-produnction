@@ -3,9 +3,9 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { 
-  BookOpenIcon, 
-  UserPlusIcon, 
+import {
+  BookOpenIcon,
+  UserPlusIcon,
   CurrencyDollarIcon,
   CpuChipIcon,
   ShieldCheckIcon,
@@ -24,7 +24,8 @@ import {
   GiftIcon,
   BanknotesIcon,
   ClockIcon,
-  BellIcon
+  BellIcon,
+  CogIcon
 } from "@heroicons/react/24/outline";
 import { DocsProvider, useDocs } from './DocsContext';
 
@@ -32,7 +33,7 @@ function DocsLayoutContent({ children }) {
   const { lang, setLang } = useDocs();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const pathname = usePathname();
-  
+
   // Extract slug from pathname (e.g., /docs/intro -> intro)
   const activeSlug = pathname.split('/').pop() || 'intro';
 
@@ -44,7 +45,7 @@ function DocsLayoutContent({ children }) {
         { id: 'intro', title: lang === 'en' ? 'Introduction' : 'ভূমিকা', icon: <BookOpenIcon className="h-5 w-5" /> },
       ]
     },
-    
+
     {
       title: lang === 'en' ? 'Registration' : 'রেজিস্ট্রেশন',
       items: [
@@ -64,7 +65,7 @@ function DocsLayoutContent({ children }) {
     {
       title: lang === 'en' ? 'Dashboard' : 'ড্যাশবোর্ড',
       items: [
-        {id: 'dashboard-switching-display-mode', title: lang === 'en' ? 'Switching & Display Modes' : 'সুইচিং & ডিসপ্লে মোড', icon: <LightBulbIcon className="h-5 w-5" /> },
+        { id: 'dashboard-switching-display-mode', title: lang === 'en' ? 'Switching & Display Modes' : 'সুইচিং & ডিসপ্লে মোড', icon: <LightBulbIcon className="h-5 w-5" /> },
         { id: 'dashboard-overview', title: lang === 'en' ? 'Overview' : 'ওভারভিউ', icon: <CpuChipIcon className="h-5 w-5" /> },
         { id: 'dashboard-saving', title: lang === 'en' ? 'Ranking & Caching' : 'র‍্যাঙ্কিং ও ক্যাশিং', icon: <ShieldCheckIcon className="h-5 w-5" /> },
         { id: 'dashboard-order', title: lang === 'en' ? 'Order Center' : 'অর্ডার সেন্টার', icon: <ShoppingCartIcon className="h-5 w-5" /> },
@@ -74,6 +75,14 @@ function DocsLayoutContent({ children }) {
         { id: 'dashboard-payments', title: lang === 'en' ? 'Payment' : 'পেমেন্টস', icon: <BanknotesIcon className="h-5 w-5" /> },
         { id: 'dashboard-history', title: lang === 'en' ? 'History' : 'হিস্ট্রি', icon: <ClockIcon className="h-5 w-5" /> },
         { id: 'dashboard-notifications', title: lang === 'en' ? 'Notifications' : 'নোটিফিকেশন', icon: <BellIcon className="h-5 w-5" /> },
+        { id: 'dashboard-connect-facebook', title: lang === 'en' ? 'Connect Facebook' : 'ফেসবুক কানেক্ট', icon: <GlobeAltIcon className="h-5 w-5" /> },
+        { id: 'dashboard-connect-whatsapp', title: lang === 'en' ? 'Connect WhatsApp' : 'হোয়াটসঅ্যাপ কানেক্ট', icon: <GlobeAltIcon className="h-5 w-5" /> },
+        { id: 'dashboard-connect-widget', title: lang === 'en' ? 'Web Widget' : 'ওয়েব উইজেট', icon: <GlobeAltIcon className="h-5 w-5" /> },
+        { id: 'dashboard-settings', title: lang === 'en' ? 'Settings' : 'সেটিংস', icon: <CogIcon className="h-5 w-5" /> },
+        { id: 'agent-dashboard-overview', title: lang === 'en' ? 'Referral & Earnings' : 'রেফারেল ও আর্নিং', icon: <CurrencyDollarIcon className="h-5 w-5" /> },
+        { id: 'agent-dashboard-accounts', title: lang === 'en' ? 'Accounts' : 'অ্যাকাউন্টস', icon: <BanknotesIcon className="h-5 w-5" /> },
+        { id: 'agent-dashboard-my-referrals', title: lang === 'en' ? 'My Network' : 'আমার নেটওয়ার্ক', icon: <UserPlusIcon className="h-5 w-5" /> },
+        { id: 'agent-dashboard-otp-settings', title: lang === 'en' ? 'OTP Settings' : 'ওটিপি সেটিংস', icon: <ShieldCheckIcon className="h-5 w-5" /> },
       ]
     },
     {
@@ -98,6 +107,7 @@ function DocsLayoutContent({ children }) {
         { id: 'platform-wa-cloud-api', title: lang === 'en' ? 'WA Cloud API' : 'WA ক্লাউড API', icon: <GlobeAltIcon className="h-5 w-5" /> },
         { id: 'platform-wa-templates', title: lang === 'en' ? 'WA Templates' : 'WA টেমপ্লেট', icon: <EnvelopeIcon className="h-5 w-5" /> },
         { id: 'platform-youtube', title: lang === 'en' ? 'YouTube Automation' : 'ইউটিউব অটোমেশন', icon: <GlobeAltIcon className="h-5 w-5" /> },
+
       ]
     },
     {
@@ -119,6 +129,8 @@ function DocsLayoutContent({ children }) {
         { id: 'order-labels', title: lang === 'en' ? 'Shipping Labels' : 'শিপিং লেবেল', icon: <ClipboardDocumentListIcon className="h-5 w-5" /> },
         { id: 'order-status-sync', title: lang === 'en' ? 'Courier Sync' : 'কুরিয়ার সিঙ্ক', icon: <ArrowsRightLeftIcon className="h-5 w-5" /> },
         { id: 'crm-spreadsheet', title: lang === 'en' ? 'Spreadsheet Sync' : 'স্প্রেডশিট সিঙ্ক', icon: <ClipboardDocumentListIcon className="h-5 w-5" /> },
+        { id: 'dashboard-crm', title: lang === 'en' ? 'CRM Interface' : 'সিআরএম ইন্টারফেস', icon: <TableCellsIcon className="h-5 w-5" /> },
+        { id: 'dashboard-contacts', title: lang === 'en' ? 'Live Chat' : 'লাইভ চ্যাট', icon: <EnvelopeIcon className="h-5 w-5" /> },
       ]
     },
     {
@@ -134,6 +146,12 @@ function DocsLayoutContent({ children }) {
         { id: 'profile-settings', title: lang === 'en' ? 'User Settings' : 'ইউজার সেটিংস', icon: <UserPlusIcon className="h-5 w-5" /> },
         { id: 'profile-api-key', title: lang === 'en' ? 'Developer API' : 'ডেভেলপার API', icon: <ShieldCheckIcon className="h-5 w-5" /> },
       ]
+    },
+    {
+      title: lang === 'en' ? 'Advanced AI' : 'অ্যাডভান্সড এআই',
+      items: [
+        { id: 'dashboard-ai-agent', title: lang === 'en' ? 'Agent Management' : 'এজেন্ট ম্যানেজমেন্ট', icon: <CpuChipIcon className="h-5 w-5" /> },
+      ]
     }
   ];
 
@@ -141,22 +159,22 @@ function DocsLayoutContent({ children }) {
 
   return (
     <div className="min-h-screen bg-[#FDFDFF] flex flex-col lg:flex-row">
-      
+
       {/* --- Mobile Header --- */}
       <div className="lg:hidden bg-white border-b border-gray-100 p-4 flex items-center justify-between sticky top-0 z-50">
         <div className="flex items-center gap-4">
-            <Link href="/" className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
-                <HomeIcon className="h-5 w-5" />
-            </Link>
-            <div className="flex items-center gap-2">
-                <div className="bg-indigo-600 p-1.5 rounded-lg">
-                    <CpuChipIcon className="h-5 w-5 text-white" />
-                </div>
-                <span className="font-black text-xl tracking-tighter">NSA Docs</span>
+          <Link href="/" className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+            <HomeIcon className="h-5 w-5" />
+          </Link>
+          <div className="flex items-center gap-2">
+            <div className="bg-indigo-600 p-1.5 rounded-lg">
+              <CpuChipIcon className="h-5 w-5 text-white" />
             </div>
+            <span className="font-black text-xl tracking-tighter">NSA Docs</span>
+          </div>
         </div>
         <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 text-gray-500">
-            <BookOpenIcon className="h-6 w-6" />
+          <BookOpenIcon className="h-6 w-6" />
         </button>
       </div>
 
@@ -170,48 +188,48 @@ function DocsLayoutContent({ children }) {
         </div>
 
         {/* Back to Home Button */}
-        <Link 
-            href="/"
-            className="flex items-center gap-2 px-4 py-2 mb-8 bg-indigo-50 text-indigo-600 rounded-xl font-bold text-xs hover:bg-indigo-100 transition-all w-fit"
+        <Link
+          href="/"
+          className="flex items-center gap-2 px-4 py-2 mb-8 bg-indigo-50 text-indigo-600 rounded-xl font-bold text-xs hover:bg-indigo-100 transition-all w-fit"
         >
-            <HomeIcon className="h-4 w-4" />
-            {lang === 'en' ? 'Back to Home' : 'হোমে ফিরে যান'}
+          <HomeIcon className="h-4 w-4" />
+          {lang === 'en' ? 'Back to Home' : 'হোমে ফিরে যান'}
         </Link>
 
         {/* Language Switcher */}
         <div className="flex p-1 bg-gray-50 rounded-xl mb-8">
-            <button 
-                onClick={() => setLang('bn')} 
-                className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${lang === 'bn' ? 'bg-white shadow text-indigo-600' : 'text-gray-400'}`}
-            >
-                বাংলা
-            </button>
-            <button 
-                onClick={() => setLang('en')} 
-                className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${lang === 'en' ? 'bg-white shadow text-indigo-600' : 'text-gray-400'}`}
-            >
-                English
-            </button>
+          <button
+            onClick={() => setLang('bn')}
+            className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${lang === 'bn' ? 'bg-white shadow text-indigo-600' : 'text-gray-400'}`}
+          >
+            বাংলা
+          </button>
+          <button
+            onClick={() => setLang('en')}
+            className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${lang === 'en' ? 'bg-white shadow text-indigo-600' : 'text-gray-400'}`}
+          >
+            English
+          </button>
         </div>
 
         {/* Dropdown Navigation */}
         <div className="mb-6">
-            <select 
-                onChange={(e) => {
-                    const id = e.target.value;
-                    window.location.href = `/docs/${id}`;
-                }}
-                value={activeSlug}
-                className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all appearance-none cursor-pointer"
-                style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'currentColor\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'org.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'currentColor\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M19 9l-7 7-7-7\'%3E%3C/path%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1rem' }}
-            >
-                <option value="" disabled>{lang === 'en' ? 'Quick Jump...' : 'তাড়াতাড়ি দেখুন...'}</option>
-                {allItems.map(s => (
-                    <option key={s.id} value={s.id}>{s.title}</option>
-                ))}
-            </select>
+          <select
+            onChange={(e) => {
+              const id = e.target.value;
+              window.location.href = `/docs/${id}`;
+            }}
+            value={activeSlug}
+            className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all appearance-none cursor-pointer"
+            style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'currentColor\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'org.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 24 24\' stroke=\'currentColor\'%3E%3Cpath stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'2\' d=\'M19 9l-7 7-7-7\'%3E%3C/path%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 1rem center', backgroundSize: '1rem' }}
+          >
+            <option value="" disabled>{lang === 'en' ? 'Quick Jump...' : 'তাড়াতাড়ি দেখুন...'}</option>
+            {allItems.map(s => (
+              <option key={s.id} value={s.id}>{s.title}</option>
+            ))}
+          </select>
         </div>
-        
+
         <nav className="space-y-8 pb-20">
           {groups.map((group, gIdx) => (
             <div key={gIdx} className="space-y-2">
@@ -222,11 +240,10 @@ function DocsLayoutContent({ children }) {
                     key={item.id}
                     href={`/docs/${item.id}`}
                     onClick={() => setIsSidebarOpen(false)}
-                    className={`flex items-center gap-3 px-4 py-2.5 rounded-xl font-bold transition-all group ${
-                      activeSlug === item.id 
-                      ? 'bg-indigo-50 text-indigo-600' 
-                      : 'text-gray-500 hover:bg-gray-50'
-                    }`}
+                    className={`flex items-center gap-3 px-4 py-2.5 rounded-xl font-bold transition-all group ${activeSlug === item.id
+                        ? 'bg-indigo-50 text-indigo-600'
+                        : 'text-gray-500 hover:bg-gray-50'
+                      }`}
                   >
                     <span className={`${activeSlug === item.id ? 'text-indigo-600' : 'text-gray-400 group-hover:text-gray-600'}`}>
                       {React.cloneElement(item.icon, { className: 'h-4 w-4' })}

@@ -67,8 +67,8 @@ class AgentDashboardStatsView(APIView):
         monthly_history = []
         for p in payments:
             monthly_labels.append(p['month'].strftime("%b %Y"))
-            # মোট প্রাপ্ত অর্থ (কমিশন হার ধরে না নিয়ে) মাসভিত্তিক মোট
-            monthly_history.append(round(Decimal(p['total']), 2))
+            # এজেন্ট কমিশন (পেইড অংকের ২০%) মাসভিত্তিক
+            monthly_history.append(round(Decimal(p['total']) * Decimal('0.20'), 2))
 
         # যদি কোনো ইতিহাস না থাকে, অন্তত বর্তমান কমিশন ব্যালেন্স দেখানো হবে
         if not monthly_history and profile.commission_balance:

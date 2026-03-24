@@ -53,7 +53,7 @@ export default function AgentDashboard() {
     const barData = {
         labels: monthLabels,
         datasets: [{
-            label: 'Monthly Received (৳)',
+            label: 'Monthly Commission (৳)',
             data: monthlyAvgData,
             backgroundColor: 'rgba(99, 102, 241, 0.8)',
             borderRadius: 8,
