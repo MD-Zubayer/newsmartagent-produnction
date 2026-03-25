@@ -770,6 +770,8 @@ class VisitorSubscribeView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 import requests
+import logging
+from django.conf import settings
 
 class ConnectTelegramBotView(APIView):
     """
@@ -797,8 +799,8 @@ class ConnectTelegramBotView(APIView):
             return Response({"error": "Failed to verify token with Telegram API", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         # 2. Set Webhook
-        # Note: replace with actual live domain when deploying
-        webhook_url = f"https://api.newsmartagent.com/webhooks/telegram/" 
+        # Use environment variable if available, otherwise fallback to reasonable default
+        webhook_url = getattr(settings, 'TELEGRAM_WEBHOOK_URL', f"https://{request.get_host()}/api/webhooks/telegram/")
         set_webhook_url = f"https://api.telegram.org/bot{token}/setWebhook?url={webhook_url}"
         
         try:
