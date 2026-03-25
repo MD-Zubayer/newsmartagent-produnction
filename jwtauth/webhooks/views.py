@@ -176,9 +176,9 @@ def instagram_webhook(request):
     data = request.data.dict() if hasattr(request.data, 'dict') else dict(request.data)
     logger.info(f"📥 [instagram_webhook] Received IG data: {data}")
     
-    sender_id = str(data.get('sender_id', ''))
-    page_id = str(data.get('page_id', ''))
-    text = data.get('message') or data.get('text')
+    sender_id = str(data.get('sender_id') or data.get('senderId') or '')
+    page_id = str(data.get('page_id') or data.get('recipient') or data.get('receiver') or data.get('recipient_id') or '')
+    text = data.get('message') or data.get('text') or data.get('message_text')
     
     if not all([sender_id, text, page_id]):
         logger.error(f"❌ [instagram_webhook] Missing core data: sender={sender_id}, page={page_id}")
