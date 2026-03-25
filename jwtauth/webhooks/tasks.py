@@ -309,11 +309,23 @@ def process_ai_reply_task(self, data):
                     platform='instagram'
                 ).order_by('-id').first()
             elif request_type == 'telegram':
-                agent_config = AgentAI.objects.filter(
-                    is_active=True,
-                    page_id__in=lookup_ids,
-                    platform='telegram'
-                ).order_by('-id').first()
+                # Handle both custom bots and shared bot
+                if page_id.startswith('shared_agent_'):
+                    try:
+                        agent_id = int(page_id.replace('shared_agent_', ''))
+                        agent_config = AgentAI.objects.get(
+                            id=agent_id,
+                            is_active=True,
+                            platform='telegram'
+                        )
+                    except (ValueError, AgentAI.DoesNotExist):
+                        agent_config = None
+                else:
+                    agent_config = AgentAI.objects.filter(
+                        is_active=True,
+                        page_id__in=lookup_ids,
+                        platform='telegram'
+                    ).order_by('-id').first()
             else:
                 agent_config = AgentAI.objects.filter(
                     is_active=True,
@@ -358,6 +370,17 @@ def process_ai_reply_task(self, data):
                     logger.info(f"FB token auto-refreshed for page {page_id}")
 
         effective_access_token = fb_page.access_token if fb_page else agent_config.access_token
+        
+        # For shared Telegram bots, use the shared bot token instead
+        if request_type == 'telegram' and page_id.startswith('shared_agent_'):
+            # Get shared bot token from environment or settings
+            shared_bot_token = getattr(settings, 'TELEGRAM_SHARED_BOT_TOKEN', None)
+            if shared_bot_token:
+                effective_access_token = shared_bot_token
+                logger.info(f"Using shared bot token for agent {page_id}")
+            else:
+                logger.error(f"No shared bot token configured for {page_id}")
+                effective_access_token = None
 
         # ── WhatsApp Message Logging (Incoming) ──
         wa_msg_obj = None

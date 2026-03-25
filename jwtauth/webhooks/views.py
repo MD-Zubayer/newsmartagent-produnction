@@ -245,11 +245,74 @@ def telegram_webhook(request):
         logger.error(f"❌ [telegram_webhook] Missing core data: sender={sender_id}, chat={chat_id}, text={text}")
         return Response({'error': 'Missing core data'}, status=400)
 
-    # For Telegram, page_id is the bot username
-    page_id = bot_username or data.get('page_id', '')
-    if not page_id:
-        logger.error("❌ [telegram_webhook] Missing bot_username or page_id")
-        return Response({'error': 'Missing bot identifier'}, status=400)
+    # Check if this is a /start command with agent ID (shared bot)
+    is_start_command = False
+    agent_id = None
+    if text.startswith('/start'):
+        parts = text.split()
+        if len(parts) > 1 and parts[1].startswith('agent_'):
+            try:
+                agent_id = int(parts[1].replace('agent_', ''))
+                is_start_command = True
+                logger.info(f"🚀 [telegram_webhook] Start command detected for agent {agent_id}")
+            except ValueError:
+                pass
+
+    if is_start_command:
+        # Handle shared bot start command
+        from aiAgent.models import AgentAI, TelegramBotMapping
+        
+        try:
+            agent = AgentAI.objects.get(id=agent_id, is_active=True)
+            
+            # Create or update mapping
+            mapping, created = TelegramBotMapping.objects.get_or_create(
+                chat_id=chat_id,
+                defaults={
+                    'agent': agent,
+                    'user': agent.user,
+                    'is_active': True
+                }
+            )
+            
+            if not created:
+                # Update existing mapping
+                mapping.agent = agent
+                mapping.user = agent.user
+                mapping.is_active = True
+                mapping.save()
+            
+            logger.info(f"✅ [telegram_webhook] {'Created' if created else 'Updated'} mapping: Chat {chat_id} -> Agent {agent.name}")
+            
+            # Send welcome message via Telegram API
+            welcome_text = f"✅ Connected! You are now chatting with {agent.name}.\n\n{agent.greeting_message or 'Hello! How can I help you today?'}"
+            
+            # For shared bot, we need to send the message directly
+            # This assumes we have a shared bot token configured somewhere
+            # For now, we'll just log it and let the normal flow handle it
+            logger.info(f"📤 [telegram_webhook] Would send welcome message: {welcome_text}")
+            
+        except AgentAI.DoesNotExist:
+            logger.error(f"❌ [telegram_webhook] Agent {agent_id} not found")
+            return Response({'status': 'ignored', 'reason': 'agent_not_found'}, status=200)
+        except Exception as e:
+            logger.error(f"❌ [telegram_webhook] Error creating mapping: {e}")
+            return Response({'status': 'error', 'reason': 'mapping_error'}, status=500)
+    
+    # For shared bot, determine the agent from mapping
+    if not bot_username:
+        from aiAgent.models import TelegramBotMapping
+        try:
+            mapping = TelegramBotMapping.objects.get(chat_id=chat_id, is_active=True)
+            agent = mapping.agent
+            bot_username = 'shared_bot'  # Placeholder for shared bot
+            page_id = f"shared_agent_{agent.id}"
+        except TelegramBotMapping.DoesNotExist:
+            logger.info(f"⏭️ [telegram_webhook] No mapping found for chat {chat_id}")
+            return Response({'status': 'ignored', 'reason': 'no_mapping'}, status=200)
+    else:
+        # Custom bot - use bot_username as page_id
+        page_id = bot_username
 
     # Ignore bot's own messages
     if str(sender_id) == str(chat_id):
@@ -269,6 +332,7 @@ def telegram_webhook(request):
         data['type'] = 'telegram'
         data['platform'] = 'telegram'
         data['chat_id'] = chat_id  # Keep for reply delivery
+        data['is_start_command'] = is_start_command
         
         logger.info(f"📦 [telegram_webhook] Sending to Celery: sender={sender_id}, page={page_id}")
         process_ai_reply_task.delay(data)

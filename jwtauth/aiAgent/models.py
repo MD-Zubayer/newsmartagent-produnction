@@ -133,6 +133,23 @@ class UserMemory(models.Model):
     class Meta:
         unique_together = ('ai_agent', 'sender_id')
 
+class TelegramBotMapping(models.Model):
+    """Mapping between Telegram chat IDs and AgentAI for shared bot"""
+    chat_id = models.CharField(max_length=100, unique=True, db_index=True)
+    agent = models.ForeignKey(AgentAI, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_message_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Telegram Bot Mapping"
+        verbose_name_plural = "Telegram Bot Mappings"
+        unique_together = ('chat_id', 'agent')
+
+    def __str__(self):
+        return f"Chat {self.chat_id} -> Agent {self.agent.name}"
+
 import uuid
 from django.conf import settings
 User = settings.AUTH_USER_MODEL

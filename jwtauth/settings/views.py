@@ -6,6 +6,7 @@ from .models import AgentSettings
 from .serializers import AgentSettingsSerializer
 import requests
 import logging
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -84,4 +85,95 @@ class TelegramBotSetupView(APIView):
             'success': True,
             'bot_username': bot_username,
             'message': 'Telegram bot configured successfully'
+        })
+
+class TelegramSharedBotView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        """Get all user's Telegram agents with shared bot links"""
+        from aiAgent.models import AgentAI, TelegramBotMapping
+        
+        agents = AgentAI.objects.filter(
+            user=request.user,
+            platform='telegram',
+            is_active=True
+        )
+
+        if not agents.exists():
+            # Auto-create a default shared Telegram agent when user has none
+            agent = AgentAI.objects.create(
+                user=request.user,
+                name='Telegram Auto Agent',
+                platform='telegram',
+                system_prompt='You are a helpful AI assistant for Telegram.',
+                greeting_message='Hello! How can I help you today?',
+                page_id=f'shared_agent_{uuid.uuid4().hex[:8]}',
+                ai_agent_type='support',
+                is_active=True,
+            )
+            agents = AgentAI.objects.filter(
+                user=request.user,
+                platform='telegram',
+                is_active=True
+            )
+
+        agent_data = []
+        for agent in agents:
+            # Generate deep link
+            deep_link = f"https://t.me/NewSmartAgent_Bot?start=agent_{agent.id}"
+            
+            # Count connected chats
+            chat_count = TelegramBotMapping.objects.filter(
+                agent=agent,
+                is_active=True
+            ).count()
+            
+            agent_data.append({
+                'id': agent.id,
+                'name': agent.name,
+                'deep_link': deep_link,
+                'connected_chats': chat_count,
+                'created_at': agent.created_at
+            })
+        
+        return Response({
+            'agents': agent_data,
+            'shared_bot_username': '@NewSmartAgent_Bot'
+        })
+
+    def post(self, request):
+        """Create a new Telegram agent for shared bot"""
+        from aiAgent.models import AgentAI
+        
+        name = request.data.get('name', 'Telegram Agent')
+        system_prompt = request.data.get('system_prompt', 'You are a helpful AI assistant for Telegram.')
+        greeting_message = request.data.get('greeting_message', 'Hello! How can I help you today?')
+        
+        if not name:
+            return Response({'error': 'Agent name is required'}, status=400)
+        
+        # Create agent
+        agent = AgentAI.objects.create(
+            user=request.user,
+            name=name,
+            platform='telegram',
+            system_prompt=system_prompt,
+            greeting_message=greeting_message,
+            page_id=f'shared_agent_{uuid.uuid4().hex[:8]}',  # Temporary unique identifier
+            ai_agent_type='support'
+        )
+        
+        # Generate deep link
+        deep_link = f"https://t.me/NewSmartAgent_Bot?start=agent_{agent.id}"
+        
+        return Response({
+            'success': True,
+            'agent': {
+                'id': agent.id,
+                'name': agent.name,
+                'deep_link': deep_link,
+                'connected_chats': 0
+            },
+            'message': 'Telegram agent created successfully'
         })
