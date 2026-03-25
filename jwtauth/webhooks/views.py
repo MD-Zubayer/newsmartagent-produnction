@@ -136,8 +136,16 @@ def ai_webhook(request):
         # messenger or whatsapp
         text = data.get('message')
 
-    if not all([sender_id, text, page_id]):
-        print(f"Missing data: sender={sender_id}, text={text}, page={page_id}")
+    is_echo = data.get('is_echo', False)
+    if isinstance(is_echo, str):
+        is_echo = is_echo.lower() == 'true'
+
+    if is_echo or not text:
+        logger.info(f"⏭️ View Filter: Ignoring echo or missing text. sender={sender_id}, page={page_id}")
+        return Response({'status': 'ignored'}, status=200)
+
+    if not all([sender_id, page_id]):
+        print(f"Missing data: sender={sender_id}, page={page_id}")
         return Response({'error': 'Missing data'}, status=400)
 
     if sender_id == page_id:
@@ -180,9 +188,17 @@ def instagram_webhook(request):
     page_id = str(data.get('page_id') or data.get('recipient') or data.get('receiver') or data.get('recipient_id') or '')
     text = data.get('message') or data.get('text') or data.get('message_text')
     
-    if not all([sender_id, text, page_id]):
+    is_echo = data.get('is_echo', False)
+    if isinstance(is_echo, str):
+        is_echo = is_echo.lower() == 'true'
+
+    if is_echo or not text:
+        logger.info(f"⏭️ [instagram_webhook] View Filter: Ignoring echo or missing text. sender={sender_id}, page={page_id}")
+        return Response({'status': 'ignored'}, status=200)
+
+    if not all([sender_id, page_id]):
         logger.error(f"❌ [instagram_webhook] Missing core data: sender={sender_id}, page={page_id}")
-        return Response({'status': 'ignored', 'error': 'Missing core data'}, status=200)
+        return Response({'error': 'Missing core data'}, status=400)
 
     if sender_id == page_id:
         logger.info(f"⏭️ [instagram_webhook] View Filter: Ignoring self-activity from {page_id}")
@@ -205,4 +221,58 @@ def instagram_webhook(request):
         return Response({'status': 'accepted'}, status=202)
     except Exception as e:
         logger.error(f"❌ [instagram_webhook] Celery enqueue error: {e}")
+        return Response({'error': 'Internal Task Queue Error'}, status=500)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def telegram_webhook(request):
+    """Dedicated webhook for Telegram bot messages"""
+    data = request.data.dict() if hasattr(request.data, 'dict') else dict(request.data)
+    logger.info(f"📥 [telegram_webhook] Received Telegram data: {data}")
+    
+    # Telegram webhook structure: message.from.id, message.chat.id, message.text
+    message = data.get('message', {})
+    if not message:
+        logger.info("⏭️ [telegram_webhook] No message in payload")
+        return Response({'status': 'ignored'}, status=200)
+    
+    sender_id = str(message.get('from', {}).get('id', ''))
+    chat_id = str(message.get('chat', {}).get('id', ''))
+    text = message.get('text', '')
+    bot_username = data.get('bot_username', '')  # This will be passed from n8n or set in webhook URL
+    
+    if not all([sender_id, chat_id, text]):
+        logger.error(f"❌ [telegram_webhook] Missing core data: sender={sender_id}, chat={chat_id}, text={text}")
+        return Response({'error': 'Missing core data'}, status=400)
+
+    # For Telegram, page_id is the bot username
+    page_id = bot_username or data.get('page_id', '')
+    if not page_id:
+        logger.error("❌ [telegram_webhook] Missing bot_username or page_id")
+        return Response({'error': 'Missing bot identifier'}, status=400)
+
+    # Ignore bot's own messages
+    if str(sender_id) == str(chat_id):
+        logger.info(f"⏭️ [telegram_webhook] Ignoring self-message from {page_id}")
+        return Response({'status': 'ignored'}, status=200)
+
+    # Dedup check
+    if _is_duplicate_webhook(sender_id, text, page_id):
+        logger.info(f"🔁 Duplicate Telegram webhook blocked for {sender_id}")
+        return Response({'status': 'ignored', 'reason': 'duplicate'}, status=200)
+
+    try:
+        # Prepare data for Celery task
+        data['sender_id'] = sender_id
+        data['page_id'] = page_id
+        data['message'] = text
+        data['type'] = 'telegram'
+        data['platform'] = 'telegram'
+        data['chat_id'] = chat_id  # Keep for reply delivery
+        
+        logger.info(f"📦 [telegram_webhook] Sending to Celery: sender={sender_id}, page={page_id}")
+        process_ai_reply_task.delay(data)
+        return Response({'status': 'accepted'}, status=202)
+    except Exception as e:
+        logger.error(f"❌ [telegram_webhook] Celery enqueue error: {e}")
         return Response({'error': 'Internal Task Queue Error'}, status=500)

@@ -29,7 +29,8 @@ class AgentAI(models.Model):
         ('messenger', 'Messenger'),
         ('facebook_comment', 'Facebook Comment'),
         ('instagram', 'Instagram'),
-        ('web_widget', 'Web Chat Widget')
+        ('web_widget', 'Web Chat Widget'),
+        ('telegram', 'Telegram')
     ]
     AI_AGENT_CATEGORIES = (
     ('business', 'Business / Commercial'),

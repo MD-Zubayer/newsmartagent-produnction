@@ -21,7 +21,7 @@ from chat.utils import get_smart_post_context
 from aiAgent.business_logic.logic_handler import (
     is_duplicate_or_outdated, acquire_user_lock, get_order_instructions,
     perform_rag_search, build_ai_context, get_ai_response,
-    log_token_usage, deduct_user_tokens, deliver_whatsapp_reply, deliver_instagram_reply, deliver_facebook_reply, handle_public_comment_logic,
+    log_token_usage, deduct_user_tokens, deliver_whatsapp_reply, deliver_instagram_reply, deliver_facebook_reply, deliver_telegram_reply, handle_public_comment_logic,
     check_token_availability, deliver_dashboard_reply
 )
 from webhooks.utils import fetch_messenger_profile
@@ -308,6 +308,12 @@ def process_ai_reply_task(self, data):
                     page_id__in=lookup_ids,
                     platform='instagram'
                 ).order_by('-id').first()
+            elif request_type == 'telegram':
+                agent_config = AgentAI.objects.filter(
+                    is_active=True,
+                    page_id__in=lookup_ids,
+                    platform='telegram'
+                ).order_by('-id').first()
             else:
                 agent_config = AgentAI.objects.filter(
                     is_active=True,
@@ -381,7 +387,7 @@ def process_ai_reply_task(self, data):
             contact_name = fetch_messenger_profile(sender_id, effective_access_token)
 
         # --- ROBUST CONTACT SYNC & STATE MIGRATION ---
-        p_type = request_type if request_type in ['whatsapp', 'messenger', 'web_widget', 'facebook_comment', 'instagram'] else 'messenger'
+        p_type = request_type if request_type in ['whatsapp', 'messenger', 'web_widget', 'facebook_comment', 'instagram', 'telegram'] else 'messenger'
         
         # 1. Primary Lookup: Full ID + Agent
         contact_obj = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
@@ -666,6 +672,8 @@ def process_ai_reply_task(self, data):
                 delivered = deliver_whatsapp_reply(data, clean_reply)
             elif request_type == 'instagram':
                 delivered = deliver_instagram_reply(data, clean_reply, page_id, effective_access_token)
+            elif request_type == 'telegram':
+                delivered = deliver_telegram_reply(data, clean_reply, effective_access_token)
             else:
                 delivered = deliver_facebook_reply(data, clean_reply, page_id, effective_access_token)
 
@@ -889,6 +897,8 @@ def process_ai_reply_task(self, data):
                 delivered = deliver_whatsapp_reply(data, clean_reply)
             elif request_type == 'instagram':
                 delivered = deliver_instagram_reply(data, clean_reply, page_id, effective_access_token)
+            elif request_type == 'telegram':
+                delivered = deliver_telegram_reply(data, clean_reply, effective_access_token)
             else:
                 delivered = deliver_facebook_reply(data, clean_reply, page_id, effective_access_token)
 

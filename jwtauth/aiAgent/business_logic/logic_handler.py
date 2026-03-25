@@ -583,6 +583,37 @@ def deliver_facebook_reply(data, reply, page_id, access_token):
         logger.error(f"n8n Facebook delivery critical failure: {e}")
         return False
 
+def deliver_telegram_reply(data, reply, token):
+    """Deliver final reply for Telegram via Telegram Bot API"""
+    chat_id = data.get('chat_id') or data.get('sender_id')
+    if not chat_id:
+        logger.error("❌ [Logic] Missing chat_id for Telegram reply")
+        return False
+    
+    if not token:
+        logger.error("❌ [Logic] Missing bot token for Telegram reply")
+        return False
+    
+    api_url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": reply,
+        "parse_mode": "Markdown"  # Optional: for formatting
+    }
+    
+    try:
+        logger.info(f"🚀 [Logic] Sending Telegram reply to chat {chat_id}")
+        response = requests.post(api_url, json=payload, timeout=15)
+        if response.status_code == 200:
+            logger.info(f"✅ [Logic] Telegram reply sent successfully")
+            return True
+        else:
+            logger.error(f"❌ [Logic] Telegram API error: {response.status_code} - {response.text}")
+            return False
+    except Exception as e:
+        logger.error(f"❌ [Logic] Telegram delivery critical failure: {e}")
+        return False
+
 def deliver_dashboard_reply(user_id, reply_text, message_id):
     """Deliver final reply to the dashboard via WebSocket and update the log"""
     try:

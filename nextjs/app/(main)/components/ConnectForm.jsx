@@ -10,6 +10,7 @@ import {
 } from "react-icons/fa";
 import { HiOutlineSparkles } from "react-icons/hi2";
 import WhatsAppConnector from "./WhatsAppConnector";
+import TelegramConnector from "./TelegramConnector";
 
 export default function IntegrationManager() {
   const [selectedPlatform, setSelectedPlatform] = useState(null);
@@ -436,6 +437,13 @@ export default function IntegrationManager() {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Platform Specific: Telegram */}
+            {selectedPlatform.id === "telegram" && (
+              <div className="pt-16 md:pt-24 border-t border-slate-100 animate-in slide-in-from-bottom-8 duration-1000">
+                <TelegramConnector />
               </div>
             )}
 
