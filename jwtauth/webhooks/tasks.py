@@ -664,6 +664,8 @@ def process_ai_reply_task(self, data):
                 delivered = deliver_dashboard_reply(agent_config.user.id, clean_reply, msg_id)
             elif request_type == 'whatsapp':
                 delivered = deliver_whatsapp_reply(data, clean_reply)
+            elif request_type == 'instagram':
+                delivered = deliver_instagram_reply(data, clean_reply, page_id, effective_access_token)
             else:
                 delivered = deliver_facebook_reply(data, clean_reply, page_id, effective_access_token)
 

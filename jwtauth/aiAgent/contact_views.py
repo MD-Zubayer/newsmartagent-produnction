@@ -166,6 +166,15 @@ class UnifiedReplyView(APIView):
                     'type': platform
                 }
                 success = logic_handler.deliver_facebook_reply(data, message_text, agent.page_id, effective_token)
+            elif platform == 'instagram':
+                from users.models import FacebookPage
+                fb_page = FacebookPage.objects.filter(page_id=agent.page_id, is_active=True).first()
+                effective_token = fb_page.access_token if fb_page else agent.access_token
+                data = {
+                    'sender_id': identifier,
+                    'type': platform
+                }
+                success = logic_handler.deliver_instagram_reply(data, message_text, agent.page_id, effective_token)
             elif platform == 'web_widget':
                  # For Web Widget, save the message to history. The visitor sees it on next fetch/message.
                  # Also update the dashboard context via WebSocket.
