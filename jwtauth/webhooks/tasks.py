@@ -365,6 +365,12 @@ def process_ai_reply_task(self, data):
             }
         )
 
+        # ── Message Logging & Dashboard Sync (Always) ──
+        # Save early so even if AI doesn't reply (Human Mode), message is in history & dashboard
+        save_message(agent_config, sender_id, text, 'user', platform=agent_config.platform)
+        send_cache_update_ws(agent_config.user.id, page_id)
+        handle_smart_memory_update(agent_config, sender_id, text)
+
         # ── Auto-Reply Enable/Disable Check ──
         contact = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
         if contact and (not contact.is_auto_reply_enabled or contact.is_human_needed):
@@ -553,9 +559,7 @@ def process_ai_reply_task(self, data):
             logger.info(f"⚡ CACHE HIT [{cache_hit_scope}] → '{text[:30]}'")
             send_cache_update_ws(agent_config.user.id, page_id)
 
-            save_message(agent_config, sender_id, text, 'user', platform=agent_config.platform)
             save_message(agent_config, sender_id, reply, 'assistant', tokens=0, platform=agent_config.platform)
-            handle_smart_memory_update(agent_config, sender_id, text)
 
             clean_reply = reply.strip()
             # Force platform-based routing: if agent is WhatsApp, send via WhatsApp delivery
@@ -769,9 +773,7 @@ def process_ai_reply_task(self, data):
                     save_vector_embedding(page_id, text, msg_hash_for_vector, query_vector)
                     logger.info(f"✅ Saved vector embedding for '{text[:30]}'")
 
-                save_message(agent_config, sender_id, text, 'user', platform=agent_config.platform)
                 save_message(agent_config, sender_id, reply, 'assistant', tokens=total_tokens, platform=agent_config.platform)
-                handle_smart_memory_update(agent_config, sender_id, text)
 
                 # ── Update WhatsApp Log (AI Call) ──
                 if wa_msg_obj:
