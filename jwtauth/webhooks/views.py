@@ -182,7 +182,11 @@ def instagram_webhook(request):
     
     if not all([sender_id, text, page_id]):
         logger.error(f"❌ [instagram_webhook] Missing core data: sender={sender_id}, page={page_id}")
-        return Response({'error': 'Missing core data'}, status=400)
+        return Response({'status': 'ignored', 'error': 'Missing core data'}, status=200)
+
+    if sender_id == page_id:
+        logger.info(f"⏭️ [instagram_webhook] View Filter: Ignoring self-activity from {page_id}")
+        return Response({'status': 'ignored'}, status=200)
 
     # Dedup check
     if _is_duplicate_webhook(sender_id, text, page_id):
