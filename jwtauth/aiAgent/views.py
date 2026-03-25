@@ -768,3 +768,74 @@ class VisitorSubscribeView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+import requests
+
+class ConnectTelegramBotView(APIView):
+    """
+    Verifies a Telegram Bot Token and sets up the webhook for Option 2 (Custom Bot).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        token = request.data.get('token', '').strip()
+        agent_id = request.data.get('agent_id') # Optional: ID of existing agent to update
+
+        if not token:
+            return Response({"error": "Telegram Bot Token is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 1. Verify Token with Telegram
+        verify_url = f"https://api.telegram.org/bot{token}/getMe"
+        try:
+            response = requests.get(verify_url, timeout=10)
+            data = response.json()
+            if not data.get('ok'):
+                return Response({"error": "Invalid Telegram Token", "details": data.get('description')}, status=status.HTTP_400_BAD_REQUEST)
+            bot_username = data['result']['username']
+            bot_name = data['result']['first_name']
+        except Exception as e:
+            return Response({"error": "Failed to verify token with Telegram API", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # 2. Set Webhook
+        # Note: replace with actual live domain when deploying
+        webhook_url = f"https://api.newsmartagent.com/webhooks/telegram/" 
+        set_webhook_url = f"https://api.telegram.org/bot{token}/setWebhook?url={webhook_url}"
+        
+        try:
+            wh_response = requests.post(set_webhook_url, timeout=10)
+            wh_data = wh_response.json()
+            if not wh_data.get('ok'):
+                return Response({"error": "Failed to set Telegram Webhook", "details": wh_data.get('description')}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as e:
+            return Response({"error": "Failed to connect to Telegram API for webhook setup", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # 3. Save to Database
+        try:
+            if agent_id:
+                agent = AgentAI.objects.filter(id=agent_id, user=request.user).first()
+                if not agent:
+                    return Response({"error": "Agent not found or unauthorized."}, status=status.HTTP_404_NOT_FOUND)
+                agent.platform = 'telegram'
+                agent.page_id = bot_username
+                agent.access_token = token
+                agent.name = f"{bot_name} (Telegram)"
+                agent.save()
+            else:
+                agent = AgentAI.objects.create(
+                    user=request.user,
+                    name=f"{bot_name} (Telegram)",
+                    platform='telegram',
+                    page_id=bot_username,
+                    access_token=token,
+                    system_prompt="You are a helpful Telegram AI assistant."
+                )
+
+            return Response({
+                "status": "success",
+                "message": f"Successfully connected Telegram Bot: @{bot_username}",
+                "agent_id": agent.id,
+                "bot_username": bot_username
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": "Failed to save Telegram agent to database", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

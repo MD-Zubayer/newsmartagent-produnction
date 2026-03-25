@@ -1,7 +1,7 @@
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from aiAgent.views import AgentAIViewSet, TokenUsageAnalyticsView, dashboard_chat_view, RankingAPIView, UserAvailableModelsView, AgentMetricsAPIView, DeleteRankingDataAPIView, UpdateCacheScopeAPIView, RequestSpecialAgentAPIView, ClearGlobalCacheAPIView, ToggleSharingAPIView, VisitorSubscribeView, VisitorTrackView
+from aiAgent.views import AgentAIViewSet, TokenUsageAnalyticsView, dashboard_chat_view, RankingAPIView, UserAvailableModelsView, AgentMetricsAPIView, DeleteRankingDataAPIView, UpdateCacheScopeAPIView, RequestSpecialAgentAPIView, ClearGlobalCacheAPIView, ToggleSharingAPIView, VisitorSubscribeView, VisitorTrackView, ConnectTelegramBotView
 from aiAgent.contact_views import ContactListView, ToggleAutoReplyView, ContactMessageHistoryView, ContactDetailView, UnifiedReplyView, ResolveHumanHandoffView
 from aiAgent.widget_views import WidgetConfigView, WidgetChatView, WidgetIconUploadView
 from chat.views import facebook_data_deletion_callback
@@ -39,5 +39,6 @@ urlpatterns = [
     path('visitor/track/', VisitorTrackView.as_view(), name='visitor-track'),
     path('visitor/subscribe/', VisitorSubscribeView.as_view(), name='visitor-subscribe'),
 
+    # Telegram Connection Endpoint
+    path('telegram/connect-bot/', ConnectTelegramBotView.as_view(), name='connect-telegram-bot'),
 ]
-

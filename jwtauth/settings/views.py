@@ -35,8 +35,8 @@ class TelegramBotSetupView(APIView):
         token = request.data.get('token')
         agent_id = request.data.get('agent_id')
         
-        if not token or not agent_id:
-            return Response({'error': 'Token and agent_id are required'}, status=400)
+        if not token:
+            return Response({'error': 'Token is required'}, status=400)
         
         # Validate token with Telegram API
         try:
@@ -53,12 +53,29 @@ class TelegramBotSetupView(APIView):
         except Exception as e:
             logger.error(f"Telegram token validation error: {e}")
             return Response({'error': 'Failed to validate token'}, status=500)
-        
-        # Get the agent
-        try:
-            agent = AgentAI.objects.get(id=agent_id, user=request.user, platform='telegram')
-        except AgentAI.DoesNotExist:
-            return Response({'error': 'Agent not found or not a Telegram agent'}, status=404)
+
+        agent = None
+        if agent_id:
+            agent = AgentAI.objects.filter(id=agent_id, user=request.user, platform='telegram').first()
+
+        if not agent:
+            # Auto-create agent if not found or not provided
+            agent_name = request.data.get('name') or 'Telegram Agent'
+            agent = AgentAI.objects.create(
+                user=request.user,
+                name=agent_name,
+                platform='telegram',
+                system_prompt=request.data.get('system_prompt', 'You are a helpful AI assistant for Telegram.'),
+                greeting_message=request.data.get('greeting_message', 'Hello! How can I help you today?'),
+                page_id=bot_username,
+                access_token=token,
+                ai_agent_type='support',
+                is_active=True,
+            )
+        else:
+            agent.access_token = token
+            agent.page_id = bot_username
+            agent.save()
         
         # Set webhook
         webhook_url = f"https://newsmartagent.com/api/webhooks/telegram/"  # Adjust domain as needed
