@@ -107,7 +107,8 @@ export const useNotifications = (user, setOrders = null) => {
           });
 
         } else if (data.action === "CACHE_UPDATE") {
-          console.log("CACHE_UPDATE received, ignoring audio/toast.");
+          console.log("CACHE_UPDATE received, updating state for sync.");
+          setNotifications((prev) => [data, ...prev]);
 
         } else {
           if (audioRef.current) {

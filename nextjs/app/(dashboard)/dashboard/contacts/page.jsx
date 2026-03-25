@@ -16,6 +16,8 @@ import {
 } from "@heroicons/react/24/outline";
 import api from "@/lib/api";
 import { toast } from 'react-hot-toast';
+import { useAuth } from "@/app/context/AuthContext";
+import { useNotifications } from "@/app/hooks/useNotifications";
 
 export default function Contacts() {
   const [agents, setAgents] = useState([]);
@@ -43,6 +45,9 @@ export default function Contacts() {
   });
   const [savingSettings, setSavingSettings] = useState(false);
   
+  const { user } = useAuth();
+  const { notifications } = useNotifications(user);
+
   const messagesEndRefDesktop = useRef(null);
   const messagesEndRefMobile = useRef(null);
   const observer = useRef();
@@ -90,6 +95,24 @@ export default function Contacts() {
       scrollToBottom();
     }
   }, [historyMessages]);
+
+  // Real-time Sync Logic
+  useEffect(() => {
+    if (!notifications.length) return;
+    const lastNotif = notifications[0];
+
+    if (lastNotif.action === "CACHE_UPDATE") {
+      // Refresh contact list if it belongs to selected agent or all
+      if (selectedAgent === "all" || lastNotif.agent_id === selectedAgent) {
+        fetchContacts(selectedAgent);
+      }
+      
+      // Refresh active chat history if match
+      if (historyContact && lastNotif.sender_id === historyContact.identifier) {
+        fetchHistory(historyContact.id, 1);
+      }
+    }
+  }, [notifications]);
 
   const fetchAgents = async () => {
     try {

@@ -97,7 +97,7 @@ def refresh_fb_page_token(fb_page):
         logger.error(f"FB token refresh error: {e}")
     return None
 
-def send_cache_update_ws(user_id, agent_id):
+def send_cache_update_ws(user_id, agent_id, sender_id=None):
     try:
         from channels.layers import get_channel_layer
         from asgiref.sync import async_to_sync
@@ -109,6 +109,7 @@ def send_cache_update_ws(user_id, agent_id):
                 "content": {
                     "action": "CACHE_UPDATE",
                     "agent_id": agent_id,
+                    "sender_id": sender_id,
                 }
             }
         )
@@ -368,7 +369,7 @@ def process_ai_reply_task(self, data):
         # ── Message Logging & Dashboard Sync (Always) ──
         # Save early so even if AI doesn't reply (Human Mode), message is in history & dashboard
         save_message(agent_config, sender_id, text, 'user', platform=agent_config.platform)
-        send_cache_update_ws(agent_config.user.id, page_id)
+        send_cache_update_ws(agent_config.user.id, page_id, sender_id=sender_id)
         handle_smart_memory_update(agent_config, sender_id, text)
 
         # ── Auto-Reply Enable/Disable Check ──
@@ -557,7 +558,7 @@ def process_ai_reply_task(self, data):
 
             incr_counter(page_id, "cache_hit")
             logger.info(f"⚡ CACHE HIT [{cache_hit_scope}] → '{text[:30]}'")
-            send_cache_update_ws(agent_config.user.id, page_id)
+            send_cache_update_ws(agent_config.user.id, page_id, sender_id=sender_id)
 
             save_message(agent_config, sender_id, reply, 'assistant', tokens=0, platform=agent_config.platform)
 
@@ -737,7 +738,7 @@ def process_ai_reply_task(self, data):
                         input_tokens=ai_data.get('input_tokens', 0),
                         output_tokens=ai_data.get('output_tokens', 0),
                     )
-                    send_cache_update_ws(agent_config.user.id, page_id)
+                    send_cache_update_ws(agent_config.user.id, page_id, sender_id=sender_id)
                 elif cache_type == 'sender_specific':
                     set_sender_cached_reply(
                         page_id, sender_id, text, reply, model=effective_model,
@@ -752,7 +753,7 @@ def process_ai_reply_task(self, data):
                         output_tokens=ai_data.get('output_tokens', 0),
                         is_special=agent_config.is_special_agent
                     )
-                    send_cache_update_ws(agent_config.user.id, page_id)
+                    send_cache_update_ws(agent_config.user.id, page_id, sender_id=sender_id)
                 else:
                     # no_cache বা অজানা type → save করা হবে না
                     logger.info(f"🚫 Cache SKIPPED (no_cache) for: '{text[:30]}'")
