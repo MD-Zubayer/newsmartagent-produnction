@@ -533,7 +533,7 @@ def deliver_whatsapp_reply(data, reply):
 
 def deliver_instagram_reply(data, reply, page_id, access_token):
     """Deliver final reply for Instagram via n8n webhook (Separate Workflow)"""
-    webhook_url = "https://n8n.newsmartagent.com/webhook-test/instagram-delivery"
+    webhook_url = "https://n8n.newsmartagent.com/webhook/instagram-delivery"
     payload = {
         "sender_id": str(data.get('sender_id', '')),
         "reply": str(reply),
