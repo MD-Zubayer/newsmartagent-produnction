@@ -16,8 +16,8 @@ import {
 } from "@heroicons/react/24/outline";
 import api from "@/lib/api";
 import { toast } from 'react-hot-toast';
-import { useAuth } from "@/app/context/AuthContext";
-import { useNotifications } from "@/app/hooks/useNotifications";
+import { useAuth } from "@/context/AuthContext";
+import { useNotifications } from "@/hooks/useNotifications";
 
 export default function Contacts() {
   const [agents, setAgents] = useState([]);
