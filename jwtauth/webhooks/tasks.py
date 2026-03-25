@@ -108,7 +108,7 @@ def send_cache_update_ws(user_id, agent_id, sender_id=None):
                 "type": "send_notification",
                 "content": {
                     "action": "CACHE_UPDATE",
-                    "agent_id": agent_id,
+                    "agent_id": agent_id, # Should be the string identifier (page_id)
                     "sender_id": sender_id,
                 }
             }
@@ -116,7 +116,7 @@ def send_cache_update_ws(user_id, agent_id, sender_id=None):
     except Exception as e:
         logger.error(f"WebSocket broadcast error: {e}")
 
-def send_human_handoff_ws(user_id, agent_id, contact_id, contact_name):
+def send_human_handoff_ws(user_id, agent_id, sender_id, contact_id, contact_name):
     try:
         from channels.layers import get_channel_layer
         from asgiref.sync import async_to_sync
@@ -127,7 +127,8 @@ def send_human_handoff_ws(user_id, agent_id, contact_id, contact_name):
                 "type": "send_notification",
                 "content": {
                     "action": "HUMAN_HANDOFF",
-                    "agent_id": agent_id,
+                    "agent_id": agent_id, # Should be the string identifier (page_id)
+                    "sender_id": sender_id,
                     "contact_id": contact_id,
                     "contact_name": contact_name
                 }
@@ -188,18 +189,33 @@ def process_ai_reply_task(self, data):
     logger.info(f"🔍 [Task] Raw data received: {data}")
     sender_id = data.get('sender_id') or data.get('from') or data.get('phone')
     
-    # Do NOT globally strip WhatsApp JIDs here to avoid breaking existing integrations.
-    # We will handle variations during Contact lookup if needed.
-    
+    # 2. Identifier Normalization (Safety)
+    if request_type == 'whatsapp' and sender_id and isinstance(sender_id, str):
+        # Enforce domain for phone-number IDs to prevent Messenger collision
+        if '@' not in sender_id and sender_id.isdigit() and len(sender_id) > 7:
+            sender_id = f"{sender_id}@s.whatsapp.net"
+            logger.info(f"⚡ [Task] Appended domain to WA sender: {sender_id}")
+
     data['sender_id'] = sender_id  # Ensure it's available for delivery functions
-    logger.info(f"🔍 [Task] Extracted sender_id: {sender_id}")
+    logger.info(f"🔍 [Task] Extracted sender_id: {sender_id} | Platform: {request_type}")
     page_id = data.get('page_id')
-    request_type = data.get('type') or data.get('platform')
+    # Detect platform if missing
     if not request_type:
-        if data.get('receiver') or data.get('sessionId') or data.get('phone'):
+        # Check for WhatsApp indicators ( Baileys/EvolutionAPI fields or JIDs )
+        if (data.get('receiver') or 
+            data.get('sessionId') or 
+            data.get('phone') or 
+            (sender_id and isinstance(sender_id, str) and '@' in sender_id)):
             request_type = 'whatsapp'
+        elif data.get('object') == 'instagram' or data.get('platform') == 'instagram':
+            request_type = 'instagram'
         else:
             request_type = 'messenger'
+    
+    # Standardize names
+    if request_type == 'fbmessenger': request_type = 'messenger'
+    if request_type == 'fb_messenger': request_type = 'messenger'
+    if request_type == 'whatsapp_baileys': request_type = 'whatsapp'
 
     # WhatsApp: normalize page_id to phone/session for lookup
     if request_type == 'whatsapp':
@@ -234,10 +250,10 @@ def process_ai_reply_task(self, data):
             page_id = best_candidate
 
     if request_type == 'facebook_comment':
-        text = data.get('comment_text')
+        text = data.get('comment_text') or data.get('message') or data.get('text')
     else:
         # messenger or whatsapp
-        text = data.get('message')
+        text = data.get('message') or data.get('text') or data.get('body')
     msg_id = data.get('message_id')
     incoming_ts = data.get('timestamp')
 
@@ -354,15 +370,49 @@ def process_ai_reply_task(self, data):
         if not contact_name and request_type == 'messenger' and effective_access_token:
             contact_name = fetch_messenger_profile(sender_id, effective_access_token)
 
-        Contact.objects.update_or_create(
-            agent=agent_config,
-            identifier=sender_id,
-            platform=request_type if request_type in ['whatsapp', 'messenger', 'web_widget', 'facebook_comment', 'instagram'] else 'messenger',
-            defaults={
-                'name': contact_name if contact_name else None,
-                'push_name': incoming_push_name if incoming_push_name else None
-            }
-        )
+        # --- ROBUST CONTACT SYNC & STATE MIGRATION ---
+        p_type = request_type if request_type in ['whatsapp', 'messenger', 'web_widget', 'facebook_comment', 'instagram'] else 'messenger'
+        
+        # 1. Primary Lookup: Full ID + Agent
+        contact_obj = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
+        
+        # 2. Fallback Migration: If full ID not found, check for stripped ID (WhatsApp legacy)
+        if not contact_obj and request_type == 'whatsapp' and '@' in str(sender_id):
+            stripped_id = str(sender_id).split('@')[0]
+            contact_obj = Contact.objects.filter(agent=agent_config, identifier=stripped_id).first()
+            if contact_obj:
+                logger.info(f"🔄 [Task] Migrating state for legacy contact: {stripped_id} -> {sender_id}")
+                
+                # Update identifier and migrate related models that use it as a string key
+                old_id = contact_obj.identifier
+                contact_obj.identifier = sender_id
+                contact_obj.platform = 'whatsapp'
+                
+                try:
+                    from chat.models import Conversation
+                    from aiAgent.models import UserMemory
+                    Conversation.objects.filter(agentAi=agent_config, contact_id=old_id, platform='whatsapp').update(contact_id=sender_id)
+                    UserMemory.objects.filter(ai_agent=agent_config, sender_id=old_id).update(sender_id=sender_id)
+                    logger.info(f"✅ [Task] Cascaded ID update complete for {sender_id}")
+                except Exception as mig_err:
+                    logger.error(f"❌ [Task] Related record migration failed: {mig_err}")
+        
+        # 3. Update or Create (Preserving existing flags if contact_obj exists)
+        if contact_obj:
+            contact_obj.name = contact_name or contact_obj.name
+            contact_obj.push_name = incoming_push_name or contact_obj.push_name
+            contact_obj.platform = p_type
+            contact_obj.save()
+            logger.info(f"✅ [Task] Contact sync: Updated {sender_id}")
+        else:
+            contact_obj = Contact.objects.create(
+                agent=agent_config,
+                identifier=sender_id,
+                platform=p_type,
+                name=contact_name,
+                push_name=incoming_push_name
+            )
+            logger.info(f"✅ [Task] Contact sync: Created NEW {sender_id}")
 
         # ── Message Logging & Dashboard Sync (Always) ──
         # Save early so even if AI doesn't reply (Human Mode), message is in history & dashboard
@@ -386,8 +436,8 @@ def process_ai_reply_task(self, data):
             contact_obj = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
             if contact_obj:
                 contact_name = contact_obj.name or contact_obj.push_name or sender_id
-                send_human_handoff_ws(agent_config.user.id, agent_config.id, contact_obj.id, contact_name)
-                send_cache_update_ws(agent_config.user.id, agent_config.id, sender_id=sender_id) # Force sync
+                send_human_handoff_ws(agent_config.user.id, page_id, sender_id, contact_obj.id, contact_name)
+                send_cache_update_ws(agent_config.user.id, page_id, sender_id=sender_id) # Force sync
                 logger.info(f"🔊 [Pre-AI Handoff] WS Alert sent for {contact_name}")
             
             # Exit early to prevent AI response
@@ -701,14 +751,13 @@ def process_ai_reply_task(self, data):
                 try:
                     platform_for_lookup = request_type if request_type in ['whatsapp', 'messenger', 'web_widget', 'facebook_comment', 'instagram'] else 'messenger'
                     
-                    # Update is_human_needed with platform filter
+                    # Update is_human_needed (Robust lookup using only Agent + ID)
                     updated = Contact.objects.filter(
                         agent=agent_config,
-                        identifier=sender_id,
-                        platform=platform_for_lookup
+                        identifier=sender_id
                     ).update(is_human_needed=True)
                     
-                    logger.info(f"🔄 Handoff update for {sender_id} on {platform_for_lookup}: {'Success' if updated else 'Failed (Contact not found)'}")
+                    logger.info(f"🔄 [Task] Handoff update for {sender_id}: {'Success' if updated else f'FAILED (Contact {sender_id} not found)'}")
 
                     if not updated:
                         updated_fallback = Contact.objects.filter(agent=agent_config, identifier=sender_id).update(is_human_needed=True)
@@ -723,8 +772,8 @@ def process_ai_reply_task(self, data):
 
                     if contact_obj:
                         contact_name = contact_obj.name or contact_obj.push_name or sender_id
-                        send_human_handoff_ws(agent_config.user.id, agent_config.id, contact_obj.id, contact_name)
-                        send_cache_update_ws(agent_config.user.id, agent_config.id, sender_id=sender_id) # Force sync
+                        send_human_handoff_ws(agent_config.user.id, page_id, sender_id, contact_obj.id, contact_name)
+                        send_cache_update_ws(agent_config.user.id, page_id, sender_id=sender_id) # Force sync
                         logger.info(f"🚨 Human Handoff WS sent for {sender_id} (Platform: {platform_for_lookup})")
                     else:
                         logger.warning(f"⚠️ Could not find Contact object to send WS for {sender_id}")

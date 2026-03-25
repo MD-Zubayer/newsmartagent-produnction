@@ -108,6 +108,10 @@ export const useNotifications = (user, setOrders = null) => {
 
         } else if (data.action === "CACHE_UPDATE") {
           console.log("CACHE_UPDATE received, updating state for sync.");
+          if (audioRef.current) {
+            audioRef.current.currentTime = 0;
+            audioRef.current.play().catch(err => console.log("Audio play blocked:", err));
+          }
           setNotifications((prev) => [data, ...prev]);
 
         } else {
