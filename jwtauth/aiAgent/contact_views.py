@@ -150,6 +150,8 @@ class UnifiedReplyView(APIView):
                 data = {
                     'sender_id': identifier,
                     'delivery_jid': identifier, # Usually same for WA
+                    'sessionId': agent.page_id,  # Important for n8n delivery instance
+                    'phone': identifier,
                 }
                 success = logic_handler.deliver_whatsapp_reply(data, message_text)
             elif platform == 'messenger' or platform == 'facebook_comment':
