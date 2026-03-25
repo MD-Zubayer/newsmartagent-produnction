@@ -21,7 +21,7 @@ from chat.utils import get_smart_post_context
 from aiAgent.business_logic.logic_handler import (
     is_duplicate_or_outdated, acquire_user_lock, get_order_instructions,
     perform_rag_search, build_ai_context, get_ai_response,
-    log_token_usage, deduct_user_tokens, deliver_whatsapp_reply, deliver_facebook_reply, handle_public_comment_logic,
+    log_token_usage, deduct_user_tokens, deliver_whatsapp_reply, deliver_instagram_reply, deliver_facebook_reply, handle_public_comment_logic,
     check_token_availability, deliver_dashboard_reply
 )
 from webhooks.utils import fetch_messenger_profile
@@ -302,10 +302,17 @@ def process_ai_reply_task(self, data):
                     is_active=True,
                     platform='whatsapp'
                 ).order_by('-id').first()
+            elif request_type == 'instagram':
+                agent_config = AgentAI.objects.filter(
+                    is_active=True,
+                    page_id__in=lookup_ids,
+                    platform='instagram'
+                ).order_by('-id').first()
             else:
                 agent_config = AgentAI.objects.filter(
                     is_active=True,
-                    page_id__in=lookup_ids
+                    page_id__in=lookup_ids,
+                    platform='messenger'
                 ).order_by('-id').first()
 
         # Fallback for WhatsApp: Try lookup by user_id if we have it in sessionId
@@ -878,6 +885,8 @@ def process_ai_reply_task(self, data):
                 delivered = deliver_dashboard_reply(agent_config.user.id, clean_reply, msg_id)
             elif request_type == 'whatsapp':
                 delivered = deliver_whatsapp_reply(data, clean_reply)
+            elif request_type == 'instagram':
+                delivered = deliver_instagram_reply(data, clean_reply, page_id, effective_access_token)
             else:
                 delivered = deliver_facebook_reply(data, clean_reply, page_id, effective_access_token)
 

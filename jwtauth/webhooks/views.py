@@ -168,3 +168,36 @@ def ai_webhook(request):
         # যদি রেডিস কানেকশন বা সিরিয়ালাইজেশন এরর হয়
         print(f"ERROR SENDING TO CELERY: {str(e)}")
         return Response({'error': 'Internal Task Queue Error'}, status=500)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def instagram_webhook(request):
+    """Dedicated webhook for Instagram messages from n8n"""
+    data = request.data.dict() if hasattr(request.data, 'dict') else dict(request.data)
+    logger.info(f"📥 [instagram_webhook] Received IG data: {data}")
+    
+    sender_id = str(data.get('sender_id', ''))
+    page_id = str(data.get('page_id', ''))
+    text = data.get('message') or data.get('text')
+    
+    if not all([sender_id, text, page_id]):
+        logger.error(f"❌ [instagram_webhook] Missing core data: sender={sender_id}, page={page_id}")
+        return Response({'error': 'Missing core data'}, status=400)
+
+    # Dedup check
+    if _is_duplicate_webhook(sender_id, text, page_id):
+        logger.info(f"🔁 Duplicate Instagram webhook blocked for {sender_id}")
+        return Response({'status': 'ignored', 'reason': 'duplicate'}, status=200)
+
+    try:
+        data['sender_id'] = sender_id
+        data['page_id'] = page_id
+        data['type'] = 'instagram'
+        data['platform'] = 'instagram'
+        
+        logger.info(f"📦 [instagram_webhook] Sending to Celery: sender={sender_id}, page={page_id}")
+        process_ai_reply_task.delay(data)
+        return Response({'status': 'accepted'}, status=202)
+    except Exception as e:
+        logger.error(f"❌ [instagram_webhook] Celery enqueue error: {e}")
+        return Response({'error': 'Internal Task Queue Error'}, status=500)

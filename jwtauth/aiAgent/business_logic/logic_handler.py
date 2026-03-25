@@ -531,6 +531,29 @@ def deliver_whatsapp_reply(data, reply):
         logger.error(f"❌ [Logic] n8n WhatsApp delivery critical failure: {e}")
         return False
 
+def deliver_instagram_reply(data, reply, page_id, access_token):
+    """Deliver final reply for Instagram via n8n webhook (Separate Workflow)"""
+    webhook_url = "https://n8n.newsmartagent.com/webhook/instagram-delivery"
+    payload = {
+        "sender_id": str(data.get('sender_id', '')),
+        "reply": str(reply),
+        "page_id": str(page_id),
+        "page_access_token": str(access_token),
+        "type": "instagram",
+        "message_id": str(data.get('message_id', '')),
+    }
+
+    try:
+        logger.info(f"🚀 [Logic] Routing Instagram reply to n8n delivery. Payload: {payload}")
+        response = requests.post(webhook_url, json=payload, timeout=15)
+        if response.status_code != 200:
+            logger.error(f"❌ [Logic] n8n Instagram delivery error: {response.status_code} - {response.text}")
+            return False
+        return True
+    except Exception as e:
+        logger.error(f"❌ [Logic] n8n Instagram delivery critical failure: {e}")
+        return False
+
 def deliver_facebook_reply(data, reply, page_id, access_token):
     """Deliver final reply for Facebook (Messenger / Comment) via n8n webhook"""
     webhook_url = "https://n8n.newsmartagent.com/webhook/fb-comment-message-delivery"
