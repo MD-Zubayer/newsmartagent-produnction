@@ -147,10 +147,11 @@ class UnifiedReplyView(APIView):
             
             success = False
             if platform == 'whatsapp':
+                # For WhatsApp, Baileys/n8n expects sessionId as 'user_{user_id}'
                 data = {
                     'sender_id': identifier,
-                    'delivery_jid': identifier, # Usually same for WA
-                    'sessionId': agent.page_id,  # Important for n8n delivery instance
+                    'delivery_jid': identifier,
+                    'sessionId': f"user_{agent.user.id}",
                     'phone': identifier,
                 }
                 success = logic_handler.deliver_whatsapp_reply(data, message_text)
