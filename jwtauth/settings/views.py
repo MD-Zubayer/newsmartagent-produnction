@@ -117,24 +117,6 @@ class TelegramSharedBotView(APIView):
             is_active=True
         )
 
-        if not agents.exists():
-            # Auto-create a default shared Telegram agent when user has none
-            agent = AgentAI.objects.create(
-                user=request.user,
-                name='Telegram Auto Agent',
-                platform='telegram',
-                system_prompt='You are a helpful AI assistant for Telegram.',
-                greeting_message='Hello! How can I help you today?',
-                page_id=f'shared_agent_{uuid.uuid4().hex[:8]}',
-                ai_agent_type='support',
-                is_active=True,
-            )
-            agents = AgentAI.objects.filter(
-                user=request.user,
-                platform='telegram',
-                is_active=True
-            )
-
         agent_data = []
         for agent in agents:
             # Generate deep link

@@ -21,12 +21,6 @@ export default function TelegramConnector() {
     fetchSharedBotAgents();
   }, []);
 
-  useEffect(() => {
-    if (activeTab === 'shared' && sharedBotAgents.length === 0 && !isLoading) {
-      createSharedBotAgent();
-    }
-  }, [activeTab, sharedBotAgents, isLoading]);
-
   const fetchAgents = async () => {
     try {
       const res = await axiosInstance.get("/agents/");
