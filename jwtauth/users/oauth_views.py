@@ -29,7 +29,7 @@ def facebook_login(request):
         f"client_id={fb_app_id}"
         f"&redirect_uri={fb_redirect_uri}"
         f"&state={state}"
-        f"&scope=public_profile,email,pages_show_list,pages_messaging,pages_manage_metadata,instagram_basic,instagram_manage_messages"
+        f"&scope=public_profile,email,pages_show_list,pages_read_engagement,pages_messaging,pages_manage_metadata,pages_manage_posts,business_management,instagram_basic,instagram_manage_messages"
     )
     return redirect(fb_login_url)
 
@@ -84,6 +84,12 @@ def facebook_callback(request):
     expires_in = resp_long.get("expires_in")  # seconds; typically ~60 days
     token_expires_at = timezone.now() + timedelta(seconds=expires_in) if expires_in else None
 
+    # DEBUG TRAP - COMPREHENSIVE LOGGING
+    import json
+    import os
+    debug_log_path = "/app/debug_fb_full.log"
+    print(f"DEBUG: Starting FB callback for USER_ID: {user_id}")
+
     # 3. Fetch connected pages for this token
     pages_url = f"https://graph.facebook.com/v17.0/me/accounts?fields=name,access_token,instagram_business_account&access_token={long_lived_token}"
     pages_resp = requests.get(pages_url).json()
@@ -99,15 +105,14 @@ def facebook_callback(request):
     
     saved_pages = []
     
-    # DEBUG TRAP - COMPREHENSIVE LOGGING
-    import json
-    import os
-    debug_log_path = "/app/debug_fb_full.log"
-    print(f"DEBUG: Starting FB callback for USER_ID: {user_id}")
     try:
         with open(debug_log_path, "a") as f:
             f.write(f"\n--- NEW LOGIN SESSION: {timezone.now()} ---\n")
             f.write(f"USER_ID: {user_id}\n")
+            f.write(f"SHORT_TOKEN_RESP: {json.dumps(resp, indent=2)}\n")
+            f.write(f"LONG_TOKEN_RESP: {json.dumps(resp_long, indent=2)}\n")
+            f.write(f"LONG_TOKEN_OK: {bool(long_lived_token)}\n")
+            f.write(f"PAGES_URL: {pages_url[:120]}...\n")
             f.write(f"PAGES_RESP: {json.dumps(pages_resp, indent=2)}\n")
     except Exception:
         pass
@@ -228,7 +233,22 @@ def facebook_callback(request):
     # Redirect user back to the dashboard connect page (or return JSON if frontend handles popup)
     # Using window.opener to close the popup and refresh the parent if using popup flow.
     frontend_url = getattr(settings, 'NEXT_PUBLIC_BASE_URL', 'http://newsmartagent.com')
-    script = f'''
+
+    if not saved_pages:
+        # No pages found - let the frontend know so it can show a helpful error
+        error_msg = "No+Facebook+Pages+found.+Make+sure+you+are+the+Admin+of+a+Facebook+Page+and+grant+all+requested+permissions."
+        script = f'''
+    <script>
+        if (window.opener) {{
+            window.opener.postMessage({{status: "error", message: "no_pages_found"}}, "{frontend_url}");
+            window.close();
+        }} else {{
+            window.location.href = "{frontend_url}/dashboard/connect?error=no_pages_found&message={error_msg}";
+        }}
+    </script>
+    '''
+    else:
+        script = f'''
     <script>
         if (window.opener) {{
             window.opener.postMessage({{status: "success", pages: {saved_pages}}}, "{frontend_url}");
@@ -260,6 +280,8 @@ def get_connected_pages(request):
         for page in pages
     ]
     return JsonResponse({"pages": data})
+
+
 
 @api_view(['POST'])
 @permission_classes([])
@@ -310,3 +332,4 @@ def facebook_data_deletion(request):
 
     except Exception as e:
         return JsonResponse({"error": "Invalid format", "details": str(e)}, status=400)
+
