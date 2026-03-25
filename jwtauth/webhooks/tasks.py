@@ -185,8 +185,11 @@ def process_ai_reply_task(self, data):
 
     start_time = time.time()
 
+    # 1. Platform Detection (Early)
+    request_type = data.get('platform') or data.get('type') or 'messenger'
+    logger.info(f"🔍 [Task] Raw data received (Platform: {request_type}): {data}")
+    
     # Extract sender_id: from (WhatsApp JID), phone (WA), or sender_id (FB)
-    logger.info(f"🔍 [Task] Raw data received: {data}")
     sender_id = data.get('sender_id') or data.get('from') or data.get('phone')
     
     # 2. Identifier Normalization (Safety)
@@ -199,8 +202,8 @@ def process_ai_reply_task(self, data):
     data['sender_id'] = sender_id  # Ensure it's available for delivery functions
     logger.info(f"🔍 [Task] Extracted sender_id: {sender_id} | Platform: {request_type}")
     page_id = data.get('page_id')
-    # Detect platform if missing
-    if not request_type:
+    # Detect platform refinement (if it was just a default or needs specific check)
+    if request_type == 'messenger':
         # Check for WhatsApp indicators ( Baileys/EvolutionAPI fields or JIDs )
         if (data.get('receiver') or 
             data.get('sessionId') or 
