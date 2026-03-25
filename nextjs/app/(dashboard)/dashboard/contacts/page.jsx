@@ -399,9 +399,9 @@ export default function Contacts() {
                               <button 
                                 onClick={(e) => toggleAutoReply(contact.id, e)}
                                 className={`flex-shrink-0 w-3 h-3 rounded-full ${
-                                  contact.is_auto_reply_enabled ? 'bg-[#25d366]' : 'bg-rose-500'
+                                  (contact.is_auto_reply_enabled && !contact.is_human_needed) ? 'bg-[#25d366]' : 'bg-rose-500'
                                 } shadow-sm border border-white`}
-                                title={contact.is_auto_reply_enabled ? "AI Responding" : "AI Blocked"}
+                                title={(contact.is_auto_reply_enabled && !contact.is_human_needed) ? "AI Responding" : "AI Blocked"}
                               />
                             </div>
                           </div>
