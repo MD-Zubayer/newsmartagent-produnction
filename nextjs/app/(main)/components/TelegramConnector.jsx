@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { FaTelegram, FaRobot, FaCheckCircle, FaExclamationCircle, FaKey, FaCopy, FaLink, FaUsers } from "react-icons/fa";
+import { FaTelegram, FaRobot, FaCheckCircle, FaExclamationCircle, FaKey, FaCopy, FaLink, FaUsers, FaTrash } from "react-icons/fa";
 import axiosInstance from "@/lib/api";
 import { toast } from "react-hot-toast";
 
@@ -135,6 +135,23 @@ export default function TelegramConnector() {
     }
   };
 
+  const deleteAgent = async (agentId) => {
+    if (!confirm("Are you sure you want to delete this agent? This cannot be undone.")) return;
+
+    setIsLoading(true);
+    try {
+      await axiosInstance.delete(`/agents/${agentId}/`);
+      toast.success("Agent deleted successfully!");
+      fetchAgents();
+      fetchSharedBotAgents();
+    } catch (err) {
+      toast.error("Failed to delete agent");
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
     toast.success("Copied to clipboard!");
@@ -237,13 +254,22 @@ export default function TelegramConnector() {
                       </div>
                       <div className="space-y-2">
                         <p className="text-sm text-slate-600 break-all">{agent.deep_link}</p>
-                        <button
-                          onClick={() => copyToClipboard(agent.deep_link)}
-                          className="w-full bg-sky-500 text-white px-4 py-2 rounded-lg font-bold uppercase tracking-wider hover:bg-sky-600 transition-all flex items-center justify-center gap-2 text-sm"
-                        >
-                          <FaCopy />
-                          Copy Link
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => copyToClipboard(agent.deep_link)}
+                            className="flex-1 bg-sky-500 text-white px-4 py-2 rounded-lg font-bold uppercase tracking-wider hover:bg-sky-600 transition-all flex items-center justify-center gap-2 text-sm"
+                          >
+                            <FaCopy />
+                            Link
+                          </button>
+                          <button
+                            onClick={() => deleteAgent(agent.id)}
+                            className="bg-red-500 text-white px-4 py-2 rounded-lg font-bold uppercase tracking-wider hover:bg-red-600 transition-all flex items-center justify-center gap-2 text-sm"
+                            title="Delete Agent"
+                          >
+                            <FaTrash />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -414,11 +440,20 @@ export default function TelegramConnector() {
                         <span className="font-bold text-slate-900">{agent.name}</span>
                       </div>
                       <p className="text-sm text-slate-600 mb-2">@{agent.page_id}</p>
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className={`w-2 h-2 rounded-full ${agent.is_active ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
-                        <span className={agent.is_active ? 'text-emerald-600' : 'text-red-600'}>
-                          {agent.is_active ? 'Active' : 'Inactive'}
-                        </span>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className={`w-2 h-2 rounded-full ${agent.is_active ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+                          <span className={agent.is_active ? 'text-emerald-600' : 'text-red-600'}>
+                            {agent.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => deleteAgent(agent.id)}
+                          className="text-red-500 hover:text-red-700 p-1 transition-colors"
+                          title="Delete Bot"
+                        >
+                          <FaTrash size={14} />
+                        </button>
                       </div>
                     </div>
                   ))}

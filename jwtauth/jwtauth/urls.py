@@ -34,6 +34,7 @@ router.register(r'blog/posts', blog_views.BlogPostViewSet, basename='blog-posts'
 router.register(r'blog/categories', blog_views.CategoryViewSet, basename='blog-categories')
 router.register(r'withdraw-methods', WithdrawMethodViewSet, basename='withdraw-methods')
 router.register(r'cashout-requests', CashoutRequestViewSet, basename='cashout-requests')
+router.register(r'agents', ai_views.AgentAIViewSet, basename='agent-ai')
 
 
 urlpatterns = [
