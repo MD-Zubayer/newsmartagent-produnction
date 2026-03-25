@@ -53,7 +53,7 @@ def get_order_instructions(user):
                 order_instruction = "If they want to buy, say order form is not ready yet."
                 return order_instruction
         else:
-            order_instruction = "Online ordering is currently closed. Ask them to contact support for manual orders."
+            order_instruction = 'Online ordering is currently closed. Ask them to contact support for manual orders and set "human_handoff": true in your JSON response.'
             return order_instruction
     except Exception as e:
         logger.error(f"Settings Error: {e}")
@@ -197,7 +197,7 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
             logger.info(">>> Embedding skipped due to keyword + message length.")
     except Exception as e:
         logger.error(f"RAG Search Error: {e}", exc_info=True)
-        extra_instruction = f" Answer politely. If data missing, ask to wait. {order_instruction}"
+        extra_instruction = f' Answer politely. If data missing, ask to wait and set "human_handoff": true if human help is needed. {order_instruction}'
     return sheet_context, extra_instruction, query_vector
 
 def check_token_availability(user_profile, ai_model_name):

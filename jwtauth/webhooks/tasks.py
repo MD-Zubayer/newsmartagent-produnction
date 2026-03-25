@@ -359,7 +359,7 @@ def process_ai_reply_task(self, data):
         Contact.objects.update_or_create(
             agent=agent_config,
             identifier=sender_id,
-            platform=request_type if request_type in ['whatsapp', 'messenger', 'web_widget', 'facebook_comment'] else 'messenger',
+            platform=request_type if request_type in ['whatsapp', 'messenger', 'web_widget', 'facebook_comment', 'instagram'] else 'messenger',
             defaults={
                 'name': contact_name if contact_name else None,
                 'push_name': incoming_push_name if incoming_push_name else None
@@ -371,6 +371,32 @@ def process_ai_reply_task(self, data):
         save_message(agent_config, sender_id, text, 'user', platform=agent_config.platform)
         send_cache_update_ws(agent_config.user.id, page_id, sender_id=sender_id)
         handle_smart_memory_update(agent_config, sender_id, text)
+        
+        # ── [NEW] Pre-AI Human Handoff Keyword Check ──
+        pre_ai_handoff_keywords = [
+            'মানুষ', 'প্রতিনিধি', 'এজেন্ট', 'অপারেটর', 'কথা বলতে চাই', 'সাপোর্ট', 'help', 'human', 'agent', 'support', 'contact'
+        ]
+        
+        lower_text = text.lower()
+        is_pre_ai_handoff = any(kw in lower_text for kw in pre_ai_handoff_keywords)
+        
+        if is_pre_ai_handoff:
+            logger.info(f"🚨 [Pre-AI Handoff] Keyword matched in message: '{text}' from {sender_id}")
+            Contact.objects.filter(agent=agent_config, identifier=sender_id).update(is_human_needed=True)
+            
+            # Fetch for WS
+            contact_obj = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
+            if contact_obj:
+                contact_name = contact_obj.name or contact_obj.push_name or sender_id
+                send_human_handoff_ws(agent_config.user.id, agent_config.id, contact_obj.id, contact_name)
+                send_cache_update_ws(agent_config.user.id, agent_config.id, sender_id=sender_id) # Force sync
+                logger.info(f"🔊 [Pre-AI Handoff] WS Alert sent for {contact_name}")
+            
+            # Exit early to prevent AI response
+            if msg_id:
+                r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                r.delete(f'processing_msg:{msg_id}')
+            return
 
         # ── Auto-Reply Enable/Disable Check ──
         contact = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
@@ -658,7 +684,10 @@ def process_ai_reply_task(self, data):
                     logger.warning(f"⚠️ JSON parse failed from AI reply, using raw. Error: {e}")
 
             # Keyword fallback (if JSON fails or AI hints at handoff in text)
-            handoff_keywords = ['human agent', 'representative', 'support person', 'admin', 'সাপোর্ট', 'এজেন্ট', 'মানুষ', 'কথা বলতে চাই']
+            handoff_keywords = [
+                'human agent', 'representative', 'support person', 'admin', 'support', 'contact', 'operator',
+                'সাপোর্ট', 'এজেন্ট', 'মানুষ', 'কথা বলতে চাই', 'প্রতিনিধি', 'যোগাযোগ', 'অপারেটর', 'কথা বলুন', 'হেল্প', 'নাম্বার'
+            ]
             if not is_handoff:
                 lower_reply = raw_ai_reply.lower()
                 if any(kw in lower_reply for kw in handoff_keywords):
@@ -672,7 +701,7 @@ def process_ai_reply_task(self, data):
                 
                 cache_type = 'no_cache'  # এই message কখনো cache হবে না
                 try:
-                    platform_for_lookup = request_type if request_type in ['whatsapp', 'messenger', 'web_widget', 'facebook_comment'] else 'messenger'
+                    platform_for_lookup = request_type if request_type in ['whatsapp', 'messenger', 'web_widget', 'facebook_comment', 'instagram'] else 'messenger'
                     
                     # Update is_human_needed with platform filter
                     updated = Contact.objects.filter(
@@ -681,8 +710,11 @@ def process_ai_reply_task(self, data):
                         platform=platform_for_lookup
                     ).update(is_human_needed=True)
                     
+                    logger.info(f"🔄 Handoff update for {sender_id} on {platform_for_lookup}: {'Success' if updated else 'Failed (Contact not found)'}")
+
                     if not updated:
-                        Contact.objects.filter(agent=agent_config, identifier=sender_id).update(is_human_needed=True)
+                        updated_fallback = Contact.objects.filter(agent=agent_config, identifier=sender_id).update(is_human_needed=True)
+                        logger.info(f"🔄 Handoff fallback update for {sender_id}: {'Success' if updated_fallback else 'Failed completely'}")
 
                     # Get contact for WS payload (platform specific)
                     contact_obj = Contact.objects.filter(
@@ -694,6 +726,7 @@ def process_ai_reply_task(self, data):
                     if contact_obj:
                         contact_name = contact_obj.name or contact_obj.push_name or sender_id
                         send_human_handoff_ws(agent_config.user.id, agent_config.id, contact_obj.id, contact_name)
+                        send_cache_update_ws(agent_config.user.id, agent_config.id, sender_id=sender_id) # Force sync
                         logger.info(f"🚨 Human Handoff WS sent for {sender_id} (Platform: {platform_for_lookup})")
                     else:
                         logger.warning(f"⚠️ Could not find Contact object to send WS for {sender_id}")

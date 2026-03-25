@@ -101,7 +101,7 @@ export default function Contacts() {
     if (!notifications.length) return;
     const lastNotif = notifications[0];
 
-    if (lastNotif.action === "CACHE_UPDATE") {
+    if (lastNotif.action === "CACHE_UPDATE" || lastNotif.action === "HUMAN_HANDOFF") {
       // Refresh contact list if it belongs to selected agent or all
       if (selectedAgent === "all" || lastNotif.agent_id === selectedAgent) {
         fetchContacts(selectedAgent);
