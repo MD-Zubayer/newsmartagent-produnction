@@ -192,6 +192,7 @@ def instagram_webhook(request):
     try:
         data['sender_id'] = sender_id
         data['page_id'] = page_id
+        data['message'] = text
         data['type'] = 'instagram'
         data['platform'] = 'instagram'
         
