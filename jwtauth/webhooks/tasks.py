@@ -187,12 +187,10 @@ def process_ai_reply_task(self, data):
     # Extract sender_id: from (WhatsApp JID), phone (WA), or sender_id (FB)
     logger.info(f"🔍 [Task] Raw data received: {data}")
     sender_id = data.get('sender_id') or data.get('from') or data.get('phone')
-    if sender_id and isinstance(sender_id, str) and '@' in sender_id:
-        if '@lid' in sender_id:
-            # Preserve LID
-            pass
-        else:
-            sender_id = sender_id.split('@')[0]
+    
+    # Do NOT globally strip WhatsApp JIDs here to avoid breaking existing integrations.
+    # We will handle variations during Contact lookup if needed.
+    
     data['sender_id'] = sender_id  # Ensure it's available for delivery functions
     logger.info(f"🔍 [Task] Extracted sender_id: {sender_id}")
     page_id = data.get('page_id')
