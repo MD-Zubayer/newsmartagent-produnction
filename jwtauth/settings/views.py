@@ -144,35 +144,56 @@ class TelegramSharedBotView(APIView):
     def post(self, request):
         """Create a new Telegram agent for shared bot"""
         from aiAgent.models import AgentAI
+        import uuid
+        import logging
+        logger = logging.getLogger(__name__)
+
+        print(f"🚀 [SharedBotView] POST request from user: {request.user.email}")
         
         name = request.data.get('name', 'Telegram Agent')
         system_prompt = request.data.get('system_prompt', 'You are a helpful AI assistant for Telegram.')
         greeting_message = request.data.get('greeting_message', 'Hello! How can I help you today?')
         
         if not name:
+            print("❌ [SharedBotView] Agent name missing")
             return Response({'error': 'Agent name is required'}, status=400)
         
-        # Create agent
-        agent = AgentAI.objects.create(
-            user=request.user,
-            name=name,
-            platform='telegram',
-            system_prompt=system_prompt,
-            greeting_message=greeting_message,
-            page_id=f'shared_agent_{uuid.uuid4().hex[:8]}',  # Temporary unique identifier
-            ai_agent_type='support'
-        )
-        
-        # Generate deep link
-        deep_link = f"https://t.me/NewSmartAgent_Bot?start=agent_{agent.id}"
-        
-        return Response({
-            'success': True,
-            'agent': {
-                'id': agent.id,
-                'name': agent.name,
-                'deep_link': deep_link,
-                'connected_chats': 0
-            },
-            'message': 'Telegram agent created successfully'
-        })
+        try:
+            # Create agent
+            agent = AgentAI.objects.create(
+                user=request.user,
+                name=name,
+                platform='telegram',
+                system_prompt=system_prompt,
+                greeting_message=greeting_message,
+                # 🔥 Important: page_id must match the format expected by the webhook lookup
+                # Webhook expects "shared_agent_{agent.id}"
+                # We'll set it to a temp value and update it after creation
+                page_id=f'shared_agent_temp_{uuid.uuid4().hex[:8]}', 
+                ai_agent_type='support'
+            )
+            
+            # Now update page_id to the final format
+            agent.page_id = f"shared_agent_{agent.id}"
+            agent.save(update_fields=['page_id'])
+            
+            print(f"✅ [SharedBotView] Agent created: ID {agent.id}, name {agent.name}")
+
+            # Generate deep link
+            # Use @NewSmartAgent_Bot as the default shared bot
+            deep_link = f"https://t.me/NewSmartAgent_Bot?start=agent_{agent.id}"
+            
+            return Response({
+                'success': True,
+                'agent': {
+                    'id': agent.id,
+                    'name': agent.name,
+                    'deep_link': deep_link,
+                    'connected_chats': 0
+                },
+                'message': 'Telegram agent created successfully'
+            })
+        except Exception as e:
+            print(f"❌ [SharedBotView] Error creating agent: {e}")
+            logger.exception("Shared bot agent creation failed")
+            return Response({'error': str(e)}, status=500)

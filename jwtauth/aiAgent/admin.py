@@ -8,7 +8,7 @@ import json
 from django.db.models import Sum, Count, Avg
 from django.utils.html import format_html
 from .models import TokenUsageLog
-from .models import AIProviderModel, SmartKeyword, SmartTranslationMap
+from .models import AIProviderModel, SmartKeyword, SmartTranslationMap, TelegramBot, TelegramBotMapping
 from django import forms
 from django.urls import path, reverse
 from django.shortcuts import render, redirect, get_object_or_404
@@ -622,6 +622,21 @@ class WidgetSettingsAdmin(ModelAdmin):
     list_display = ['agent', 'primary_color', 'widget_position', 'is_enabled', 'updated_at']
     list_filter = ['is_enabled', 'widget_position']
     search_fields = ['agent__name', 'header_title']
+
+
+@admin.register(TelegramBot)
+class TelegramBotAdmin(ModelAdmin):
+    list_display = ['agent', 'bot_username', 'bot_name', 'is_active', 'updated_at']
+    list_filter = ['is_active', 'updated_at']
+    search_fields = ['bot_username', 'bot_name', 'agent__name', 'bot_token']
+    readonly_fields = ['created_at', 'updated_at']
+
+@admin.register(TelegramBotMapping)
+class TelegramBotMappingAdmin(ModelAdmin):
+    list_display = ['agent', 'telegram_chat_id', 'is_active', 'created_at']
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['telegram_chat_id', 'agent__name']
+    readonly_fields = ['created_at']
 
 
 # ─── Website Visitor Tracking Admin ──────────────────────────────────────────
