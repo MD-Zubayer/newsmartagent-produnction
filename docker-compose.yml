@@ -20,7 +20,7 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-    command: postgres -c shared_buffers=4GB -c effective_cache_size=10GB -c work_mem=64MB -c maintenance_work_mem=1GB
+    command: postgres -c shared_buffers=4GB -c effective_cache_size=10GB -c work_mem=64MB -c maintenance_work_mem=2GB -c max_connections=500
     restart: always
     logging: *default-logging
     deploy:
