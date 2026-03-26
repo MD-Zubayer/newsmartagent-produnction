@@ -97,7 +97,21 @@ class TelegramBotSetupView(APIView):
         agent.access_token = token
         agent.page_id = bot_username
         agent.save()
-        
+
+        # ✅ Save to TelegramBot model (required for webhook lookup & token delivery)
+        from aiAgent.models import TelegramBot
+        bot_name = bot_data['result'].get('first_name', bot_username)
+        TelegramBot.objects.update_or_create(
+            agent=agent,
+            defaults={
+                'bot_token': token,
+                'bot_username': bot_username,
+                'bot_name': bot_name,
+                'is_active': True
+            }
+        )
+        print(f"✅ [TelegramBotSetupView] TelegramBot record saved for @{bot_username}")
+
         return Response({
             'success': True,
             'bot_username': bot_username,
