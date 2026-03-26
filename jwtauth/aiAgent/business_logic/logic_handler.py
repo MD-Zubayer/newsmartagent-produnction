@@ -42,20 +42,19 @@ logger = logging.getLogger('aiAgent')
 def get_order_instructions(user):
     order_instruction = ""
     try:
-        settings, created = AgentSettings.objects.get_or_create(user=user)
-        if settings.is_order_enable:
-            try:
-                order_form = OrderForm.objects.get(user=user)
-                link = f'https://newsmartagent.com/orders/{order_form.form_id}'
-                order_instruction = f"If user wants to buy/order, strictly give this link: {link}."
-                return order_instruction
-            except OrderForm.DoesNotExist:
-                order_instruction = "If they want to buy, say order form is not ready yet."
-                return order_instruction
-        else:
-            order_instruction = 'Online ordering is currently closed. Ask them to contact support for manual orders and set "human_handoff": true in your JSON response.'
-            return order_instruction
+        logger.info(f'[Logic] Routing Telegram reply via n8n | chat={chat_id} | url={webhook_url}')
+        response = requests.post(
+            webhook_url,
+            json=payload,
+            timeout=15
+        )
+        if response.status_code != 200:
+            logger.error(f'[Logic] n8n Telegram delivery error: {response.status_code} - {response.text}')
+            return False
+        logger.info(f'[Logic] n8n Telegram delivery ok: {response.status_code}')
+        return True
     except Exception as e:
+        logger.error(f'[Logic] Telegram delivery critical failure: {e}')
         logger.error(f"Settings Error: {e}")
         order_instruction = "Handle orders politely."
         return order_instruction
@@ -520,12 +519,17 @@ def deliver_whatsapp_reply(data, reply):
         "sessionId": str(data.get('sessionId', ''))
     }
     try:
-        logger.info(f"🚀 [Logic] Routing WhatsApp reply to n8n delivery. Payload: {payload}")
-        response = requests.post(webhook_url, json=payload, timeout=15)
-        logger.info(f"📥 [Logic] n8n Delivery response: Status {response.status_code}, Body: {response.text}")
+        logger.info(f'[Logic] Routing Telegram reply via n8n | chat={chat_id} | url={webhook_url}')
+        response = requests.post(
+            webhook_url,
+            json=payload,
+            timeout=15
+        )
         if response.status_code != 200:
-            logger.error(f"❌ [Logic] n8n WhatsApp delivery error: {response.status_code} - {response.text}")
+            logger.error(f'[Logic] n8n Telegram delivery error: {response.status_code} - {response.text}')
             return False
+        logger.info(f'[Logic] n8n Telegram delivery ok: {response.status_code}')
+        return True
         return True
     except Exception as e:
         logger.error(f"❌ [Logic] n8n WhatsApp delivery critical failure: {e}")
@@ -544,11 +548,17 @@ def deliver_instagram_reply(data, reply, page_id, access_token):
     }
 
     try:
-        logger.info(f"🚀 [Logic] Routing Instagram reply to n8n delivery. Payload: {payload}")
-        response = requests.post(webhook_url, json=payload, timeout=15)
+        logger.info(f'[Logic] Routing Telegram reply via n8n | chat={chat_id} | url={webhook_url}')
+        response = requests.post(
+            webhook_url,
+            json=payload,
+            timeout=15
+        )
         if response.status_code != 200:
-            logger.error(f"❌ [Logic] n8n Instagram delivery error: {response.status_code} - {response.text}")
+            logger.error(f'[Logic] n8n Telegram delivery error: {response.status_code} - {response.text}')
             return False
+        logger.info(f'[Logic] n8n Telegram delivery ok: {response.status_code}')
+        return True
         return True
     except Exception as e:
         logger.error(f"❌ [Logic] n8n Instagram delivery critical failure: {e}")
@@ -569,15 +579,17 @@ def deliver_facebook_reply(data, reply, page_id, access_token):
     }
 
     try:
-        logger.info(f"Sending Facebook payload to n8n: {payload}")
+        logger.info(f'[Logic] Routing Telegram reply via n8n | chat={chat_id} | url={webhook_url}')
         response = requests.post(
             webhook_url,
             json=payload,
             timeout=15
         )
         if response.status_code != 200:
-            logger.error(f"n8n Facebook delivery error: {response.status_code} - {response.text}")
+            logger.error(f'[Logic] n8n Telegram delivery error: {response.status_code} - {response.text}')
             return False
+        logger.info(f'[Logic] n8n Telegram delivery ok: {response.status_code}')
+        return True
         return True
     except Exception as e:
         logger.error(f"n8n Facebook delivery critical failure: {e}")
@@ -607,18 +619,19 @@ def deliver_telegram_reply(data, reply, token):
     }
 
     try:
-        logger.info(f"🚀 [Logic] Routing Telegram reply to n8n delivery for chat {chat_id}")
+        logger.info(f'[Logic] Routing Telegram reply via n8n | chat={chat_id} | url={webhook_url}')
         response = requests.post(
             webhook_url,
             json=payload,
             timeout=15
         )
         if response.status_code != 200:
-            logger.error(f"❌ [Logic] n8n Telegram delivery error: {response.status_code} - {response.text}")
+            logger.error(f'[Logic] n8n Telegram delivery error: {response.status_code} - {response.text}')
             return False
+        logger.info(f'[Logic] n8n Telegram delivery ok: {response.status_code}')
         return True
     except Exception as e:
-        logger.error(f"❌ [Logic] n8n Telegram delivery critical failure: {e}")
+        logger.error(f'[Logic] n8n Telegram delivery critical failure: {e}')
         return False
 
 def deliver_dashboard_reply(user_id, reply_text, message_id):
