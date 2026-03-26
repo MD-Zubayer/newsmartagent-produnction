@@ -633,9 +633,9 @@ class TelegramBotAdmin(ModelAdmin):
 
 @admin.register(TelegramBotMapping)
 class TelegramBotMappingAdmin(ModelAdmin):
-    list_display = ['agent', 'telegram_chat_id', 'is_active', 'created_at']
+    list_display = ['agent', 'chat_id', 'is_active', 'created_at']
     list_filter = ['is_active', 'created_at']
-    search_fields = ['telegram_chat_id', 'agent__name']
+    search_fields = ['chat_id', 'agent__name', 'user__email']
     readonly_fields = ['created_at']
 
 
