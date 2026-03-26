@@ -702,20 +702,27 @@ def send_messenger_buttons(sender_id, page_id, access_token, contact, reply_text
     webhook_url = os.getenv("N8N_FACEBOOK_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/fb-comment-message-delivery")
     
     buttons = get_button_payload(contact)
-    quick_replies = [
-        {
+    short_titles = {
+        "HUMAN_HELP": "🙋 Human",
+        "RESOLVE_HUMAN": "✅ Resolve",
+        "STOP_AI_REPLY": "🔇 Stop AI",
+        "ON_AI_REPLY": "🔊 On AI"
+    }
+    quick_replies = []
+    for b in buttons:
+        title = short_titles.get(b["action"], b["text"])[:20]  # keep it short to avoid oversized bubbles
+        quick_replies.append({
             "content_type": "text",
-            "title": b["text"][:20], # Messenger limit
+            "title": title,
             "payload": b["action"]
-        } for b in buttons
-    ]
+        })
     
     payload = {
         "sender_id": str(sender_id),
         "page_id": str(page_id),
         "page_access_token": str(access_token),
         "type": "messenger",
-        "reply": reply_text,
+        "reply": "Choose an option:",  # keep header concise so bubbles look smaller
         "quick_replies": quick_replies
     }
     
