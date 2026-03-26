@@ -256,12 +256,19 @@ def telegram_webhook(request):
         # Custom bots now append bot_username as a query param in the webhook URL
         bot_username = request.query_params.get('bot_username') if hasattr(request, 'query_params') else request.GET.get('bot_username', '')
 
-    # Forward raw update to n8n (optional ingress workflow)
+    # Forward raw update to n8n (optional ingress workflow) with dedup
     try:
         import os
         n8n_ingress_url = os.getenv("TELEGRAM_WEBHOOK_URL") or os.getenv("N8N_TELEGRAM_WEBHOOK_URL")
         if n8n_ingress_url:
-            requests.post(n8n_ingress_url, json=data, timeout=5)
+            update_id = data.get('update_id')
+            if update_id:
+                r = _get_redis()
+                dedup_key = f"n8n_ingress:telegram:{update_id}"
+                if r.set(dedup_key, '1', nx=True, ex=300):  # forward once per update_id for 5 minutes
+                    requests.post(n8n_ingress_url, json=data, timeout=5)
+            else:
+                requests.post(n8n_ingress_url, json=data, timeout=5)
     except Exception as e:
         logger.warning(f"n8n ingress forward failed: {e}")
 
