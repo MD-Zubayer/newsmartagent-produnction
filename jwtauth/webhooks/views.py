@@ -254,7 +254,16 @@ def telegram_webhook(request):
     if not bot_username:
         # Custom bots now append bot_username as a query param in the webhook URL
         bot_username = request.query_params.get('bot_username') if hasattr(request, 'query_params') else request.GET.get('bot_username', '')
-    
+
+    # Forward raw update to n8n (optional ingress workflow)
+    try:
+        import os
+        n8n_ingress_url = os.getenv("TELEGRAM_WEBHOOK_URL") or os.getenv("N8N_TELEGRAM_WEBHOOK_URL")
+        if n8n_ingress_url:
+            requests.post(n8n_ingress_url, json=data, timeout=5)
+    except Exception as e:
+        logger.warning(f"n8n ingress forward failed: {e}")
+
     # Check if this is a /start command with agent ID (shared bot)
     is_start_command = False
     agent_id = None
