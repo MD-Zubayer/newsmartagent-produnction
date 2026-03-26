@@ -228,27 +228,30 @@ def instagram_webhook(request):
 def telegram_webhook(request):
     """Dedicated webhook for Telegram bot messages"""
     data = request.data.dict() if hasattr(request.data, 'dict') else dict(request.data)
+    
+    # 📢 Terminal Logging (User requested)
+    print("\n" + "="*50)
+    print("📥 [TELEGRAM WEBHOOK] Incoming Request")
+    print("="*50)
+    import json
+    # Use indent=2 for readable terminal output
+    try:
+        print(json.dumps(data, indent=2))
+    except:
+        print(data)
+    print("="*50 + "\n")
+
     logger.info(f"📥 [telegram_webhook] Received Telegram data: {data}")
     
     # Telegram webhook structure: message.from.id, message.chat.id, message.text
-    # n8n sometimes flattens it or sends it differently.
     message = data.get('message', {})
     
-    # Robust extraction: handle both nested and possible top-level keys if n8n flattened it
+    # Robust extraction
     sender_id = str(message.get('from', {}).get('id') or data.get('sender_id') or data.get('from_id') or '')
     chat_id = str(message.get('chat', {}).get('id') or data.get('chat_id') or data.get('chatId') or '')
     text = message.get('text') or data.get('text') or data.get('message_text') or ''
     bot_username = data.get('bot_username') or data.get('botUsername') or ''
     
-    if not any([message, sender_id, chat_id]):
-        logger.info("⏭️ [telegram_webhook] Empty or non-message payload (e.g. heartbeat/verification)")
-        return Response({'status': 'ignored'}, status=200)
-    
-    if not all([sender_id, chat_id, text]):
-        logger.error(f"❌ [telegram_webhook] Missing core data: sender={sender_id}, chat={chat_id}, text='{text[:20]}...'")
-        logger.debug(f"🔍 [telegram_webhook] Full payload: {data}")
-        return Response({'error': 'Missing core data'}, status=400)
-
     # Check if this is a /start command with agent ID (shared bot)
     is_start_command = False
     agent_id = None
@@ -259,88 +262,94 @@ def telegram_webhook(request):
                 agent_id = int(parts[1].replace('agent_', ''))
                 is_start_command = True
                 logger.info(f"🚀 [telegram_webhook] Start command detected for agent {agent_id}")
+                print(f"🚀 Start command for agent: {agent_id}")
             except ValueError:
                 pass
 
+    if not any([message, sender_id, chat_id]):
+        print("⏭️ Ignoring empty payload")
+        return Response({'status': 'ignored'}, status=200)
+    
+    if not all([sender_id, chat_id, text]):
+        print(f"❌ Missing core data: sender={sender_id}, chat={chat_id}, text='{text[:20]}'")
+        return Response({'error': 'Missing core data'}, status=400)
+
+    # Resolve Agent (page_id)
+    # If bot_username is provided, check if it's actually the user's username
+    user_username = str(message.get('from', {}).get('username') or '')
+    if bot_username and user_username and bot_username == user_username:
+        print(f"⚠️ bot_username ({bot_username}) matches user's username. This is likely an n8n configuration error. Falling back to mapping.")
+        bot_username = '' # Treat as missing to force mapping lookup
+
+    from aiAgent.models import TelegramBotMapping, AgentAI
+
     if is_start_command:
         # Handle shared bot start command
-        from aiAgent.models import AgentAI, TelegramBotMapping
-        
         try:
             agent = AgentAI.objects.get(id=agent_id, is_active=True)
-            
-            # Create or update mapping
             mapping, created = TelegramBotMapping.objects.get_or_create(
                 chat_id=chat_id,
-                defaults={
-                    'agent': agent,
-                    'user': agent.user,
-                    'is_active': True
-                }
+                defaults={'agent': agent, 'user': agent.user, 'is_active': True}
             )
-            
             if not created:
-                # Update existing mapping
                 mapping.agent = agent
                 mapping.user = agent.user
                 mapping.is_active = True
                 mapping.save()
-            
-            logger.info(f"✅ [telegram_webhook] {'Created' if created else 'Updated'} mapping: Chat {chat_id} -> Agent {agent.name}")
-            
-            # Send welcome message via Telegram API
-            welcome_text = f"✅ Connected! You are now chatting with {agent.name}.\n\n{agent.greeting_message or 'Hello! How can I help you today?'}"
-            
-            # For shared bot, we need to send the message directly
-            # This assumes we have a shared bot token configured somewhere
-            # For now, we'll just log it and let the normal flow handle it
-            logger.info(f"📤 [telegram_webhook] Would send welcome message: {welcome_text}")
-            
+            print(f"✅ Mapping updated: {chat_id} -> {agent.name}")
+            page_id = f"shared_agent_{agent.id}"
+            bot_username = 'shared_bot'
         except AgentAI.DoesNotExist:
-            logger.error(f"❌ [telegram_webhook] Agent {agent_id} not found")
+            print(f"❌ Agent {agent_id} not found")
             return Response({'status': 'ignored', 'reason': 'agent_not_found'}, status=200)
-        except Exception as e:
-            logger.error(f"❌ [telegram_webhook] Error creating mapping: {e}")
-            return Response({'status': 'error', 'reason': 'mapping_error'}, status=500)
     
-    # For shared bot, determine the agent from mapping
-    if not bot_username:
-        from aiAgent.models import TelegramBotMapping
+    elif not bot_username:
+        # No bot_username provided, must check mapping
         try:
             mapping = TelegramBotMapping.objects.get(chat_id=chat_id, is_active=True)
             agent = mapping.agent
-            bot_username = 'shared_bot'  # Placeholder for shared bot
             page_id = f"shared_agent_{agent.id}"
+            print(f"🔍 Mapping found for chat {chat_id} -> {agent.name}")
         except TelegramBotMapping.DoesNotExist:
-            logger.info(f"⏭️ [telegram_webhook] No mapping found for chat {chat_id}")
+            print(f"⏭️ No mapping found for chat {chat_id} and no bot_username provided.")
             return Response({'status': 'ignored', 'reason': 'no_mapping'}, status=200)
     else:
-        # Custom bot - use bot_username as page_id
-        page_id = bot_username
+        # Custom bot - verify if agent exists with this bot_username
+        agent_exists = AgentAI.objects.filter(page_id=bot_username, platform='telegram', is_active=True).exists()
+        if not agent_exists:
+            print(f"⚠️ No agent found with bot_username: {bot_username}. Checking mapping as fallback.")
+            try:
+                mapping = TelegramBotMapping.objects.get(chat_id=chat_id, is_active=True)
+                agent = mapping.agent
+                page_id = f"shared_agent_{agent.id}"
+                print(f"🔍 System found a mapping fallback for {chat_id} -> {agent.name}")
+            except TelegramBotMapping.DoesNotExist:
+                print(f"❌ No agent found for bot_username '{bot_username}' and no mapping fallback exists.")
+                return Response({'status': 'error', 'reason': 'agent_not_found'}, status=404)
+        else:
+            page_id = bot_username
 
-    # Ignore bot's own messages
-    if str(sender_id) == str(chat_id):
-        logger.info(f"⏭️ [telegram_webhook] Ignoring self-message from {page_id}")
-        return Response({'status': 'ignored'}, status=200)
-
+    # Ignore self-messages
+    if str(sender_id) == str(chat_id) and text.strip().lower() == 'ping':
+        # Special case for self-ping testing
+        pass
+    
     # Dedup check
     if _is_duplicate_webhook(sender_id, text, page_id):
-        logger.info(f"🔁 Duplicate Telegram webhook blocked for {sender_id}")
+        print(f"🔁 Duplicate blocked for {sender_id}")
         return Response({'status': 'ignored', 'reason': 'duplicate'}, status=200)
 
     try:
-        # Prepare data for Celery task
         data['sender_id'] = sender_id
         data['page_id'] = page_id
         data['message'] = text
         data['type'] = 'telegram'
         data['platform'] = 'telegram'
-        data['chat_id'] = chat_id  # Keep for reply delivery
-        data['is_start_command'] = is_start_command
+        data['chat_id'] = chat_id
         
-        logger.info(f"📦 [telegram_webhook] Sending to Celery: sender={sender_id}, page={page_id}")
+        print(f"📦 Message accepted. Routing to AI. sender={sender_id}, page={page_id}")
         process_ai_reply_task.delay(data)
         return Response({'status': 'accepted'}, status=202)
     except Exception as e:
-        logger.error(f"❌ [telegram_webhook] Celery enqueue error: {e}")
-        return Response({'error': 'Internal Task Queue Error'}, status=500)
+        print(f"❌ Celery error: {e}")
+        return Response({'error': str(e)}, status=500)
