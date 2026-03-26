@@ -138,6 +138,27 @@ def send_human_handoff_ws(user_id, agent_id, sender_id, contact_id, contact_name
     except Exception as e:
         logger.error(f"Human handoff WebSocket error: {e}")
 
+def _send_platform_buttons_alone(request_type, data, sender_id, page_id, effective_access_token, contact_obj):
+    """Helper to send ONLY the buttons when the AI reply itself is skipped."""
+    if not contact_obj:
+        return
+    try:
+        if request_type == 'whatsapp':
+            from aiAgent.business_logic.logic_handler import send_whatsapp_buttons
+            send_whatsapp_buttons(data, contact_obj)
+        elif request_type == 'instagram':
+            from aiAgent.business_logic.logic_handler import send_instagram_buttons
+            send_instagram_buttons(sender_id, page_id, effective_access_token, contact_obj)
+        elif request_type == 'telegram':
+            from aiAgent.business_logic.logic_handler import send_telegram_buttons
+            chat_id = data.get('chat_id') or sender_id
+            send_telegram_buttons(chat_id, effective_access_token, contact_obj)
+        elif request_type in ['messenger', 'facebook_comment']:
+            from aiAgent.business_logic.logic_handler import send_messenger_buttons
+            send_messenger_buttons(sender_id, page_id, effective_access_token, contact_obj)
+    except Exception as e:
+        logger.error(f"Failed to send standalone buttons: {e}")
+
 def deliver_dashboard_reply(user_id, reply, msg_id):
     try:
         from channels.layers import get_channel_layer
@@ -488,6 +509,9 @@ def process_ai_reply_task(self, data):
                 send_human_handoff_ws(agent_config.user.id, page_id, sender_id, contact_obj.id, contact_name)
                 send_cache_update_ws(agent_config.user.id, page_id, sender_id=sender_id) # Force sync
                 logger.info(f"🔊 [Pre-AI Handoff] WS Alert sent for {contact_name}")
+                
+                # Send buttons so user can easily restore AI or resolve human mode
+                _send_platform_buttons_alone(request_type, data, sender_id, page_id, effective_access_token, contact_obj)
             
             # Exit early to prevent AI response
             if msg_id:
@@ -500,6 +524,10 @@ def process_ai_reply_task(self, data):
         if contact and (not contact.is_auto_reply_enabled or contact.is_human_needed):
             reason = "DISABLED" if not contact.is_auto_reply_enabled else "HUMAN_HANDOFF_ACTIVE"
             logger.info(f"🚫 Auto-reply is {reason} for contact {sender_id} (Agent: {agent_config.id}). Skipping AI response.")
+            
+            # Send buttons so user can easily restore AI
+            _send_platform_buttons_alone(request_type, data, sender_id, page_id, effective_access_token, contact)
+            
             if msg_id:
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)
                 r.delete(f'processing_msg:{msg_id}')

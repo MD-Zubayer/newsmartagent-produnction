@@ -654,7 +654,7 @@ def get_button_payload(contact):
         
     return buttons
 
-def send_telegram_buttons(chat_id, token, contact):
+def send_telegram_buttons(chat_id, token, contact, reply_text="Options:"):
     """Send inline keyboard buttons after Telegram reply"""
     if not token or not chat_id:
         return False
@@ -674,7 +674,7 @@ def send_telegram_buttons(chat_id, token, contact):
         "chat_id": str(chat_id),
         "access_token": str(token),
         "platform": "telegram",
-        "reply": "Options:", # Minimal text as Telegram requires text with buttons
+        "reply": reply_text, # Minimal text as Telegram requires text with buttons
         "reply_markup": {"inline_keyboard": inline_keyboard}
     }
     
@@ -686,7 +686,7 @@ def send_telegram_buttons(chat_id, token, contact):
         logger.error(f"Telegram button delivery error: {e}")
         return False
 
-def send_messenger_buttons(sender_id, page_id, access_token, contact):
+def send_messenger_buttons(sender_id, page_id, access_token, contact, reply_text="How would you like to proceed?"):
     """Send quick_reply buttons after Messenger reply"""
     if not access_token or not sender_id:
         return False
@@ -708,7 +708,7 @@ def send_messenger_buttons(sender_id, page_id, access_token, contact):
         "page_id": str(page_id),
         "page_access_token": str(access_token),
         "type": "messenger",
-        "reply": "How would you like to proceed?",
+        "reply": reply_text,
         "quick_replies": quick_replies
     }
     
@@ -720,7 +720,7 @@ def send_messenger_buttons(sender_id, page_id, access_token, contact):
         logger.error(f"Messenger button delivery error: {e}")
         return False
 
-def send_instagram_buttons(sender_id, page_id, access_token, contact):
+def send_instagram_buttons(sender_id, page_id, access_token, contact, reply_text="How would you like to proceed?"):
     """Send quick_reply buttons after Instagram reply"""
     if not access_token or not sender_id:
         return False
@@ -742,7 +742,7 @@ def send_instagram_buttons(sender_id, page_id, access_token, contact):
         "page_id": str(page_id),
         "page_access_token": str(access_token),
         "type": "instagram",
-        "reply": "How would you like to proceed?",
+        "reply": reply_text,
         "quick_replies": quick_replies
     }
     
@@ -754,7 +754,7 @@ def send_instagram_buttons(sender_id, page_id, access_token, contact):
         logger.error(f"Instagram button delivery error: {e}")
         return False
 
-def send_whatsapp_buttons(data, contact):
+def send_whatsapp_buttons(data, contact, reply_text="Options:"):
     """Send button message via n8n for WhatsApp"""
     import os
     webhook_url = os.getenv("N8N_WHATSAPP_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/whatsapp-delivery")
@@ -773,7 +773,7 @@ def send_whatsapp_buttons(data, contact):
         "type": "whatsapp",
         "sessionId": str(data.get('sessionId', '')),
         "is_button_message": True, # Flag for n8n to route as button message
-        "reply": "Options:",
+        "reply": reply_text,
         "buttons": [
             {"buttonId": b["action"], "buttonText": {"displayText": b["text"]}, "type": 1}
             for b in buttons_data

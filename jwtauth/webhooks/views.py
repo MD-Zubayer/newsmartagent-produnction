@@ -124,21 +124,22 @@ def handle_button_action(action, sender_id, page_id, platform):
         # Delivery logic
         if platform == 'whatsapp':
             data = {'sender_id': sender_id, 'delivery_jid': sender_id, 'sessionId': f"user_{agent.user.id}"}
-            logic_handler.deliver_whatsapp_reply(data, confirmation_text)
+            from aiAgent.business_logic.logic_handler import send_whatsapp_buttons
+            send_whatsapp_buttons(data, contact, confirmation_text)
         elif platform == 'instagram':
             fb_page = FacebookPage.objects.filter(page_id=agent.page_id, is_active=True).first()
             token = fb_page.access_token if fb_page else agent.access_token
-            data = {'sender_id': sender_id}
-            logic_handler.deliver_instagram_reply(data, confirmation_text, agent.page_id, token)
+            from aiAgent.business_logic.logic_handler import send_instagram_buttons
+            send_instagram_buttons(sender_id, page_id, token, contact, confirmation_text)
         elif platform == 'telegram':
             token = agent.access_token
-            data = {'sender_id': sender_id, 'chat_id': page_id}
-            logic_handler.deliver_telegram_reply(data, confirmation_text, token)
+            from aiAgent.business_logic.logic_handler import send_telegram_buttons
+            send_telegram_buttons(page_id, token, contact, confirmation_text)
         elif platform == 'messenger':
             fb_page = FacebookPage.objects.filter(page_id=agent.page_id, is_active=True).first()
             token = fb_page.access_token if fb_page else agent.access_token
-            data = {'sender_id': sender_id, 'type': 'messenger'}
-            logic_handler.deliver_facebook_reply(data, confirmation_text, agent.page_id, token)
+            from aiAgent.business_logic.logic_handler import send_messenger_buttons
+            send_messenger_buttons(sender_id, page_id, token, contact, confirmation_text)
             
         # Remove buttons or send new ones (optional)
         
