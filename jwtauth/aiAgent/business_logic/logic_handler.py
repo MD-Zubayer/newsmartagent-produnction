@@ -770,10 +770,12 @@ def send_whatsapp_buttons(data, contact, reply_text="Options:"):
         "delivery_jid": str(data.get('delivery_jid', '')),
         "phone": str(data.get('sender_id', '')),
         "sender_id": str(data.get('sender_id', '')),
+        "message": str(reply_text),
+        "reply": str(reply_text),
         "type": "whatsapp",
+        "message_id": str(data.get('message_id', '')),
         "sessionId": str(data.get('sessionId', '')),
         "is_button_message": True, # Flag for n8n to route as button message
-        "reply": reply_text,
         "buttons": [
             {"buttonId": b["action"], "buttonText": {"displayText": b["text"]}, "type": 1}
             for b in buttons_data
