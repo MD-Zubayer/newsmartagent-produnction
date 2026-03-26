@@ -371,16 +371,26 @@ def process_ai_reply_task(self, data):
 
         effective_access_token = fb_page.access_token if fb_page else agent_config.access_token
         
-        # For shared Telegram bots, use the shared bot token instead
-        if request_type == 'telegram' and page_id.startswith('shared_agent_'):
-            # Get shared bot token from environment or settings
-            shared_bot_token = getattr(settings, 'TELEGRAM_SHARED_BOT_TOKEN', None)
-            if shared_bot_token:
-                effective_access_token = shared_bot_token
-                logger.info(f"Using shared bot token for agent {page_id}")
+        # 🔗 Telegram Token Lookup (Separate Model)
+        if request_type == 'telegram':
+            from aiAgent.models import TelegramBot
+            # If shared bot, use shared token
+            if page_id.startswith('shared_agent_'):
+                shared_bot_token = getattr(settings, 'TELEGRAM_SHARED_BOT_TOKEN', None)
+                if shared_bot_token:
+                    effective_access_token = shared_bot_token
+                    logger.info(f"Using shared bot token for agent {page_id}")
+                else:
+                    logger.error(f"No shared bot token configured for {page_id}")
+                    effective_access_token = None
             else:
-                logger.error(f"No shared bot token configured for {page_id}")
-                effective_access_token = None
+                # Custom bot - try to get from TelegramBot model
+                tbot = TelegramBot.objects.filter(agent=agent_config, is_active=True).first()
+                if tbot and tbot.bot_token:
+                    effective_access_token = tbot.bot_token
+                    logger.info(f"Using token from TelegramBot model for {page_id}")
+                else:
+                    logger.info(f"Falling back to AgentAI.access_token for {page_id}")
 
         # ── WhatsApp Message Logging (Incoming) ──
         wa_msg_obj = None

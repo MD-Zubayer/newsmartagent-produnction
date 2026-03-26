@@ -150,6 +150,24 @@ class TelegramBotMapping(models.Model):
     def __str__(self):
         return f"Chat {self.chat_id} -> Agent {self.agent.name}"
 
+class TelegramBot(models.Model):
+    """Dedicated model for Telegram bot settings"""
+    agent = models.OneToOneField(AgentAI, on_delete=models.CASCADE, related_name='telegram_bot_details')
+    bot_token = encrypt(models.TextField(help_text="Bot API Token from BotFather"))
+    bot_username = models.CharField(max_length=100, unique=True, db_index=True)
+    bot_name = models.CharField(max_length=150, blank=True, null=True)
+    
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Telegram Bot"
+        verbose_name_plural = "Telegram Bots"
+
+    def __str__(self):
+        return f"@{self.bot_username} ({self.agent.name})"
+
 import uuid
 from django.conf import settings
 User = settings.AUTH_USER_MODEL

@@ -812,6 +812,7 @@ class ConnectTelegramBotView(APIView):
             return Response({"error": "Failed to connect to Telegram API for webhook setup", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         # 3. Save to Database
+        from aiAgent.models import TelegramBot, AgentAI
         try:
             if agent_id:
                 agent = AgentAI.objects.filter(id=agent_id, user=request.user).first()
@@ -831,6 +832,17 @@ class ConnectTelegramBotView(APIView):
                     access_token=token,
                     system_prompt="You are a helpful Telegram AI assistant."
                 )
+
+            # Update or Create TelegramBot record
+            TelegramBot.objects.update_or_create(
+                agent=agent,
+                defaults={
+                    'bot_token': token,
+                    'bot_username': bot_username,
+                    'bot_name': bot_name,
+                    'is_active': True
+                }
+            )
 
             return Response({
                 "status": "success",

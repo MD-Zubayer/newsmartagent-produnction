@@ -281,7 +281,7 @@ def telegram_webhook(request):
         print(f"⚠️ bot_username ({bot_username}) matches user's username. This is likely an n8n configuration error. Falling back to mapping.")
         bot_username = '' # Treat as missing to force mapping lookup
 
-    from aiAgent.models import TelegramBotMapping, AgentAI
+    from aiAgent.models import TelegramBotMapping, AgentAI, TelegramBot
 
     if is_start_command:
         # Handle shared bot start command
@@ -314,20 +314,28 @@ def telegram_webhook(request):
             print(f"⏭️ No mapping found for chat {chat_id} and no bot_username provided.")
             return Response({'status': 'ignored', 'reason': 'no_mapping'}, status=200)
     else:
-        # Custom bot - verify if agent exists with this bot_username
-        agent_exists = AgentAI.objects.filter(page_id=bot_username, platform='telegram', is_active=True).exists()
-        if not agent_exists:
-            print(f"⚠️ No agent found with bot_username: {bot_username}. Checking mapping as fallback.")
-            try:
-                mapping = TelegramBotMapping.objects.get(chat_id=chat_id, is_active=True)
-                agent = mapping.agent
-                page_id = f"shared_agent_{agent.id}"
-                print(f"🔍 System found a mapping fallback for {chat_id} -> {agent.name}")
-            except TelegramBotMapping.DoesNotExist:
-                print(f"❌ No agent found for bot_username '{bot_username}' and no mapping fallback exists.")
-                return Response({'status': 'error', 'reason': 'agent_not_found'}, status=404)
-        else:
+        # Custom bot - verify if agent exists with this bot_username (check TelegramBot model first)
+        tbot = TelegramBot.objects.filter(bot_username=bot_username, is_active=True).first()
+        if tbot:
+            agent = tbot.agent
             page_id = bot_username
+            print(f"✅ Agent found via TelegramBot model: @{bot_username} -> {agent.name}")
+        else:
+            # Fallback to legacy AgentAI.page_id check
+            agent = AgentAI.objects.filter(page_id=bot_username, platform='telegram', is_active=True).first()
+            if agent:
+                page_id = bot_username
+                print(f"🔍 Agent found via legacy page_id lookup: @{bot_username} -> {agent.name}")
+            else:
+                print(f"⚠️ No agent found with bot_username: {bot_username}. Checking mapping as fallback.")
+                try:
+                    mapping = TelegramBotMapping.objects.get(chat_id=chat_id, is_active=True)
+                    agent = mapping.agent
+                    page_id = f"shared_agent_{agent.id}"
+                    print(f"🔍 System found a mapping fallback for {chat_id} -> {agent.name}")
+                except TelegramBotMapping.DoesNotExist:
+                    print(f"❌ No agent found for bot_username '{bot_username}' and no mapping fallback exists.")
+                    return Response({'status': 'error', 'reason': 'agent_not_found'}, status=404)
 
     # Ignore self-messages
     if str(sender_id) == str(chat_id) and text.strip().lower() == 'ping':
