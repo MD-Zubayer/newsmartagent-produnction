@@ -1,7 +1,7 @@
 from django.db import models
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework import status
 from .models import AgentAI, Contact
 from .serializers import ContactSerializer, MessageSerializer
@@ -221,3 +221,44 @@ class HumanHelpView(APIView):
         except Contact.DoesNotExist:
             return Response({"error": "Contact not found"}, status=status.HTTP_404_NOT_FOUND)
 
+
+class WhatsAppButtonClickView(APIView):
+    """Public view to handle button clicks via links for WhatsApp fallback"""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        contact_id = request.GET.get('cid')
+        action = request.GET.get('act')
+        
+        if not contact_id or not action:
+            return Response({"error": "Invalid request parameters"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            # We use the internal database ID for simplicity, 
+            # ideally this should be a UUID or signed token in production.
+            contact = Contact.objects.get(id=contact_id)
+            
+            if action == 'HUMAN_HELP':
+                contact.is_human_needed = True
+                contact.is_auto_reply_enabled = False
+                msg = "🙋 Human Help: A human agent has been notified and AI is paused."
+            elif action == 'STOP_AI_REPLY':
+                contact.is_auto_reply_enabled = False
+                msg = "🔇 Stop AI: Auto-reply has been disabled for this conversation."
+            elif action == 'ON_AI_REPLY':
+                contact.is_auto_reply_enabled = True
+                msg = "▶️ Start AI: Auto-reply has been re-enabled."
+            else:
+                return Response({"error": "Unknown action"}, status=status.HTTP_400_BAD_REQUEST)
+                
+            contact.save()
+            
+            # Simple text response for now, can be a template later
+            return Response({
+                "success": True, 
+                "message": msg,
+                "contact": contact.name or contact.identifier
+            }, status=status.HTTP_200_OK)
+            
+        except Contact.DoesNotExist:
+            return Response({"error": "Link expired or invalid"}, status=status.HTTP_404_NOT_FOUND)

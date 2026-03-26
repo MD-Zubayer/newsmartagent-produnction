@@ -765,43 +765,33 @@ def send_whatsapp_buttons(data, contact, reply_text="Options:"):
         
     buttons_data = get_button_payload(contact)
     
+    # ── Text Menu Fallback (with Clickable Links) ──
+    # Since Meta/LID often blocks interactive buttons, we send a premium text menu 
+    # with clickable links as fallback buttons.
+    base_url = os.getenv("BASE_URL", "https://newsmartagent.com")
+    menu_text = f"{reply_text}\n\n"
+    menu_text += "--- 📝 *Select an Option* ---\n"
+    
+    for i, b in enumerate(buttons_data, 1):
+        # We append a clickable link for each action
+        link = f"{base_url}/api/aiAgent/contacts/whatsapp-click/?cid={contact.id}&act={b['action']}"
+        menu_text += f"{i}️⃣ *{b['text']}*\n    🔗 {link}\n"
+        
+    menu_text += f"\n⌨️ _You can also reply with 1{' or 2' if len(buttons_data) > 1 else ''}_"
+
     payload = {
         "to": str(final_target),
         "number": str(final_target),
         "delivery_jid": str(data.get('delivery_jid', '')),
         "phone": str(data.get('sender_id', '')),
         "sender_id": str(data.get('sender_id', '')),
-        "message": str(reply_text),
-        "reply": str(reply_text),
-        "text": str(reply_text),
+        "message": menu_text,
+        "reply": menu_text,
+        "text": menu_text,
         "type": "whatsapp",
         "message_id": str(data.get('message_id', '')),
         "sessionId": str(data.get('sessionId', '')),
-        "is_button_message": True, # Keep for backward compatibility
-        "is_interactive_list": True, # Flag for Interactive List
-        "listMessage": {
-            "title": "Agent Options",
-            "description": str(reply_text)[:50],
-            "buttonText": "Tap to view options",
-            "footerText": "New Smart Agent",
-            "sections": [
-                {
-                    "title": "Available Actions",
-                    "rows": [
-                        {"title": b["text"][:24], "rowId": b["action"]}
-                        for b in buttons_data
-                    ]
-                }
-            ]
-        },
-        "buttons": [
-            {"buttonId": b["action"], "buttonText": {"displayText": b["text"][:20]}, "type": 1}
-            for b in buttons_data
-        ],
-        "interactiveButtons": [
-            {"type": "reply", "reply": {"id": b["action"], "title": b["text"][:20]}}
-            for b in buttons_data
-        ]
+        "is_button_message": False
     }
     
     try:

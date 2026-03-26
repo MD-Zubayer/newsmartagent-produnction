@@ -261,6 +261,22 @@ def ai_webhook(request):
     elif request_type == 'whatsapp':
         # Depending on n8n mapping, the buttonId might be in a specific field
         button_id = data.get('buttonId') or data.get('listResponseId')
+        
+        # Numeric Text Fallback (1=Help, 2=Toggle AI)
+        text_cmd = text.strip() if text else ""
+        if not button_id and text_cmd in ["1", "2"]:
+            from aiAgent.models import Contact, AgentAI
+            # Try to find the contact to resolve what '2' means
+            agent = AgentAI.objects.filter(page_id=page_id, platform='whatsapp', is_active=True).first()
+            if agent:
+                contact = Contact.objects.filter(identifier=sender_id, agent=agent).first()
+                if text_cmd == "1":
+                    button_id = "HUMAN_HELP"
+                elif text_cmd == "2" and contact:
+                    button_id = "STOP_AI_REPLY" if contact.is_auto_reply_enabled else "ON_AI_REPLY"
+                elif text_cmd == "2": # Fallback if contact not found yet
+                    button_id = "STOP_AI_REPLY"
+
         # Sometimes the button text itself is the action if poorly mapped
         if not button_id and text in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN"]:
             button_id = text

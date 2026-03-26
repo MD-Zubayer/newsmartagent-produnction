@@ -136,7 +136,7 @@ async function initSession(sessionId, phoneNumber = null) {
         if (existing.state === 'open') return existing;
         if (existing.sock) {
             existing.sock.ev.removeAllListeners();
-            existing.sock.logout().catch(() => {});
+            existing.sock.logout().catch(() => { });
         }
     }
 
@@ -195,7 +195,7 @@ async function initSession(sessionId, phoneNumber = null) {
                 sessionData.phone = null;
                 const statusCode = lastDisconnect?.error ? new Boom(lastDisconnect.error)?.output?.statusCode : 0;
                 logger.info(`[Session: ${sessionId}] Closed (${statusCode})`);
-                
+
                 if (statusCode !== DisconnectReason.loggedOut) {
                     setTimeout(() => initSession(sessionId), 5000);
                 } else {
@@ -293,10 +293,10 @@ async function cleanupSession(sessionId, { removeFolder = true } = {}) {
     const cleanup = (async () => {
         const existing = sessions.get(sessionId);
         if (existing?.sock) {
-            try { await existing.sock.logout(); } catch (err) {}
+            try { await existing.sock.logout(); } catch (err) { }
         }
         if (removeFolder) {
-            try { fs.rmSync(sessionFolder, { recursive: true, force: true }); } catch (err) {}
+            try { fs.rmSync(sessionFolder, { recursive: true, force: true }); } catch (err) { }
         }
         sessions.delete(sessionId);
         messageQueues.delete(sessionId);
@@ -324,11 +324,11 @@ app.post('/init/:sessionId', async (req, res) => {
 app.get('/status/:sessionId', (req, res) => {
     const session = sessions.get(req.params.sessionId);
     if (!session) return res.status(404).json({ error: 'Session not found' });
-    res.json({ 
-        state: session.state, 
-        phone: session.phone, 
+    res.json({
+        state: session.state,
+        phone: session.phone,
         qr: session.qr,
-        pairingCode: session.pairingCode 
+        pairingCode: session.pairingCode
     });
 });
 
@@ -371,7 +371,7 @@ app.post('/send-message', async (req, res) => {
     // but here we wait for the result to keep the API response consistent for now.
     // However, if the queue gets long, this might timeout.
     // Let's return the message as "Queued" if the queue is not empty.
-    
+
     if (queueData.messages.length > 1) {
         res.json({ success: true, status: 'queued', queueLength: queueData.messages.length });
     } else {
@@ -398,7 +398,7 @@ async function restoreSessions() {
     for (const sessionId of folders) {
         if (fs.statSync(path.join(AUTH_BASE_FOLDER, sessionId)).isDirectory()) {
             logger.info(`Restoring: ${sessionId}`);
-            initSession(sessionId).catch(() => {});
+            initSession(sessionId).catch(() => { });
         }
     }
 }
