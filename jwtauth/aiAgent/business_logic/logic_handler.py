@@ -585,7 +585,8 @@ def deliver_facebook_reply(data, reply, page_id, access_token):
 
 def deliver_telegram_reply(data, reply, token):
     """Deliver final reply for Telegram via n8n webhook (Separate Workflow)"""
-    webhook_url = "https://n8n.newsmartagent.com/webhook/telegram-delivery"
+    import os
+    webhook_url = os.getenv("N8N_TELEGRAM_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/telegram-delivery")
     chat_id = data.get('chat_id') or data.get('sender_id')
     
     if not chat_id:
