@@ -550,6 +550,8 @@ def deliver_instagram_reply(data, reply, page_id, access_token):
     payload = {
         "sender_id": str(data.get('sender_id', '')),
         "reply": str(reply),
+        "message": str(reply),
+        "text": str(reply),
         "page_id": str(page_id),
         "page_access_token": str(access_token),
         "type": "instagram",
