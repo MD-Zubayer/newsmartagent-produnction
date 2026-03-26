@@ -134,7 +134,7 @@ def handle_button_action(action, sender_id, page_id, platform):
         elif platform == 'telegram':
             token = agent.access_token
             from aiAgent.business_logic.logic_handler import send_telegram_buttons
-            send_telegram_buttons(page_id, token, contact, confirmation_text)
+            send_telegram_buttons(sender_id, token, contact, confirmation_text)
         elif platform == 'messenger':
             fb_page = FacebookPage.objects.filter(page_id=agent.page_id, is_active=True).first()
             token = fb_page.access_token if fb_page else agent.access_token
@@ -429,7 +429,9 @@ def telegram_webhook(request):
 
     # Resolve Agent (page_id)
     # If bot_username is provided, check if it's actually the user's username
-    user_username = str(message.get('from', {}).get('username') or '')
+    # For callback_query, the user is in callback_query['from'], not message['from']
+    user_data = callback_query.get('from', {}) if callback_query else message.get('from', {})
+    user_username = str(user_data.get('username') or '')
     if bot_username and user_username and bot_username == user_username:
         print(f"⚠️ bot_username ({bot_username}) matches user's username. This is likely an n8n configuration error. Falling back to mapping.")
         bot_username = '' # Treat as missing to force mapping lookup
