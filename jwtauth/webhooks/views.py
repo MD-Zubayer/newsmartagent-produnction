@@ -383,8 +383,12 @@ def telegram_webhook(request):
     logger.info(f"📥 [telegram_webhook] Received Telegram data: {data}")
     
     # Telegram webhook can have 'message' or 'callback_query'
-    callback_query = data.get('callback_query', {})
-    message = data.get('message') or callback_query.get('message') or {}
+    callback_query = data.get('callback_query')
+    if not isinstance(callback_query, dict): callback_query = {}
+    
+    message = data.get('message')
+    if not isinstance(message, dict): message = callback_query.get('message')
+    if not isinstance(message, dict): message = {}
     
     # Robust extraction of identifiers
     raw_sender_id = callback_query.get('from', {}).get('id') or message.get('from', {}).get('id') or data.get('sender_id') or data.get('from_id')
