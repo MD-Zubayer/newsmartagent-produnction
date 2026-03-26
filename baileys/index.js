@@ -51,7 +51,7 @@ async function processQueue(sessionId) {
             return;
         }
 
-        const { jid, message, resolve, reject } = queueData.messages.shift();
+        const { jid, message, buttons, listMessage, resolve, reject } = queueData.messages.shift();
         try {
             // "Fake Typing" behavior: send presence update first
             await session.sock.sendPresenceUpdate('composing', jid);
@@ -61,7 +61,26 @@ async function processQueue(sessionId) {
             logger.info(`⏳ [Baileys] Typing for ${randomDelay}ms before sending to ${jid}`);
             await delay(randomDelay);
 
-            const sent = await session.sock.sendMessage(jid, { text: message });
+            let msgObj = { text: message };
+
+            if (listMessage) {
+                // Baileys-এ লিস্ট মেসেজ পাঠানোর সঠিক পদ্ধতি (To avoid .match() crash)
+                msgObj = {
+                    text: listMessage.description || message || "Please select an option",
+                    footer: listMessage.footerText || "",
+                    title: listMessage.title || "",
+                    buttonText: listMessage.buttonText || "Select",
+                    sections: listMessage.sections,
+                };
+            } else if (buttons && buttons.length > 0) {
+                msgObj = {
+                    text: message,
+                    buttons: buttons,
+                    headerType: 1
+                };
+            }
+
+            const sent = await session.sock.sendMessage(jid, msgObj);
             logger.info(`✅ [Baileys] Sent successfully to ${jid}`);
             resolve({ success: true, messageId: sent?.key?.id });
         } catch (err) {
@@ -318,7 +337,7 @@ app.get('/qr/:sessionId', (req, res) => {
 });
 
 app.post('/send-message', async (req, res) => {
-    const { sessionId, to, message } = req.body;
+    const { sessionId, to, message, buttons, listMessage } = req.body;
     const secret = req.headers['x-api-secret'];
     if (secret !== API_SECRET) return res.status(401).send('Unauthorized');
 
@@ -336,7 +355,7 @@ app.post('/send-message', async (req, res) => {
 
     // Return promise after queuing
     const sendPromise = new Promise((resolve, reject) => {
-        queueData.messages.push({ jid, message, resolve, reject });
+        queueData.messages.push({ jid, message, buttons, listMessage, resolve, reject });
     });
 
     processQueue(sessionId).catch(err => logger.error(`Queue error: ${err.message}`));
