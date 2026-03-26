@@ -772,17 +772,13 @@ def send_whatsapp_buttons(data, contact, reply_text="Options:"):
         
     buttons_data = get_button_payload(contact)
     
-    # ── Text Menu Fallback (with Clickable Links) ──
-    # Since Meta/LID often blocks interactive buttons, we send a premium text menu 
-    # with clickable links as fallback buttons.
-    base_url = os.getenv("BASE_URL", "https://newsmartagent.com")
+    # ── Text Menu Fallback (no URLs) ──
+    # Meta/LID sometimes blocks interactive buttons; we send a plain numbered menu without links.
     menu_text = f"{reply_text}\n\n"
     menu_text += "--- 📝 *Select an Option* ---\n"
     
     for i, b in enumerate(buttons_data, 1):
-        # We append a clickable link for each action
-        link = f"{base_url}/api/aiAgent/contacts/whatsapp-click/?cid={contact.id}&act={b['action']}"
-        menu_text += f"{i}️⃣ *{b['text']}*\n    🔗 {link}\n"
+        menu_text += f"{i}️⃣ *{b['text']}*\n"
         
     menu_text += f"\n⌨️ _You can also reply with 1{' or 2' if len(buttons_data) > 1 else ''}_"
 
