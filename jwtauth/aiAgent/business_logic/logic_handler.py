@@ -767,17 +767,23 @@ def send_whatsapp_buttons(data, contact, reply_text="Options:"):
     
     payload = {
         "to": str(final_target),
+        "number": str(final_target),
         "delivery_jid": str(data.get('delivery_jid', '')),
         "phone": str(data.get('sender_id', '')),
         "sender_id": str(data.get('sender_id', '')),
         "message": str(reply_text),
         "reply": str(reply_text),
+        "text": str(reply_text),
         "type": "whatsapp",
         "message_id": str(data.get('message_id', '')),
         "sessionId": str(data.get('sessionId', '')),
         "is_button_message": True, # Flag for n8n to route as button message
         "buttons": [
-            {"buttonId": b["action"], "buttonText": {"displayText": b["text"]}, "type": 1}
+            {"buttonId": b["action"], "buttonText": {"displayText": b["text"][:20]}, "type": 1}
+            for b in buttons_data
+        ],
+        "interactiveButtons": [
+            {"type": "reply", "reply": {"id": b["action"], "title": b["text"][:20]}}
             for b in buttons_data
         ]
     }
