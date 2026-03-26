@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from webhooks.tasks import process_ai_reply_task
 import hashlib
 import logging
+import requests
 from aiAgent.cache.client import get_redis_client
 
 logger = logging.getLogger(__name__)
