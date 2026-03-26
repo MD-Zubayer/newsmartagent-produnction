@@ -507,6 +507,12 @@ def deliver_whatsapp_reply(data, reply):
     """Deliver final reply for WhatsApp via n8n webhook"""
     import os
     webhook_url = os.getenv("N8N_WHATSAPP_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/whatsapp-delivery")
+    buttons = [
+        {"id": "human_help" if not data.get('human_mode') else "resolve_human",
+         "title": "🙋 Human Help" if not data.get('human_mode') else "✅ Resolve Human Mode"},
+        {"id": "toggle_ai",
+         "title": "🔊 On AI Reply" if data.get('stop_ai') else "🔇 Stop AI Reply"},
+    ]
     final_target = data.get('delivery_jid') or data.get('sender_id', '')
     payload = {
         "to": str(final_target),
@@ -517,7 +523,8 @@ def deliver_whatsapp_reply(data, reply):
         "reply": str(reply),
         "type": "whatsapp",
         "message_id": str(data.get('message_id', '')),
-        "sessionId": str(data.get('sessionId', ''))
+        "sessionId": str(data.get('sessionId', '')),
+        "buttons": buttons  # only option labels, no URLs
     }
     try:
         logger.info(f'[Logic] Routing WhatsApp reply via n8n | to={final_target} | url={webhook_url}')
