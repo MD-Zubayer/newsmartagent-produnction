@@ -382,13 +382,16 @@ def telegram_webhook(request):
 
     logger.info(f"📥 [telegram_webhook] Received Telegram data: {data}")
     
-    # Telegram webhook structure: message.from.id, message.chat.id, message.text
-    message = data.get('message', {})
+    # Telegram webhook can have 'message' or 'callback_query'
+    callback_query = data.get('callback_query', {})
+    message = data.get('message') or callback_query.get('message') or {}
     
-    # Robust extraction
-    sender_id = str(message.get('from', {}).get('id') or data.get('sender_id') or data.get('from_id') or '')
+    # Robust extraction of identifiers
+    raw_sender_id = callback_query.get('from', {}).get('id') or message.get('from', {}).get('id') or data.get('sender_id') or data.get('from_id')
+    sender_id = str(raw_sender_id) if raw_sender_id else ''
+    
     chat_id = str(message.get('chat', {}).get('id') or data.get('chat_id') or data.get('chatId') or '')
-    text = message.get('text') or data.get('text') or data.get('message_text') or ''
+    text = callback_query.get('data') or message.get('text') or data.get('text') or data.get('message_text') or ''
     bot_username = data.get('bot_username') or data.get('botUsername') or ''
     if not bot_username:
         # Custom bots now append bot_username as a query param in the webhook URL
