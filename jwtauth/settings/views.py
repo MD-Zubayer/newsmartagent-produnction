@@ -9,6 +9,31 @@ import logging
 import uuid
 import os
 
+def set_telegram_webhook(token, bot_username):
+    """
+    Configure Telegram webhook for a given bot token.
+    Prefers TELEGRAM_WEBHOOK_URL (e.g., n8n ingress). Always appends bot_username.
+    """
+    base_url = os.getenv("TELEGRAM_WEBHOOK_URL") or "https://newsmartagent.com/api/webhooks/telegram/"
+    if "bot_username=" not in base_url:
+        separator = "&" if "?" in base_url else "?"
+        webhook_url = f"{base_url}{separator}bot_username={bot_username}"
+    else:
+        webhook_url = base_url
+
+    try:
+        resp = requests.post(
+            f"https://api.telegram.org/bot{token}/setWebhook",
+            json={"url": webhook_url},
+            timeout=10
+        )
+        if resp.status_code != 200:
+            logger.warning(f"Webhook set failed @{bot_username}: {resp.status_code} - {resp.text}")
+        else:
+            logger.info(f"Webhook set for @{bot_username} -> {webhook_url}")
+    except Exception as e:
+        logger.error(f"Webhook setup error @{bot_username}: {e}")
+
 logger = logging.getLogger(__name__)
 
 class AgentSettingsDetailView(generics.RetrieveUpdateAPIView):
@@ -78,30 +103,8 @@ class TelegramBotSetupView(APIView):
             agent.page_id = bot_username
             agent.save()
         
-        # Set webhook
-        # If TELEGRAM_WEBHOOK_URL is provided, use that (e.g., n8n ingress). Otherwise default to Django endpoint.
-        webhook_url = os.getenv("TELEGRAM_WEBHOOK_URL") or f"https://newsmartagent.com/api/webhooks/telegram/?bot_username={bot_username}"
-        # Ensure bot_username query param is present (helps downstream routing)
-        if "bot_username=" not in webhook_url:
-            from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
-            parsed = urlparse(webhook_url)
-            qs = parse_qs(parsed.query)
-            qs["bot_username"] = [bot_username]
-            new_query = urlencode(qs, doseq=True)
-            webhook_url = urlunparse(parsed._replace(query=new_query))
-        try:
-            webhook_response = requests.post(
-                f"https://api.telegram.org/bot{token}/setWebhook",
-                json={"url": webhook_url},
-                timeout=10
-            )
-            if webhook_response.status_code != 200:
-                logger.warning(f"Failed to set webhook: {webhook_response.text}")
-                # Continue anyway, webhook can be set manually
-        
-        except Exception as e:
-            logger.error(f"Webhook setup error: {e}")
-            # Continue anyway
+        # Set webhook (n8n ingress preferred)
+        set_telegram_webhook(token, bot_username)
         
         # Save token and bot info
         agent.access_token = token

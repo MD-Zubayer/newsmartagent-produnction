@@ -630,6 +630,42 @@ class TelegramBotAdmin(ModelAdmin):
     list_filter = ['is_active', 'updated_at']
     search_fields = ['bot_username', 'bot_name', 'agent__name', 'bot_token']
     readonly_fields = ['created_at', 'updated_at']
+    actions = ['reset_webhook_to_n8n']
+
+    def reset_webhook_to_n8n(self, request, queryset):
+        """
+        Admin action: reset webhook for selected bots to TELEGRAM_WEBHOOK_URL (n8n ingress).
+        """
+        import requests
+        import os
+
+        base_url = os.getenv("TELEGRAM_WEBHOOK_URL") or "https://newsmartagent.com/api/webhooks/telegram/"
+        success, fail = 0, 0
+        for bot in queryset:
+            token = bot.bot_token
+            username = bot.bot_username
+            if not token or not username:
+                fail += 1
+                continue
+            if "bot_username=" not in base_url:
+                sep = "&" if "?" in base_url else "?"
+                webhook_url = f"{base_url}{sep}bot_username={username}"
+            else:
+                webhook_url = base_url
+            try:
+                resp = requests.post(
+                    f"https://api.telegram.org/bot{token}/setWebhook",
+                    json={"url": webhook_url},
+                    timeout=10
+                )
+                if resp.status_code == 200:
+                    success += 1
+                else:
+                    fail += 1
+            except Exception:
+                fail += 1
+        self.message_user(request, f"Webhook reset success: {success}, failed: {fail}")
+    reset_webhook_to_n8n.short_description = "Reset webhook to n8n ingress"
 
 @admin.register(TelegramBotMapping)
 class TelegramBotMappingAdmin(ModelAdmin):
