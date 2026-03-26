@@ -7,6 +7,7 @@ from .serializers import AgentSettingsSerializer
 import requests
 import logging
 import uuid
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -78,9 +79,16 @@ class TelegramBotSetupView(APIView):
             agent.save()
         
         # Set webhook
-        # Include bot_username in the webhook URL so incoming updates can be routed
-        # to the correct custom bot without requiring a mapping fallback.
-        webhook_url = f"https://newsmartagent.com/api/webhooks/telegram/?bot_username={bot_username}"
+        # If TELEGRAM_WEBHOOK_URL is provided, use that (e.g., n8n ingress). Otherwise default to Django endpoint.
+        webhook_url = os.getenv("TELEGRAM_WEBHOOK_URL") or f"https://newsmartagent.com/api/webhooks/telegram/?bot_username={bot_username}"
+        # Ensure bot_username query param is present (helps downstream routing)
+        if "bot_username=" not in webhook_url:
+            from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+            parsed = urlparse(webhook_url)
+            qs = parse_qs(parsed.query)
+            qs["bot_username"] = [bot_username]
+            new_query = urlencode(qs, doseq=True)
+            webhook_url = urlunparse(parsed._replace(query=new_query))
         try:
             webhook_response = requests.post(
                 f"https://api.telegram.org/bot{token}/setWebhook",
