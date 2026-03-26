@@ -262,19 +262,25 @@ def ai_webhook(request):
         # Depending on n8n mapping, the buttonId might be in a specific field
         button_id = data.get('buttonId') or data.get('listResponseId')
         
-        # Numeric Text Fallback (1=Help, 2=Toggle AI)
+        # Numeric Text Fallback (map to current menu order)
         text_cmd = text.strip() if text else ""
-        if not button_id and text_cmd in ["1", "2"]:
+        if not button_id and text_cmd.isdigit():
             from aiAgent.models import Contact, AgentAI
-            # Try to find the contact to resolve what '2' means
             agent = AgentAI.objects.filter(page_id=page_id, platform='whatsapp', is_active=True).first()
+            contact = Contact.objects.filter(identifier=sender_id, agent=agent).first() if agent else None
             if agent:
-                contact = Contact.objects.filter(identifier=sender_id, agent=agent).first()
+                from aiAgent.business_logic.logic_handler import get_button_payload
+                buttons = get_button_payload(contact) if contact else [
+                    {"action": "HUMAN_HELP"}, {"action": "STOP_AI_REPLY"}
+                ]
+                idx = int(text_cmd) - 1
+                if 0 <= idx < len(buttons):
+                    button_id = buttons[idx]['action']
+            # fallback old mapping
+            if not button_id and text_cmd in ["1", "2"]:
                 if text_cmd == "1":
                     button_id = "HUMAN_HELP"
-                elif text_cmd == "2" and contact:
-                    button_id = "STOP_AI_REPLY" if contact.is_auto_reply_enabled else "ON_AI_REPLY"
-                elif text_cmd == "2": # Fallback if contact not found yet
+                elif text_cmd == "2":
                     button_id = "STOP_AI_REPLY"
 
         # Sometimes the button text itself is the action if poorly mapped
