@@ -78,7 +78,9 @@ class TelegramBotSetupView(APIView):
             agent.save()
         
         # Set webhook
-        webhook_url = f"https://newsmartagent.com/api/webhooks/telegram/"  # Adjust domain as needed
+        # Include bot_username in the webhook URL so incoming updates can be routed
+        # to the correct custom bot without requiring a mapping fallback.
+        webhook_url = f"https://newsmartagent.com/api/webhooks/telegram/?bot_username={bot_username}"
         try:
             webhook_response = requests.post(
                 f"https://api.telegram.org/bot{token}/setWebhook",
@@ -99,18 +101,24 @@ class TelegramBotSetupView(APIView):
         agent.save()
 
         # ✅ Save to TelegramBot model (required for webhook lookup & token delivery)
-        from aiAgent.models import TelegramBot
-        bot_name = bot_data['result'].get('first_name', bot_username)
-        TelegramBot.objects.update_or_create(
-            agent=agent,
-            defaults={
-                'bot_token': token,
-                'bot_username': bot_username,
-                'bot_name': bot_name,
-                'is_active': True
-            }
-        )
-        print(f"✅ [TelegramBotSetupView] TelegramBot record saved for @{bot_username}")
+        try:
+            from aiAgent.models import TelegramBot
+            bot_name = bot_data['result'].get('first_name', bot_username)
+            print(f"💾 [TelegramBotSetupView] Saving TelegramBot for agent={agent.id}, username=@{bot_username}, name={bot_name}")
+            TelegramBot.objects.update_or_create(
+                agent=agent,
+                defaults={
+                    'bot_token': token,
+                    'bot_username': bot_username,
+                    'bot_name': bot_name,
+                    'is_active': True
+                }
+            )
+            print(f"✅ [TelegramBotSetupView] TelegramBot record saved for @{bot_username}")
+        except Exception as e:
+            print(f"❌ [TelegramBotSetupView] Failed to save TelegramBot: {e}")
+            logger.exception("TelegramBot save failed")
+            # Don't fail the whole request — agent is already saved
 
         return Response({
             'success': True,

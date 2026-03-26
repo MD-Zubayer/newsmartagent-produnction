@@ -251,6 +251,9 @@ def telegram_webhook(request):
     chat_id = str(message.get('chat', {}).get('id') or data.get('chat_id') or data.get('chatId') or '')
     text = message.get('text') or data.get('text') or data.get('message_text') or ''
     bot_username = data.get('bot_username') or data.get('botUsername') or ''
+    if not bot_username:
+        # Custom bots now append bot_username as a query param in the webhook URL
+        bot_username = request.query_params.get('bot_username') if hasattr(request, 'query_params') else request.GET.get('bot_username', '')
     
     # Check if this is a /start command with agent ID (shared bot)
     is_start_command = False

@@ -706,7 +706,7 @@ def process_ai_reply_task(self, data):
             elif request_type == 'instagram':
                 delivered = deliver_instagram_reply(data, clean_reply, page_id, effective_access_token)
             elif request_type == 'telegram':
-                delivered = deliver_telegram_reply(data, clean_reply, effective_access_token)
+                delivered = (data, clean_reply, effective_access_token)
             else:
                 delivered = deliver_facebook_reply(data, clean_reply, page_id, effective_access_token)
 
