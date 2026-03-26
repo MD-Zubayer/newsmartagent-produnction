@@ -112,9 +112,13 @@ export default function TelegramConnector() {
     }
   };
 
-  const createSharedBotAgent = async (name = 'Telegram Auto Agent') => {
-    const agentName = name || prompt("Enter agent name:");
-    if (!agentName) return;
+  const createSharedBotAgent = async (nameInput = 'Telegram Auto Agent') => {
+    // When used as an onClick handler, React passes the click event as the first argument.
+    // Guard against that so we always send a clean agent name to the API.
+    const agentName =
+      typeof nameInput === "string" && nameInput.trim()
+        ? nameInput.trim()
+        : "Telegram Auto Agent";
 
     setIsLoading(true);
     try {
@@ -221,7 +225,7 @@ export default function TelegramConnector() {
             {/* Create New Shared Agent */}
             <div className="flex justify-center">
               <button
-                onClick={createSharedBotAgent}
+                onClick={() => createSharedBotAgent()}
                 disabled={isLoading}
                 className="bg-sky-500 text-white px-8 py-4 rounded-xl font-bold uppercase tracking-wider hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
               >
