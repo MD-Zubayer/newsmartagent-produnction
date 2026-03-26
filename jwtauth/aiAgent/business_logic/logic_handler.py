@@ -777,7 +777,23 @@ def send_whatsapp_buttons(data, contact, reply_text="Options:"):
         "type": "whatsapp",
         "message_id": str(data.get('message_id', '')),
         "sessionId": str(data.get('sessionId', '')),
-        "is_button_message": True, # Flag for n8n to route as button message
+        "is_button_message": True, # Keep for backward compatibility
+        "is_interactive_list": True, # Flag for Interactive List
+        "listMessage": {
+            "title": "Agent Options",
+            "description": str(reply_text)[:50],
+            "buttonText": "Tap to view options",
+            "footerText": "New Smart Agent",
+            "sections": [
+                {
+                    "title": "Available Actions",
+                    "rows": [
+                        {"title": b["text"][:24], "rowId": b["action"]}
+                        for b in buttons_data
+                    ]
+                }
+            ]
+        },
         "buttons": [
             {"buttonId": b["action"], "buttonText": {"displayText": b["text"][:20]}, "type": 1}
             for b in buttons_data
