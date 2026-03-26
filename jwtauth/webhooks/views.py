@@ -231,18 +231,22 @@ def telegram_webhook(request):
     logger.info(f"📥 [telegram_webhook] Received Telegram data: {data}")
     
     # Telegram webhook structure: message.from.id, message.chat.id, message.text
+    # n8n sometimes flattens it or sends it differently.
     message = data.get('message', {})
-    if not message:
-        logger.info("⏭️ [telegram_webhook] No message in payload")
+    
+    # Robust extraction: handle both nested and possible top-level keys if n8n flattened it
+    sender_id = str(message.get('from', {}).get('id') or data.get('sender_id') or data.get('from_id') or '')
+    chat_id = str(message.get('chat', {}).get('id') or data.get('chat_id') or data.get('chatId') or '')
+    text = message.get('text') or data.get('text') or data.get('message_text') or ''
+    bot_username = data.get('bot_username') or data.get('botUsername') or ''
+    
+    if not any([message, sender_id, chat_id]):
+        logger.info("⏭️ [telegram_webhook] Empty or non-message payload (e.g. heartbeat/verification)")
         return Response({'status': 'ignored'}, status=200)
     
-    sender_id = str(message.get('from', {}).get('id', ''))
-    chat_id = str(message.get('chat', {}).get('id', ''))
-    text = message.get('text', '')
-    bot_username = data.get('bot_username', '')  # This will be passed from n8n or set in webhook URL
-    
     if not all([sender_id, chat_id, text]):
-        logger.error(f"❌ [telegram_webhook] Missing core data: sender={sender_id}, chat={chat_id}, text={text}")
+        logger.error(f"❌ [telegram_webhook] Missing core data: sender={sender_id}, chat={chat_id}, text='{text[:20]}...'")
+        logger.debug(f"🔍 [telegram_webhook] Full payload: {data}")
         return Response({'error': 'Missing core data'}, status=400)
 
     # Check if this is a /start command with agent ID (shared bot)
