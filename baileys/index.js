@@ -71,12 +71,14 @@ async function processQueue(sessionId) {
                     title: listMessage.title || "",
                     buttonText: listMessage.buttonText || "Select",
                     sections: listMessage.sections,
+                    viewOnce: true
                 };
             } else if (buttons && buttons.length > 0) {
                 msgObj = {
                     text: message,
                     buttons: buttons,
-                    headerType: 1
+                    headerType: 1,
+                    viewOnce: true
                 };
             }
 
@@ -337,7 +339,7 @@ app.get('/qr/:sessionId', (req, res) => {
 });
 
 app.post('/send-message', async (req, res) => {
-    const { sessionId, to, message, buttons, listMessage } = req.body;
+    const { sessionId, to, message, text, buttons, interactiveButtons, listMessage } = req.body;
     const secret = req.headers['x-api-secret'];
     if (secret !== API_SECRET) return res.status(401).send('Unauthorized');
 
@@ -353,9 +355,13 @@ app.post('/send-message', async (req, res) => {
     const jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
     const queueData = messageQueues.get(sessionId);
 
+    // Final merge of aliases
+    const finalMessage = message || text || "";
+    const finalButtons = buttons || interactiveButtons || [];
+
     // Return promise after queuing
     const sendPromise = new Promise((resolve, reject) => {
-        queueData.messages.push({ jid, message, buttons, listMessage, resolve, reject });
+        queueData.messages.push({ jid, message: finalMessage, buttons: finalButtons, listMessage, resolve, reject });
     });
 
     processQueue(sessionId).catch(err => logger.error(`Queue error: ${err.message}`));
