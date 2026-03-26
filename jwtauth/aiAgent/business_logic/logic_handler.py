@@ -636,6 +636,159 @@ def deliver_telegram_reply(data, reply, token):
         logger.error(f'[Logic] n8n Telegram delivery critical failure: {e}')
         return False
 
+def get_button_payload(contact):
+    """Generate button text and payload based on current contact state"""
+    buttons = []
+    
+    # Button 1: Human Help / Resolve Human Mode
+    if contact.is_human_needed:
+        buttons.append({"text": "✅ Resolve Human Mode", "action": "RESOLVE_HUMAN"})
+    else:
+        buttons.append({"text": "🙋 Human Help", "action": "HUMAN_HELP"})
+        
+    # Button 2: Stop AI / On AI
+    if contact.is_auto_reply_enabled:
+        buttons.append({"text": "🔇 Stop AI Reply", "action": "STOP_AI_REPLY"})
+    else:
+        buttons.append({"text": "🔊 On AI Reply", "action": "ON_AI_REPLY"})
+        
+    return buttons
+
+def send_telegram_buttons(chat_id, token, contact):
+    """Send inline keyboard buttons after Telegram reply"""
+    if not token or not chat_id:
+        return False
+        
+    import os
+    # We can reuse the telegram delivery webhook, but send buttons
+    webhook_url = os.getenv("N8N_TELEGRAM_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/telegram-delivery")
+    
+    buttons = get_button_payload(contact)
+    inline_keyboard = [
+        [
+            {"text": b["text"], "callback_data": b["action"]} for b in buttons
+        ]
+    ]
+    
+    payload = {
+        "chat_id": str(chat_id),
+        "access_token": str(token),
+        "platform": "telegram",
+        "reply": "Options:", # Minimal text as Telegram requires text with buttons
+        "reply_markup": {"inline_keyboard": inline_keyboard}
+    }
+    
+    try:
+        logger.info(f'[Logic] Sending Telegram buttons to {chat_id}')
+        requests.post(webhook_url, json=payload, timeout=10)
+        return True
+    except Exception as e:
+        logger.error(f"Telegram button delivery error: {e}")
+        return False
+
+def send_messenger_buttons(sender_id, page_id, access_token, contact):
+    """Send quick_reply buttons after Messenger reply"""
+    if not access_token or not sender_id:
+        return False
+        
+    import os
+    webhook_url = os.getenv("N8N_FACEBOOK_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/fb-comment-message-delivery")
+    
+    buttons = get_button_payload(contact)
+    quick_replies = [
+        {
+            "content_type": "text",
+            "title": b["text"][:20], # Messenger limit
+            "payload": b["action"]
+        } for b in buttons
+    ]
+    
+    payload = {
+        "sender_id": str(sender_id),
+        "page_id": str(page_id),
+        "page_access_token": str(access_token),
+        "type": "messenger",
+        "reply": "How would you like to proceed?",
+        "quick_replies": quick_replies
+    }
+    
+    try:
+        logger.info(f'[Logic] Sending Messenger buttons to {sender_id}')
+        requests.post(webhook_url, json=payload, timeout=10)
+        return True
+    except Exception as e:
+        logger.error(f"Messenger button delivery error: {e}")
+        return False
+
+def send_instagram_buttons(sender_id, page_id, access_token, contact):
+    """Send quick_reply buttons after Instagram reply"""
+    if not access_token or not sender_id:
+        return False
+        
+    import os
+    webhook_url = os.getenv("N8N_INSTAGRAM_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/instagram-delivery")
+    
+    buttons = get_button_payload(contact)
+    quick_replies = [
+        {
+            "content_type": "text",
+            "title": b["text"][:20], # Instagram limit
+            "payload": b["action"]
+        } for b in buttons
+    ]
+    
+    payload = {
+        "sender_id": str(sender_id),
+        "page_id": str(page_id),
+        "page_access_token": str(access_token),
+        "type": "instagram",
+        "reply": "How would you like to proceed?",
+        "quick_replies": quick_replies
+    }
+    
+    try:
+        logger.info(f'[Logic] Sending Instagram buttons to {sender_id}')
+        requests.post(webhook_url, json=payload, timeout=10)
+        return True
+    except Exception as e:
+        logger.error(f"Instagram button delivery error: {e}")
+        return False
+
+def send_whatsapp_buttons(data, contact):
+    """Send button message via n8n for WhatsApp"""
+    import os
+    webhook_url = os.getenv("N8N_WHATSAPP_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/whatsapp-delivery")
+    
+    final_target = data.get('delivery_jid') or data.get('sender_id', '')
+    if not final_target:
+        return False
+        
+    buttons_data = get_button_payload(contact)
+    
+    payload = {
+        "to": str(final_target),
+        "delivery_jid": str(data.get('delivery_jid', '')),
+        "phone": str(data.get('sender_id', '')),
+        "sender_id": str(data.get('sender_id', '')),
+        "type": "whatsapp",
+        "sessionId": str(data.get('sessionId', '')),
+        "is_button_message": True, # Flag for n8n to route as button message
+        "reply": "Options:",
+        "buttons": [
+            {"buttonId": b["action"], "buttonText": {"displayText": b["text"]}, "type": 1}
+            for b in buttons_data
+        ]
+    }
+    
+    try:
+        logger.info(f'[Logic] Sending WhatsApp buttons to {final_target}')
+        requests.post(webhook_url, json=payload, timeout=10)
+        return True
+    except Exception as e:
+        logger.error(f"WhatsApp button delivery error: {e}")
+        return False
+
+
 def deliver_dashboard_reply(user_id, reply_text, message_id):
     """Deliver final reply to the dashboard via WebSocket and update the log"""
     try:

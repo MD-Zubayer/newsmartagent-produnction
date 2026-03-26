@@ -7,7 +7,7 @@ from .models import AgentAI, Contact
 from .serializers import ContactSerializer, MessageSerializer
 from chat.models import Conversation, Message
 from rest_framework.pagination import PageNumberPagination
-
+import uuid
 class ContactListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -203,4 +203,21 @@ class ResolveHumanHandoffView(APIView):
         except Contact.DoesNotExist:
             return Response({"error": "Contact not found"}, status=status.HTTP_404_NOT_FOUND)
 
-import uuid
+class HumanHelpView(APIView):
+    """Marks contact as needing human help and disables AI auto-reply"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, contact_id):
+        try:
+            contact = Contact.objects.get(id=contact_id, agent__user=request.user)
+            contact.is_human_needed = True
+            contact.is_auto_reply_enabled = False
+            contact.save()
+            return Response({
+                "success": True, 
+                "is_human_needed": True,
+                "is_auto_reply_enabled": False
+            }, status=status.HTTP_200_OK)
+        except Contact.DoesNotExist:
+            return Response({"error": "Contact not found"}, status=status.HTTP_404_NOT_FOUND)
+

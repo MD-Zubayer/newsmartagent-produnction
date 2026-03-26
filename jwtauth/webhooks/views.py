@@ -52,6 +52,101 @@ def test_webhook(request):
 
 # recive data from n8n & return 202 ok
 
+def handle_button_action(action, sender_id, page_id, platform):
+    """
+    Handle button clicks from users across all platforms.
+    Returns True if an action was handled, False otherwise.
+    """
+    valid_actions = ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN"]
+    if action not in valid_actions:
+        return False
+        
+    from aiAgent.models import AgentAI, Contact
+    
+    try:
+        # Find the agent
+        agent = None
+        if platform == 'telegram':
+            from aiAgent.models import TelegramBotMapping, TelegramBot
+            # Start by trying mapping
+            mapping = TelegramBotMapping.objects.filter(chat_id=page_id, is_active=True).first()
+            if mapping:
+                agent = mapping.agent
+            else:
+                # Try TelegramBot
+                tbot = TelegramBot.objects.filter(bot_username=page_id, is_active=True).first()
+                if tbot:
+                    agent = tbot.agent
+                else:
+                    # Legacy fallback
+                    agent = AgentAI.objects.filter(page_id=page_id, platform='telegram', is_active=True).first()
+        else:
+            agent = AgentAI.objects.filter(page_id=page_id, platform=platform, is_active=True).first()
+            
+        if not agent:
+            logger.warning(f"Button action {action} failed: Agent not found for page_id={page_id}, platform={platform}")
+            return True # State it was handled (to stop further processing)
+            
+        # Get or create contact
+        contact, _ = Contact.objects.get_or_create(
+            identifier=sender_id,
+            agent=agent,
+            defaults={'platform': platform}
+        )
+        
+        # Apply the action
+        if action == "HUMAN_HELP":
+            contact.is_human_needed = True
+            contact.is_auto_reply_enabled = False
+        elif action == "STOP_AI_REPLY":
+            contact.is_auto_reply_enabled = False
+        elif action == "ON_AI_REPLY":
+            contact.is_auto_reply_enabled = True
+        elif action == "RESOLVE_HUMAN":
+            contact.is_human_needed = False
+            contact.is_auto_reply_enabled = True
+            
+        contact.save()
+        logger.info(f"✅ Handled button action {action} for contact {contact.id} ({sender_id})")
+        
+        # Send confirmation (optional, but good UX)
+        from aiAgent.business_logic import logic_handler
+        from users.models import FacebookPage
+        
+        # Send a brief confirmation message back to the user
+        confirmation_text = {
+            "HUMAN_HELP": "A human agent has been notified and will be with you shortly. AI replies are paused.",
+            "STOP_AI_REPLY": "AI replies have been paused.",
+            "ON_AI_REPLY": "AI replies have been resumed.",
+            "RESOLVE_HUMAN": "Human mode resolved. AI replies have been resumed."
+        }.get(action, "Action confirmed.")
+        
+        # Delivery logic
+        if platform == 'whatsapp':
+            data = {'sender_id': sender_id, 'delivery_jid': sender_id, 'sessionId': f"user_{agent.user.id}"}
+            logic_handler.deliver_whatsapp_reply(data, confirmation_text)
+        elif platform == 'instagram':
+            fb_page = FacebookPage.objects.filter(page_id=agent.page_id, is_active=True).first()
+            token = fb_page.access_token if fb_page else agent.access_token
+            data = {'sender_id': sender_id}
+            logic_handler.deliver_instagram_reply(data, confirmation_text, agent.page_id, token)
+        elif platform == 'telegram':
+            token = agent.access_token
+            data = {'sender_id': sender_id, 'chat_id': page_id}
+            logic_handler.deliver_telegram_reply(data, confirmation_text, token)
+        elif platform == 'messenger':
+            fb_page = FacebookPage.objects.filter(page_id=agent.page_id, is_active=True).first()
+            token = fb_page.access_token if fb_page else agent.access_token
+            data = {'sender_id': sender_id, 'type': 'messenger'}
+            logic_handler.deliver_facebook_reply(data, confirmation_text, agent.page_id, token)
+            
+        # Remove buttons or send new ones (optional)
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error handling button action {action}: {e}")
+        return True # Handled (even if failed, we don't want AI to reply to a button payload)
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def ai_webhook(request):
@@ -149,6 +244,33 @@ def ai_webhook(request):
         print(f"Missing data: sender={sender_id}, page={page_id}")
         return Response({'error': 'Missing data'}, status=400)
 
+    # ======== Button Action Detection ========
+    button_action = None
+    
+    # Messenger Quick Reply or Postback
+    if request_type == 'messenger':
+        # If payload was mapped to 'message' by n8n or exists directly
+        payload = data.get('payload') 
+        if not payload and text in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN"]:
+            payload = text
+        if payload in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN"]:
+            button_action = payload
+            
+    # WhatsApp Button Response (from Baileys/Evolution API)
+    elif request_type == 'whatsapp':
+        # Depending on n8n mapping, the buttonId might be in a specific field
+        button_id = data.get('buttonId') or data.get('listResponseId')
+        # Sometimes the button text itself is the action if poorly mapped
+        if not button_id and text in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN"]:
+            button_id = text
+            
+        if button_id in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN"]:
+            button_action = button_id
+            
+    if button_action:
+        if handle_button_action(button_action, sender_id, page_id, request_type):
+            return Response({'status': 'handled_button'}, status=200)
+
     if sender_id == page_id:
         print(f"⏭️ View Filter: Ignoring self-activity from {page_id}")
         return Response({'status': 'ignored'}, status=200)
@@ -204,6 +326,21 @@ def instagram_webhook(request):
     if sender_id == page_id:
         logger.info(f"⏭️ [instagram_webhook] View Filter: Ignoring self-activity from {page_id}")
         return Response({'status': 'ignored'}, status=200)
+
+    # ======== Button Action Detection ========
+    button_action = None
+    # Instagram quick replies usually come through as regular messages with a payload field
+    # depending on your n8n setup, it might just be the text itself
+    payload = data.get('payload') or data.get('quick_reply', {}).get('payload')
+    if not payload and text in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN"]:
+        payload = text
+        
+    if payload in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN"]:
+        button_action = payload
+        
+    if button_action:
+        if handle_button_action(button_action, sender_id, page_id, 'instagram'):
+            return Response({'status': 'handled_button'}, status=200)
 
     # Dedup check
     if _is_duplicate_webhook(sender_id, text, page_id):
@@ -349,6 +486,37 @@ def telegram_webhook(request):
     if str(sender_id) == str(chat_id) and text.strip().lower() == 'ping':
         # Special case for self-ping testing
         pass
+        
+    # ======== Button Action Detection ========
+    button_action = None
+    # Telegram inline keyboard callbacks come via 'callback_query'
+    callback_query = data.get('callback_query', {})
+    if callback_query:
+        # Override sender and text with callback data
+        sender_id = str(callback_query.get('from', {}).get('id', sender_id))
+        callback_data = callback_query.get('data')
+        if callback_data in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN"]:
+            button_action = callback_data
+            # We don't need text for button actions, but want to record deduplication
+            text = callback_data
+            
+    # Also allow standard text to act as button if poorly formatted
+    if not button_action and text in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN"]:
+        button_action = text
+        
+    if button_action:
+        # We need to acknowledge Telegram callback queries otherwise they spin
+        try:
+            import requests, os
+            bot_token = agent.access_token if agent else None
+            callback_id = callback_query.get('id')
+            if bot_token and callback_id:
+                requests.post(f"https://api.telegram.org/bot{bot_token}/answerCallbackQuery", json={"callback_query_id": callback_id})
+        except Exception:
+            pass # Failsafe
+            
+        if handle_button_action(button_action, sender_id, page_id, 'telegram'):
+            return Response({'status': 'handled_button'}, status=200)
     
     # Dedup check
     if _is_duplicate_webhook(sender_id, text, page_id):

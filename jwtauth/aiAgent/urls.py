@@ -26,6 +26,7 @@ urlpatterns = [
     path('contacts/detail/<int:contact_id>/', ContactDetailView.as_view(), name='contact-detail'),
     path('contacts/toggle-reply/<int:contact_id>/', ToggleAutoReplyView.as_view(), name='toggle-auto-reply'),
     path('contacts/resolve-handoff/<int:contact_id>/', ResolveHumanHandoffView.as_view(), name='resolve-human-handoff'),
+    path('contacts/human-help/<int:contact_id>/', HumanHelpView.as_view(), name='human-help'),
     path('contacts/<int:contact_id>/messages/', ContactMessageHistoryView.as_view(), name='contact-messages'),
     path('contacts/unified/reply/', UnifiedReplyView.as_view(), name='unified-reply'),
     

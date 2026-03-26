@@ -703,12 +703,40 @@ def process_ai_reply_task(self, data):
                 delivered = deliver_dashboard_reply(agent_config.user.id, clean_reply, msg_id)
             elif request_type == 'whatsapp':
                 delivered = deliver_whatsapp_reply(data, clean_reply)
+                if delivered:
+                    try:
+                        from aiAgent.business_logic.logic_handler import send_whatsapp_buttons
+                        contact_obj = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
+                        if contact_obj: send_whatsapp_buttons(data, contact_obj)
+                    except Exception as e:
+                        logger.error(f"Failed to send button message: {e}")
             elif request_type == 'instagram':
                 delivered = deliver_instagram_reply(data, clean_reply, page_id, effective_access_token)
+                if delivered:
+                    try:
+                        from aiAgent.business_logic.logic_handler import send_instagram_buttons
+                        contact_obj = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
+                        if contact_obj: send_instagram_buttons(sender_id, page_id, effective_access_token, contact_obj)
+                    except Exception as e:
+                        logger.error(f"Failed to send button message: {e}")
             elif request_type == 'telegram':
                 delivered = deliver_telegram_reply(data, clean_reply, effective_access_token)
+                if delivered:
+                    try:
+                        from aiAgent.business_logic.logic_handler import send_telegram_buttons
+                        contact_obj = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
+                        if contact_obj: send_telegram_buttons(data.get('chat_id') or sender_id, effective_access_token, contact_obj)
+                    except Exception as e:
+                        logger.error(f"Failed to send button message: {e}")
             else:
                 delivered = deliver_facebook_reply(data, clean_reply, page_id, effective_access_token)
+                if delivered:
+                    try:
+                        from aiAgent.business_logic.logic_handler import send_messenger_buttons
+                        contact_obj = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
+                        if contact_obj: send_messenger_buttons(sender_id, page_id, effective_access_token, contact_obj)
+                    except Exception as e:
+                        logger.error(f"Failed to send button message: {e}")
 
             if delivered and msg_id:
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)
