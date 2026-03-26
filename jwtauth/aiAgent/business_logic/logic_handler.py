@@ -584,8 +584,10 @@ def deliver_facebook_reply(data, reply, page_id, access_token):
         return False
 
 def deliver_telegram_reply(data, reply, token):
-    """Deliver final reply for Telegram via Telegram Bot API"""
+    """Deliver final reply for Telegram via n8n webhook (Separate Workflow)"""
+    webhook_url = "https://n8n.newsmartagent.com/webhook/telegram-delivery"
     chat_id = data.get('chat_id') or data.get('sender_id')
+    
     if not chat_id:
         logger.error("❌ [Logic] Missing chat_id for Telegram reply")
         return False
@@ -593,25 +595,29 @@ def deliver_telegram_reply(data, reply, token):
     if not token:
         logger.error("❌ [Logic] Missing bot token for Telegram reply")
         return False
-    
-    api_url = f"https://api.telegram.org/bot{token}/sendMessage"
+
     payload = {
-        "chat_id": chat_id,
-        "text": reply,
-        "parse_mode": "Markdown"  # Optional: for formatting
+        "chat_id": str(chat_id),
+        "sender_id": str(data.get('sender_id', '')),
+        "reply": str(reply),
+        "access_token": str(token),  # Consistent with other delivery functions
+        "platform": "telegram",
+        "message_id": str(data.get('message_id', ''))
     }
-    
+
     try:
-        logger.info(f"🚀 [Logic] Sending Telegram reply to chat {chat_id}")
-        response = requests.post(api_url, json=payload, timeout=15)
-        if response.status_code == 200:
-            logger.info(f"✅ [Logic] Telegram reply sent successfully")
-            return True
-        else:
-            logger.error(f"❌ [Logic] Telegram API error: {response.status_code} - {response.text}")
+        logger.info(f"🚀 [Logic] Routing Telegram reply to n8n delivery for chat {chat_id}")
+        response = requests.post(
+            webhook_url,
+            json=payload,
+            timeout=15
+        )
+        if response.status_code != 200:
+            logger.error(f"❌ [Logic] n8n Telegram delivery error: {response.status_code} - {response.text}")
             return False
+        return True
     except Exception as e:
-        logger.error(f"❌ [Logic] Telegram delivery critical failure: {e}")
+        logger.error(f"❌ [Logic] n8n Telegram delivery critical failure: {e}")
         return False
 
 def deliver_dashboard_reply(user_id, reply_text, message_id):
