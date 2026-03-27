@@ -25,8 +25,10 @@ export default function IntegrationManager() {
   useEffect(() => {
     // Listen for OAuth Success Messages
     const handleMessage = (event) => {
+      console.log("ConnectForm: Message received", event.data);
       // Security: Check origin if needed, but here we check status and platform
       if (event.data?.status === "select_channel" && event.data?.platform === "youtube") {
+        console.log("ConnectForm: YouTube selection triggered", event.data.channels);
         setStagedYoutubeChannels(event.data.channels || []);
         setYoutubeSessionId(event.data.sessionId);
         import("react-hot-toast").then(({ toast }) => toast.success("Select a channel to connect"));

@@ -397,15 +397,27 @@ def youtube_callback(request):
 
     script = f'''
     <script>
+        console.log("YouTube Callback: Script loaded");
+        const channels = {json.dumps(display_channels)};
+        const sessionId = "{session_id}";
+        const targetOrigin = "{frontend_url}";
+        
         if (window.opener) {{
+            console.log("YouTube Callback: Sending postMessage to opener", targetOrigin);
             window.opener.postMessage({{
                 status: "select_channel", 
                 platform: "youtube", 
-                channels: {json.dumps(display_channels)},
-                sessionId: "{session_id}"
-            }}, "{frontend_url}");
-            window.close();
+                channels: channels,
+                sessionId: sessionId
+            }}, "*"); // Using * temporarily to fix origin mismatch issues
+            
+            // Give it a tiny bit of time before closing to ensure message is sent
+            setTimeout(() => {{
+                console.log("YouTube Callback: Closing popup");
+                window.close();
+            }}, 500);
         }} else {{
+            console.log("YouTube Callback: No opener found, redirecting");
             window.location.href = "{frontend_url}/dashboard/connect?success=yt_auth&sessionId={session_id}";
         }}
     </script>
