@@ -196,7 +196,7 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
             logger.info(">>> Embedding skipped due to keyword + message length.")
     except Exception as e:
         logger.error(f"RAG Search Error: {e}", exc_info=True)
-        extra_instruction = f' Answer politely. If data missing, ask to wait and set "human_handoff": true if human help is needed. {order_instruction}'
+        extra_instruction = f' Answer politely. If data missing, politely ask clarifying questions instead of handoff. {order_instruction}'
     return sheet_context, extra_instruction, query_vector
 
 def check_token_availability(user_profile, ai_model_name):

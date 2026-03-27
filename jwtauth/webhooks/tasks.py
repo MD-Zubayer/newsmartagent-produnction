@@ -801,7 +801,8 @@ def process_ai_reply_task(self, data):
                 'Use "agent_specific" for information extracted from [KNOWLEDGE BASE DATA], business details like products/prices, or IF ASKED ABOUT YOUR IDENTITY (who you are, what you do). '
                 'Use "global" ONLY for general world facts, universal greetings (Salam/Hi), or general knowledge. NEVER use "global" for identity, personal info, or specific business details.'
                 '\nCRITICAL: If you cannot answer a question based on provided data, DO NOT trigger human handoff. Instead, politely ask clarifying questions to the user.'
-                '\nHowever, ONLY if the user explicitly asks to talk to a human, admin, representative, or explicitly requests to contact support via text, you MUST set "human_handoff": true.'
+                '\nHowever, ONLY if the user EXPLICITLY and CLEARLY asks to talk to a human, admin, representative, or support team via text, you MUST set "human_handoff": true.'
+                '\nWARNING: Do NOT trigger human_handoff just because the message contains the word "agent", "support", or the name of a bot (e.g., "newsmartagent?"). It must be an explicit intent to speak to a live person.'
                 '\nSTRICT: No markdown blocks, no preamble, and ensure JSON syntax is perfect.'
             )
             system_instruction = system_instruction + classify_instruction
