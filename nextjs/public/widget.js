@@ -111,7 +111,10 @@
             '.nsa-footer { padding: 10px; text-align: center; background: #fff; font-size: 10px; color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; border-top: 1px solid #f8fafc; }',
             '.nsa-footer a { color: inherit; text-decoration: none; transition: color 0.2s; }',
             '.nsa-footer a:hover { color: ' + color + '; }',
+            '.nsa-ctrl-btn.nsa-btn-active { background: #ef4444; color: #fff; border-color: #ef4444; }',
+            '.nsa-ctrl-btn.nsa-btn-resolve { background: #10b981; color: #fff; border-color: #10b981; }',
         ].join('');
+
 
 
         var style = document.createElement('style');
@@ -128,11 +131,7 @@
             '    <div class="nsa-hdr-img"><img src="' + iconUrl + '" alt="icon" onerror="this.style.display=\'none\'"></div>',
             '    <div><h3>' + esc(s.header_title) + '</h3><p>' + esc(s.header_subtitle) + '</p></div>',
             '  </div>',
-            '  <div class="nsa-controls">',
-            '    <button class="nsa-ctrl-btn" id="nsa-btn-human" title="Talk to a human"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Human</button>',
-            '    <button class="nsa-ctrl-btn" id="nsa-btn-stop" title="Pause AI responses"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg> Stop AI</button>',
-            '    <button class="nsa-ctrl-btn active" id="nsa-btn-on" title="Enable AI responses"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-14 9V3z"></path></svg> On AI</button>',
-            '  </div>',
+            '  <div class="nsa-controls" id="nsa-controls" style="display:none;"></div>',
             '  <div class="nsa-body" id="nsa-body">',
             '  </div>',
             '  <div class="nsa-foot-inp">',
@@ -284,51 +283,91 @@
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
         });
 
-        // ── Control Button Logic ─────────────────────────────────────────────
-        var btnHuman = document.getElementById('nsa-btn-human');
-        var btnStop  = document.getElementById('nsa-btn-stop');
-        var btnOn    = document.getElementById('nsa-btn-on');
+        // ── Dynamic Control Logic ───────────────────────────────────────────
+        var controlsWrap = document.getElementById('nsa-controls');
+        var isHumanActive = false;
+        var isAIActive    = true;
 
-        function setActiveButton(activeBtn) {
-            [btnHuman, btnStop, btnOn].forEach(function(b) { b.classList.remove('active'); });
-            activeBtn.classList.add('active');
+        var enableHuman = !!s.enable_human_control;
+        var enableAI    = !!s.enable_ai_control;
+
+        if (enableHuman || enableAI) {
+            controlsWrap.style.display = 'flex';
+            if (enableHuman) {
+                var hb = document.createElement('button');
+                hb.className = 'nsa-ctrl-btn';
+                hb.id = 'nsa-btn-human-toggle';
+                hb.title = "Toggle Human Help";
+                controlsWrap.appendChild(hb);
+                updateHumanUI();
+                hb.onclick = toggleHuman;
+            }
+            if (enableAI) {
+                var ab = document.createElement('button');
+                ab.className = 'nsa-ctrl-btn';
+                ab.id = 'nsa-btn-ai-toggle';
+                ab.title = "Toggle AI Response";
+                controlsWrap.appendChild(ab);
+                updateAIUI();
+                ab.onclick = toggleAI;
+            }
         }
 
-        btnHuman.addEventListener('click', function() {
-            setActiveButton(btnHuman);
-            addMsg("I'd like to speak with a human agent.", 'user');
-            // Logic to notify system for human intervention
-            fetch(apiBase + '/chat/' + widgetKey + '/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: "[SYSTEM: HUMAN_REQUEST]", sender_id: senderId })
-            }).catch(function(){});
-            setTimeout(function() {
-                addMsg("A human agent has been notified and will be with you shortly.", 'ai');
-            }, 1000);
-        });
+        function updateHumanUI() {
+            var btn = document.getElementById('nsa-btn-human-toggle');
+            if (!btn) return;
+            if (isHumanActive) {
+                btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> Resolve Help';
+                btn.className = 'nsa-ctrl-btn nsa-btn-resolve';
+            } else {
+                btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Human Help';
+                btn.className = 'nsa-ctrl-btn';
+            }
+        }
 
-        btnStop.addEventListener('click', function() {
-            setActiveButton(btnStop);
-            addMsg("AI responses have been paused.", 'ai', true);
-            // Logic to disable AI
-            fetch(apiBase + '/chat/' + widgetKey + '/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: "[SYSTEM: STOP_AI]", sender_id: senderId })
-            }).catch(function(){});
-        });
+        function updateAIUI() {
+            var btn = document.getElementById('nsa-btn-ai-toggle');
+            if (!btn) return;
+            if (isAIActive) {
+                btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg> Off AI';
+                btn.className = 'nsa-ctrl-btn nsa-btn-active';
+            } else {
+                btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-14 9V3z"></path></svg> On AI';
+                btn.className = 'nsa-ctrl-btn';
+            }
+        }
 
-        btnOn.addEventListener('click', function() {
-            setActiveButton(btnOn);
-            addMsg("AI responses have been enabled.", 'ai', true);
-            // Logic to enable AI
+        function toggleHuman() {
+            isHumanActive = !isHumanActive;
+            var msg = isHumanActive ? "[SYSTEM: HUMAN_REQUEST]" : "[SYSTEM: HUMAN_RESOLVED]";
+            var userMsg = isHumanActive ? "I need human help." : "Issue resolved. Back to AI.";
+            
+            addMsg(userMsg, 'user');
             fetch(apiBase + '/chat/' + widgetKey + '/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: "[SYSTEM: START_AI]", sender_id: senderId })
+                body: JSON.stringify({ message: msg, sender_id: senderId })
             }).catch(function(){});
-        });
+
+            if (isHumanActive) {
+                setTimeout(function() { addMsg("A human agent has been notified.", 'ai'); }, 800);
+            }
+            updateHumanUI();
+        }
+
+        function toggleAI() {
+            isAIActive = !isAIActive;
+            var msg = isAIActive ? "[SYSTEM: START_AI]" : "[SYSTEM: STOP_AI]";
+            var feedback = isAIActive ? "AI responses enabled." : "AI responses paused.";
+            
+            addMsg(feedback, 'ai', true);
+            fetch(apiBase + '/chat/' + widgetKey + '/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: msg, sender_id: senderId })
+            }).catch(function(){});
+            updateAIUI();
+        }
     }
 
 
