@@ -784,12 +784,15 @@ def send_whatsapp_buttons(data, contact, reply_text="Options:"):
     # ── Text Menu Fallback (no URLs) ──
     # Meta/LID sometimes blocks interactive buttons; we send a plain numbered menu without links.
     # Keep text compact so bubbles don't look big
-    menu_text = f"{reply_text}\n"
+    menu_text = f"{reply_text}\n\n\n"
     menu_text += "Choose: "
     
     labels = []
     for i, b in enumerate(buttons_data, 1):
         label = b['text']
+        # remove emojis for WhatsApp compact view
+        label = ''.join(ch for ch in label if ch.isalnum() or ch.isspace())
+        label = label.strip()
         if len(label) > 18:
             label = label[:17] + "…"
         labels.append(f"{i}) {label}")
