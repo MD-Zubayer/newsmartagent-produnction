@@ -17,8 +17,10 @@ class WidgetSettingsSerializer(serializers.ModelSerializer):
             'primary_color', 'bubble_icon', 'bubble_icon_url', 'bubble_size', 'bubble_roundness', 'show_bubble_background',
             'whatsapp_number', 'messenger_link',
             'widget_position', 'header_title', 'header_subtitle', 'placeholder_text', 'is_enabled', 'allowed_domains',
-            'enable_human_control', 'enable_ai_control'
+            'enable_human_control', 'enable_ai_control',
+            'menu_ai_icon_size', 'menu_ai_icon_bg_color'
         ]
+
 
 
 

@@ -46,8 +46,10 @@ export default function WidgetCustomizePage() {
     messenger_link: "",
     is_enabled: true,
     allowed_domains: "",
-    enable_human_control: false,
-    enable_ai_control: false
+    enable_human_control: true,
+    enable_ai_control: true,
+    menu_ai_icon_size: 44,
+    menu_ai_icon_bg_color: ""
   });
 
 
@@ -372,6 +374,38 @@ export default function WidgetCustomizePage() {
                       {pos.replace(/-/g, ' ')}
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Menu AI Icon Customization */}
+              <div className="space-y-4 pt-4 border-t border-slate-100">
+                <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-tight">FAB Menu AI Icon Customization</h4>
+                
+                {/* Menu Icon Background */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Background Color (Leave empty for transparent)</label>
+                  <div className="flex gap-3 items-center">
+                    <input type="color" value={settings.menu_ai_icon_bg_color || "#ffffff"}
+                      onChange={e => set('menu_ai_icon_bg_color', e.target.value)}
+                      className="w-12 h-12 rounded-xl cursor-pointer border-none bg-transparent" />
+                    <input type="text" value={settings.menu_ai_icon_bg_color || ""}
+                      placeholder="Transparent"
+                      onChange={e => set('menu_ai_icon_bg_color', e.target.value)}
+                      className="flex-1 p-3 bg-slate-50 rounded-xl font-mono text-sm outline-none border border-slate-100 uppercase" />
+                    {settings.menu_ai_icon_bg_color && (
+                      <button onClick={() => set('menu_ai_icon_bg_color', "")} className="text-xs text-red-500 font-bold px-2 py-1 hover:bg-red-50 rounded">Clear</button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Menu Icon Size */}
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <FaExpand /> Icon Box Size in FAB — <span className="text-indigo-600">{settings.menu_ai_icon_size || 44}px</span>
+                  </label>
+                  <input type="range" min={24} max={80} step={2} value={settings.menu_ai_icon_size || 44}
+                    onChange={e => set('menu_ai_icon_size', Number(e.target.value))}
+                    className="w-full accent-indigo-600" />
                 </div>
               </div>
             </div>

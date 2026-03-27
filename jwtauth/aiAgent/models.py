@@ -403,7 +403,12 @@ class WidgetSettings(models.Model):
     enable_human_control = models.BooleanField(default=True, help_text="Show Human Help / Resolve button in the widget")
     enable_ai_control = models.BooleanField(default=True, help_text="Show AI Off/On toggle button in the widget")
     
+    # FAB Menu Customization
+    menu_ai_icon_size = models.IntegerField(default=44, help_text="AI Icon size in the 3-icon menu")
+    menu_ai_icon_bg_color = models.CharField(max_length=7, blank=True, null=True, help_text="Background color for AI icon in FAB menu (leave blank for transparent)")
+
     updated_at = models.DateTimeField(auto_now=True)
+
 
 
     def __str__(self):

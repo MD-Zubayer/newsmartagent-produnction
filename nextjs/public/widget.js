@@ -54,6 +54,10 @@
         var roundness = typeof s.bubble_roundness !== 'undefined' ? s.bubble_roundness : 28;
         var radius    = Math.round(roundness * 0.5) + '%';
         
+        // Menu AI Icon Customization
+        var menuAiIconSize = parseInt(s.menu_ai_icon_size) || 44;
+        var menuAiIconBgColor = s.menu_ai_icon_bg_color || 'transparent';
+
         // Background
         var showBg    = typeof s.show_bubble_background !== 'undefined' ? s.show_bubble_background : true;
         var bubbleBg  = showBg ? color : 'transparent';
@@ -77,8 +81,9 @@
             '.nsa-fab-btn:hover { transform: translateY(-3px) scale(1.05); box-shadow: 0 8px 25px rgba(0,0,0,0.15); }',
             '.nsa-fab-wa { background: #25D366; }',
             '.nsa-fab-ms { background: #0084FF; }',
-            '.nsa-fab-ai { background: transparent; border: none; box-shadow: none; }',
-            '.nsa-fab-ai img { width: 44px; height: 44px; }',
+            '.nsa-fab-ai { background: ' + menuAiIconBgColor + '; border: none; box-shadow: none; border-radius: ' + radius + '; display: flex; justify-content: center; align-items: center; width: ' + menuAiIconSize + 'px; height: ' + menuAiIconSize + 'px; }',
+            '.nsa-fab-ai img { width: ' + menuAiIconSize + 'px; height: ' + menuAiIconSize + 'px; object-fit: contain; }',
+
 
             '.nsa-fab-btn svg { width: 22px; height: 22px; fill: #fff; }',
             '.nsa-fab-btn img { width: 24px; height: 24px; object-fit: contain; border-radius: 50%; }',
