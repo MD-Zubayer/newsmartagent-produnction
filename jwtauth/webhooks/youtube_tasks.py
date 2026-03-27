@@ -28,11 +28,20 @@ def process_channel_comments(channel):
     """
     Fetches and processes comments for a single YouTube channel.
     """
-    url = "https://www.googleapis.com/youtube/v3/commentThreads"
+    # Initial URL construction with API Key and maxResults=50
+    base_url = f"https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&allThreadsRelatedToChannelId={channel.channel_id}&maxResults=50&key={settings.YOUTUBE_API_KEY}"
+    
+    # Access token is still needed for authenticated requests, add it to params
+    # The instruction implies moving to a direct URL construction for some parts,
+    # but access_token is dynamic and often better handled as a separate param or header.
+    # For simplicity and to align with the instruction's intent of using API key directly in URL,
+    # we'll construct the URL with the access_token as well, or keep it in params for requests.get.
+    # Given the original code's structure, keeping access_token in params is more robust for refresh.
+    
     params = {
         "part": "snippet,replies",
         "allThreadsRelatedToChannelId": channel.channel_id,
-        "maxResults": 20,
+        "maxResults": 50, # Updated as per instruction
         "order": "time",
         "access_token": channel.access_token
     }
@@ -98,8 +107,8 @@ def process_channel_comments(channel):
         }
         
         from .tasks import process_ai_reply_task
-        process_ai_reply_task.delay(payload)
-        logger.info(f"🚀 [YouTube Task] Dispatched comment {comment_id} to advanced handler")
+        process_ai_reply_task.apply_async(kwargs={'data': payload}, queue='youtube_queue')
+        logger.info(f"🚀 [YouTube Task] Dispatched comment {comment_id} to youtube_queue")
         processed_count += 1
 
     logger.info(f"📊 [YouTube Task] Channel {channel.channel_title} summary: Proccesed {processed_count}, Skipped {skipped_count}")

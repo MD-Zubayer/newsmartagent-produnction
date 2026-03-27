@@ -261,10 +261,11 @@ def deliver_dashboard_reply(user_id, reply, msg_id):
 @shared_task(
              bind=True,
              queue='chat_queue',
+             rate_limit='100/m',
              expires=180,
-             autoretry_for=(requests.exceptions.RequestException,),
+             autoretry_for=(requests.exceptions.RequestException, Exception),
              retry_backoff=True,
-             max_retries=5,
+             max_retries=3,
              retry_jitter=True,
              time_limit=140,
              soft_time_limit=130

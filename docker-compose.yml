@@ -158,6 +158,28 @@ services:
     networks:
       - smart-network
     restart: always
+
+  celery_youtube_worker:
+    build: ./jwtauth
+    container_name: newsmartagent-celery-youtube-worker
+    command: celery -A jwtauth worker -Q youtube_queue -c 4 --prefetch-multiplier 1 --max-tasks-per-child 1000 --loglevel=info
+    volumes:
+      - ./jwtauth:/app
+      - /home/ubuntu/configs/service_account.json:/app/gdrive_key.json:ro
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@newsmartagent-db:5432/${POSTGRES_DB}
+      - REDIS_URL=${REDIS_URL}
+      - GOOGLE_DRIVE_LOG_FOLDER_ID=${GOOGLE_DRIVE_LOG_FOLDER_ID}
+      - GOOGLE_DRIVE_LOG_SUBFOLDER=${GOOGLE_DRIVE_LOG_SUBFOLDER}
+      - GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE=/app/gdrive_key.json
+    depends_on:
+      - db
+      - redis
+    networks:
+      - smart-network
+    restart: always
     logging: *default-logging
     deploy:
       update_config:
