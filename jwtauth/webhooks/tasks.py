@@ -550,35 +550,6 @@ def process_ai_reply_task(self, data):
         send_cache_update_ws(agent_config.user.id, page_id, sender_id=sender_id)
         handle_smart_memory_update(agent_config, sender_id, text)
         
-        # ── [NEW] Pre-AI Human Handoff Keyword Check ──
-        pre_ai_handoff_keywords = [
-            'মানুষ', 'প্রতিনিধি', 'এজেন্ট', 'অপারেটর', 'কথা বলতে চাই', 'সাপোর্ট', 'help', 'human', 'agent', 'support', 'contact'
-        ]
-        
-        lower_text = text.lower()
-        is_pre_ai_handoff = any(kw in lower_text for kw in pre_ai_handoff_keywords)
-        
-        if is_pre_ai_handoff:
-            logger.info(f"🚨 [Pre-AI Handoff] Keyword matched in message: '{text}' from {sender_id}")
-            Contact.objects.filter(agent=agent_config, identifier=sender_id).update(is_human_needed=True)
-            
-            # Fetch for WS
-            contact_obj = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
-            if contact_obj:
-                contact_name = contact_obj.name or contact_obj.push_name or sender_id
-                send_human_handoff_ws(agent_config.user.id, page_id, sender_id, contact_obj.id, contact_name)
-                send_cache_update_ws(agent_config.user.id, page_id, sender_id=sender_id) # Force sync
-                logger.info(f"🔊 [Pre-AI Handoff] WS Alert sent for {contact_name}")
-                
-                # Send buttons so user can easily restore AI or resolve human mode
-                _send_platform_buttons_alone(request_type, data, sender_id, page_id, effective_access_token, contact_obj)
-            
-            # Exit early to prevent AI response
-            if msg_id:
-                r.set(f'processed_msg:{msg_id}', '1', ex=3600)
-                r.delete(f'processing_msg:{msg_id}')
-            return
-
         # ── Auto-Reply Enable/Disable Check ──
         contact = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
         if contact and (not contact.is_auto_reply_enabled or contact.is_human_needed):
@@ -829,7 +800,8 @@ def process_ai_reply_task(self, data):
                 'Use "sender_specific" for user-only info (my,amar,etc any language, name/order/status/আমি/আমার/ব্যক্তিগত তথ্য). '
                 'Use "agent_specific" for information extracted from [KNOWLEDGE BASE DATA], business details like products/prices, or IF ASKED ABOUT YOUR IDENTITY (who you are, what you do). '
                 'Use "global" ONLY for general world facts, universal greetings (Salam/Hi), or general knowledge. NEVER use "global" for identity, personal info, or specific business details.'
-                '\nCRITICAL: If you cannot answer a question based on provided data, OR if the user explicitly asks for a human/admin/support representative, set "human_handoff": true. Otherwise, set it to false.'
+                '\nCRITICAL: If you cannot answer a question based on provided data, DO NOT trigger human handoff. Instead, politely ask clarifying questions to the user.'
+                '\nHowever, ONLY if the user explicitly asks to talk to a human, admin, representative, or explicitly requests to contact support via text, you MUST set "human_handoff": true.'
                 '\nSTRICT: No markdown blocks, no preamble, and ensure JSON syntax is perfect.'
             )
             system_instruction = system_instruction + classify_instruction
@@ -866,16 +838,6 @@ def process_ai_reply_task(self, data):
                 except (json.JSONDecodeError, AttributeError) as e:
                     logger.warning(f"⚠️ JSON parse failed from AI reply, using raw. Error: {e}")
 
-            # Keyword fallback (if JSON fails or AI hints at handoff in text)
-            handoff_keywords = [
-                'human agent', 'representative', 'support person', 'admin', 'support', 'contact', 'operator',
-                'সাপোর্ট', 'এজেন্ট', 'মানুষ', 'কথা বলতে চাই', 'প্রতিনিধি', 'যোগাযোগ', 'অপারেটর', 'কথা বলুন', 'হেল্প', 'নাম্বার'
-            ]
-            if not is_handoff:
-                lower_reply = raw_ai_reply.lower()
-                if any(kw in lower_reply for kw in handoff_keywords):
-                    is_handoff = True
-                    logger.info(f"🔍 Text-based handoff detected for {sender_id}")
 
             if is_handoff:
                 # Override reply with friendly handoff message if it was a JSON-detected handoff
