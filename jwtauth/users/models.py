@@ -448,3 +448,18 @@ class CashoutRequest(models.Model):
 
     def __str__(self):
         return f"{self.profile.unique_id} - {self.balance_type.upper()} - {self.amount} BDT - {self.status}"
+
+
+class YouTubeChannel(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='youtube_channels')
+    channel_id = models.CharField(max_length=255, unique=True)
+    channel_title = models.CharField(max_length=255)
+    access_token = models.CharField(max_length=500)
+    refresh_token = models.CharField(max_length=500, blank=True, null=True)
+    token_expires_at = models.DateTimeField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.channel_title} ({self.channel_id}) - {self.user.email}"

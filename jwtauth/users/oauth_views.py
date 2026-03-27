@@ -6,7 +6,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
-from .models import FacebookPage
+from .models import FacebookPage, YouTubeChannel
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -280,6 +280,147 @@ def get_connected_pages(request):
         for page in pages
     ]
     return JsonResponse({"pages": data})
+
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def youtube_login(request):
+    """
+    Redirects the user to Google's OAuth 2.0 endpoint for YouTube.
+    """
+    client_id = getattr(settings, 'YOUTUBE_CLIENT_ID', None)
+    redirect_uri = getattr(settings, 'YOUTUBE_REDIRECT_URI', None)
+
+    if not client_id or not redirect_uri:
+        return JsonResponse({"error": "YouTube integration is not configured."}, status=500)
+
+    # Scopes for YouTube Read-Only and potentially Manage (for replies)
+    # https://www.googleapis.com/auth/youtube.force-ssl is required for managing comments
+    scopes = [
+        "https://www.googleapis.com/auth/youtube.readonly",
+        "https://www.googleapis.com/auth/youtube.force-ssl",
+        "openid",
+        "email",
+        "profile"
+    ]
+    
+    auth_url = (
+        f"https://accounts.google.com/o/oauth2/v2/auth?"
+        f"client_id={client_id}"
+        f"&redirect_uri={redirect_uri}"
+        f"&response_type=code"
+        f"&scope={' '.join(scopes)}"
+        f"&access_type=offline"
+        f"&prompt=consent"
+        f"&state={request.user.id}"
+    )
+    return redirect(auth_url)
+
+@api_view(['GET'])
+@permission_classes([])
+def youtube_callback(request):
+    """
+    Handles the redirect back from Google.
+    Trades the code for an access token and refresh token.
+    """
+    code = request.GET.get("code")
+    user_id = request.GET.get("state")
+    error = request.GET.get("error")
+
+    frontend_url = getattr(settings, 'NEXT_PUBLIC_BASE_URL', 'https://newsmartagent.com')
+
+    if error or not code:
+        return redirect(f"{frontend_url}/dashboard/connect?error=auth_failed&message=Google authentication failed.")
+
+    client_id = getattr(settings, 'YOUTUBE_CLIENT_ID', None)
+    client_secret = getattr(settings, 'YOUTUBE_CLIENT_SECRET', None)
+    redirect_uri = getattr(settings, 'YOUTUBE_REDIRECT_URI', None)
+
+    # 1. Exchange code for tokens
+    token_url = "https://oauth2.googleapis.com/token"
+    token_data = {
+        'code': code,
+        'client_id': client_id,
+        'client_secret': client_secret,
+        'redirect_uri': redirect_uri,
+        'grant_type': 'authorization_code'
+    }
+    
+    resp = requests.post(token_url, data=token_data).json()
+    access_token = resp.get("access_token")
+    refresh_token = resp.get("refresh_token")
+    expires_in = resp.get("expires_in")
+    token_expires_at = timezone.now() + timedelta(seconds=expires_in) if expires_in else None
+
+    if not access_token:
+        return JsonResponse({"error": "Failed to get access token.", "details": resp}, status=400)
+
+    # 2. Get YouTube Channel info
+    channels_url = f"https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails&mine=true&access_token={access_token}"
+    channels_resp = requests.get(channels_url).json()
+    channels_data = channels_resp.get("items", [])
+
+    if not channels_data:
+        return redirect(f"{frontend_url}/dashboard/connect?error=no_channels&message=No YouTube channels found for this account.")
+
+    # 3. Save to database
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    try:
+        user = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({"error": "Invalid user state."}, status=400)
+
+    saved_items = []
+    for item in channels_data:
+        channel_id = item.get("id")
+        channel_title = item.get("snippet", {}).get("title")
+
+        YouTubeChannel.objects.update_or_create(
+            channel_id=channel_id,
+            defaults={
+                'user': user,
+                'channel_title': channel_title,
+                'access_token': access_token,
+                'refresh_token': refresh_token or '', # Only sent once by Google
+                'token_expires_at': token_expires_at,
+                'is_active': True
+            }
+        )
+        saved_items.append({"name": channel_title, "id": channel_id})
+
+    # Redirect script similar to Facebook to handle popups if needed
+    script = f'''
+    <script>
+        if (window.opener) {{
+            window.opener.postMessage({{status: "success", platform: "youtube", channels: {saved_items}}}, "{frontend_url}");
+            window.close();
+        }} else {{
+            window.location.href = "{frontend_url}/dashboard/connect?success=1";
+        }}
+    </script>
+    '''
+    from django.http import HttpResponse
+    return HttpResponse(script)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_connected_youtube_channels(request):
+    """
+    Returns a list of connected YouTube channels for the user.
+    """
+    channels = YouTubeChannel.objects.filter(user=request.user)
+    data = [
+        {
+            "id": channel.channel_id,
+            "name": channel.channel_title,
+            "is_active": channel.is_active,
+            "connected_at": channel.created_at
+        }
+        for channel in channels
+    ]
+    return JsonResponse({"channels": data})
 
 
 

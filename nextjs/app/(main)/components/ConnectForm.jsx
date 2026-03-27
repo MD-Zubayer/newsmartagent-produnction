@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import axiosInstance from "@/lib/api";
 import {
-  FaFacebook, FaWhatsapp, FaInstagram, FaTelegram,
+  FaFacebook, FaWhatsapp, FaInstagram, FaTelegram, FaYoutube,
   FaArrowLeft, FaLink, FaCopy, FaCode, FaRobot, FaShieldAlt, FaExternalLinkAlt,
   FaCheckCircle, FaExclamationCircle
 } from "react-icons/fa";
@@ -25,6 +25,14 @@ export default function IntegrationManager() {
           setConnectedPages(res.data.pages || []);
         })
         .catch(err => console.error("Error fetching Facebook pages", err))
+        .finally(() => setIsLoadingPages(false));
+    } else if (selectedPlatform?.id === 'youtube') {
+      setIsLoadingPages(true);
+      axiosInstance.get("/youtube/channels/")
+        .then(res => {
+          setConnectedPages(res.data.channels || []);
+        })
+        .catch(err => console.error("Error fetching YouTube channels", err))
         .finally(() => setIsLoadingPages(false));
     }
   }, [selectedPlatform]);
@@ -90,6 +98,16 @@ export default function IntegrationManager() {
       devLink: "/dashboard/connect/widget-customize",
       btnText: "Customize Widget",
       description: "Embed a high-performance AI chat widget on any website in seconds."
+    },
+    youtube: {
+      id: "youtube",
+      name: "YouTube",
+      icon: <FaYoutube />,
+      color: "from-red-600 via-rose-600 to-red-700",
+      iconBg: "bg-red-600",
+      devLink: "https://console.cloud.google.com/",
+      btnText: "Google Console",
+      description: "Automate your YouTube Channel comments and engagement with AI."
     }
   };
 
@@ -432,6 +450,84 @@ export default function IntegrationManager() {
                         <h4 className="text-2xl md:text-3xl font-black text-slate-900 uppercase tracking-tighter italic">No Instagram Connected</h4>
                         <p className="text-base md:text-lg text-slate-400 font-medium max-w-[280px] md:max-w-sm mx-auto opacity-70 leading-relaxed">
                           Link your Instagram Business Account to a Facebook Page, then connect via the button above.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Platform Specific: YouTube */}
+            {selectedPlatform.id === "youtube" && (
+              <div className="pt-16 md:pt-24 border-t border-slate-100 space-y-12 md:space-y-16 animate-in slide-in-from-bottom-8 duration-1000">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 lg:gap-12 text-center lg:text-left">
+                  <div className="space-y-2">
+                    <h3 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter italic uppercase">
+                      YouTube Channels
+                    </h3>
+                    <p className="text-[10px] md:text-xs text-red-600 font-black uppercase tracking-[0.3em] md:tracking-[0.4em] opacity-70 flex items-center gap-2 justify-center lg:justify-start">
+                      <span className="w-1.5 h-1.5 bg-red-600 rounded-full shadow-[0_0_10px_rgba(220,38,38,0.5)]"></span> YouTube Integration
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://newsmartagent.com/api";
+                      window.location.href = `${apiUrl}/youtube/login/`;
+                    }}
+                    className="group relative flex items-center justify-center gap-4 md:gap-5 bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white px-6 md:px-10 py-4 md:py-6 rounded-[1.5rem] md:rounded-[2rem] text-[10px] md:text-[11px] font-black uppercase tracking-[0.15em] md:tracking-[0.2em] hover:opacity-90 transition-all shadow-[0_20px_40px_-10px_rgba(220,38,38,0.3)] active:scale-95 overflow-hidden w-full lg:w-auto"
+                  >
+                    <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity"></div>
+                    <FaYoutube className="text-xl md:text-2xl group-hover:rotate-12 transition-transform duration-500" />
+                    Connect YouTube Channel
+                  </button>
+                </div>
+
+                <div className="bg-slate-50/50 rounded-[2.5rem] md:rounded-[4rem] p-6 md:p-16 border border-slate-100 relative overflow-hidden group/list">
+                  <div className="absolute inset-0 bg-white/20 backdrop-blur-3xl pointer-events-none"></div>
+
+                  {isLoadingPages ? (
+                    <div className="flex flex-col items-center justify-center py-20 md:py-28 gap-6 md:gap-8 relative z-10">
+                      <div className="relative">
+                        <div className="w-16 h-16 md:w-20 md:h-20 border-2 border-slate-200 border-t-red-600 rounded-full animate-spin"></div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-8 h-8 md:w-10 md:h-10 bg-red-50 rounded-[1.2rem] md:rounded-2xl animate-pulse"></div>
+                        </div>
+                      </div>
+                      <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-[0.4em] md:tracking-[0.5em] animate-pulse">Fetching YouTube Channels...</p>
+                    </div>
+                  ) : connectedPages.length > 0 ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 relative z-10 w-full overflow-hidden">
+                      {connectedPages.map(channel => (
+                        <div key={channel.id} className="flex items-center justify-between bg-white p-5 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] shadow-[0_16px_32px_-12px_rgba(0,0,0,0.03)] border border-slate-50 hover:border-red-100 hover:shadow-[0_32px_64px_-16px_rgba(220,38,38,0.12)] transition-all duration-700 group/page hover:-translate-y-1 min-w-0">
+                          <div className="flex items-center gap-3 md:gap-6 min-w-0">
+                            <div className="w-12 h-12 md:w-16 md:h-16 shrink-0 bg-gradient-to-br from-red-50 to-rose-50 rounded-[1.2rem] md:rounded-[1.5rem] flex items-center justify-center text-red-600 shadow-inner group-hover/page:scale-110 transition-transform duration-700">
+                              <FaYoutube className="text-2xl md:text-3xl" />
+                            </div>
+                            <div className="space-y-1 min-w-0">
+                              <p className="font-black text-base md:text-xl text-slate-900 tracking-tight italic truncate text-left">{channel.name}</p>
+                              <div className="flex items-center gap-1.5 px-2 md:px-3 py-1 bg-emerald-50 rounded-full border border-emerald-100 w-fit">
+                                <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
+                                <span className="text-[8px] md:text-[9px] font-black text-emerald-600 uppercase tracking-widest truncate">Connected</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="w-8 h-8 md:w-10 md:h-10 shrink-0 bg-slate-50 rounded-[0.8rem] md:rounded-2xl flex items-center justify-center group-hover/page:bg-red-600 group-hover/page:text-white transition-all duration-500 ml-2">
+                            <span className="transform transition-transform group-hover/page:translate-x-0.5 text-base md:text-xl">→</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-20 md:py-28 px-6 md:px-12 space-y-8 md:space-y-10 relative z-10">
+                      <div className="w-24 h-24 md:w-32 md:h-32 bg-white rounded-[2rem] md:rounded-[2.5rem] shadow-lg md:shadow-xl flex items-center justify-center mx-auto border border-slate-50 hover:scale-110 transition-transform duration-700">
+                        <FaYoutube size={48} className="md:w-16 md:h-16 opacity-10 text-red-500" />
+                      </div>
+                      <div className="space-y-3 md:space-y-4">
+                        <h4 className="text-2xl md:text-3xl font-black text-slate-900 uppercase tracking-tighter italic">No YouTube Channel Connected</h4>
+                        <p className="text-base md:text-lg text-slate-400 font-medium max-w-[280px] md:max-w-sm mx-auto opacity-70 leading-relaxed">
+                          Click &quot;Connect YouTube Channel&quot; to authorize our AI to manage your channel comments.
                         </p>
                       </div>
                     </div>
