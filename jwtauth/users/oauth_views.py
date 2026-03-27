@@ -1,4 +1,5 @@
 import requests
+import logging
 from datetime import timedelta
 from django.shortcuts import redirect
 from django.conf import settings
@@ -7,6 +8,8 @@ from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from .models import FacebookPage, YouTubeChannel, GoogleBusinessAccount, GoogleBusinessLocation
+
+logger = logging.getLogger(__name__)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -419,13 +422,18 @@ def handle_youtube_callback_data(request, user_id, access_token, refresh_token, 
 def handle_gbp_callback_data(request, user_id, access_token, refresh_token, token_expires_at, frontend_url):
     # 2. Get GBP Accounts info
     # API: https://mybusinessaccountmanagement.googleapis.com/v1/accounts
-    accounts_url = f"https://mybusinessaccountmanagement.googleapis.com/v1/accounts"
+    accounts_url = "https://mybusinessaccountmanagement.googleapis.com/v1/accounts"
     headers = {"Authorization": f"Bearer {access_token}"}
-    accounts_resp = requests.get(accounts_url, headers=headers).json()
+    
+    accounts_resp_raw = requests.get(accounts_url, headers=headers)
+    accounts_resp = accounts_resp_raw.json()
     accounts_data = accounts_resp.get("accounts", [])
 
     if not accounts_data:
-        return redirect(f"{frontend_url}/dashboard/connect?error=no_gbp_accounts&message=No Google Business Profile accounts found.")
+        # Log the error or response for debugging
+        error_detail = accounts_resp.get("error", {}).get("message", "No accounts returned by Google.")
+        logger.error(f"GBP OAuth Error: status={accounts_resp_raw.status_code}, resp={accounts_resp}")
+        return redirect(f"{frontend_url}/dashboard/connect?error=no_gbp_accounts&message=No Google Business Profile accounts found. Detail: {error_detail}")
 
     # Fetch locations for each account
     all_locations = []
