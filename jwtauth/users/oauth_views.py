@@ -310,7 +310,7 @@ def youtube_login(request):
             "https://www.googleapis.com/auth/youtube.force-ssl"
         ])
     elif auth_type == 'gbp':
-        scopes.append("https://www.googleapis.com/auth/ business.manage")
+        scopes.append("https://www.googleapis.com/auth/business.manage")
 
     auth_url = (
         f"https://accounts.google.com/o/oauth2/v2/auth?"
