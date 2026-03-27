@@ -29,7 +29,7 @@ def process_channel_comments(channel):
     Fetches and processes comments for a single YouTube channel.
     """
     # Initial URL construction with API Key and maxResults=50
-    base_url = f"https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&allThreadsRelatedToChannelId={channel.channel_id}&maxResults=50&key={settings.YOUTUBE_API_KEY}"
+    base_url = f"https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&allThreadsRelatedToChannelId={channel.channel_id}&maxResults=50"
     
     # Access token is still needed for authenticated requests, add it to params
     # The instruction implies moving to a direct URL construction for some parts,
