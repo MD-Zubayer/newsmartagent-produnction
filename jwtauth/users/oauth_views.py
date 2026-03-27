@@ -549,7 +549,7 @@ def confirm_youtube_connection(request):
             'name': agent_name,
             'access_token': access_token,
             'token_expires_at': token_expires_at,
-            'system_prompt': "You are an AI assistant for this YouTube channel. Answer viewer queries and engage with comments based on the video context and channel information.",
+            'system_prompt': f"You are the personal assistant for {channel_title}'s YouTube channel. Reply concisely to the user's comment. STRICTLY PROHIBITED: Do not mention you are an AI. Do not add any closing phrases like 'feel free to ask' or 'I am here to help'. Just provide the direct answer or a friendly engagement.",
             'is_active': True
         }
     )
