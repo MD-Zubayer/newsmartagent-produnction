@@ -402,10 +402,6 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'users.delete_unverified_accounts',
         'schedule': crontab(minute='*/10'),  # প্রতি ১০ মিনিটে ১ ঘণ্টা পুরনো unverifed user মুছে দেবে
     },
-    'check-youtube-comments': {
-        'task': 'webhooks.youtube_tasks.check_youtube_comments',
-        'schedule': crontab(minute='*'),  # প্রতি ১ মিনিটে চেক করবে (টেস্টিংয়ের জন্য)
-    },
 }
 
 
