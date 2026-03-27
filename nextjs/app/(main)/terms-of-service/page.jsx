@@ -31,8 +31,14 @@ export default function TermsOfService() {
       fullText: `To use our AI automation features, you must authorize New Smart Agent (NSA) to access your Google Business Profile and/or YouTube account via Google OAuth. You are responsible for maintaining the security of your account and any actions taken under your credentials. New Smart Agent (NSA) is not liable for any unauthorized access resulting from user negligence.`
     },
     {
+      id: "api-usage",
+      title: "5. API Usage & User Responsibility",
+      icon: <HiOutlineShieldCheck />,
+      fullText: `By using New Smart Agent (NSA), you agree to comply with all applicable Google Terms of Service and YouTube Terms of Service. You are solely responsible for any content posted through your authorized Google accounts. NSA is not responsible for any actions taken by Google (such as account suspension) due to your misuse of automated features.`
+    },
+    {
       id: "description",
-      title: "5. Service Description",
+      title: "6. Service Description",
       icon: <FaRobot />,
       fullText: `Service Description
 New Smart Agent (NSA) is an AI-driven SaaS platform designed to enhance business efficiency. Our services include:
@@ -47,23 +53,25 @@ We provide the platform on an "as-is" and "as-available" basis. We reserve the r
     },
     {
       id: "acceptable-use",
-      title: "6. Permitted Use & Restrictions",
+      title: "7. Permitted Use & Restrictions",
       icon: <FaBan />,
       fullText: `You agree not to use New Smart Agent (NSA) for any illegal activities, including but not limited to:
 • Generating or posting spam, offensive, or misleading reviews/comments.
 • Violating Google’s Service Policies or any third-party rights.
 • Using the platform to distribute malware or engage in any form of automated abuse.
-Users are prohibited from using New Smart Agent (NSA) to generate spam, misleading reviews, or artificial engagement that violates Google’s Service Policies.`
+Users are prohibited from using New Smart Agent (NSA) to generate spam, misleading reviews, or artificial engagement that violates Google’s Service Policies.
+
+You must not use NSA to generate or distribute spam, misleading reviews, or artificial engagement. Any attempt to automate bulk activities that violate third-party API policies will result in immediate termination of your account.`
     },
     {
       id: "ai-disclaimer",
-      title: "7. AI-Generated Content Disclaimer",
+      title: "8. AI-Generated Content Disclaimer",
       icon: <FaRobot />,
       fullText: `New Smart Agent (NSA) provides AI-generated responses for customer engagement. While we strive for accuracy, users are encouraged to review automated replies. New Smart Agent (NSA) is not responsible for any inaccuracies, misunderstandings, or reputational damage caused by AI-generated content.`
     },
     {
       id: "third-party",
-      title: "8. Third-Party Services",
+      title: "9. Third-Party Services",
       icon: <HiOutlineGlobeAlt />,
       fullText: `Our platform integrates with third-party services, including Meta (Facebook Graph API), AI providers (OpenAI/Grok), and payment processors. Your use of these integrations is subject to the respective third-party’s terms and policies. We are not responsible for changes, downtime, or data handling practices of these external providers.
 
@@ -71,7 +79,7 @@ By using New Smart Agent (NSA), you agree to be bound by the YouTube Terms of Se
     },
     {
       id: "payment",
-      title: "9. Payment & Manual Transactions",
+      title: "10. Payment & Manual Transactions",
       icon: <FaCreditCard />,
       fullText: `Manual Payments: Currently, we accept payments via local mobile financial services (bKash, Nagod) and Bank Transfers. Activation of service occurs only after manual verification of the Transaction ID (TrxID) and sender details.
 Subscription Model: Our services are offered as fixed-validity packs (e.g., 7 days, 30 days) with specific usage limits. Once validity expires or the limit is reached, automation will pause.
@@ -79,35 +87,35 @@ Refunds: All manual payments are final. No refunds will be issued once the subsc
     },
     {
       id: "privacy",
-      title: "10. Data Privacy",
+      title: "11. Data Privacy",
       icon: <FaShieldAlt />,
       fullText: `Your use of New Smart Agent (NSA) is also governed by our Privacy Policy. By using the service, you consent to the collection and processing of data (including Facebook tokens and message metadata) as described in that policy to enable automation features.`
     },
     {
       id: "termination",
-      title: "11. Termination of Service",
+      title: "12. Termination of Service",
       icon: <HiOutlineLogout />,
       fullText: `We reserve the right to suspend or terminate your access to New Smart Agent (NSA) if you violate these terms or if your actions pose a risk to our platform or other users. You may also terminate your account at any time by disconnecting your Google services and contacting our support.`
     },
     {
       id: "liability",
-      title: "12. Limitation of Liability",
+      title: "13. Limitation of Liability",
       icon: <FaBalanceScale />,
       fullText: `New Smart Agent (NSA) and its developers shall not be liable for any indirect, incidental, or consequential damages arising out of your use of the service, including data loss or business interruption.`
     },
     {
        id: "governing-law",
-       title: "13. Governing Law",
+       title: "14. Governing Law",
        icon: <HiOutlineScale />,
        fullText: `These Terms are governed by and construed in accordance with the laws of Bangladesh. Any disputes arising from these terms shall be resolved in the courts of Bangladesh.`
     },
     {
        id: "contact",
-       title: "14. Contact Support",
+       title: "15. Contact Support",
        icon: <HiOutlineMail />,
        fullText: `For any questions regarding these Terms, please contact us at:
 Email: newsmartagentbd@gmail.com
-Address: Sadarpur, Faridpur
+Address: Sadarpur, Faridpur, Bangladesh.
 Official Website: https://newsmartagent.com`
     }
   ];
@@ -169,7 +177,7 @@ Official Website: https://newsmartagent.com`
                   <div className="flex flex-col md:flex-row items-center gap-6 text-slate-400 font-black text-[10px] md:text-xs uppercase tracking-[0.3em]">
                      <div className="flex items-center gap-3">
                         <HiOutlineMail className="text-purple-400 text-xl" />
-                        support@newsmartagent.com
+                        newsmartagentbd@gmail.com
                      </div>
                      <div className="hidden md:block w-2 h-2 bg-slate-800 rounded-full"></div>
                      <div className="flex items-center gap-3 text-purple-400">
@@ -187,7 +195,7 @@ Official Website: https://newsmartagent.com`
             Terms of Service • © 2026 New Smart Agent (NSA). All rights reserved.
           </p>
           <p className="text-xs text-slate-400 text-center mt-2">
-            Contact: support@newsmartagent.com • Address: Sadarpur, Faridpur
+            Contact: newsmartagentbd@gmail.com • Address: Sadarpur, Faridpur, Bangladesh
           </p>
         </footer>
 
