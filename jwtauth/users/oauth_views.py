@@ -364,70 +364,135 @@ def youtube_callback(request):
     if not channels_data:
         return redirect(f"{frontend_url}/dashboard/connect?error=no_channels&message=No YouTube channels found for this account.")
 
-    # 3. Save to database
-    from django.contrib.auth import get_user_model
-    User = get_user_model()
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return JsonResponse({"error": "Invalid user state."}, status=400)
+    # 3. Store in Redis for selection
+    import uuid
+    import json
+    from aiAgent.cache.client import get_redis_client
+    
+    session_id = str(uuid.uuid4())
+    redis_client = get_redis_client()
+    
+    session_data = {
+        "user_id": user_id,
+        "access_token": access_token,
+        "refresh_token": refresh_token or '',
+        "token_expires_at": token_expires_at.isoformat() if token_expires_at else None,
+        "channels": channels_data
+    }
+    
+    # Store for 10 minutes
+    redis_client.setex(f"yt_session:{session_id}", 600, json.dumps(session_data))
 
-    saved_items = []
+    # Send channels to frontend via postMessage
+    # We only send snippet info for selection to avoid exposing tokens in the broadcast
+    display_channels = []
     for item in channels_data:
         snippet = item.get("snippet", {})
-        channel_id = item.get("id")
-        channel_title = snippet.get("title")
-        custom_url = snippet.get("customUrl") # e.g. @MkzTips
+        display_channels.append({
+            "id": item.get("id"),
+            "name": snippet.get("title"),
+            "handle": snippet.get("customUrl"),
+            "thumbnail": snippet.get("thumbnails", {}).get("default", {}).get("url")
+        })
 
-        YouTubeChannel.objects.update_or_create(
-            channel_id=channel_id,
-            defaults={
-                'user': user,
-                'channel_title': channel_title,
-                'custom_url': custom_url,
-                'access_token': access_token,
-                'refresh_token': refresh_token or '', # Only sent once by Google
-                'token_expires_at': token_expires_at,
-                'is_active': True
-            }
-        )
-
-        # Auto-create or update AgentAI for YouTube channel
-        from aiAgent.models import AgentAI
-        agent_name = f"{channel_title} ({custom_url})" if custom_url else f"{channel_title} ({channel_id})"
-        
-        agent, created = AgentAI.objects.filter(page_id=channel_id, platform='youtube').defer('access_token').get_or_create(
-            page_id=channel_id,
-            platform='youtube',
-            defaults={
-                'user': user,
-                'name': agent_name,
-                'access_token': access_token,
-                'token_expires_at': token_expires_at,
-                'system_prompt': "You are an AI assistant for this YouTube channel. Answer viewer queries and engage with comments based on the video context and channel information.",
-                'is_active': True
-            }
-        )
-        if not created:
-            agent.access_token = access_token
-            agent.token_expires_at = token_expires_at
-            agent.save(update_fields=['access_token', 'token_expires_at'])
-
-        saved_items.append({"name": channel_title, "id": channel_id})
-
-    # Redirect script similar to Facebook to handle popups if needed
     script = f'''
     <script>
         if (window.opener) {{
-            window.opener.postMessage({{status: "success", platform: "youtube", channels: {saved_items}}}, "{frontend_url}");
+            window.opener.postMessage({{
+                status: "select_channel", 
+                platform: "youtube", 
+                channels: {json.dumps(display_channels)},
+                sessionId: "{session_id}"
+            }}, "{frontend_url}");
             window.close();
         }} else {{
-            window.location.href = "{frontend_url}/dashboard/connect?success=1";
+            window.location.href = "{frontend_url}/dashboard/connect?success=yt_auth&sessionId={session_id}";
         }}
     </script>
     '''
     from django.http import HttpResponse
     return HttpResponse(script)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def confirm_youtube_connection(request):
+    """
+    Finalizes the connection for a selected YouTube channel using the session stored in Redis.
+    """
+    session_id = request.data.get("sessionId")
+    channel_id = request.data.get("channelId")
+    
+    if not session_id or not channel_id:
+        return JsonResponse({"error": "Missing sessionId or channelId."}, status=400)
+    
+    import json
+    from aiAgent.cache.client import get_redis_client
+    redis_client = get_redis_client()
+    
+    session_raw = redis_client.get(f"yt_session:{session_id}")
+    if not session_raw:
+        return JsonResponse({"error": "Session expired or invalid. Please try connecting again."}, status=400)
+    
+    session_data = json.loads(session_raw)
+    
+    # Verify user matches
+    if str(session_data.get("user_id")) != str(request.user.id):
+        return JsonResponse({"error": "Unauthorized session."}, status=403)
+    
+    # Find the selected channel in session data
+    selected_channel = next((c for c in session_data["channels"] if c["id"] == channel_id), None)
+    if not selected_channel:
+        return JsonResponse({"error": "Selected channel not found in this session."}, status=404)
+    
+    access_token = session_data["access_token"]
+    refresh_token = session_data["refresh_token"]
+    token_expires_at_str = session_data["token_expires_at"]
+    token_expires_at = timezone.datetime.fromisoformat(token_expires_at_str) if token_expires_at_str else None
+    
+    snippet = selected_channel.get("snippet", {})
+    channel_title = snippet.get("title")
+    custom_url = snippet.get("customUrl")
+    
+    # Save to database
+    YouTubeChannel.objects.update_or_create(
+        channel_id=channel_id,
+        defaults={
+            'user': request.user,
+            'channel_title': channel_title,
+            'custom_url': custom_url,
+            'access_token': access_token,
+            'refresh_token': refresh_token,
+            'token_expires_at': token_expires_at,
+            'is_active': True
+        }
+    )
+    
+    # Create or update AgentAI
+    from aiAgent.models import AgentAI
+    agent_name = f"{channel_title} ({custom_url})" if custom_url else f"{channel_title} ({channel_id})"
+    
+    agent, created = AgentAI.objects.filter(page_id=channel_id, platform='youtube').defer('access_token').get_or_create(
+        page_id=channel_id,
+        platform='youtube',
+        defaults={
+            'user': request.user,
+            'name': agent_name,
+            'access_token': access_token,
+            'token_expires_at': token_expires_at,
+            'system_prompt': "You are an AI assistant for this YouTube channel. Answer viewer queries and engage with comments based on the video context and channel information.",
+            'is_active': True
+        }
+    )
+    if not created:
+        agent.access_token = access_token
+        agent.token_expires_at = token_expires_at
+        agent.name = agent_name # Update name too in case it changed
+        agent.save(update_fields=['access_token', 'token_expires_at', 'name'])
+        
+    # Optional: Delete session after success
+    redis_client.delete(f"yt_session:{session_id}")
+    
+    return JsonResponse({"status": "success", "message": f"Channel {channel_title} connected successfully!"})
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])

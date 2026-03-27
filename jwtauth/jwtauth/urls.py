@@ -64,6 +64,7 @@ urlpatterns = [
     # YouTube Integration Endpoints
     path('api/youtube/login/', oauth_views.youtube_login, name='youtube_login'),
     path('api/youtube/callback/', oauth_views.youtube_callback, name='youtube_callback'),
+    path('api/youtube/confirm/', oauth_views.confirm_youtube_connection, name='youtube_confirm'),
     path('api/youtube/channels/', oauth_views.get_connected_youtube_channels, name='youtube_channels'),
 
     path('api/facebook/data-deletion/', oauth_views.facebook_data_deletion, name='facebook_data_deletion'),

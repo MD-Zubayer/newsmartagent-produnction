@@ -16,6 +16,51 @@ export default function IntegrationManager() {
   const [selectedPlatform, setSelectedPlatform] = useState(null);
   const [connectedPages, setConnectedPages] = useState([]);
   const [isLoadingPages, setIsLoadingPages] = useState(false);
+  
+  // YouTube Selection State
+  const [stagedYoutubeChannels, setStagedYoutubeChannels] = useState([]);
+  const [youtubeSessionId, setYoutubeSessionId] = useState(null);
+  const [isConfirmingChannel, setIsConfirmingChannel] = useState(false);
+
+  useEffect(() => {
+    // Listen for OAuth Success Messages
+    const handleMessage = (event) => {
+      // Security: Check origin if needed, but here we check status and platform
+      if (event.data?.status === "select_channel" && event.data?.platform === "youtube") {
+        setStagedYoutubeChannels(event.data.channels || []);
+        setYoutubeSessionId(event.data.sessionId);
+        import("react-hot-toast").then(({ toast }) => toast.success("Select a channel to connect"));
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
+
+  const confirmYoutubeConnection = async (channelId) => {
+    setIsConfirmingChannel(true);
+    try {
+      const res = await axiosInstance.post("/youtube/confirm/", {
+        sessionId: youtubeSessionId,
+        channelId: channelId
+      });
+      import("react-hot-toast").then(({ toast }) => toast.success(res.data.message));
+      
+      // Refresh connected channels
+      const refreshRes = await axiosInstance.get("/youtube/channels/");
+      setConnectedPages(refreshRes.data.channels || []);
+      
+      // Clear selection state
+      setStagedYoutubeChannels([]);
+      setYoutubeSessionId(null);
+    } catch (err) {
+      console.error("Error confirming YouTube connection", err);
+      const errorMsg = err.response?.data?.error || "Failed to connect channel";
+      import("react-hot-toast").then(({ toast }) => toast.error(errorMsg));
+    } finally {
+      setIsConfirmingChannel(false);
+    }
+  };
 
   useEffect(() => {
     if (selectedPlatform?.id === 'facebook' || selectedPlatform?.id === 'instagram') {
@@ -474,7 +519,14 @@ export default function IntegrationManager() {
                   <button
                     onClick={() => {
                       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://newsmartagent.com/api";
-                      window.location.href = `${apiUrl}/youtube/login/`;
+                      const width = 600, height = 700;
+                      const left = (window.innerWidth - width) / 2;
+                      const top = (window.innerHeight - height) / 2;
+                      window.open(
+                        `${apiUrl}/youtube/login/`,
+                        "YouTube Login",
+                        `width=${width},height=${height},top=${top},left=${left}`
+                      );
                     }}
                     className="group relative flex items-center justify-center gap-4 md:gap-5 bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white px-6 md:px-10 py-4 md:py-6 rounded-[1.5rem] md:rounded-[2rem] text-[10px] md:text-[11px] font-black uppercase tracking-[0.15em] md:tracking-[0.2em] hover:opacity-90 transition-all shadow-[0_20px_40px_-10px_rgba(220,38,38,0.3)] active:scale-95 overflow-hidden w-full lg:w-auto"
                   >
@@ -486,6 +538,45 @@ export default function IntegrationManager() {
 
                 <div className="bg-slate-50/50 rounded-[2.5rem] md:rounded-[4rem] p-6 md:p-16 border border-slate-100 relative overflow-hidden group/list">
                   <div className="absolute inset-0 bg-white/20 backdrop-blur-3xl pointer-events-none"></div>
+
+                  {/* Channel Selection UI (Facebook Style) */}
+                  {stagedYoutubeChannels.length > 0 && (
+                    <div className="relative z-20 mb-12 p-8 bg-white/80 backdrop-blur-3xl rounded-[2.5rem] border-2 border-red-100 shadow-2xl animate-in slide-in-from-top-10 duration-700">
+                      <div className="flex items-center justify-between mb-8">
+                        <div>
+                          <h4 className="text-xl md:text-2xl font-black text-slate-900 italic uppercase">Select Your Channel</h4>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Multiple channels found in this account</p>
+                        </div>
+                        <button 
+                          onClick={() => setStagedYoutubeChannels([])}
+                          className="text-slate-400 hover:text-red-600 text-[10px] font-black uppercase tracking-widest"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {stagedYoutubeChannels.map(channel => (
+                          <div key={channel.id} className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl hover:border-red-200 transition-all group/item">
+                            <div className="flex items-center gap-4">
+                              <img src={channel.thumbnail} className="w-12 h-12 rounded-full border-2 border-red-50" alt={channel.name} />
+                              <div className="min-w-0">
+                                <p className="font-black text-slate-900 truncate">{channel.name}</p>
+                                <p className="text-[9px] text-red-500 font-bold uppercase">{channel.handle || `@${channel.id}`}</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => confirmYoutubeConnection(channel.id)}
+                              disabled={isConfirmingChannel}
+                              className="px-6 py-2 bg-red-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-red-700 disabled:opacity-50 transition-all shadow-lg"
+                            >
+                              {isConfirmingChannel ? "Connecting..." : "Link"}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {isLoadingPages ? (
                     <div className="flex flex-col items-center justify-center py-20 md:py-28 gap-6 md:gap-8 relative z-10">
