@@ -406,8 +406,10 @@ class WidgetSettings(models.Model):
     # FAB Menu Customization
     menu_ai_icon_size = models.IntegerField(default=44, help_text="AI Icon size in the 3-icon menu")
     menu_ai_icon_bg_color = models.CharField(max_length=7, blank=True, null=True, help_text="Background color for AI icon in FAB menu (leave blank for transparent)")
+    menu_ai_icon_roundness = models.IntegerField(default=50, help_text="AI Icon corner roundness in percentage (0-100)")
 
     updated_at = models.DateTimeField(auto_now=True)
+
 
 
 

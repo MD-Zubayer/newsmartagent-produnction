@@ -49,7 +49,8 @@ export default function WidgetCustomizePage() {
     enable_human_control: true,
     enable_ai_control: true,
     menu_ai_icon_size: 44,
-    menu_ai_icon_bg_color: ""
+    menu_ai_icon_bg_color: "",
+    menu_ai_icon_roundness: 50
   });
 
 
@@ -403,9 +404,24 @@ export default function WidgetCustomizePage() {
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
                     <FaExpand /> Icon Box Size in FAB — <span className="text-indigo-600">{settings.menu_ai_icon_size || 44}px</span>
                   </label>
-                  <input type="range" min={24} max={80} step={2} value={settings.menu_ai_icon_size || 44}
+                  <input type="range" min={24} max={120} step={2} value={settings.menu_ai_icon_size || 44}
                     onChange={e => set('menu_ai_icon_size', Number(e.target.value))}
                     className="w-full accent-indigo-600" />
+                </div>
+
+                {/* Menu Icon Roundness */}
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <HiOutlineSparkles className="text-indigo-600" /> Roundness in FAB — <span className="text-indigo-600">{settings.menu_ai_icon_roundness ?? 50}%</span>
+                  </label>
+                  <input type="range" min={0} max={100} step={2} value={settings.menu_ai_icon_roundness ?? 50}
+                    onChange={e => set('menu_ai_icon_roundness', Number(e.target.value))}
+                    className="w-full accent-indigo-600" />
+                  <div className="flex justify-between text-[8px] font-black text-slate-300 uppercase tracking-widest">
+                    <span>Square</span>
+                    <span>Rounded</span>
+                    <span>Circle</span>
+                  </div>
                 </div>
               </div>
             </div>

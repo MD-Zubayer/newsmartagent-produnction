@@ -57,6 +57,8 @@
         // Menu AI Icon Customization
         var menuAiIconSize = parseInt(s.menu_ai_icon_size) || 44;
         var menuAiIconBgColor = s.menu_ai_icon_bg_color || 'transparent';
+        var menuAiIconRoundness = typeof s.menu_ai_icon_roundness !== 'undefined' ? s.menu_ai_icon_roundness : 50;
+        var menuAiIconRadius = Math.round(menuAiIconRoundness * 0.5) + '%';
 
         // Background
         var showBg    = typeof s.show_bubble_background !== 'undefined' ? s.show_bubble_background : true;
@@ -83,8 +85,9 @@
             '.nsa-fab-ms { background: #0084FF; }',
             '.nsa-fab-btn svg { width: 22px; height: 22px; fill: #fff; }',
             '.nsa-fab-btn img { width: 24px; height: 24px; object-fit: contain; border-radius: 50%; }',
-            '#nsa-fab-ai.nsa-fab-btn { background: ' + menuAiIconBgColor + '; border: none; box-shadow: none; border-radius: ' + radius + '; display: flex; justify-content: center; align-items: center; width: ' + menuAiIconSize + 'px; height: ' + menuAiIconSize + 'px; }',
-            '#nsa-fab-ai.nsa-fab-btn img { width: ' + menuAiIconSize + 'px; height: ' + menuAiIconSize + 'px; object-fit: contain; border-radius: 0; }',
+            '#nsa-fab-ai.nsa-fab-btn { background: ' + menuAiIconBgColor + '; border: none; box-shadow: none; border-radius: ' + menuAiIconRadius + '; display: flex; justify-content: center; align-items: center; width: ' + menuAiIconSize + 'px; height: ' + menuAiIconSize + 'px; overflow: hidden; }',
+            '#nsa-fab-ai.nsa-fab-btn img { width: ' + menuAiIconSize + 'px; height: ' + menuAiIconSize + 'px; object-fit: contain; border-radius: ' + menuAiIconRadius + '; }',
+
 
             '#nsa-win { width: 380px; height: 620px; max-width: calc(100vw - 40px); max-height: calc(100vh - 100px); background: #fff; border-radius: 24px; box-shadow: 0 24px 80px rgba(0,0,0,0.2); margin-' + (isBottom ? 'bottom' : 'top') + ': 16px; display: none; flex-direction: column; overflow: hidden; border: 1px solid rgba(0,0,0,0.08); animation: nsa-in 0.4s cubic-bezier(0.16, 1, 0.3, 1); }',
             '@keyframes nsa-in { from { opacity: 0; transform: translateY(' + (isBottom ? '20' : '-20') + 'px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }',
