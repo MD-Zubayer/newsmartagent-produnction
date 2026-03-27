@@ -351,6 +351,10 @@ FB_APP_ID = os.environ.get('FB_APP_ID')
 FB_APP_SECRET = os.environ.get('FB_APP_SECRET')
 FB_REDIRECT_URI = os.environ.get('FB_REDIRECT_URI')
 
+YOUTUBE_CLIENT_ID = os.environ.get('YOUTUBE_CLIENT_ID')
+YOUTUBE_CLIENT_SECRET = os.environ.get('YOUTUBE_CLIENT_SECRET')
+YOUTUBE_REDIRECT_URI = os.environ.get('YOUTUBE_REDIRECT_URI')
+
 
 
 CELERY_BROKER_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
