@@ -37,6 +37,7 @@ import logging.config
 from django.conf import settings
 from django.utils import timezone
 from aiAgent.cache.client import get_redis_client
+from . import youtube_tasks
 
 @after_setup_logger.connect
 @after_setup_task_logger.connect
