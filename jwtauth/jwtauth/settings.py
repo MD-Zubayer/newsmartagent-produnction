@@ -354,6 +354,7 @@ FB_REDIRECT_URI = os.environ.get('FB_REDIRECT_URI')
 YOUTUBE_CLIENT_ID = os.environ.get('YOUTUBE_CLIENT_ID')
 YOUTUBE_CLIENT_SECRET = os.environ.get('YOUTUBE_CLIENT_SECRET')
 YOUTUBE_REDIRECT_URI = os.environ.get('YOUTUBE_REDIRECT_URI')
+N8N_YOUTUBE_WEBHOOK_URL = os.environ.get('N8N_YOUTUBE_WEBHOOK_URL')
 
 
 
@@ -400,6 +401,10 @@ CELERY_BEAT_SCHEDULE = {
     'delete-unverified-accounts': {
         'task': 'users.delete_unverified_accounts',
         'schedule': crontab(minute='*/10'),  # প্রতি ১০ মিনিটে ১ ঘণ্টা পুরনো unverifed user মুছে দেবে
+    },
+    'check-youtube-comments': {
+        'task': 'webhooks.youtube_tasks.check_youtube_comments',
+        'schedule': crontab(minute='*'),  # প্রতি ১ মিনিটে চেক করবে (টেস্টিংয়ের জন্য)
     },
 }
 
