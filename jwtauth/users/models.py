@@ -518,3 +518,19 @@ class GBPReviewLog(models.Model):
 
     def __str__(self):
         return f"Review by {self.reviewer_name} on {self.location.location_name}"
+
+class TikTokAccount(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='tiktok_accounts')
+    open_id = models.CharField(max_length=255, unique=True)
+    union_id = models.CharField(max_length=255, blank=True, null=True)
+    display_name = models.CharField(max_length=255, blank=True, null=True)
+    avatar_url = models.URLField(max_length=500, blank=True, null=True)
+    access_token = models.CharField(max_length=500)
+    refresh_token = models.CharField(max_length=500, blank=True, null=True)
+    token_expires_at = models.DateTimeField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.display_name or self.open_id} ({self.user.email})"

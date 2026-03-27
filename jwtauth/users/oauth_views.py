@@ -7,7 +7,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
-from .models import FacebookPage, YouTubeChannel, GoogleBusinessAccount, GoogleBusinessLocation
+from .models import FacebookPage, YouTubeChannel, GoogleBusinessAccount, GoogleBusinessLocation, TikTokAccount
 
 logger = logging.getLogger(__name__)
 
@@ -768,6 +768,166 @@ def get_connected_youtube_channels(request):
     ]
     return JsonResponse({"channels": data})
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def tiktok_login(request):
+    """
+    Redirects the user to TikTok's OAuth v2 page.
+    """
+    client_key = getattr(settings, 'TIKTOK_CLIENT_KEY', None)
+    redirect_uri = getattr(settings, 'TIKTOK_REDIRECT_URI', None)
+
+    if not client_key or not redirect_uri:
+        return JsonResponse({"error": "TikTok integration is not configured."}, status=500)
+
+    # Scopes: user.info.basic, video.list are common for Login Kit
+    scopes = "user.info.basic,video.list"
+    state = str(request.user.id)
+
+    auth_url = (
+        f"https://www.tiktok.com/v2/auth/authorize/?"
+        f"client_key={client_key}"
+        f"&scope={scopes}"
+        f"&response_type=code"
+        f"&redirect_uri={redirect_uri}"
+        f"&state={state}"
+    )
+    return redirect(auth_url)
+
+@api_view(['GET'])
+@permission_classes([])
+def tiktok_callback(request):
+    """
+    Handles the redirect back from TikTok.
+    Exchanges code for access token and fetches user profile.
+    """
+    code = request.GET.get("code")
+    user_id = request.GET.get("state")
+    error = request.GET.get("error")
+    error_msg = request.GET.get("error_description", "TikTok authentication failed.")
+
+    frontend_url = getattr(settings, 'NEXT_PUBLIC_BASE_URL', 'https://newsmartagent.com')
+
+    if error or not code:
+        return redirect(f"{frontend_url}/dashboard/connect?error=auth_failed&message={error_msg}")
+
+    client_key = getattr(settings, 'TIKTOK_CLIENT_KEY', None)
+    client_secret = getattr(settings, 'TIKTOK_CLIENT_SECRET', None)
+    redirect_uri = getattr(settings, 'TIKTOK_REDIRECT_URI', None)
+
+    # 1. Exchange code for access token
+    token_url = "https://open.tiktokapis.com/v2/oauth/token/"
+    token_data = {
+        'client_key': client_key,
+        'client_secret': client_secret,
+        'code': code,
+        'grant_type': 'authorization_code',
+        'redirect_uri': redirect_uri,
+    }
+    
+    headers = {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Cache-Control': 'no-cache'
+    }
+    
+    resp_raw = requests.post(token_url, data=token_data, headers=headers)
+    resp = resp_raw.json()
+    access_token = resp.get("access_token")
+    refresh_token = resp.get("refresh_token")
+    expires_in = resp.get("expires_in") # in seconds
+    open_id = resp.get("open_id")
+
+    if not access_token or not open_id:
+        logger.error(f"TikTok Token Error: {resp}")
+        return JsonResponse({"error": "Failed to get TikTok access token.", "details": resp}, status=400)
+
+    token_expires_at = timezone.now() + timedelta(seconds=expires_in) if expires_in else None
+
+    # 2. Fetch User Profile Info
+    user_info_url = "https://open.tiktokapis.com/v2/user/info/?fields=open_id,union_id,avatar_url,display_name"
+    user_headers = {
+        "Authorization": f"Bearer {access_token}"
+    }
+    
+    user_resp_raw = requests.get(user_info_url, headers=user_headers)
+    user_resp = user_resp_raw.json()
+    user_data = user_resp.get("data", {}).get("user", {})
+    
+    if not user_data:
+        logger.error(f"TikTok User Info Error: {user_resp}")
+        # fallback to using open_id if user info fails
+        display_name = "TikTok User"
+        avatar_url = None
+        union_id = None
+    else:
+        display_name = user_data.get("display_name")
+        avatar_url = user_data.get("avatar_url")
+        union_id = user_data.get("union_id")
+
+    # 3. Save to database
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    try:
+        user_obj = User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({"error": "Invalid user state."}, status=400)
+
+    tiktok_acc, created = TikTokAccount.objects.update_or_create(
+        open_id=open_id,
+        defaults={
+            'user': user_obj,
+            'union_id': union_id,
+            'display_name': display_name,
+            'avatar_url': avatar_url,
+            'access_token': access_token,
+            'refresh_token': refresh_token,
+            'token_expires_at': token_expires_at,
+            'is_active': True
+        }
+    )
+
+    # 4. Success Redirect/Script
+    saved_acc = {
+        "display_name": display_name,
+        "open_id": open_id,
+        "avatar_url": avatar_url
+    }
+    
+    script = f'''
+    <script>
+        if (window.opener) {{
+            window.opener.postMessage({{
+                status: "success", 
+                platform: "tiktok", 
+                account: {json.dumps(saved_acc)}
+            }}, "{frontend_url}");
+            window.close();
+        }} else {{
+            window.location.href = "{frontend_url}/dashboard/connect?success=tiktok_auth";
+        }}
+    </script>
+    '''
+    from django.http import HttpResponse
+    import json
+    return HttpResponse(script)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_connected_tiktok_accounts(request):
+    """
+    Returns a list of connected TikTok accounts for the user.
+    """
+    accounts = TikTokAccount.objects.filter(user=request.user, is_active=True)
+    data = [
+        {
+            "id": acc.open_id,
+            "name": acc.display_name,
+            "avatar": acc.avatar_url,
+            "connected_at": acc.created_at
+        }
+        for acc in accounts
+    ]
+    return JsonResponse({"accounts": data})
 
 
 @api_view(['POST'])

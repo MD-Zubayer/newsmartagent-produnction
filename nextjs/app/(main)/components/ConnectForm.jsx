@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import axiosInstance from "@/lib/api";
 import {
-  FaFacebook, FaWhatsapp, FaInstagram, FaTelegram, FaYoutube,
+  FaFacebook, FaWhatsapp, FaInstagram, FaTelegram, FaYoutube, FaTiktok,
   FaArrowLeft, FaLink, FaCopy, FaCode, FaRobot, FaShieldAlt, FaExternalLinkAlt,
   FaCheckCircle, FaExclamationCircle
 } from "react-icons/fa";
@@ -41,6 +41,10 @@ export default function IntegrationManager() {
           setGbpSessionId(event.data.sessionId);
           import("react-hot-toast").then(({ toast }) => toast.success("Select a location to connect"));
         }
+      } else if (event.data?.status === "success" && event.data?.platform === "tiktok") {
+        import("react-hot-toast").then(({ toast }) => toast.success(`TikTok account ${event.data.account.display_name} connected!`));
+        // Refresh TikTok accounts if we are on the tiktok platform view
+        axiosInstance.get("/tiktok/accounts/").then(res => setConnectedPages(res.data.accounts || []));
       }
     };
 
@@ -166,6 +170,14 @@ export default function IntegrationManager() {
         })
         .catch(err => console.error("Error fetching GBP accounts", err))
         .finally(() => setIsLoadingPages(false));
+    } else if (selectedPlatform?.id === 'tiktok') {
+      setIsLoadingPages(true);
+      axiosInstance.get("/tiktok/accounts/")
+        .then(res => {
+          setConnectedPages(res.data.accounts || []);
+        })
+        .catch(err => console.error("Error fetching TikTok accounts", err))
+        .finally(() => setIsLoadingPages(false));
     }
   }, [selectedPlatform]);
 
@@ -250,6 +262,16 @@ export default function IntegrationManager() {
       devLink: "https://business.google.com/",
       btnText: "Business Profile",
       description: "Manage and automate your Google Business Profile reviews and queries."
+    },
+    tiktok: {
+      id: "tiktok",
+      name: "TikTok",
+      icon: <FaTiktok />,
+      color: "from-slate-900 via-slate-800 to-black",
+      iconBg: "bg-black",
+      devLink: "https://developers.tiktok.com/",
+      btnText: "TikTok Developers",
+      description: "Automate your TikTok engagement and manage your profile interactions."
     }
   };
 
@@ -841,6 +863,92 @@ export default function IntegrationManager() {
                         <h4 className="text-2xl md:text-3xl font-black text-slate-900 uppercase tracking-tighter italic">No Locations Connected</h4>
                         <p className="text-base md:text-lg text-slate-400 font-medium max-w-[280px] md:max-w-sm mx-auto opacity-70 leading-relaxed">
                           Click &quot;Connect Google Business&quot; to authorize our AI to manage your business reviews.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {/* Platform Specific: TikTok */}
+            {selectedPlatform.id === "tiktok" && (
+              <div className="pt-16 md:pt-24 border-t border-slate-100 space-y-12 md:space-y-16 animate-in slide-in-from-bottom-8 duration-1000">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 lg:gap-12 text-center lg:text-left">
+                  <div className="space-y-2">
+                    <h3 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter italic uppercase">
+                      TikTok Profiles
+                    </h3>
+                    <p className="text-[10px] md:text-xs text-black font-black uppercase tracking-[0.3em] md:tracking-[0.4em] opacity-70 flex items-center gap-2 justify-center lg:justify-start">
+                      <span className="w-1.5 h-1.5 bg-black rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)]"></span> TikTok Login Kit v2
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://newsmartagent.com/api";
+                      const width = 600, height = 700;
+                      const left = (window.innerWidth - width) / 2;
+                      const top = (window.innerHeight - height) / 2;
+                      window.open(
+                        `${apiUrl}/tiktok/login/`,
+                        "TikTok Login",
+                        `width=${width},height=${height},top=${top},left=${left}`
+                      );
+                    }}
+                    className="group relative flex items-center justify-center gap-4 md:gap-5 bg-black text-white px-6 md:px-10 py-4 md:py-6 rounded-[1.5rem] md:rounded-[2rem] text-[10px] md:text-[11px] font-black uppercase tracking-[0.15em] md:tracking-[0.2em] hover:bg-slate-900 transition-all shadow-[0_20px_40px_-10px_rgba(0,0,0,0.3)] active:scale-95 overflow-hidden w-full lg:w-auto"
+                  >
+                    <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity"></div>
+                    <FaTiktok className="text-xl md:text-2xl group-hover:rotate-12 transition-transform duration-500" />
+                    Connect TikTok
+                  </button>
+                </div>
+
+                <div className="bg-slate-50/50 rounded-[2.5rem] md:rounded-[4rem] p-6 md:p-16 border border-slate-100 relative overflow-hidden group/list">
+                  <div className="absolute inset-0 bg-white/20 backdrop-blur-3xl pointer-events-none"></div>
+
+                  {isLoadingPages ? (
+                    <div className="flex flex-col items-center justify-center py-20 md:py-28 gap-6 md:gap-8 relative z-10">
+                      <div className="relative">
+                        <div className="w-16 h-16 md:w-20 md:h-20 border-2 border-slate-200 border-t-black rounded-full animate-spin"></div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-8 h-8 md:w-10 md:h-10 bg-slate-50 rounded-[1.2rem] md:rounded-2xl animate-pulse"></div>
+                        </div>
+                      </div>
+                      <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-[0.4em] md:tracking-[0.5em] animate-pulse">Fetching Profiles...</p>
+                    </div>
+                  ) : connectedPages.length > 0 ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 relative z-10 w-full overflow-hidden">
+                      {connectedPages.map(acc => (
+                        <div key={acc.id} className="flex items-center justify-between bg-white p-5 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] shadow-[0_16px_32px_-12px_rgba(0,0,0,0.03)] border border-slate-50 hover:border-slate-200 hover:shadow-[0_32px_64px_-16px_rgba(0,0,0,0.12)] transition-all duration-700 group/page hover:-translate-y-1 min-w-0">
+                          <div className="flex items-center gap-3 md:gap-6 min-w-0">
+                            <div className="w-12 h-12 md:w-16 md:h-16 shrink-0 bg-gradient-to-br from-slate-50 to-indigo-50 rounded-[1.2rem] md:rounded-[1.5rem] flex items-center justify-center text-black shadow-inner group-hover/page:scale-110 transition-transform duration-700">
+                                {acc.avatar ? (
+                                  <img src={acc.avatar} alt={acc.name} className="w-full h-full object-cover rounded-[1.2rem] md:rounded-[1.5rem]" />
+                                ) : (
+                                  <FaTiktok className="text-2xl md:text-3xl" />
+                                )}
+                            </div>
+                            <div className="space-y-1 min-w-0">
+                              <p className="font-black text-base md:text-xl text-slate-900 tracking-tight italic truncate text-left">{acc.name || 'TikTok User'}</p>
+                              <p className="text-[9px] text-slate-400 font-bold uppercase truncate">ID: {acc.id}</p>
+                              <div className="flex items-center gap-1.5 px-2 md:px-3 py-1 bg-emerald-50 rounded-full border border-emerald-100 w-fit">
+                                <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
+                                <span className="text-[8px] md:text-[9px] font-black text-emerald-600 uppercase tracking-widest truncate">Synced</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-20 md:py-28 px-6 md:px-12 space-y-8 md:space-y-10 relative z-10">
+                      <div className="w-24 h-24 md:w-32 md:h-32 bg-white rounded-[2rem] md:rounded-[2.5rem] shadow-lg md:shadow-xl flex items-center justify-center mx-auto border border-slate-50 hover:scale-110 transition-transform duration-700">
+                        <FaTiktok size={48} className="md:w-16 md:h-16 opacity-10 text-black" />
+                      </div>
+                      <div className="space-y-3 md:space-y-4">
+                        <h4 className="text-2xl md:text-3xl font-black text-slate-900 uppercase tracking-tighter italic">No TikTok Connected</h4>
+                        <p className="text-base md:text-lg text-slate-400 font-medium max-w-[280px] md:max-w-sm mx-auto opacity-70 leading-relaxed">
+                          Click &quot;Connect TikTok&quot; to authorize our AI to manage your TikTok engagement.
                         </p>
                       </div>
                     </div>

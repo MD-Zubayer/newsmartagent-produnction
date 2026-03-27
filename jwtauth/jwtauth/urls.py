@@ -72,6 +72,10 @@ urlpatterns = [
     path('api/gbp/confirm/', oauth_views.confirm_gbp_connection, name='gbp_confirm'),
     path('api/gbp/session-locations/', oauth_views.get_gbp_session_locations, name='gbp_id_session_locations'),
     path('api/gbp/accounts/', oauth_views.get_connected_gbp_accounts, name='gbp_accounts'),
+    # TikTok Integration Endpoints
+    path('api/tiktok/login/', oauth_views.tiktok_login, name='tiktok_login'),
+    path('api/tiktok/callback/', oauth_views.tiktok_callback, name='tiktok_callback'),
+    path('api/tiktok/accounts/', oauth_views.get_connected_tiktok_accounts, name='tiktok_accounts'),
 
     path('api/facebook/data-deletion/', oauth_views.facebook_data_deletion, name='facebook_data_deletion'),
 
