@@ -6,7 +6,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
-from .models import FacebookPage, YouTubeChannel
+from .models import FacebookPage, YouTubeChannel, GoogleBusinessAccount, GoogleBusinessLocation
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
