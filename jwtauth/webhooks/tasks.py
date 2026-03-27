@@ -801,8 +801,8 @@ def process_ai_reply_task(self, data):
                 'Use "agent_specific" for information extracted from [KNOWLEDGE BASE DATA], business details like products/prices, or IF ASKED ABOUT YOUR IDENTITY (who you are, what you do). '
                 'Use "global" ONLY for general world facts, universal greetings (Salam/Hi), or general knowledge. NEVER use "global" for identity, personal info, or specific business details.'
                 '\nCRITICAL: If you cannot answer a question based on provided data, DO NOT trigger human handoff. Instead, politely ask clarifying questions to the user.'
-                f'\nHowever, ONLY if the user EXPLICITLY and CLEARLY asks to talk to a human, admin, representative, or support team via text, you MUST set "human_handoff": true.'
-                f'\nWARNING: Your identity/name is "{agent_config.name}". Do NOT trigger human_handoff just because the message contains your name, or words like "agent" or "support" without an explicit request to speak to a live person.'
+                '\nHowever, ONLY if the user EXPLICITLY and CLEARLY asks to talk to a human, admin, representative, or support team via text, you MUST set "human_handoff": true.'
+                '\nWARNING: Do NOT trigger human_handoff just because the message contains the word "agent", "support", or the name of a bot (e.g., "newsmartagent?"). It must be an explicit intent to speak to a live person.'
                 '\nSTRICT: No markdown blocks, no preamble, and ensure JSON syntax is perfect.'
             )
             system_instruction = system_instruction + classify_instruction
@@ -829,20 +829,9 @@ def process_ai_reply_task(self, data):
                         json_parse_success = True
                         
                         # --- Human Handoff Check ---
-                        raw_handoff = parsed.get('human_handoff')
-                        if raw_handoff is True or str(raw_handoff).lower() == 'true':
-                            # Safeguard: LLMs might hallucinate this flag if they see their own name containing trigger words.
-                            # We dynamically check against the specific agent's name.
-                            t_lower = text.lower().strip('?.,!/ "\'-_ \t')
-                            agent_name = agent_config.name.lower().strip()
-                            
-                            # Ignore if the user just typed the bot's exact name
-                            if t_lower == agent_name or t_lower.replace(" ", "") == agent_name.replace(" ", ""):
-                                is_handoff = False
-                                logger.warning(f"⚠️ Ignored hallucinated human_handoff=true for exact agent name match: {text}")
-                            else:
-                                is_handoff = True
-                                is_json_handoff_override = True
+                        if parsed.get('human_handoff') is True or str(parsed.get('human_handoff')).lower() == 'true':
+                            is_handoff = True
+                            is_json_handoff_override = True
                         
                         logger.info(f"📋 AI cache_type classified as: '{cache_type}' for '{text[:30]}'")
                     else:
