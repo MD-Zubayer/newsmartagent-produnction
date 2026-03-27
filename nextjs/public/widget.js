@@ -81,12 +81,11 @@
             '.nsa-fab-btn:hover { transform: translateY(-3px) scale(1.05); box-shadow: 0 8px 25px rgba(0,0,0,0.15); }',
             '.nsa-fab-wa { background: #25D366; }',
             '.nsa-fab-ms { background: #0084FF; }',
-            '.nsa-fab-ai { background: ' + menuAiIconBgColor + '; border: none; box-shadow: none; border-radius: ' + radius + '; display: flex; justify-content: center; align-items: center; width: ' + menuAiIconSize + 'px; height: ' + menuAiIconSize + 'px; }',
-            '.nsa-fab-ai img { width: ' + menuAiIconSize + 'px; height: ' + menuAiIconSize + 'px; object-fit: contain; }',
-
-
             '.nsa-fab-btn svg { width: 22px; height: 22px; fill: #fff; }',
             '.nsa-fab-btn img { width: 24px; height: 24px; object-fit: contain; border-radius: 50%; }',
+            '#nsa-fab-ai.nsa-fab-btn { background: ' + menuAiIconBgColor + '; border: none; box-shadow: none; border-radius: ' + radius + '; display: flex; justify-content: center; align-items: center; width: ' + menuAiIconSize + 'px; height: ' + menuAiIconSize + 'px; }',
+            '#nsa-fab-ai.nsa-fab-btn img { width: ' + menuAiIconSize + 'px; height: ' + menuAiIconSize + 'px; object-fit: contain; border-radius: 0; }',
+
             '#nsa-win { width: 380px; height: 620px; max-width: calc(100vw - 40px); max-height: calc(100vh - 100px); background: #fff; border-radius: 24px; box-shadow: 0 24px 80px rgba(0,0,0,0.2); margin-' + (isBottom ? 'bottom' : 'top') + ': 16px; display: none; flex-direction: column; overflow: hidden; border: 1px solid rgba(0,0,0,0.08); animation: nsa-in 0.4s cubic-bezier(0.16, 1, 0.3, 1); }',
             '@keyframes nsa-in { from { opacity: 0; transform: translateY(' + (isBottom ? '20' : '-20') + 'px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }',
             '.nsa-hdr { padding: 20px 24px; background: linear-gradient(135deg, ' + color + ' 0%, ' + color + 'dd 100%); color: #fff; display: flex; align-items: center; gap: 14px; position: relative; overflow: hidden; }',
