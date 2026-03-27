@@ -97,7 +97,7 @@
             '.nsa-hdr-img img { width: 36px; height: 36px; object-fit: contain; }',
             '.nsa-hdr h3 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.2px; }',
             '.nsa-hdr p { margin: 2px 0 0; font-size: 11px; opacity: 0.85; font-weight: 500; }',
-            '.nsa-controls { display: flex; padding: 10px 16px; background: #fff; border-bottom: 1px solid #f1f5f9; gap: 8px; }',
+            '.nsa-controls { display: flex; padding: 4px 16px 16px; background: #fff; gap: 8px; }',
             '.nsa-ctrl-btn { flex: 1; padding: 8px 6px; border-radius: 10px; border: 1px solid #e2e8f0; background: #f8fafc; color: #64748b; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 5px; }',
             '.nsa-ctrl-btn:hover { background: #f1f5f9; border-color: ' + color + '; color: ' + color + '; }',
             '.nsa-ctrl-btn.active { background: ' + color + '; color: #fff; border-color: ' + color + '; box-shadow: 0 4px 12px ' + color + '44; }',
@@ -157,7 +157,6 @@
             '    <div class="nsa-hdr-img"><img src="' + iconUrl + '" alt="icon" onerror="this.style.display=\'none\'"></div>',
             '    <div><h3>' + esc(s.header_title) + '</h3><p>' + esc(s.header_subtitle) + '</p></div>',
             '  </div>',
-            '  <div class="nsa-controls" id="nsa-controls" style="display:none;"></div>',
             '  <div class="nsa-body" id="nsa-body">',
             '  </div>',
             '  <div class="nsa-foot-inp">',
@@ -168,6 +167,7 @@
             '      </button>',
             '    </div>',
             '  </div>',
+            '  <div class="nsa-controls" id="nsa-controls" style="display:none;"></div>',
             '  <div class="nsa-footer"><a href="https://newsmartagent.com" target="_blank">Powered by New Smart Agent</a></div>',
             '</div>'
         ];

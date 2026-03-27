@@ -44,9 +44,7 @@ function Footer() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 pb-20">
           
-          {/* Brand Info */}
-          <div className="lg:col-span-4 space-y-10">
-            <div className="space-y-6">
+          {/* Brand Info */}           <div className="space-y-6">
               <Link href="/" className="inline-block">
                 <h2 className="text-4xl font-black tracking-tighter">
                   New <span className="text-gradient">Smart</span> Agent
