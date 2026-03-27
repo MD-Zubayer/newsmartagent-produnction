@@ -282,6 +282,23 @@ def ai_webhook(request):
                     button_id = "HUMAN_HELP"
                 elif text_cmd == "2":
                     button_id = "STOP_AI_REPLY"
+        # Word-based fallback (strict keywords with length guard to avoid false triggers)
+        if not button_id and text_cmd:
+            t = text_cmd.lower()
+            keyword_map = {
+                "HUMAN_HELP": ["human", "help", "human help", "human assistant"],
+                "RESOLVE_HUMAN": ["resolve", "done", "close human"],
+                "STOP_AI_REPLY": ["stop", "pause", "stop ai", "pause ai", "ai off"],
+                "ON_AI_REPLY": ["on ai", "resume ai", "ai on", "resume"],
+            }
+            for action, kws in keyword_map.items():
+                for kw in kws:
+                    max_extra = 4  # allow up to +4 chars
+                    if t == kw or (t.startswith(kw) and len(t) <= len(kw) + max_extra):
+                        button_id = action
+                        break
+                if button_id:
+                    break
 
         # Sometimes the button text itself is the action if poorly mapped
         if not button_id and text in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN"]:
