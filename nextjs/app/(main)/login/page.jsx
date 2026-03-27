@@ -76,7 +76,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md bg-white p-10 rounded-3xl shadow-xl">
         <div className="text-center mb-10">
           <h1 className="text-3xl font-bold text-gray-900">
-            {is2FARequired ? "Two-Factor Auth" : "Welcome Back to Login!"}
+            {is2FARequired ? "Two-Factor Auth" : "Welcome Back to Login Page"}
           </h1>
           <p className="text-gray-500 mt-2">
             {is2FARequired
