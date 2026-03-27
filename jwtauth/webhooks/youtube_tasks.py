@@ -94,8 +94,8 @@ def process_channel_comments(channel):
             agent, 
             sender_id=author_name, 
             text=comment_text, 
-            extra_instr=f"User is commenting on your YouTube video (ID: {video_id}).", 
-            sheet_ctx="", 
+            extra_instruction=f"User is commenting on your YouTube video (ID: {video_id}).", 
+            sheet_context="", 
             platform='youtube'
         )
         
