@@ -49,7 +49,7 @@ Google Data (via Google APIs): To provide our AI automation services, we request
       fullText: `You can revoke NSA's access to your Google data anytime:
 - Visit Google Account > Security > Third-party access > find "NewSmartAgent" (or NSA) > Remove access.
 - Once removed, our systems immediately lose access tokens and cannot read or act on your Google data.
-- For a full account/data wipe (including Google data we have processed), email support@newsmartagent.com; we complete deletions within 30 days.`
+- For a full account/data wipe (including Google data we have processed), email newsmartagentbd@gmail.com; we complete deletions within 30 days.`
     },
     {
       id: "ai-processing",
