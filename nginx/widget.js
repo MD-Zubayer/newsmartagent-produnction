@@ -299,7 +299,6 @@
                 hb.id = 'nsa-btn-human-toggle';
                 hb.title = "Toggle Human Help";
                 controlsWrap.appendChild(hb);
-                updateHumanUI();
                 hb.onclick = toggleHuman;
             }
             if (enableAI) {
@@ -308,9 +307,20 @@
                 ab.id = 'nsa-btn-ai-toggle';
                 ab.title = "Toggle AI Response";
                 controlsWrap.appendChild(ab);
-                updateAIUI();
                 ab.onclick = toggleAI;
             }
+            syncControlState();
+        }
+
+        async function syncControlState() {
+            try {
+                var r = await fetch(apiBase + '/status/' + widgetKey + '/?sender_id=' + senderId);
+                var d = await r.json();
+                isHumanActive = !!d.is_human_active;
+                isAIActive    = !!d.is_ai_active;
+                updateHumanUI();
+                updateAIUI();
+            } catch(e) {}
         }
 
         function updateHumanUI() {
@@ -337,37 +347,50 @@
             }
         }
 
-        function toggleHuman() {
-            isHumanActive = !isHumanActive;
-            var msg = isHumanActive ? "[SYSTEM: HUMAN_REQUEST]" : "[SYSTEM: HUMAN_RESOLVED]";
-            var userMsg = isHumanActive ? "I need human help." : "Issue resolved. Back to AI.";
+        async function toggleHuman() {
+            var action = isHumanActive ? 'human_resolved' : 'human_request';
+            var userMsg = !isHumanActive ? "I need human help." : "Issue resolved. Back to AI.";
             
             addMsg(userMsg, 'user');
-            fetch(apiBase + '/chat/' + widgetKey + '/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: msg, sender_id: senderId })
-            }).catch(function(){});
-
-            if (isHumanActive) {
-                setTimeout(function() { addMsg("A human agent has been notified.", 'ai'); }, 800);
-            }
-            updateHumanUI();
-        }
-
-        function toggleAI() {
-            isAIActive = !isAIActive;
-            var msg = isAIActive ? "[SYSTEM: START_AI]" : "[SYSTEM: STOP_AI]";
-            var feedback = isAIActive ? "AI responses enabled." : "AI responses paused.";
             
-            addMsg(feedback, 'ai', true);
-            fetch(apiBase + '/chat/' + widgetKey + '/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: msg, sender_id: senderId })
-            }).catch(function(){});
-            updateAIUI();
+            try {
+                var r = await fetch(apiBase + '/control/' + widgetKey + '/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: action, sender_id: senderId })
+                });
+                var d = await r.json();
+                if (d.status === 'ok') {
+                    isHumanActive = !!d.is_human_active;
+                    if (typeof d.is_ai_active !== 'undefined') isAIActive = !!d.is_ai_active;
+                    if (isHumanActive) {
+                        setTimeout(function() { addMsg("A human agent has been notified.", 'ai'); }, 800);
+                    }
+                    updateHumanUI();
+                    updateAIUI();
+                }
+            } catch(e) {}
         }
+
+        async function toggleAI() {
+            var action = isAIActive ? 'stop_ai' : 'start_ai';
+            var feedback = !isAIActive ? "AI responses enabled." : "AI responses paused.";
+            
+            try {
+                var r = await fetch(apiBase + '/control/' + widgetKey + '/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: action, sender_id: senderId })
+                });
+                var d = await r.json();
+                if (d.status === 'ok') {
+                    isAIActive = !!d.is_ai_active;
+                    addMsg(feedback, 'ai', true);
+                    updateAIUI();
+                }
+            } catch(e) {}
+        }
+
     }
 
 

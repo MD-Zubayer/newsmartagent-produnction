@@ -3,7 +3,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from aiAgent.views import AgentAIViewSet, TokenUsageAnalyticsView, dashboard_chat_view, RankingAPIView, UserAvailableModelsView, AgentMetricsAPIView, DeleteRankingDataAPIView, UpdateCacheScopeAPIView, RequestSpecialAgentAPIView, ClearGlobalCacheAPIView, ToggleSharingAPIView, VisitorSubscribeView, VisitorTrackView, ConnectTelegramBotView
 from aiAgent.contact_views import ContactListView, ToggleAutoReplyView, ContactMessageHistoryView, ContactDetailView, UnifiedReplyView, ResolveHumanHandoffView, HumanHelpView, WhatsAppButtonClickView
-from aiAgent.widget_views import WidgetConfigView, WidgetChatView, WidgetIconUploadView
+from aiAgent.widget_views import WidgetConfigView, WidgetChatView, WidgetIconUploadView, WidgetStatusView, WidgetControlView
 from chat.views import facebook_data_deletion_callback
 router = DefaultRouter()
 router.register(r'agents', AgentAIViewSet, basename='agent-ai')
@@ -34,6 +34,8 @@ urlpatterns = [
     # Web Widget Public API
     path('widget/config/<str:widget_key>/', WidgetConfigView.as_view(), name='widget-config'),
     path('widget/chat/<str:widget_key>/', WidgetChatView.as_view(), name='widget-chat'),
+    path('widget/status/<str:widget_key>/', WidgetStatusView.as_view(), name='widget-status'),
+    path('widget/control/<str:widget_key>/', WidgetControlView.as_view(), name='widget-control'),
     # Widget Icon Upload (authenticated)
     path('widget/upload-icon/<int:agent_id>/', WidgetIconUploadView.as_view(), name='widget-icon-upload'),
     

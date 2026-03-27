@@ -158,3 +158,75 @@ class WidgetIconUploadView(APIView):
         except Exception as e:
             logger.error(f"Error uploading widget icon: {e}", exc_info=True)
             return Response({"error": "Failed to upload icon."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class WidgetStatusView(APIView):
+    """
+    Publicly accessible endpoint to get the current human/AI state for a sender.
+    Widget polls this on load to sync button states with server.
+    """
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request, widget_key):
+        from aiAgent.models import Contact
+        agent = get_object_or_404(AgentAI, widget_key=widget_key, platform='web_widget', is_active=True)
+        sender_id = request.query_params.get('sender_id')
+        if not sender_id:
+            return Response({"is_human_active": False, "is_ai_active": True})
+
+        contact = Contact.objects.filter(agent=agent, identifier=sender_id).first()
+        if not contact:
+            return Response({"is_human_active": False, "is_ai_active": True})
+
+        return Response({
+            "is_human_active": contact.is_human_needed,
+            "is_ai_active": contact.is_auto_reply_enabled,
+        })
+
+
+class WidgetControlView(APIView):
+    """
+    Publicly accessible endpoint for the widget to toggle human/AI mode.
+    """
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, widget_key):
+        from aiAgent.models import Contact
+        agent = get_object_or_404(AgentAI, widget_key=widget_key, platform='web_widget', is_active=True)
+        sender_id = request.data.get('sender_id')
+        action = request.data.get('action')  # 'human_request', 'human_resolved', 'stop_ai', 'start_ai'
+
+        if not sender_id or not action:
+            return Response({"error": "sender_id and action are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        contact, _ = Contact.objects.get_or_create(
+            agent=agent,
+            identifier=sender_id,
+            defaults={'platform': 'web_widget'}
+        )
+
+        if action == 'human_request':
+            contact.is_human_needed = True
+            contact.is_auto_reply_enabled = False
+            contact.save()
+            return Response({"status": "ok", "is_human_active": True, "is_ai_active": False})
+
+        elif action == 'human_resolved':
+            contact.is_human_needed = False
+            contact.is_auto_reply_enabled = True
+            contact.save()
+            return Response({"status": "ok", "is_human_active": False, "is_ai_active": True})
+
+        elif action == 'stop_ai':
+            contact.is_auto_reply_enabled = False
+            contact.save()
+            return Response({"status": "ok", "is_ai_active": False})
+
+        elif action == 'start_ai':
+            contact.is_auto_reply_enabled = True
+            contact.save()
+            return Response({"status": "ok", "is_ai_active": True})
+
+        return Response({"error": "Invalid action"}, status=status.HTTP_400_BAD_REQUEST)
