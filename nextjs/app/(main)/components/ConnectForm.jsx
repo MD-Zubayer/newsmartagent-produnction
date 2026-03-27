@@ -29,6 +29,7 @@ export default function IntegrationManager() {
       // Security: Check origin if needed, but here we check status and platform
       if (event.data?.status === "select_channel" && event.data?.platform === "youtube") {
         console.log("ConnectForm: YouTube selection triggered", event.data.channels);
+        alert("YouTube connected! Please select your channel from the list."); // Added visible alert for debug
         setStagedYoutubeChannels(event.data.channels || []);
         setYoutubeSessionId(event.data.sessionId);
         import("react-hot-toast").then(({ toast }) => toast.success("Select a channel to connect"));
@@ -55,6 +56,9 @@ export default function IntegrationManager() {
       // Clear selection state
       setStagedYoutubeChannels([]);
       setYoutubeSessionId(null);
+      
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
     } catch (err) {
       console.error("Error confirming YouTube connection", err);
       const errorMsg = err.response?.data?.error || "Failed to connect channel";
@@ -64,6 +68,29 @@ export default function IntegrationManager() {
     }
   };
 
+  const fetchSessionChannels = async (sessionId) => {
+    try {
+      console.log("ConnectForm: Fetching session channels for", sessionId);
+      const res = await axiosInstance.get(`/youtube/session-channels/?sessionId=${sessionId}`);
+      if (res.data.status === "success") {
+        setStagedYoutubeChannels(res.data.channels || []);
+        setYoutubeSessionId(res.data.sessionId);
+        import("react-hot-toast").then(({ toast }) => toast.success("Channels recovered from session"));
+      }
+    } catch (err) {
+      console.error("Error fetching session channels", err);
+    }
+  };
+
+  useEffect(() => {
+    // Fail-safe: Check URL for sessionId on mount and URL change
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get("sessionId");
+    if (sessionId && !youtubeSessionId) {
+      console.log("ConnectForm: Found sessionId in URL", sessionId);
+      fetchSessionChannels(sessionId);
+    }
+  }, [youtubeSessionId]);
   useEffect(() => {
     if (selectedPlatform?.id === 'facebook' || selectedPlatform?.id === 'instagram') {
       setIsLoadingPages(true);

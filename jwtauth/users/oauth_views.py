@@ -395,6 +395,10 @@ def youtube_callback(request):
             "thumbnail": snippet.get("thumbnails", {}).get("default", {}).get("url")
         })
 
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"YouTube Callback success for session {session_id}. Channels found: {len(display_channels)}")
+
     script = f'''
     <script>
         console.log("YouTube Callback: Script loaded");
@@ -402,28 +406,82 @@ def youtube_callback(request):
         const sessionId = "{session_id}";
         const targetOrigin = "{frontend_url}";
         
+        let messageSent = false;
+        
         if (window.opener) {{
-            console.log("YouTube Callback: Sending postMessage to opener", targetOrigin);
-            window.opener.postMessage({{
-                status: "select_channel", 
-                platform: "youtube", 
-                channels: channels,
-                sessionId: sessionId
-            }}, "*"); // Using * temporarily to fix origin mismatch issues
+            console.log("YouTube Callback: Sending postMessage to opener");
+            try {{
+                window.opener.postMessage({{
+                    status: "select_channel", 
+                    platform: "youtube", 
+                    channels: channels,
+                    sessionId: sessionId
+                }}, "*"); 
+                messageSent = true;
+            }} catch(e) {{
+                console.error("PostMessage failed", e);
+            }}
             
-            // Give it a tiny bit of time before closing to ensure message is sent
+            // If message was sent, wait a bit then close. 
+            // If it fails or we want a fail-safe, redirect the opener instead.
             setTimeout(() => {{
-                console.log("YouTube Callback: Closing popup");
+                if (window.opener && !window.opener.closed) {{
+                     // Fail-safe: if the parent hasn't reacted, redirect it
+                     // window.opener.location.href = "{frontend_url}/dashboard/connect?success=yt_auth&sessionId={session_id}";
+                }}
                 window.close();
-            }}, 500);
+            }}, 1000);
         }} else {{
-            console.log("YouTube Callback: No opener found, redirecting");
+            console.log("YouTube Callback: No opener found, redirecting main window");
             window.location.href = "{frontend_url}/dashboard/connect?success=yt_auth&sessionId={session_id}";
         }}
     </script>
+    <div style="font-family: sans-serif; text-align: center; margin-top: 50px;">
+        <h2>Authentication Successful</h2>
+        <p>You can close this window if it doesn't close automatically.</p>
+        <p><a href="{frontend_url}/dashboard/connect?success=yt_auth&sessionId={session_id}">Click here to return to dashboard</a></p>
+    </div>
     '''
     from django.http import HttpResponse
     return HttpResponse(script)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_youtube_session_channels(request):
+    """
+    Recovers the YouTube channel list from Redis using a session ID.
+    Used as a fail-safe if postMessage fails.
+    """
+    session_id = request.query_params.get("sessionId")
+    if not session_id:
+        return JsonResponse({"error": "Missing sessionId"}, status=400)
+        
+    import json
+    from aiAgent.cache.client import get_redis_client
+    redis_client = get_redis_client()
+    
+    session_raw = redis_client.get(f"yt_session:{session_id}")
+    if not session_raw:
+        return JsonResponse({"error": "Session expired or invalid."}, status=404)
+        
+    session_data = json.loads(session_raw)
+    
+    # Check ownership
+    if str(session_data.get("user_id")) != str(request.user.id):
+        return JsonResponse({"error": "Unauthorized access to session."}, status=403)
+        
+    channels_data = session_data.get("channels", [])
+    display_channels = []
+    for item in channels_data:
+        snippet = item.get("snippet", {})
+        display_channels.append({
+            "id": item.get("id"),
+            "name": snippet.get("title"),
+            "handle": snippet.get("customUrl"),
+            "thumbnail": snippet.get("thumbnails", {}).get("default", {}).get("url")
+        })
+        
+    return JsonResponse({"status": "success", "channels": display_channels, "sessionId": session_id})
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
