@@ -588,6 +588,20 @@ export default function WidgetCustomizePage() {
                           </div>
                           <div style={{ backgroundColor: settings.primary_color }} className="w-6 h-6 rounded-lg flex-shrink-0" />
                         </div>
+                        {(settings.enable_human_control || settings.enable_ai_control) && (
+                          <div className="flex gap-1.5 mt-1 pt-1">
+                            {settings.enable_human_control && (
+                              <div className="flex-1 bg-slate-50 border border-slate-100 rounded-md py-1 px-1 flex justify-center items-center gap-1 shadow-sm">
+                                <span className="text-[7px] font-bold text-slate-500">Human Help</span>
+                              </div>
+                            )}
+                            {settings.enable_ai_control && (
+                              <div className="flex-1 bg-slate-50 border border-slate-100 rounded-md py-1 px-1 flex justify-center items-center gap-1 shadow-sm">
+                                <span className="text-[7px] font-bold text-slate-500">Off AI</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
 
