@@ -46,14 +46,14 @@ def process_channel_comments(channel):
         "access_token": channel.access_token
     }
     
-    response = requests.get(url, params=params)
+    response = requests.get(base_url, params=params)
     
     if response.status_code == 401:
         logger.warning(f"🔑 [YouTube Task] Token expired for {channel.channel_title}. Attempting refresh.")
         new_token = refresh_youtube_token(channel)
         if new_token:
             params["access_token"] = new_token
-            response = requests.get(url, params=params)
+            response = requests.get(base_url, params=params)
         else:
             logger.error(f"❌ [YouTube Task] Failed to refresh token for {channel.channel_id}")
             return
