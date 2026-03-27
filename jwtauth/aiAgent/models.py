@@ -399,7 +399,12 @@ class WidgetSettings(models.Model):
     whatsapp_number = models.CharField(max_length=20, blank=True, null=True, help_text="WhatsApp number with country code")
     messenger_link = models.CharField(max_length=255, blank=True, null=True, help_text="Facebook Messenger link (e.g. m.me/yourpage)")
     
+    # Chat Controls
+    enable_human_control = models.BooleanField(default=True, help_text="Show Human Help / Resolve button in the widget")
+    enable_ai_control = models.BooleanField(default=True, help_text="Show AI Off/On toggle button in the widget")
+    
     updated_at = models.DateTimeField(auto_now=True)
+
 
     def __str__(self):
         return f"Widget Settings for {self.agent.name}"
