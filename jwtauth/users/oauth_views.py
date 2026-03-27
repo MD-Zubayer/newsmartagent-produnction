@@ -374,14 +374,17 @@ def youtube_callback(request):
 
     saved_items = []
     for item in channels_data:
+        snippet = item.get("snippet", {})
         channel_id = item.get("id")
-        channel_title = item.get("snippet", {}).get("title")
+        channel_title = snippet.get("title")
+        custom_url = snippet.get("customUrl") # e.g. @MkzTips
 
         YouTubeChannel.objects.update_or_create(
             channel_id=channel_id,
             defaults={
                 'user': user,
                 'channel_title': channel_title,
+                'custom_url': custom_url,
                 'access_token': access_token,
                 'refresh_token': refresh_token or '', # Only sent once by Google
                 'token_expires_at': token_expires_at,
@@ -391,12 +394,14 @@ def youtube_callback(request):
 
         # Auto-create or update AgentAI for YouTube channel
         from aiAgent.models import AgentAI
+        agent_name = f"{channel_title} ({custom_url})" if custom_url else f"{channel_title} ({channel_id})"
+        
         agent, created = AgentAI.objects.filter(page_id=channel_id, platform='youtube').defer('access_token').get_or_create(
             page_id=channel_id,
             platform='youtube',
             defaults={
                 'user': user,
-                'name': f"{channel_title} (YouTube)",
+                'name': agent_name,
                 'access_token': access_token,
                 'token_expires_at': token_expires_at,
                 'system_prompt': "You are an AI assistant for this YouTube channel. Answer viewer queries and engage with comments based on the video context and channel information.",

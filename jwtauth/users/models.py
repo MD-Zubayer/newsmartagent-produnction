@@ -454,6 +454,7 @@ class YouTubeChannel(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='youtube_channels')
     channel_id = models.CharField(max_length=255, unique=True)
     channel_title = models.CharField(max_length=255)
+    custom_url = models.CharField(max_length=255, blank=True, null=True) # e.g. @MkzTips
     access_token = models.CharField(max_length=500)
     refresh_token = models.CharField(max_length=500, blank=True, null=True)
     token_expires_at = models.DateTimeField(blank=True, null=True)
@@ -464,3 +465,16 @@ class YouTubeChannel(models.Model):
 
     def __str__(self):
         return f"{self.channel_title} ({self.channel_id}) - {self.user.email}"
+
+class YouTubeCommentLog(models.Model):
+    channel = models.ForeignKey(YouTubeChannel, on_delete=models.CASCADE, related_name='logs')
+    video_id = models.CharField(max_length=255)
+    comment_id = models.CharField(max_length=255, unique=True)
+    author = models.CharField(max_length=255)
+    comment_text = models.TextField()
+    ai_reply = models.TextField()
+    status = models.CharField(max_length=50, default='success') # success, failed
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Comment by {self.author} on {self.video_id}"

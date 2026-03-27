@@ -238,6 +238,14 @@ class FacebookPageAdmin(admin.ModelAdmin):
         }),
     )
 
+from .models import YouTubeCommentLog
+@admin.register(YouTubeCommentLog)
+class YouTubeCommentLogAdmin(admin.ModelAdmin):
+    list_display = ('author', 'channel', 'status', 'created_at')
+    list_filter = ('status', 'channel', 'created_at')
+    search_fields = ('author', 'comment_text', 'ai_reply')
+    readonly_fields = ('created_at',)
+
     # টোকেন অনেক বড় হয়, তাই ইনপুট বক্সটি বড় দেখানোর জন্য (ঐচ্ছিক)
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
