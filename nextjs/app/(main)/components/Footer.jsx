@@ -44,14 +44,16 @@ function Footer() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 pb-20">
           
-          {/* Brand Info */}           <div className="space-y-6">
+{/* Brand Info & Socials */}
+          <div className="lg:col-span-4 space-y-12">
+            <div className="space-y-6">
               <Link href="/" className="inline-block">
                 <h2 className="text-4xl font-black tracking-tighter">
                   New <span className="text-gradient">Smart</span> Agent
                 </h2>
               </Link>
               <p className="text-gray-400 font-medium text-lg leading-relaxed">
-                বাংলাদেশের ১ নম্বর এআই চালিত সোশ্যাল মিডিয়া অটোমেশন প্লাটফর্ম। আপনার ব্যবসাকে দিন এক নতুন গতি।
+                বাংলাদেশের ১ নম্বর এআই চালিত সোশ্যাল মিডিয়া অটোমেশন প্লাটফর্ম। আপনার ব্যবসাকে দিন এক নতুন গতি।
               </p>
             </div>
             
@@ -70,7 +72,6 @@ function Footer() {
               </div>
             </div>
           </div>
-
           {/* Links Grid */}
           <div className="lg:col-span-5 grid grid-cols-2 gap-10">
             <div className="space-y-8">
