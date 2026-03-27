@@ -760,6 +760,7 @@ def get_connected_youtube_channels(request):
         {
             "id": channel.channel_id,
             "name": channel.channel_title,
+            "handle": channel.custom_url,
             "is_active": channel.is_active,
             "connected_at": channel.created_at
         }

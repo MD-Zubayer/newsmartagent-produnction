@@ -697,8 +697,8 @@ export default function IntegrationManager() {
                                 <FaYoutube className="text-2xl md:text-3xl" />
                             </div>
                             <div className="space-y-1 min-w-0">
-                              <p className="font-black text-base md:text-xl text-slate-900 tracking-tight italic truncate text-left">{channel.channel_name}</p>
-                              <p className="text-[9px] text-slate-400 font-bold uppercase truncate">ID: {channel.channel_id}</p>
+                              <p className="font-black text-base md:text-xl text-slate-900 tracking-tighter italic truncate text-left">{channel.name}</p>
+                              <p className="text-[9px] text-red-500 font-bold uppercase truncate">{channel.handle || `ID: ${channel.id}`}</p>
                               <div className="flex items-center gap-1.5 px-2 md:px-3 py-1 bg-emerald-50 rounded-full border border-emerald-100 w-fit">
                                 <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
                                 <span className="text-[8px] md:text-[9px] font-black text-emerald-600 uppercase tracking-widest truncate">Synced</span>
