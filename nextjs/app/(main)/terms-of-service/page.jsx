@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { HiOutlineShieldCheck, HiOutlineDocumentText, HiOutlineLockClosed, HiOutlineMail, HiOutlineCheckCircle, HiOutlineExclamation, HiOutlineCash, HiOutlineScale, HiOutlineLogout, HiOutlineClipboardList, HiOutlineGlobeAlt } from 'react-icons/hi';
-import { FaFacebook, FaRobot, FaShieldAlt, FaBalanceScale, FaUserCheck, FaBan, FaCreditCard } from 'react-icons/fa';
+import { FaFacebook, FaRobot, FaShieldAlt, FaBalanceScale, FaUserCheck, FaBan, FaCreditCard, FaTiktok } from 'react-icons/fa';
 
 export default function TermsOfService() {
   const sections = [
@@ -64,14 +64,45 @@ Users are prohibited from using New Smart Agent (NSA) to generate spam, misleadi
 You must not use NSA to generate or distribute spam, misleading reviews, or artificial engagement. Any attempt to automate bulk activities that violate third-party API policies will result in immediate termination of your account.`
     },
     {
+      id: "tiktok-terms",
+      title: "8. Specific Terms for TikTok API Integration",
+      icon: <FaTiktok />,
+      fullText: `1. TikTok API Services Participation
+By using the TikTok automation features provided by New Smart Agent (NSA), you acknowledge and agree that:
+
+Our platform uses TikTok API Services to automate video comments and direct messages.
+
+You are also bound by the TikTok Terms of Service and TikTok Community Guidelines.
+
+2. User Responsibility & Content
+
+Prohibited Content: You are strictly prohibited from using our automation tools to post spam, hate speech, or any content that violates TikTok’s policies.
+
+Account Security: You are responsible for the security of your TikTok account while it is connected to our platform.
+
+Consent: You must have the necessary rights and permissions for any content you automate or respond to via our dashboard.
+
+3. Limitations and Compliance
+
+API Limits: New Smart Agent is subject to TikTok’s API rate limits. We are not responsible for delays or failures in automation caused by TikTok’s platform restrictions or account-level bans.
+
+No Unauthorized Use: Our services shall not be used for any unauthorized harvesting of TikTok user data or creating fake engagement (e.g., botting followers).
+
+4. Account Disconnection
+
+Users can revoke New Smart Agent’s access to their TikTok account at any time through our dashboard or via their TikTok Security Settings.
+
+Upon disconnection, our system will immediately cease all automated interactions on your behalf.`
+    },
+    {
       id: "ai-disclaimer",
-      title: "8. AI-Generated Content Disclaimer",
+      title: "9. AI-Generated Content Disclaimer",
       icon: <FaRobot />,
       fullText: `New Smart Agent (NSA) provides AI-generated responses for customer engagement. While we strive for accuracy, users are encouraged to review automated replies. New Smart Agent (NSA) is not responsible for any inaccuracies, misunderstandings, or reputational damage caused by AI-generated content.`
     },
     {
       id: "third-party",
-      title: "9. Third-Party Services",
+      title: "10. Third-Party Services",
       icon: <HiOutlineGlobeAlt />,
       fullText: `Our platform integrates with third-party services, including Meta (Facebook Graph API), AI providers (OpenAI/Grok), and payment processors. Your use of these integrations is subject to the respective third-party’s terms and policies. We are not responsible for changes, downtime, or data handling practices of these external providers.
 
@@ -79,7 +110,7 @@ By using New Smart Agent (NSA), you agree to be bound by the YouTube Terms of Se
     },
     {
       id: "payment",
-      title: "10. Payment & Manual Transactions",
+      title: "11. Payment & Manual Transactions",
       icon: <FaCreditCard />,
       fullText: `Manual Payments: Currently, we accept payments via local mobile financial services (bKash, Nagod) and Bank Transfers. Activation of service occurs only after manual verification of the Transaction ID (TrxID) and sender details.
 Subscription Model: Our services are offered as fixed-validity packs (e.g., 7 days, 30 days) with specific usage limits. Once validity expires or the limit is reached, automation will pause.
@@ -87,31 +118,31 @@ Refunds: All manual payments are final. No refunds will be issued once the subsc
     },
     {
       id: "privacy",
-      title: "11. Data Privacy",
+      title: "12. Data Privacy",
       icon: <FaShieldAlt />,
       fullText: `Your use of New Smart Agent (NSA) is also governed by our Privacy Policy. By using the service, you consent to the collection and processing of data (including Facebook tokens and message metadata) as described in that policy to enable automation features.`
     },
     {
       id: "termination",
-      title: "12. Termination of Service",
+      title: "13. Termination of Service",
       icon: <HiOutlineLogout />,
       fullText: `We reserve the right to suspend or terminate your access to New Smart Agent (NSA) if you violate these terms or if your actions pose a risk to our platform or other users. You may also terminate your account at any time by disconnecting your Google services and contacting our support.`
     },
     {
       id: "liability",
-      title: "13. Limitation of Liability",
+      title: "14. Limitation of Liability",
       icon: <FaBalanceScale />,
       fullText: `New Smart Agent (NSA) and its developers shall not be liable for any indirect, incidental, or consequential damages arising out of your use of the service, including data loss or business interruption.`
     },
     {
        id: "governing-law",
-       title: "14. Governing Law",
+       title: "15. Governing Law",
        icon: <HiOutlineScale />,
        fullText: `These Terms are governed by and construed in accordance with the laws of Bangladesh. Any disputes arising from these terms shall be resolved in the courts of Bangladesh.`
     },
     {
        id: "contact",
-       title: "15. Contact Support",
+       title: "16. Contact Support",
        icon: <HiOutlineMail />,
        fullText: `For any questions regarding these Terms, please contact us at:
 Email: newsmartagentbd@gmail.com
