@@ -212,7 +212,17 @@ def _deliver_reply_with_buttons(request_type, data, clean_reply, sender_id, page
         delivered = deliver_youtube_final(data, clean_reply, agent_config)
         return delivered
 
-    else:
+    elif request_type == 'gbp':
+        from .gbp_tasks import deliver_gbp_final
+        delivered = deliver_gbp_final(data, clean_reply, agent_config)
+        return delivered
+
+    elif request_type == 'web_widget':
+        # Web widget replies are handled by the dashboard delivery mechanism,
+        # so no direct delivery here.
+        return deliver_dashboard_reply(agent_config.user.id, clean_reply, data.get('message_id'))
+
+    else: # This covers messenger and facebook_comment
         if contact_obj:
             try:
                 from aiAgent.business_logic.logic_handler import send_messenger_buttons
@@ -422,6 +432,12 @@ def process_ai_reply_task(self, data):
                     is_active=True,
                     page_id__in=lookup_ids,
                     platform='youtube'
+                ).order_by('-id').first()
+            elif request_type == 'gbp':
+                agent_config = AgentAI.objects.filter(
+                    is_active=True,
+                    page_id__in=lookup_ids,
+                    platform='gbp'
                 ).order_by('-id').first()
             else:
                 agent_config = AgentAI.objects.filter(

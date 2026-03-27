@@ -68,6 +68,11 @@ urlpatterns = [
     path('api/youtube/session-channels/', oauth_views.get_youtube_session_channels, name='youtube_session_channels'),
     path('api/youtube/channels/', oauth_views.get_connected_youtube_channels, name='youtube_channels'),
 
+    # GBP Integration Endpoints
+    path('api/gbp/confirm/', oauth_views.confirm_gbp_connection, name='gbp_confirm'),
+    path('api/gbp/session-locations/', oauth_views.get_gbp_session_locations, name='gbp_id_session_locations'),
+    path('api/gbp/accounts/', oauth_views.get_connected_gbp_accounts, name='gbp_accounts'),
+
     path('api/facebook/data-deletion/', oauth_views.facebook_data_deletion, name='facebook_data_deletion'),
 
     # CKEditor

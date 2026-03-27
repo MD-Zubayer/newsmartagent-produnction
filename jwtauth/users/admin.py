@@ -270,19 +270,10 @@ class CashoutRequestAdmin(ModelAdmin):
 from .models import YouTubeChannel
 @admin.register(YouTubeChannel)
 class YouTubeChannelAdmin(admin.ModelAdmin):
-    # অ্যাডমিন লিস্ট ভিউতে যা যা দেখাবে
     list_display = ('channel_title', 'channel_id', 'user', 'is_active', 'created_at')
-    
-    # ফিল্টার করার অপশন
     list_filter = ('is_active', 'created_at', 'user')
-    
-    # সার্চ বক্স
     search_fields = ('channel_title', 'channel_id', 'user__email')
-    
-    # রিড-অনলি ফিল্ডসমূহ
     readonly_fields = ('created_at', 'updated_at')
-    
-    # ইনপুট ফিল্ডসের সাজানো রূপ
     fieldsets = (
         ('Owner Information', {
             'fields': ('user',)
@@ -294,3 +285,25 @@ class YouTubeChannelAdmin(admin.ModelAdmin):
             'fields': ('is_active', 'created_at', 'updated_at')
         }),
     )
+
+from .models import GoogleBusinessAccount, GoogleBusinessLocation, GBPReviewLog
+@admin.register(GoogleBusinessAccount)
+class GoogleBusinessAccountAdmin(admin.ModelAdmin):
+    list_display = ('account_name', 'account_id', 'user', 'is_active', 'created_at')
+    list_filter = ('is_active', 'created_at', 'user')
+    search_fields = ('account_name', 'account_id', 'user__email')
+    readonly_fields = ('created_at', 'updated_at')
+
+@admin.register(GoogleBusinessLocation)
+class GoogleBusinessLocationAdmin(admin.ModelAdmin):
+    list_display = ('location_name', 'location_id', 'account', 'is_active', 'last_review_check')
+    list_filter = ('is_active', 'last_review_check')
+    search_fields = ('location_name', 'location_id')
+    readonly_fields = ('created_at', 'updated_at')
+
+@admin.register(GBPReviewLog)
+class GBPReviewLogAdmin(admin.ModelAdmin):
+    list_display = ('reviewer_name', 'location', 'star_rating', 'status', 'created_at')
+    list_filter = ('status', 'star_rating', 'location', 'created_at')
+    search_fields = ('reviewer_name', 'review_text', 'ai_reply')
+    readonly_fields = ('created_at',)

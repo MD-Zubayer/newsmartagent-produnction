@@ -478,3 +478,43 @@ class YouTubeCommentLog(models.Model):
 
     def __str__(self):
         return f"Comment by {self.author} on {self.video_id}"
+
+class GoogleBusinessAccount(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='gbp_accounts')
+    account_name = models.CharField(max_length=255)
+    account_id = models.CharField(max_length=255, unique=True)
+    access_token = models.CharField(max_length=500)
+    refresh_token = models.CharField(max_length=500, blank=True, null=True)
+    token_expires_at = models.DateTimeField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.account_name} ({self.account_id}) - {self.user.email}"
+
+class GoogleBusinessLocation(models.Model):
+    account = models.ForeignKey(GoogleBusinessAccount, on_delete=models.CASCADE, related_name='locations')
+    location_name = models.CharField(max_length=255)
+    location_id = models.CharField(max_length=255, unique=True) # Full resource name: accounts/{account_id}/locations/{location_id}
+    address = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    last_review_check = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.location_name} ({self.location_id})"
+
+class GBPReviewLog(models.Model):
+    location = models.ForeignKey(GoogleBusinessLocation, on_delete=models.CASCADE, related_name='review_logs')
+    review_id = models.CharField(max_length=255, unique=True)
+    reviewer_name = models.CharField(max_length=255)
+    review_text = models.TextField(blank=True, null=True)
+    star_rating = models.IntegerField(default=0)
+    ai_reply = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=20, default='pending') # pending, replied, error
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Review by {self.reviewer_name} on {self.location.location_name}"

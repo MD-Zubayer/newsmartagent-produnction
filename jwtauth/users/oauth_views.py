@@ -287,24 +287,31 @@ def get_connected_pages(request):
 @permission_classes([IsAuthenticated])
 def youtube_login(request):
     """
-    Redirects the user to Google's OAuth 2.0 endpoint for YouTube.
+    Redirects the user to Google's OAuth 2.0 endpoint.
+    Handles dynamic scoping for YouTube and Google Business Profile (GBP).
     """
-    client_id = getattr(settings, 'YOUTUBE_CLIENT_ID', None)
+    client_id = getattr(settings, 'YOUTUBE_CLIENT_ID', None) # Using same client ID for both
     redirect_uri = getattr(settings, 'YOUTUBE_REDIRECT_URI', None)
+    auth_type = request.GET.get('type', 'youtube') # 'youtube' or 'gbp'
 
     if not client_id or not redirect_uri:
-        return JsonResponse({"error": "YouTube integration is not configured."}, status=500)
+        return JsonResponse({"error": "Google integration is not configured."}, status=500)
 
-    # Scopes for YouTube Read-Only and potentially Manage (for replies)
-    # https://www.googleapis.com/auth/youtube.force-ssl is required for managing comments
+    # Base scopes
     scopes = [
-        "https://www.googleapis.com/auth/youtube.readonly",
-        "https://www.googleapis.com/auth/youtube.force-ssl",
         "openid",
         "email",
         "profile"
     ]
     
+    if auth_type == 'youtube':
+        scopes.extend([
+            "https://www.googleapis.com/auth/youtube.readonly",
+            "https://www.googleapis.com/auth/youtube.force-ssl"
+        ])
+    elif auth_type == 'gbp':
+        scopes.append("https://www.googleapis.com/auth/ business.manage")
+
     auth_url = (
         f"https://accounts.google.com/o/oauth2/v2/auth?"
         f"client_id={client_id}"
@@ -313,7 +320,7 @@ def youtube_login(request):
         f"&scope={' '.join(scopes)}"
         f"&access_type=offline"
         f"&prompt=consent"
-        f"&state={request.user.id}"
+        f"&state={request.user.id}:{auth_type}"
     )
     return redirect(auth_url)
 
@@ -322,16 +329,23 @@ def youtube_login(request):
 def youtube_callback(request):
     """
     Handles the redirect back from Google.
-    Trades the code for an access token and refresh token.
+    Distinguishes between YouTube and GBP based on the state.
     """
     code = request.GET.get("code")
-    user_id = request.GET.get("state")
+    state = request.GET.get("state", "")
     error = request.GET.get("error")
 
     frontend_url = getattr(settings, 'NEXT_PUBLIC_BASE_URL', 'https://newsmartagent.com')
 
     if error or not code:
         return redirect(f"{frontend_url}/dashboard/connect?error=auth_failed&message=Google authentication failed.")
+
+    # Split state to get user_id and auth_type
+    try:
+        user_id, auth_type = state.split(':')
+    except ValueError:
+        user_id = state
+        auth_type = 'youtube'
 
     client_id = getattr(settings, 'YOUTUBE_CLIENT_ID', None)
     client_secret = getattr(settings, 'YOUTUBE_CLIENT_SECRET', None)
@@ -356,6 +370,12 @@ def youtube_callback(request):
     if not access_token:
         return JsonResponse({"error": "Failed to get access token.", "details": resp}, status=400)
 
+    if auth_type == 'youtube':
+        return handle_youtube_callback_data(request, user_id, access_token, refresh_token, token_expires_at, frontend_url)
+    elif auth_type == 'gbp':
+        return handle_gbp_callback_data(request, user_id, access_token, refresh_token, token_expires_at, frontend_url)
+
+def handle_youtube_callback_data(request, user_id, access_token, refresh_token, token_expires_at, frontend_url):
     # 2. Get YouTube Channel info
     channels_url = f"https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails&mine=true&access_token={access_token}"
     channels_resp = requests.get(channels_url).json()
@@ -380,11 +400,8 @@ def youtube_callback(request):
         "channels": channels_data
     }
     
-    # Store for 10 minutes
     redis_client.setex(f"yt_session:{session_id}", 600, json.dumps(session_data))
 
-    # Send channels to frontend via postMessage
-    # We only send snippet info for selection to avoid exposing tokens in the broadcast
     display_channels = []
     for item in channels_data:
         snippet = item.get("snippet", {})
@@ -395,55 +412,91 @@ def youtube_callback(request):
             "thumbnail": snippet.get("thumbnails", {}).get("default", {}).get("url")
         })
 
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info(f"YouTube Callback success for session {session_id}. Channels found: {len(display_channels)}")
+    script = build_postmessage_script(display_channels, session_id, "youtube", frontend_url)
+    from django.http import HttpResponse
+    return HttpResponse(script)
 
-    script = f'''
+def handle_gbp_callback_data(request, user_id, access_token, refresh_token, token_expires_at, frontend_url):
+    # 2. Get GBP Accounts info
+    # API: https://mybusinessaccountmanagement.googleapis.com/v1/accounts
+    accounts_url = f"https://mybusinessaccountmanagement.googleapis.com/v1/accounts"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    accounts_resp = requests.get(accounts_url, headers=headers).json()
+    accounts_data = accounts_resp.get("accounts", [])
+
+    if not accounts_data:
+        return redirect(f"{frontend_url}/dashboard/connect?error=no_gbp_accounts&message=No Google Business Profile accounts found.")
+
+    # Fetch locations for each account
+    all_locations = []
+    for account in accounts_data:
+        account_name = account.get("name") # e.g. "accounts/12345"
+        locations_url = f"https://mybusinessbusinessinformation.googleapis.com/v1/{account_name}/locations?readMask=name,title,storefrontAddress"
+        locations_resp = requests.get(locations_url, headers=headers).json()
+        locations = locations_resp.get("locations", [])
+        for loc in locations:
+            all_locations.append({
+                "account_id": account_name,
+                "account_title": account.get("accountName"),
+                "location_id": loc.get("name"), # e.g. "accounts/123/locations/456"
+                "location_name": loc.get("title"),
+                "address": loc.get("storefrontAddress", {}).get("addressLines", [""])[0]
+            })
+
+    if not all_locations:
+        return redirect(f"{frontend_url}/dashboard/connect?error=no_gbp_locations&message=No locations found in your Google Business Profile accounts.")
+
+    import uuid
+    import json
+    from aiAgent.cache.client import get_redis_client
+    
+    session_id = str(uuid.uuid4())
+    redis_client = get_redis_client()
+    
+    session_data = {
+        "user_id": user_id,
+        "access_token": access_token,
+        "refresh_token": refresh_token or '',
+        "token_expires_at": token_expires_at.isoformat() if token_expires_at else None,
+        "locations": all_locations
+    }
+    
+    redis_client.setex(f"gbp_session:{session_id}", 600, json.dumps(session_data))
+
+    display_accounts = []
+    for loc in all_locations:
+        display_accounts.append({
+            "id": loc["location_id"],
+            "name": loc["location_name"],
+            "handle": loc["account_title"],
+            "thumbnail": None
+        })
+
+    script = build_postmessage_script(display_accounts, session_id, "gbp", frontend_url)
+    from django.http import HttpResponse
+    return HttpResponse(script)
+
+def build_postmessage_script(items, session_id, platform, frontend_url):
+    import json
+    return f'''
     <script>
-        console.log("YouTube Callback: Script loaded");
-        const channels = {json.dumps(display_channels)};
-        const sessionId = "{session_id}";
-        const targetOrigin = "{frontend_url}";
-        
-        let messageSent = false;
-        
         if (window.opener) {{
-            console.log("YouTube Callback: Sending postMessage to opener");
-            try {{
-                window.opener.postMessage({{
-                    status: "select_channel", 
-                    platform: "youtube", 
-                    channels: channels,
-                    sessionId: sessionId
-                }}, "*"); 
-                messageSent = true;
-            }} catch(e) {{
-                console.error("PostMessage failed", e);
-            }}
-            
-            // If message was sent, wait a bit then close. 
-            // If it fails or we want a fail-safe, redirect the opener instead.
-            setTimeout(() => {{
-                if (window.opener && !window.opener.closed) {{
-                     // Fail-safe: if the parent hasn't reacted, redirect it
-                     // window.opener.location.href = "{frontend_url}/dashboard/connect?success=yt_auth&sessionId={session_id}";
-                }}
-                window.close();
-            }}, 1000);
+            window.opener.postMessage({{
+                status: "select_channel", 
+                platform: "{platform}", 
+                channels: {json.dumps(items)},
+                sessionId: "{session_id}"
+            }}, "*"); 
+            setTimeout(() => window.close(), 1000);
         }} else {{
-            console.log("YouTube Callback: No opener found, redirecting main window");
-            window.location.href = "{frontend_url}/dashboard/connect?success=yt_auth&sessionId={session_id}";
+            window.location.href = "{frontend_url}/dashboard/connect?success={platform}_auth&sessionId={session_id}";
         }}
     </script>
     <div style="font-family: sans-serif; text-align: center; margin-top: 50px;">
         <h2>Authentication Successful</h2>
         <p>You can close this window if it doesn't close automatically.</p>
-        <p><a href="{frontend_url}/dashboard/connect?success=yt_auth&sessionId={session_id}">Click here to return to dashboard</a></p>
     </div>
     '''
-    from django.http import HttpResponse
-    return HttpResponse(script)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -563,6 +616,130 @@ def confirm_youtube_connection(request):
     redis_client.delete(f"yt_session:{session_id}")
     
     return JsonResponse({"status": "success", "message": f"Channel {channel_title} connected successfully!"})
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_gbp_session_locations(request):
+    """
+    Recovers the GBP location list from Redis using a session ID.
+    Used as a fail-safe if postMessage fails.
+    """
+    session_id = request.query_params.get("sessionId")
+    if not session_id:
+        return JsonResponse({"error": "Missing sessionId"}, status=400)
+        
+    import json
+    from aiAgent.cache.client import get_redis_client
+    redis_client = get_redis_client()
+    
+    session_raw = redis_client.get(f"gbp_session:{session_id}")
+    if not session_raw:
+        return JsonResponse({"error": "Session expired or invalid."}, status=404)
+        
+    session_data = json.loads(session_raw)
+    
+    # Check ownership
+    if str(session_data.get("user_id")) != str(request.user.id):
+        return JsonResponse({"error": "Unauthorized access to session."}, status=403)
+        
+    locations_data = session_data.get("locations", [])
+    display_locations = []
+    for loc in locations_data:
+        display_locations.append({
+            "id": loc["location_id"],
+            "name": loc["location_name"],
+            "handle": loc["account_title"],
+            "thumbnail": None
+        })
+        
+    return JsonResponse({"status": "success", "channels": display_locations, "sessionId": session_id})
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def confirm_gbp_connection(request):
+    """
+    Finalizes the connection for a selected GBP location.
+    """
+    session_id = request.data.get("sessionId")
+    location_id = request.data.get("channelId") # Using channelId param for frontend consistency
+    
+    if not session_id or not location_id:
+        return JsonResponse({"error": "Missing sessionId or locationId."}, status=400)
+    
+    import json
+    from aiAgent.cache.client import get_redis_client
+    redis_client = get_redis_client()
+    
+    session_raw = redis_client.get(f"gbp_session:{session_id}")
+    if not session_raw:
+        return JsonResponse({"error": "Session expired. Please try connecting again."}, status=400)
+    
+    session_data = json.loads(session_raw)
+    
+    if str(session_data.get("user_id")) != str(request.user.id):
+        return JsonResponse({"error": "Unauthorized session."}, status=403)
+    
+    selected_loc = next((l for l in session_data["locations"] if l["location_id"] == location_id), None)
+    if not selected_loc:
+        return JsonResponse({"error": "Selected location not found in session."}, status=404)
+    
+    # 1. Save GBP Account 
+    account, _ = GoogleBusinessAccount.objects.update_or_create(
+        account_id=selected_loc["account_id"],
+        defaults={
+            'user': request.user,
+            'account_name': selected_loc["account_title"],
+            'access_token': session_data["access_token"],
+            'refresh_token': session_data["refresh_token"],
+            'token_expires_at': timezone.datetime.fromisoformat(session_data["token_expires_at"]) if session_data["token_expires_at"] else None,
+            'is_active': True
+        }
+    )
+    
+    # 2. Save Location
+    GoogleBusinessLocation.objects.update_or_create(
+        location_id=location_id,
+        defaults={
+            'account': account,
+            'location_name': selected_loc["location_name"],
+            'address': selected_loc["address"],
+            'is_active': True
+        }
+    )
+    
+    # 3. Create/Update AgentAI
+    from aiAgent.models import AgentAI
+    AgentAI.objects.update_or_create(
+        page_id=location_id,
+        platform='gbp',
+        defaults={
+            'user': request.user,
+            'name': selected_loc["location_name"],
+            'access_token': session_data["access_token"],
+            'token_expires_at': timezone.datetime.fromisoformat(session_data["token_expires_at"]) if session_data["token_expires_at"] else None,
+            'system_prompt': f"You are the AI assistant for {selected_loc['location_name']} on Google Business Profile. Respond professionally to customer reviews and queries.",
+            'is_active': True
+        }
+    )
+    
+    redis_client.delete(f"gbp_session:{session_id}")
+    return JsonResponse({"status": "success", "message": f"GBP Location {selected_loc['location_name']} connected successfully!"})
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_connected_gbp_accounts(request):
+    accounts = GoogleBusinessAccount.objects.filter(user=request.user)
+    data = []
+    for acc in accounts:
+        locs = acc.locations.filter(is_active=True)
+        for loc in locs:
+            data.append({
+                "account_name": acc.account_name,
+                "location_name": loc.location_name,
+                "location_id": loc.location_id,
+                "is_active": loc.is_active
+            })
+    return JsonResponse({"accounts": data})
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])

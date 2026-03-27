@@ -31,7 +31,8 @@ class AgentAI(models.Model):
         ('instagram', 'Instagram'),
         ('web_widget', 'Web Chat Widget'),
         ('telegram', 'Telegram'),
-        ('youtube', 'YouTube')
+        ('youtube', 'YouTube'),
+        ('gbp', 'Google Business Profile')
     ]
     AI_AGENT_CATEGORIES = (
     ('business', 'Business / Commercial'),
