@@ -66,38 +66,53 @@
 
         // CSS
         var css = [
-            '#nsa-wrap{position:fixed;z-index:2147483647;display:flex;flex-direction:column;align-items:' + (isRight ? 'flex-end' : 'flex-start') + ';' + posStyle + '}',
-            '#nsa-bubble{width:' + size + 'px;height:' + size + 'px;border-radius:' + radius + ';background:' + bubbleBg + ';border:' + bubbleBorder + ';' + (showBg ? 'box-shadow:0 8px 30px rgba(0,0,0,.2);' : '') + 'display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;transition:transform .3s cubic-bezier(.175,.885,.32,1.275),box-shadow .3s;}',
-            '#nsa-bubble:hover{transform:scale(1.11);' + (showBg ? 'box-shadow:0 14px 40px rgba(0,0,0,.26);' : '') + '}',
-            '#nsa-bubble img{width:' + (showBg ? Math.round(size * .67) : size) + 'px;height:' + (showBg ? Math.round(size * .67) : size) + 'px;object-fit:contain;}',
-            '#nsa-fab-menu{position:absolute;bottom:calc(100% + 15px);display:none;flex-direction:column;gap:12px;align-items:center;transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);opacity:0;transform:translateY(15px);z-index:2147483648;pointer-events:none;}',
-            '#nsa-fab-menu.nsa-open{display:flex;opacity:1;transform:translateY(0);pointer-events:auto;}',
-            '.nsa-fab-btn{width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,0.15);transition:transform 0.2s,box-shadow 0.2s;text-decoration:none;}',
-            '.nsa-fab-btn:hover{transform:scale(1.1);box-shadow:0 8px 25px rgba(0,0,0,0.2);}',
-            '.nsa-fab-wa{background-color:#25d366;}',
-            '.nsa-fab-ms{background-color:#0084ff;}',
-            '.nsa-fab-ai{background-color:' + color + ';}',
-            '.nsa-fab-btn svg{width:26px;height:26px;fill:#fff;}',
-            '.nsa-fab-btn img{width:26px;height:26px;object-fit:contain;border-radius:50%;}',
-            '#nsa-win{width:380px;height:600px;max-width:calc(100vw - 40px);max-height:calc(100vh - 100px);background:#fff;border-radius:24px;box-shadow:0 20px 60px rgba(0,0,0,.18);margin-' + (isBottom ? 'bottom' : 'top') + ':14px;display:none;flex-direction:column;overflow:hidden;border:1px solid rgba(0,0,0,.05);animation:nsa-in .35s ease;}',
-            '@keyframes nsa-in{from{opacity:0;transform:translateY(' + (isBottom ? '16' : '-16') + 'px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}',
-            '.nsa-hdr{padding:18px 20px;background:' + color + ';color:#fff;display:flex;align-items:center;gap:12px;}',
-            '.nsa-hdr-img{width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.2);overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;}',
-            '.nsa-hdr-img img{width:32px;height:32px;object-fit:contain;}',
-            '.nsa-hdr h3{margin:0;font-size:15px;font-weight:800;font-style:italic;text-transform:uppercase;letter-spacing:.5px;}',
-            '.nsa-hdr p{margin:3px 0 0;font-size:10px;opacity:.7;font-weight:600;text-transform:uppercase;letter-spacing:1px;}',
-            '.nsa-body{flex:1;overflow-y:auto;padding:18px;background:#f8fafc;display:flex;flex-direction:column;gap:10px;}',
-            '.nsa-msg{padding:10px 14px;border-radius:16px;font-size:14px;max-width:85%;line-height:1.6;word-break:break-word;}',
-            '.nsa-ai{background:#fff;color:#1e293b;border-bottom-left-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,.04);}',
-            '.nsa-user{background:' + color + ';color:#fff;align-self:flex-end;border-bottom-right-radius:4px;}',
-            '.nsa-foot-inp{padding:14px;background:#fff;border-top:1px solid #f1f5f9;display:flex;gap:8px;}',
-            '.nsa-foot-inp input{flex:1;border:none;background:#f1f5f9;padding:10px 14px;border-radius:10px;font-size:14px;outline:none;}',
-            '.nsa-foot-inp input:disabled{opacity:.5;}',
-            '.nsa-send{background:' + color + ';border:none;color:#fff;width:42px;height:42px;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity .2s;}',
-            '.nsa-send:hover{opacity:.85;}.nsa-send:disabled{opacity:.4;cursor:not-allowed;}',
-            '.nsa-footer{padding:7px;text-align:center;background:#fff;font-size:9px;color:#94a3b8;font-weight:800;text-transform:uppercase;letter-spacing:1px;}',
-            '.nsa-footer a{color:inherit;text-decoration:none;}',
+            '@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");',
+            '#nsa-wrap { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; position: fixed; z-index: 2147483647; display: flex; flex-direction: column; align-items: ' + (isRight ? 'flex-end' : 'flex-start') + '; ' + posStyle + ' }',
+            '#nsa-bubble { width: ' + size + 'px; height: ' + size + 'px; border-radius: ' + radius + '; background: ' + bubbleBg + '; border: ' + bubbleBorder + '; ' + (showBg ? 'box-shadow: 0 8px 32px rgba(0,0,0,0.15);' : '') + ' display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: hidden; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }',
+            '#nsa-bubble:hover { transform: scale(1.1) rotate(5deg); ' + (showBg ? 'box-shadow: 0 12px 40px rgba(0,0,0,0.2);' : '') + ' }',
+            '#nsa-bubble img { width: ' + (showBg ? Math.round(size * 0.6) : size) + 'px; height: ' + (showBg ? Math.round(size * 0.6) : size) + 'px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)); }',
+            '#nsa-fab-menu { position: absolute; bottom: calc(100% + 15px); display: none; flex-direction: column; gap: 12px; align-items: center; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); opacity: 0; transform: translateY(15px); z-index: 2147483648; pointer-events: none; }',
+            '#nsa-fab-menu.nsa-open { display: flex; opacity: 1; transform: translateY(0); pointer-events: auto; }',
+            '.nsa-fab-btn { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.1); transition: all 0.3s; text-decoration: none; border: 1px solid rgba(255,255,255,0.2); }',
+            '.nsa-fab-btn:hover { transform: translateY(-3px) scale(1.05); box-shadow: 0 8px 25px rgba(0,0,0,0.15); }',
+            '.nsa-fab-wa { background: #25D366; }',
+            '.nsa-fab-ms { background: #0084FF; }',
+            '.nsa-fab-ai { background: ' + color + '; }',
+            '.nsa-fab-btn svg { width: 22px; height: 22px; fill: #fff; }',
+            '.nsa-fab-btn img { width: 24px; height: 24px; object-fit: contain; border-radius: 50%; }',
+            '#nsa-win { width: 380px; height: 620px; max-width: calc(100vw - 40px); max-height: calc(100vh - 100px); background: #fff; border-radius: 24px; box-shadow: 0 24px 80px rgba(0,0,0,0.2); margin-' + (isBottom ? 'bottom' : 'top') + ': 16px; display: none; flex-direction: column; overflow: hidden; border: 1px solid rgba(0,0,0,0.08); animation: nsa-in 0.4s cubic-bezier(0.16, 1, 0.3, 1); }',
+            '@keyframes nsa-in { from { opacity: 0; transform: translateY(' + (isBottom ? '20' : '-20') + 'px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }',
+            '.nsa-hdr { padding: 20px 24px; background: linear-gradient(135deg, ' + color + ' 0%, ' + color + 'dd 100%); color: #fff; display: flex; align-items: center; gap: 14px; position: relative; overflow: hidden; }',
+            '.nsa-hdr::after { content: ""; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%); pointer-events: none; }',
+            '.nsa-hdr-img { width: 44px; height: 44px; border-radius: 12px; background: rgba(255,255,255,0.2); backdrop-filter: blur(4px); overflow: hidden; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.3); }',
+            '.nsa-hdr-img img { width: 36px; height: 36px; object-fit: contain; }',
+            '.nsa-hdr h3 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.2px; }',
+            '.nsa-hdr p { margin: 2px 0 0; font-size: 11px; opacity: 0.85; font-weight: 500; }',
+            '.nsa-controls { display: flex; padding: 10px 16px; background: #fff; border-bottom: 1px solid #f1f5f9; gap: 8px; }',
+            '.nsa-ctrl-btn { flex: 1; padding: 8px 6px; border-radius: 10px; border: 1px solid #e2e8f0; background: #f8fafc; color: #64748b; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 5px; }',
+            '.nsa-ctrl-btn:hover { background: #f1f5f9; border-color: ' + color + '; color: ' + color + '; }',
+            '.nsa-ctrl-btn.active { background: ' + color + '; color: #fff; border-color: ' + color + '; box-shadow: 0 4px 12px ' + color + '44; }',
+            '.nsa-ctrl-btn svg { transition: transform 0.2s; }',
+            '.nsa-ctrl-btn:active svg { transform: scale(0.9); }',
+            '.nsa-body { flex: 1; overflow-y: auto; padding: 20px; background: #fdfdfd; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }',
+            '.nsa-body::-webkit-scrollbar { width: 5px; }',
+            '.nsa-body::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }',
+            '.nsa-msg { padding: 12px 16px; border-radius: 18px; font-size: 14px; max-width: 85%; line-height: 1.5; word-break: break-word; position: relative; animation: msg-up 0.3s ease-out; }',
+            '@keyframes msg-up { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }',
+            '.nsa-ai { background: #fff; color: #1e293b; border-bottom-left-radius: 4px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #f1f5f9; }',
+            '.nsa-user { background: ' + color + '; color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; box-shadow: 0 4px 15px ' + color + '33; }',
+            '.nsa-foot-inp { padding: 16px; background: #fff; border-top: 1px solid #f1f5f9; display: flex; gap: 10px; align-items: center; }',
+            '.nsa-inp-wrap { flex: 1; position: relative; display: flex; align-items: center; background: #f1f5f9; border-radius: 14px; padding: 4px 4px 4px 12px; transition: all 0.2s; border: 1px solid transparent; }',
+            '.nsa-inp-wrap:focus-within { background: #fff; border-color: ' + color + '; box-shadow: 0 0 0 4px ' + color + '11; }',
+            '.nsa-inp-wrap input { flex: 1; border: none; background: transparent; padding: 8px 0; font-size: 14px; outline: none; color: #1e293b; }',
+            '.nsa-send { background: ' + color + '; border: none; color: #fff; width: 36px; height: 36px; border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.2s; }',
+            '.nsa-send:hover { transform: scale(1.05); opacity: 0.9; }',
+            '.nsa-send:disabled { opacity: 0.4; cursor: not-allowed; transform: scale(1); }',
+            '.nsa-footer { padding: 10px; text-align: center; background: #fff; font-size: 10px; color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; border-top: 1px solid #f8fafc; }',
+            '.nsa-footer a { color: inherit; text-decoration: none; transition: color 0.2s; }',
+            '.nsa-footer a:hover { color: ' + color + '; }',
         ].join('');
+
 
         var style = document.createElement('style');
         style.textContent = css;
@@ -113,17 +128,25 @@
             '    <div class="nsa-hdr-img"><img src="' + iconUrl + '" alt="icon" onerror="this.style.display=\'none\'"></div>',
             '    <div><h3>' + esc(s.header_title) + '</h3><p>' + esc(s.header_subtitle) + '</p></div>',
             '  </div>',
+            '  <div class="nsa-controls">',
+            '    <button class="nsa-ctrl-btn" id="nsa-btn-human" title="Talk to a human"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg> Human</button>',
+            '    <button class="nsa-ctrl-btn" id="nsa-btn-stop" title="Pause AI responses"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg> Stop AI</button>',
+            '    <button class="nsa-ctrl-btn active" id="nsa-btn-on" title="Enable AI responses"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-14 9V3z"></path></svg> On AI</button>',
+            '  </div>',
             '  <div class="nsa-body" id="nsa-body">',
-            '  </div>', // Initial greeting will be added by loadHistory or addMsg
+            '  </div>',
             '  <div class="nsa-foot-inp">',
-            '    <input type="text" id="nsa-inp" placeholder="' + esc(s.placeholder_text) + '">',
-            '    <button class="nsa-send" id="nsa-send">',
-            '      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>',
-            '    </button>',
+            '    <div class="nsa-inp-wrap">',
+            '      <input type="text" id="nsa-inp" placeholder="' + esc(s.placeholder_text) + '">',
+            '      <button class="nsa-send" id="nsa-send">',
+            '        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>',
+            '      </button>',
+            '    </div>',
             '  </div>',
             '  <div class="nsa-footer"><a href="https://newsmartagent.com" target="_blank">Powered by New Smart Agent</a></div>',
             '</div>'
         ];
+
         
         if (hasMulti) {
             htmlArr.push('<div id="nsa-fab-menu">');
@@ -260,7 +283,54 @@
         inp.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
         });
+
+        // ── Control Button Logic ─────────────────────────────────────────────
+        var btnHuman = document.getElementById('nsa-btn-human');
+        var btnStop  = document.getElementById('nsa-btn-stop');
+        var btnOn    = document.getElementById('nsa-btn-on');
+
+        function setActiveButton(activeBtn) {
+            [btnHuman, btnStop, btnOn].forEach(function(b) { b.classList.remove('active'); });
+            activeBtn.classList.add('active');
+        }
+
+        btnHuman.addEventListener('click', function() {
+            setActiveButton(btnHuman);
+            addMsg("I'd like to speak with a human agent.", 'user');
+            // Logic to notify system for human intervention
+            fetch(apiBase + '/chat/' + widgetKey + '/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: "[SYSTEM: HUMAN_REQUEST]", sender_id: senderId })
+            }).catch(function(){});
+            setTimeout(function() {
+                addMsg("A human agent has been notified and will be with you shortly.", 'ai');
+            }, 1000);
+        });
+
+        btnStop.addEventListener('click', function() {
+            setActiveButton(btnStop);
+            addMsg("AI responses have been paused.", 'ai', true);
+            // Logic to disable AI
+            fetch(apiBase + '/chat/' + widgetKey + '/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: "[SYSTEM: STOP_AI]", sender_id: senderId })
+            }).catch(function(){});
+        });
+
+        btnOn.addEventListener('click', function() {
+            setActiveButton(btnOn);
+            addMsg("AI responses have been enabled.", 'ai', true);
+            // Logic to enable AI
+            fetch(apiBase + '/chat/' + widgetKey + '/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: "[SYSTEM: START_AI]", sender_id: senderId })
+            }).catch(function(){});
+        });
     }
+
 
     function esc(str) {
         return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
