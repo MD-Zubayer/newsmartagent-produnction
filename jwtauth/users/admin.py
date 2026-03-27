@@ -258,3 +258,31 @@ class CashoutRequestAdmin(ModelAdmin):
     search_fields = ('profile__unique_id', 'profile__user__email', 'transaction_id')
     list_editable = ('status',)
     readonly_fields = ('requested_at', 'processed_at')
+
+from .models import YouTubeChannel
+@admin.register(YouTubeChannel)
+class YouTubeChannelAdmin(admin.ModelAdmin):
+    # অ্যাডমিন লিস্ট ভিউতে যা যা দেখাবে
+    list_display = ('channel_title', 'channel_id', 'user', 'is_active', 'created_at')
+    
+    # ফিল্টার করার অপশন
+    list_filter = ('is_active', 'created_at', 'user')
+    
+    # সার্চ বক্স
+    search_fields = ('channel_title', 'channel_id', 'user__email')
+    
+    # রিড-অনলি ফিল্ডসমূহ
+    readonly_fields = ('created_at', 'updated_at')
+    
+    # ইনপুট ফিল্ডসের সাজানো রূপ
+    fieldsets = (
+        ('Owner Information', {
+            'fields': ('user',)
+        }),
+        ('Channel Details', {
+            'fields': ('channel_title', 'channel_id', 'access_token', 'refresh_token', 'token_expires_at')
+        }),
+        ('Status', {
+            'fields': ('is_active', 'created_at', 'updated_at')
+        }),
+    )

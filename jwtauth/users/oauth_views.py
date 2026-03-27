@@ -388,6 +388,26 @@ def youtube_callback(request):
                 'is_active': True
             }
         )
+
+        # Auto-create or update AgentAI for YouTube channel
+        from aiAgent.models import AgentAI
+        agent, created = AgentAI.objects.filter(page_id=channel_id, platform='youtube').defer('access_token').get_or_create(
+            page_id=channel_id,
+            platform='youtube',
+            defaults={
+                'user': user,
+                'name': f"{channel_title} (YouTube)",
+                'access_token': access_token,
+                'token_expires_at': token_expires_at,
+                'system_prompt': "You are an AI assistant for this YouTube channel. Answer viewer queries and engage with comments based on the video context and channel information.",
+                'is_active': True
+            }
+        )
+        if not created:
+            agent.access_token = access_token
+            agent.token_expires_at = token_expires_at
+            agent.save(update_fields=['access_token', 'token_expires_at'])
+
         saved_items.append({"name": channel_title, "id": channel_id})
 
     # Redirect script similar to Facebook to handle popups if needed
