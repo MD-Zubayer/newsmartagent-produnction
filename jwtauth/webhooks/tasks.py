@@ -206,6 +206,12 @@ def _deliver_reply_with_buttons(request_type, data, clean_reply, sender_id, page
             send_telegram_buttons(data.get('chat_id') or sender_id, effective_access_token, contact_obj)
         return delivered
 
+    elif request_type == 'youtube':
+        from .youtube_tasks import deliver_youtube_final
+        # For YouTube, we don't have interactive buttons yet, so just deliver the reply.
+        delivered = deliver_youtube_final(data, clean_reply, agent_config)
+        return delivered
+
     else:
         if contact_obj:
             try:
@@ -336,6 +342,8 @@ def process_ai_reply_task(self, data):
 
     if request_type == 'facebook_comment':
         text = data.get('comment_text') or data.get('message') or data.get('text')
+    elif request_type == 'youtube':
+        text = data.get('comment_text') or data.get('message') or data.get('text')
     else:
         # messenger or whatsapp
         text = data.get('message') or data.get('text') or data.get('body')
@@ -408,6 +416,12 @@ def process_ai_reply_task(self, data):
                         page_id__in=lookup_ids,
                         platform='telegram'
                     ).order_by('-id').first()
+            elif request_type == 'youtube':
+                agent_config = AgentAI.objects.filter(
+                    is_active=True,
+                    page_id__in=lookup_ids,
+                    platform='youtube'
+                ).order_by('-id').first()
             else:
                 agent_config = AgentAI.objects.filter(
                     is_active=True,

@@ -83,27 +83,23 @@ def process_channel_comments(channel):
 
         logger.info(f"✨ [YouTube Task] New comment by {author_name}: {comment_text[:50]}...")
 
-        # 2. Generate AI Reply
-        agent = AgentAI.objects.filter(page_id=channel.channel_id, platform='youtube', is_active=True).first()
-        if not agent:
-            logger.warning(f"⚠️ [YouTube Task] No active AgentAI found for {channel.channel_title}")
-            continue
-
-        logger.info(f"🤖 [YouTube Task] Generating AI reply for comment ID {comment_id}")
-        system_instruction, history, _ = build_ai_context(
-            agent, 
-            sender_id=author_name, 
-            text=comment_text, 
-            extra_instruction=f"User is commenting on your YouTube video (ID: {video_id}).", 
-            sheet_context="", 
-            platform='youtube'
-        )
+        # Prepare payload for ADVANCED processing in tasks.py
+        payload = {
+            'platform': 'youtube',
+            'sender_id': author_name,
+            'comment_text': comment_text,
+            'page_id': channel.channel_id,
+            'message_id': comment_id,
+            'video_id': video_id,
+            'author_id': author_id,
+            'timestamp': published_at,
+            'comment_item': item, # Pass the raw item for delivery
+            'channel_id': channel.id # Internal DB ID to fetch channel easily
+        }
         
-        ai_reply, _, _ = get_ai_response(agent, system_instruction, history, comment_text)
-        logger.info(f"✅ [YouTube Task] AI reply generated: {ai_reply[:50]}...")
-        
-        # 3. Deliver to n8n
-        deliver_youtube_reply_to_n8n(channel, agent, item, ai_reply)
+        from .tasks import process_ai_reply_task
+        process_ai_reply_task.delay(payload)
+        logger.info(f"🚀 [YouTube Task] Dispatched comment {comment_id} to advanced handler")
         processed_count += 1
 
     logger.info(f"📊 [YouTube Task] Channel {channel.channel_title} summary: Proccesed {processed_count}, Skipped {skipped_count}")
@@ -144,6 +140,30 @@ def refresh_youtube_token(channel):
     else:
         logger.error(f"❌ [YouTube Task] Refresh failed response: {resp}")
     return None
+
+def deliver_youtube_final(data, ai_reply, agent):
+    """
+    Final delivery hook called from tasks.py process_ai_reply_task.
+    """
+    from users.models import YouTubeChannel
+    channel_db_id = data.get('channel_id')
+    channel = YouTubeChannel.objects.filter(id=channel_db_id).first()
+    
+    if not channel:
+        # Fallback to page_id lookup
+        channel = YouTubeChannel.objects.filter(channel_id=data.get('page_id')).first()
+        
+    if not channel:
+        logger.error(f"❌ [YouTube Delivery] Channel not found for delivery: {data.get('page_id')}")
+        return False
+        
+    comment_item = data.get('comment_item')
+    if not comment_item:
+        logger.error(f"❌ [YouTube Delivery] Missing comment_item in data for {data.get('message_id')}")
+        return False
+        
+    deliver_youtube_reply_to_n8n(channel, agent, comment_item, ai_reply)
+    return True
 
 def deliver_youtube_reply_to_n8n(channel, agent, comment_item, ai_reply):
     """
