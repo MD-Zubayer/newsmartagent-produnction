@@ -28,7 +28,7 @@ export default function TermsOfService() {
       id: "api-authorization",
       title: "4. User Accounts & API Authorization",
       icon: <HiOutlineClipboardList />,
-      fullText: `To use our AI automation features, you must authorize New Smart Agent (NSA) to access your Google Business Profile and/or YouTube account via Google OAuth. You are responsible for maintaining the security of your account and any actions taken under your credentials. NSA is not liable for any unauthorized access resulting from user negligence.`
+      fullText: `To use our AI automation features, you must authorize New Smart Agent (NSA) to access your Google Business Profile and/or YouTube account via Google OAuth. You are responsible for maintaining the security of your account and any actions taken under your credentials. New Smart Agent (NSA) is not liable for any unauthorized access resulting from user negligence.`
     },
     {
       id: "description",
@@ -49,22 +49,25 @@ We provide the platform on an "as-is" and "as-available" basis. We reserve the r
       id: "acceptable-use",
       title: "6. Permitted Use & Restrictions",
       icon: <FaBan />,
-      fullText: `You agree not to use NSA for any illegal activities, including but not limited to:
+      fullText: `You agree not to use New Smart Agent (NSA) for any illegal activities, including but not limited to:
 • Generating or posting spam, offensive, or misleading reviews/comments.
 • Violating Google’s Service Policies or any third-party rights.
-• Using the platform to distribute malware or engage in any form of automated abuse.`
+• Using the platform to distribute malware or engage in any form of automated abuse.
+Users are prohibited from using New Smart Agent (NSA) to generate spam, misleading reviews, or artificial engagement that violates Google’s Service Policies.`
     },
     {
       id: "ai-disclaimer",
       title: "7. AI-Generated Content Disclaimer",
       icon: <FaRobot />,
-      fullText: `NSA provides AI-generated responses for customer engagement. While we strive for accuracy, users are encouraged to review automated replies. NSA is not responsible for any inaccuracies, misunderstandings, or reputational damage caused by AI-generated content.`
+      fullText: `New Smart Agent (NSA) provides AI-generated responses for customer engagement. While we strive for accuracy, users are encouraged to review automated replies. New Smart Agent (NSA) is not responsible for any inaccuracies, misunderstandings, or reputational damage caused by AI-generated content.`
     },
     {
       id: "third-party",
       title: "8. Third-Party Services",
       icon: <HiOutlineGlobeAlt />,
-      fullText: `Our platform integrates with third-party services, including Meta (Facebook Graph API), AI providers (OpenAI/Grok), and payment processors. Your use of these integrations is subject to the respective third-party’s terms and policies. We are not responsible for changes, downtime, or data handling practices of these external providers.`
+      fullText: `Our platform integrates with third-party services, including Meta (Facebook Graph API), AI providers (OpenAI/Grok), and payment processors. Your use of these integrations is subject to the respective third-party’s terms and policies. We are not responsible for changes, downtime, or data handling practices of these external providers.
+
+By using New Smart Agent (NSA), you agree to be bound by the YouTube Terms of Service and Google Business Profile Terms.`
     },
     {
       id: "payment",
@@ -84,13 +87,13 @@ Refunds: All manual payments are final. No refunds will be issued once the subsc
       id: "termination",
       title: "11. Termination of Service",
       icon: <HiOutlineLogout />,
-      fullText: `We reserve the right to suspend or terminate your access to NSA if you violate these terms or if your actions pose a risk to our platform or other users. You may also terminate your account at any time by disconnecting your Google services and contacting our support.`
+      fullText: `We reserve the right to suspend or terminate your access to New Smart Agent (NSA) if you violate these terms or if your actions pose a risk to our platform or other users. You may also terminate your account at any time by disconnecting your Google services and contacting our support.`
     },
     {
       id: "liability",
       title: "12. Limitation of Liability",
       icon: <FaBalanceScale />,
-      fullText: `NSA and its developers shall not be liable for any indirect, incidental, or consequential damages arising out of your use of the service, including data loss or business interruption.`
+      fullText: `New Smart Agent (NSA) and its developers shall not be liable for any indirect, incidental, or consequential damages arising out of your use of the service, including data loss or business interruption.`
     },
     {
        id: "governing-law",
@@ -180,8 +183,11 @@ Official Website: https://newsmartagent.com`
                </div>
             </div>
           </div>
-          <p className="text-[10px] font-bold text-slate-300 text-center mt-12 uppercase tracking-[0.6em]">
+          <p className="text-[10px] font-bold text-slate-300 text-center mt-8 uppercase tracking-[0.6em]">
             Terms of Service • © 2026 New Smart Agent (NSA). All rights reserved.
+          </p>
+          <p className="text-xs text-slate-400 text-center mt-2">
+            Contact: support@newsmartagent.com • Address: Sadarpur, Faridpur
           </p>
         </footer>
 
