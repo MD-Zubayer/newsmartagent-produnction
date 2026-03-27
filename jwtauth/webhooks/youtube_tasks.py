@@ -202,6 +202,7 @@ def deliver_youtube_reply_to_n8n(channel, agent, comment_item, ai_reply):
         "author_name": snippet.get("authorDisplayName"),
         "comment_text": snippet.get("textDisplay"),
         "generated_reply": ai_reply,
+        "access_token": channel.access_token,
         "timestamp": timezone.now().isoformat()
     }
     
