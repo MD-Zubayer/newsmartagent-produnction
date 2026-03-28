@@ -28,7 +28,10 @@ class ContactListView(APIView):
                 contacts = Contact.objects.filter(agent__user=request.user)
             else:
                 if agent_id.isdigit():
-                    agent = AgentAI.objects.get(id=int(agent_id), user=request.user)
+                    try:
+                        agent = AgentAI.objects.get(id=int(agent_id), user=request.user)
+                    except AgentAI.DoesNotExist:
+                        agent = AgentAI.objects.get(models.Q(page_id=agent_id) | models.Q(number=agent_id), user=request.user)
                 else:
                     agent = AgentAI.objects.get(models.Q(page_id=agent_id) | models.Q(number=agent_id), user=request.user)
                 contacts = Contact.objects.filter(agent=agent)
@@ -169,19 +172,6 @@ def _filter_contacts_for_scheduling(agent_qs, filters):
 
     start_date = filters.get('start_date')
     end_date = filters.get('end_date')
-    if start_date:
-        try:
-            sd = datetime.fromisoformat(start_date)
-            qs = qs.filter(created_at__gte=sd)
-        except Exception:
-            pass
-    if end_date:
-        try:
-            ed = datetime.fromisoformat(end_date)
-            qs = qs.filter(created_at__lte=ed)
-        except Exception:
-            pass
-
     contacts = list(qs.select_related('agent'))
 
     lead_stage = filters.get('lead_stage')
@@ -191,6 +181,24 @@ def _filter_contacts_for_scheduling(agent_qs, filters):
         stage = (mem.data.get('lead_stage') if mem and isinstance(mem.data, dict) else None) or 'new'
         if lead_stage and lead_stage != 'all' and stage != lead_stage:
             continue
+        # Date filter based on message timestamps (if provided)
+        if start_date or end_date:
+            msg_qs = Message.objects.filter(conversation__agentAi=c.agent, conversation__contact_id=c.identifier)
+            if start_date:
+                try:
+                    sd = datetime.fromisoformat(start_date)
+                    msg_qs = msg_qs.filter(sent_at__gte=sd)
+                except Exception:
+                    pass
+            if end_date:
+                try:
+                    ed = datetime.fromisoformat(end_date)
+                    msg_qs = msg_qs.filter(sent_at__lte=ed)
+                except Exception:
+                    pass
+            if not msg_qs.exists():
+                continue
+
         # Only include contacts with some activity
         if not c.name and not c.push_name and not mem:
             continue
