@@ -384,6 +384,23 @@ app.post('/send-message', async (req, res) => {
     }
 });
 
+app.get('/profile/:sessionId/:jid', async (req, res) => {
+    const { sessionId, jid } = req.params;
+    const session = sessions.get(sessionId);
+    if (!session || session.state !== 'open') {
+        return res.status(503).json({ error: 'WhatsApp session not connected' });
+    }
+
+    try {
+        const fullJid = jid.includes('@') ? jid : `${jid}@s.whatsapp.net`;
+        const url = await session.sock.profilePictureUrl(fullJid, 'image');
+        res.json({ success: true, profilePictureUrl: url });
+    } catch (err) {
+        // If no profile pic, Baileys often throws 404/401
+        res.status(404).json({ success: false, error: err.message });
+    }
+});
+
 app.delete('/session/:sessionId', async (req, res) => {
     const { sessionId } = req.params;
     const secret = req.headers['x-api-secret'];

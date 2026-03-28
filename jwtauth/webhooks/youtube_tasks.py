@@ -76,6 +76,7 @@ def process_channel_comments(channel):
         comment_text = snippet.get("textDisplay")
         author_name = snippet.get("authorDisplayName")
         author_id = snippet.get("authorChannelId", {}).get("value")
+        author_profile_image = snippet.get("authorProfileImageUrl")
         published_at = snippet.get("publishedAt")
         video_id = snippet.get("videoId")
         
@@ -101,6 +102,7 @@ def process_channel_comments(channel):
             'message_id': comment_id,
             'video_id': video_id,
             'author_id': author_id,
+            'author_profile_image': author_profile_image,
             'timestamp': published_at,
             'comment_item': item, # Pass the raw item for delivery
             'channel_id': channel.id # Internal DB ID to fetch channel easily

@@ -155,12 +155,24 @@ def sync_contact_profile_picture(self, contact_id, platform, sender_id, page_id,
         image_url = None
         
         if platform in ['messenger', 'facebook_comment', 'instagram'] and token:
-            api_url = f"https://graph.facebook.com/v20.0/{sender_id}?fields=profile_pic&access_token={token}"
+            api_url = f"https://graph.facebook.com/v20.0/{sender_id}?fields=profile_pic,picture.type(large)&redirect=false&access_token={token}"
             resp = requests.get(api_url, timeout=10)
             if resp.status_code == 200:
                 resp_json = resp.json()
-                if 'profile_pic' in resp_json:
-                    image_url = resp_json['profile_pic']
+                # Check for silhouette using the 'picture' edge which supports redirect=false
+                if 'picture' in resp_json and 'data' in resp_json['picture']:
+                    pic_data = resp_json['picture']['data']
+                    if not pic_data.get('is_silhouette'):
+                        image_url = pic_data.get('url')
+                    else:
+                        logger.info(f"⏭️ Skipping silhouette/default icon for {sender_id}")
+                elif 'profile_pic' in resp_json:
+                    # Fallback if picture edge fails
+                    url = resp_json['profile_pic']
+                    if 'silhouette' not in url and 'default_user' not in url.lower():
+                        image_url = url
+            else:
+                logger.error(f"Graph API profile fetch failed for {sender_id}: {resp.text}")
                     
         elif platform == 'telegram' and token:
             api_url = f"https://api.telegram.org/bot{token}/getUserProfilePhotos?user_id={sender_id}&limit=1"
@@ -176,8 +188,36 @@ def sync_contact_profile_picture(self, contact_id, platform, sender_id, page_id,
                         image_url = f"https://api.telegram.org/file/bot{token}/{file_path}"
                         
         elif platform == 'whatsapp' and data:
-            # Check native payload for EvolutionAPI / Baileys profile pic
+            # Check native payload for Baileys profile pic
             image_url = data.get('profilePicUrl') or data.get('profile_picture')
+            
+            # Baileys service fallback if URL missing natively
+            if not image_url:
+                try:
+                    from openwa.models import WhatsAppInstance
+                    wa_instance = WhatsAppInstance.objects.filter(user=contact.agent.user).first()
+                    # Baileys sessionId pattern is user_{id}
+                    baileys_session_id = f"user_{contact.agent.user.id}"
+                    
+                    if wa_instance and wa_instance.baileys_api_url:
+                        base_url = wa_instance.baileys_api_url.rstrip('/')
+                        # NEW Baileys Profile Endpoint: GET /profile/:sessionId/:jid
+                        api_url = f"{base_url}/profile/{baileys_session_id}/{sender_id}"
+                        
+                        resp = requests.get(api_url, timeout=10)
+                        if resp.status_code == 200:
+                            resp_json = resp.json()
+                            if resp_json.get('success') and resp_json.get('profilePictureUrl'):
+                                url = resp_json.get('profilePictureUrl')
+                                if url and 'default' not in url.lower():
+                                    image_url = url
+                except Exception as wa_err:
+                    logger.error(f"WhatsApp Baileys profile fetch error: {wa_err}")
+                    
+        elif platform == 'youtube' and data:
+            url = data.get('author_profile_image')
+            if url and 'default_avatar' not in url.lower():
+                image_url = url
             
         if not image_url:
             cache.set(cache_key, "1", timeout=86400) # cache for 24h even if failed
