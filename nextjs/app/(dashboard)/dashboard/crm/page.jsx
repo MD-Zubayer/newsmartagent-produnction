@@ -34,6 +34,10 @@ export default function SmartCRMPage() {
   const [loading, setLoading] = useState(true);
   const [schedules, setSchedules] = useState([]);
   const [loadingSchedule, setLoadingSchedule] = useState(false);
+  const [scheduleStatus, setScheduleStatus] = useState("all");
+  const [scheduleStart, setScheduleStart] = useState("");
+  const [scheduleEnd, setScheduleEnd] = useState("");
+  const [viewSchedule, setViewSchedule] = useState(null);
   
   // For drag and drop
   const [draggingContactId, setDraggingContactId] = useState(null);
@@ -105,7 +109,11 @@ export default function SmartCRMPage() {
   const fetchSchedules = async () => {
     setLoadingSchedule(true);
     try {
-      const res = await api.get("/AgentAI/schedule/");
+      const params = {};
+      if (scheduleStatus !== "all") params.status = scheduleStatus;
+      if (scheduleStart) params.run_after = scheduleStart;
+      if (scheduleEnd) params.run_before = scheduleEnd;
+      const res = await api.get("/AgentAI/schedule/", { params });
       setSchedules(Array.isArray(res?.data) ? res.data : []);
     } catch (err) {
       toast.error("Failed to load schedules");
@@ -259,6 +267,28 @@ export default function SmartCRMPage() {
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-bold text-gray-800">Scheduled Messages</h3>
             <div className="flex items-center gap-2">
+              <select
+                value={scheduleStatus}
+                onChange={(e) => setScheduleStatus(e.target.value)}
+                className="text-xs px-2 py-1 rounded border border-gray-200 bg-gray-50"
+              >
+                <option value="all">All</option>
+                <option value="pending">Pending</option>
+                <option value="sent">Sent</option>
+                <option value="failed">Failed</option>
+              </select>
+              <input
+                type="datetime-local"
+                value={scheduleStart}
+                onChange={(e) => setScheduleStart(e.target.value)}
+                className="text-xs px-2 py-1 rounded border border-gray-200 bg-gray-50"
+              />
+              <input
+                type="datetime-local"
+                value={scheduleEnd}
+                onChange={(e) => setScheduleEnd(e.target.value)}
+                className="text-xs px-2 py-1 rounded border border-gray-200 bg-gray-50"
+              />
               <button
                 onClick={fetchSchedules}
                 className="text-xs px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 border border-gray-200"
@@ -291,6 +321,12 @@ export default function SmartCRMPage() {
                       <td className="px-3 py-2 capitalize">{s.status}</td>
                       <td className="px-3 py-2">{s.audience_count}</td>
                       <td className="px-3 py-2 text-right">
+                        <button
+                          onClick={() => setViewSchedule(s)}
+                          className="text-xs text-blue-600 hover:text-blue-700 font-semibold mr-2"
+                        >
+                          View
+                        </button>
                         {s.status === "pending" && (
                           <button
                             onClick={() => handleDeleteSchedule(s.id)}
@@ -531,6 +567,68 @@ export default function SmartCRMPage() {
                 className="px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm font-semibold shadow hover:bg-cyan-700 transition"
               >
                 Schedule
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Schedule Detail Modal */}
+      {viewSchedule && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setViewSchedule(null)}></div>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 z-10 overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h2 className="text-lg font-bold text-gray-900">Schedule Details</h2>
+              <button 
+                onClick={() => setViewSchedule(null)}
+                className="text-gray-400 hover:text-gray-600 bg-white shadow-sm border border-gray-200 rounded-full w-8 h-8 flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-6 space-y-3 text-sm text-gray-700">
+              <div>
+                <p className="font-semibold">Message</p>
+                <p className="mt-1 bg-gray-50 p-2 rounded border border-gray-100 whitespace-pre-wrap">{viewSchedule.message}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="font-semibold">Run At</p>
+                  <p>{new Date(viewSchedule.run_at).toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="font-semibold">Status</p>
+                  <p className="capitalize">{viewSchedule.status}</p>
+                </div>
+                <div>
+                  <p className="font-semibold">Audience Count</p>
+                  <p>{viewSchedule.audience_count}</p>
+                </div>
+                <div>
+                  <p className="font-semibold">Created</p>
+                  <p>{new Date(viewSchedule.created_at).toLocaleString()}</p>
+                </div>
+              </div>
+              {viewSchedule.filter_payload && (
+                <div>
+                  <p className="font-semibold">Filters</p>
+                  <pre className="mt-1 bg-gray-50 p-2 rounded border border-gray-100 text-xs overflow-auto">{JSON.stringify(viewSchedule.filter_payload, null, 2)}</pre>
+                </div>
+              )}
+              {viewSchedule.error_message && (
+                <div>
+                  <p className="font-semibold text-rose-600">Error</p>
+                  <p className="text-rose-500 bg-rose-50 border border-rose-100 rounded p-2 mt-1 whitespace-pre-wrap">{viewSchedule.error_message}</p>
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50">
+              <button
+                onClick={() => setViewSchedule(null)}
+                className="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm font-semibold"
+              >
+                Close
               </button>
             </div>
           </div>

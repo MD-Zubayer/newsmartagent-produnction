@@ -250,12 +250,35 @@ class ScheduledMessageView(APIView):
 
     def get(self, request):
         sched_id = request.GET.get('id')
+        status_q = request.GET.get('status')
+        run_after = request.GET.get('run_after')
+        run_before = request.GET.get('run_before')
+
         qs = ScheduledMessage.objects.filter(agent__user=request.user)
         if sched_id:
             qs = qs.filter(id=sched_id)
+        if status_q and status_q in dict(ScheduledMessage.STATUS_CHOICES):
+            qs = qs.filter(status=status_q)
+        if run_after:
+            try:
+                ra = datetime.fromisoformat(run_after)
+                if timezone.is_naive(ra):
+                    ra = timezone.make_aware(ra, timezone.get_current_timezone())
+                qs = qs.filter(run_at__gte=ra)
+            except Exception:
+                pass
+        if run_before:
+            try:
+                rb = datetime.fromisoformat(run_before)
+                if timezone.is_naive(rb):
+                    rb = timezone.make_aware(rb, timezone.get_current_timezone())
+                qs = qs.filter(run_at__lte=rb)
+            except Exception:
+                pass
+
         qs = qs.order_by('-run_at')[:200]
-        ser = ScheduledMessageSerializer(qs, many=True if not sched_id else False)
-        return Response(ser.data if not sched_id else ser.data, status=200)
+        ser = ScheduledMessageSerializer(qs, many=not bool(sched_id))
+        return Response(ser.data, status=200)
 
     def post(self, request):
         data = request.data
