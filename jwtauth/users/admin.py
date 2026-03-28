@@ -7,7 +7,7 @@ from .models import FacebookPage
 from .models import OrderForm, CustomerOrder, EmailVerificationToken
 
 from users.forms import UserAdminChangeForm, UserAdminCreationForm
-from .models import User, Profile, Payment, Offer, Subscription, Platform, NSATransfer, WithdrawMethod, CashoutRequest
+from .models import User, Profile, Payment, Offer, Subscription, Platform, NSATransfer, WithdrawMethod, CashoutRequest, TikTokAccount
 from unfold.admin import ModelAdmin
 # Force Django Admin to use allauth login if enabled
 if settings.DJANGO_ADMIN_FORCE_ALLAUTH:
@@ -307,3 +307,21 @@ class GBPReviewLogAdmin(admin.ModelAdmin):
     list_filter = ('status', 'star_rating', 'location', 'created_at')
     search_fields = ('reviewer_name', 'review_text', 'ai_reply')
     readonly_fields = ('created_at',)
+
+@admin.register(TikTokAccount)
+class TikTokAccountAdmin(admin.ModelAdmin):
+    list_display = ('display_name', 'open_id', 'user', 'is_active', 'created_at')
+    list_filter = ('is_active', 'created_at', 'user')
+    search_fields = ('display_name', 'open_id', 'user__email')
+    readonly_fields = ('created_at', 'updated_at')
+    fieldsets = (
+        ('Owner Information', {
+            'fields': ('user',)
+        }),
+        ('TikTok Details', {
+            'fields': ('display_name', 'open_id', 'union_id', 'avatar_url', 'access_token', 'refresh_token', 'token_expires_at')
+        }),
+        ('Status', {
+            'fields': ('is_active', 'created_at', 'updated_at')
+        }),
+    )
