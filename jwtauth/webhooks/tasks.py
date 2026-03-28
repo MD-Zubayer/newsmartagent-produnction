@@ -139,6 +139,79 @@ def send_human_handoff_ws(user_id, agent_id, sender_id, contact_id, contact_name
     except Exception as e:
         logger.error(f"Human handoff WebSocket error: {e}")
 
+@shared_task(bind=True, queue='chat_queue', max_retries=3)
+def sync_contact_profile_picture(self, contact_id, platform, sender_id, page_id, token, data=None):
+    from aiAgent.models import Contact
+    from django.core.files.base import ContentFile
+    import os, requests, hashlib, time
+    from django.core.cache import cache
+    
+    cache_key = f"profile_sync_{contact_id}"
+    if cache.get(cache_key):
+        return  # Prevent continuous syncing
+    
+    try:
+        contact = Contact.objects.get(id=contact_id)
+        image_url = None
+        
+        if platform in ['messenger', 'facebook_comment', 'instagram'] and token:
+            api_url = f"https://graph.facebook.com/v20.0/{sender_id}?fields=profile_pic&access_token={token}"
+            resp = requests.get(api_url, timeout=10)
+            if resp.status_code == 200:
+                resp_json = resp.json()
+                if 'profile_pic' in resp_json:
+                    image_url = resp_json['profile_pic']
+                    
+        elif platform == 'telegram' and token:
+            api_url = f"https://api.telegram.org/bot{token}/getUserProfilePhotos?user_id={sender_id}&limit=1"
+            resp = requests.get(api_url, timeout=10)
+            if resp.status_code == 200:
+                data_json = resp.json()
+                photos = data_json.get('result', {}).get('photos', [])
+                if photos and len(photos) > 0:
+                    file_id = photos[0][-1]['file_id']
+                    file_resp = requests.get(f"https://api.telegram.org/bot{token}/getFile?file_id={file_id}", timeout=10).json()
+                    file_path = file_resp.get('result', {}).get('file_path')
+                    if file_path:
+                        image_url = f"https://api.telegram.org/file/bot{token}/{file_path}"
+                        
+        elif platform == 'whatsapp' and data:
+            # Check native payload for EvolutionAPI / Baileys profile pic
+            image_url = data.get('profilePicUrl') or data.get('profile_picture')
+            
+        if not image_url:
+            cache.set(cache_key, "1", timeout=86400) # cache for 24h even if failed
+            return
+            
+        img_resp = requests.get(image_url, timeout=15)
+        if img_resp.status_code == 200:
+            content = img_resp.content
+            img_hash = hashlib.md5(content).hexdigest()
+            
+            if contact.profile_picture_hash != img_hash:
+                # Delete old file from MinIO securely
+                if contact.profile_picture:
+                    try:
+                        contact.profile_picture.delete(save=False)
+                    except Exception as minio_err:
+                        logger.error(f"MinIO delete error: {minio_err}")
+                
+                # Save new file
+                ext = "jpg"
+                filename = f"profile_{contact.id}_{int(time.time())}.{ext}"
+                contact.profile_picture.save(filename, ContentFile(content), save=False)
+                contact.profile_picture_hash = img_hash
+                contact.save(update_fields=['profile_picture', 'profile_picture_hash'])
+                logger.info(f"✅ Downloaded & saved new profile picture for contact {contact_id}")
+            else:
+                logger.info(f"⏭️ Profile picture for {contact_id} unchanged (Hash match)")
+            
+            # Cache success for 24h
+            cache.set(cache_key, "1", timeout=86400)
+            
+    except Exception as e:
+        logger.error(f"Profile picture sync failed for contact {contact_id}: {e}")
+
 def _send_platform_buttons_alone(request_type, data, sender_id, page_id, effective_access_token, contact_obj):
     """Helper to send ONLY the buttons when the AI reply itself is skipped."""
     if not contact_obj:
@@ -569,6 +642,11 @@ def process_ai_reply_task(self, data):
                 push_name=incoming_push_name
             )
             logger.info(f"✅ [Task] Contact sync: Created NEW {sender_id}")
+
+        # ── Profile Picture Sync Trigger ──
+        sync_contact_profile_picture.apply_async(args=[
+            contact_obj.id, p_type, sender_id, page_id, effective_access_token, data
+        ])
 
         # ── Message Logging & Dashboard Sync (Always) ──
         # Save early so even if AI doesn't reply (Human Mode), message is in history & dashboard

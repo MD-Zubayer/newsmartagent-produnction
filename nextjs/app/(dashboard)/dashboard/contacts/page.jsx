@@ -367,10 +367,22 @@ export default function Contacts() {
                           historyContact?.id === contact.id ? 'bg-[#f0f2f5]' : 'hover:bg-gray-50'
                         }`}
                       >
+                        {contact.profile_picture ? (
+                          <img 
+                            src={contact.profile_picture} 
+                            alt={contact.name || contact.identifier} 
+                            className="w-12 h-12 rounded-full object-cover shadow-sm bg-white"
+                            onError={(e) => {
+                              // Fallback on error
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
                         <div className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center text-white font-black text-lg ${
                           contact.platform === 'whatsapp' ? 'bg-[#25d366]' : 'bg-[#0084ff]'
-                        }`}>
-                          {contact.name?.charAt(0) || contact.identifier.charAt(0)}
+                        }`} style={{ display: contact.profile_picture ? 'none' : 'flex' }}>
+                          {(contact.name?.charAt(0) || contact.identifier.charAt(0))?.toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0 border-b border-gray-100 pb-2">
                           <div className="flex justify-between items-baseline mb-1">
@@ -442,10 +454,21 @@ export default function Contacts() {
                   {/* Chat Header */}
                   <div className="p-3 bg-[#f0f2f5] border-b border-gray-200 flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${
+                      {historyContact?.profile_picture ? (
+                        <img 
+                          src={historyContact.profile_picture} 
+                          alt={historyContact.name || historyContact.identifier} 
+                          className="w-10 h-10 rounded-full object-cover shadow-sm bg-white"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'flex';
+                          }}
+                        />
+                      ) : null}
+                      <div className={`w-10 h-10 rounded-full items-center justify-center text-white font-bold ${
                         historyContact?.platform === 'whatsapp' ? 'bg-[#25d366]' : 'bg-[#0084ff]'
-                      }`}>
-                        {historyContact?.name?.charAt(0) || historyContact?.identifier.charAt(0)}
+                      }`} style={{ display: historyContact?.profile_picture ? 'none' : 'flex' }}>
+                        {(historyContact?.name?.charAt(0) || historyContact?.identifier?.charAt(0))?.toUpperCase()}
                       </div>
                       <div>
                         <h3 className="text-sm font-bold text-gray-900 leading-tight flex items-center gap-2">

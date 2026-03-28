@@ -341,6 +341,8 @@ class Contact(models.Model):
     identifier = models.CharField(max_length=255, db_index=True)  # Phone number or Messenger Sender ID
     name = models.CharField(max_length=255, blank=True, null=True)
     push_name = models.CharField(max_length=255, blank=True, null=True)
+    profile_picture = models.ImageField(upload_to='contact_profiles/', null=True, blank=True)
+    profile_picture_hash = models.CharField(max_length=64, blank=True, null=True, help_text="MD5 hash to prevent duplicate MinIO uploads")
     is_auto_reply_enabled = models.BooleanField(default=True)
     custom_prompt = models.TextField(blank=True, null=True, help_text="Custom system prompt for this specific contact")
     custom_instructions = models.TextField(blank=True, null=True, help_text="Additional instructions for this contact")

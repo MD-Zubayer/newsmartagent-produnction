@@ -236,7 +236,7 @@ class ContactSerializer(serializers.ModelSerializer):
     class Meta:
         model = Contact
         fields = [
-            'id', 'agent', 'agent_name', 'identifier', 'name', 'push_name', 
+            'id', 'agent', 'agent_name', 'identifier', 'name', 'push_name', 'profile_picture',
             'is_auto_reply_enabled', 'is_human_needed', 'platform', 'created_at', 'updated_at',
             'custom_prompt', 'custom_instructions', 'last_message', 'last_message_time', 'unread_count', 'crm_data'
         ]
