@@ -6,7 +6,8 @@ import {
   PhoneIcon, 
   EnvelopeIcon, 
   EllipsisHorizontalIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
+  QueueListIcon,
 } from "@heroicons/react/24/outline";
 import { toast } from "react-hot-toast";
 import api from "@/lib/api";
@@ -23,27 +24,27 @@ const STAGES = [
 export default function SmartCRMPage() {
   const [agents, setAgents] = useState([]);
   const [selectedAgentId, setSelectedAgentId] = useState("all");
-  const [contacts, setContacts] = useState([]);           // filtered list
-  const [contactsRaw, setContactsRaw] = useState([]);     // unfiltered list
+  const [contacts, setContacts] = useState([]);
+  const [contactsRaw, setContactsRaw] = useState([]);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [loading, setLoading] = useState(true);
+  const [draggingContactId, setDraggingContactId] = useState(null);
+  const [selectedCard, setSelectedCard] = useState(null);
+
+  // Scheduling state
   const [isScheduleModal, setIsScheduleModal] = useState(false);
   const [scheduleText, setScheduleText] = useState("");
   const [scheduleTime, setScheduleTime] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [showSchedulePanel, setShowSchedulePanel] = useState(false);
   const [schedules, setSchedules] = useState([]);
   const [loadingSchedule, setLoadingSchedule] = useState(false);
   const [scheduleStatus, setScheduleStatus] = useState("all");
   const [scheduleStart, setScheduleStart] = useState("");
   const [scheduleEnd, setScheduleEnd] = useState("");
   const [viewSchedule, setViewSchedule] = useState(null);
-  const [showSchedulePanel, setShowSchedulePanel] = useState(false);
-  
-  // For drag and drop
-  const [draggingContactId, setDraggingContactId] = useState(null);
-
-  const [selectedCard, setSelectedCard] = useState(null);
+  const [scheduleDetail, setScheduleDetail] = useState(null);
 
   useEffect(() => {
     fetchAgents();
@@ -55,6 +56,10 @@ export default function SmartCRMPage() {
       fetchContacts();
     }
   }, [selectedAgentId]);
+
+  useEffect(() => {
+    applyFilters(contactsRaw, startDate, endDate, statusFilter);
+  }, [startDate, endDate, statusFilter, contactsRaw]);
 
   const fetchAgents = async () => {
     try {
@@ -73,7 +78,6 @@ export default function SmartCRMPage() {
     try {
       const res = await api.get(`/AgentAI/contacts/${selectedAgentId}/`);
       const rows = res.data.contacts || [];
-      // CRM বোর্ডে শুধু যারা অন্তত একটি মেসেজ/সারাংশ রয়েছে তাদেরই দেখাব
       const withActivity = rows.filter(c => c.last_message || c.crm_data?.ai_summary);
       setContactsRaw(withActivity);
       applyFilters(withActivity, startDate, endDate, statusFilter);
@@ -87,6 +91,9 @@ export default function SmartCRMPage() {
   const applyFilters = (list, sDate, eDate, stage) => {
     let filtered = list;
     if (stage && stage !== "all") {
+      filtered = filtered.filter(c => (c.crm_data?.lead_stage || "new") === stage.id ? false : true);
+    }
+    if (stage && stage !== "all") {
       filtered = filtered.filter(c => (c.crm_data?.lead_stage || "new") === stage);
     }
     if (sDate) {
@@ -95,17 +102,11 @@ export default function SmartCRMPage() {
     }
     if (eDate) {
       const ed = new Date(eDate);
-      // include end day fully by adding 1 day
       ed.setHours(23,59,59,999);
       filtered = filtered.filter(c => new Date(c.created_at) <= ed);
     }
     setContacts(filtered);
   };
-
-  // Re-apply filters when user changes filters
-  useEffect(() => {
-    applyFilters(contactsRaw, startDate, endDate, statusFilter);
-  }, [startDate, endDate, statusFilter, contactsRaw]);
 
   const fetchSchedules = async () => {
     setLoadingSchedule(true);
@@ -123,42 +124,13 @@ export default function SmartCRMPage() {
     }
   };
 
-  const currentBoard = STAGES.map(stage => ({
-    ...stage,
-    cards: contacts.filter(c => (c.crm_data?.lead_stage || "new") === stage.id)
-  }));
-
-  const handleDragStart = (e, contactId) => {
-    setDraggingContactId(contactId);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', contactId.toString());
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-
-  const handleDrop = async (e, stageId) => {
-    e.preventDefault();
-    if (!draggingContactId) return;
-
-    const updatedContacts = contacts.map(c => {
-      if (c.id === draggingContactId) {
-        return { ...c, crm_data: { ...c.crm_data, lead_stage: stageId } };
-      }
-      return c;
-    });
-    setContacts(updatedContacts);
-    setDraggingContactId(null);
-
+  const fetchScheduleDetail = async (id) => {
     try {
-      await api.patch(`/AgentAI/contacts/detail/${draggingContactId}/`, {
-        crm_data: { lead_stage: stageId }
-      });
+      const res = await api.get("/AgentAI/schedule/", { params: { id } });
+      const data = Array.isArray(res?.data) ? res.data[0] : res.data;
+      setScheduleDetail(data);
     } catch (err) {
-      toast.error("Failed to update lead stage");
-      fetchContacts();
+      toast.error("Failed to load schedule detail");
     }
   };
 
@@ -204,10 +176,55 @@ export default function SmartCRMPage() {
     }
   };
 
+  const handleViewSchedule = async (s) => {
+    setScheduleDetail(null);
+    setViewSchedule(s);
+    await fetchScheduleDetail(s.id);
+  };
+
+  const currentBoard = STAGES.map(stage => ({
+    ...stage,
+    cards: contacts.filter(c => (c.crm_data?.lead_stage || "new") === stage.id)
+  }));
+
+  const handleDragStart = (e, contactId) => {
+    setDraggingContactId(contactId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', contactId.toString());
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = async (e, stageId) => {
+    e.preventDefault();
+    if (!draggingContactId) return;
+
+    const updatedContacts = contacts.map(c => {
+      if (c.id === draggingContactId) {
+        return { ...c, crm_data: { ...c.crm_data, lead_stage: stageId } };
+      }
+      return c;
+    });
+    setContacts(updatedContacts);
+    setDraggingContactId(null);
+
+    try {
+      await api.patch(`/AgentAI/contacts/detail/${draggingContactId}/`, {
+        crm_data: { lead_stage: stageId }
+      });
+    } catch (err) {
+      toast.error("Failed to update lead stage");
+      fetchContacts();
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-[#f8f9fa] overflow-hidden">
       {/* Header */}
-      <div className="bg-white px-6 py-4 border-b border-gray-100 flex items-center justify-between shrink-0 shadow-sm z-10">
+      <div className="bg-white px-4 sm:px-6 py-4 border-b border-gray-100 flex flex-wrap gap-3 items-center justify-between shrink-0 shadow-sm z-10">
         <div>
           <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-600 to-blue-600 flex items-center gap-2">
             <FunnelIcon className="h-6 w-6 text-cyan-600" />
@@ -216,11 +233,11 @@ export default function SmartCRMPage() {
           <p className="text-sm text-gray-500 mt-1">AI-Powered Lead Management</p>
         </div>
         
-        <div className="flex items-center gap-3 flex-wrap justify-end">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           <select 
             value={selectedAgentId} 
             onChange={e => setSelectedAgentId(e.target.value)}
-            className="px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 outline-none transition-all shadow-sm font-medium"
+            className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 outline-none transition-all shadow-sm font-medium"
           >
             <option value="all">🌐 All Channels & Agents</option>
             {agents.map(a => (
@@ -255,6 +272,7 @@ export default function SmartCRMPage() {
             onClick={() => setShowSchedulePanel(true)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm font-semibold shadow hover:bg-cyan-700 transition"
           >
+            <QueueListIcon className="w-4 h-4" />
             <span>Schedule Center</span>
             {schedules.length > 0 && (
               <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-bold">{schedules.length}</span>
@@ -264,21 +282,20 @@ export default function SmartCRMPage() {
       </div>
 
       {/* Kanban Board Area */}
-      <div className="flex-1 overflow-x-auto overflow-y-hidden p-6">
+      <div className="flex-1 overflow-x-auto overflow-y-hidden p-4 sm:p-6">
         {loading ? (
           <div className="h-full flex items-center justify-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600"></div>
           </div>
         ) : (
-          <div className="flex h-full gap-6 px-2 min-w-max pb-4">
+          <div className="flex h-full gap-4 sm:gap-6 px-1 sm:px-2 min-w-max pb-4">
             {currentBoard.map((col) => (
               <div 
                 key={col.id} 
-                className={`w-[320px] shrink-0 flex flex-col rounded-xl overflow-hidden shadow-sm border border-gray-200 bg-white`}
+                className="w-[280px] sm:w-[320px] shrink-0 flex flex-col rounded-xl overflow-hidden shadow-sm border border-gray-200 bg-white"
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, col.id)}
               >
-                {/* Column Header */}
                 <div className={`px-4 py-3 border-b border-gray-100 flex items-center justify-between ${col.bgLight}`}>
                   <div className="flex items-center gap-2">
                     <span className={`w-3 h-3 rounded-full ${col.color}`}></span>
@@ -289,7 +306,6 @@ export default function SmartCRMPage() {
                   </span>
                 </div>
 
-                {/* Column Body / Cards */}
                 <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-[#f8f9fa]/50">
                   {col.cards.map(card => (
                     <div
@@ -298,26 +314,26 @@ export default function SmartCRMPage() {
                       onDragStart={(e) => handleDragStart(e, card.id)}
                       className={`bg-white rounded-lg p-4 shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing group ${draggingContactId === card.id ? 'opacity-50 scale-95' : ''}`}
                     >
-                        <div className="flex items-start justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            {card.profile_picture ? (
-                              <img 
-                                src={card.profile_picture} 
-                                alt={card.name || card.identifier} 
-                                className="w-10 h-10 rounded-full object-cover shadow-sm bg-white border border-gray-100"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                  const fallback = e.currentTarget.nextElementSibling;
-                                  if (fallback) fallback.style.display = 'flex';
-                                }}
-                              />
-                            ) : null}
-                            <div
-                              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${col.color}`}
-                              style={{ display: card.profile_picture ? 'none' : 'flex' }}
-                            >
-                              {(card.name || card.identifier || '?').charAt(0).toUpperCase()}
-                            </div>
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          {card.profile_picture ? (
+                            <img 
+                              src={card.profile_picture} 
+                              alt={card.name || card.identifier} 
+                              className="w-10 h-10 rounded-full object-cover shadow-sm bg-white border border-gray-100"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                const fallback = e.currentTarget.nextElementSibling;
+                                if (fallback) fallback.style.display = 'flex';
+                              }}
+                            />
+                          ) : null}
+                          <div
+                            className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${col.color}`}
+                            style={{ display: card.profile_picture ? 'none' : 'flex' }}
+                          >
+                            {(card.name || card.identifier || '?').charAt(0).toUpperCase()}
+                          </div>
                           <div>
                             <h4 className="font-bold text-sm text-gray-900 line-clamp-1">{card.name || card.identifier}</h4>
                             <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider flex items-center gap-1">
@@ -396,7 +412,6 @@ export default function SmartCRMPage() {
               <div className="grid grid-cols-1 gap-3">
                 {selectedCard.crm_data?.raw_data && Object.keys(selectedCard.crm_data.raw_data).length > 0 ? (
                   Object.entries(selectedCard.crm_data.raw_data).map(([key, value]) => {
-                    // Skip standardized keys to avoid visual duplication, though seeing all is fine too
                     if (["lead_stage", "phone_number", "email"].includes(key) && !value) return null;
                     
                     return (
@@ -466,7 +481,7 @@ export default function SmartCRMPage() {
                 />
               </div>
               <div>
-                <label className="text-sm font-semibold text-gray-700">Send at (ISO)</label>
+                <label className="text-sm font-semibold text-gray-700">Send at</label>
                 <input
                   type="datetime-local"
                   value={scheduleTime}
@@ -474,7 +489,7 @@ export default function SmartCRMPage() {
                   className="mt-2 w-full border border-gray-200 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
                 />
               </div>
-              <p className="text-xs text-gray-500">ফিল্টার: বর্তমানে সেট করা স্ট্যাটাস/তারিখ ফিল্টারই প্রয়োগ হবে।</p>
+              <p className="text-xs text-gray-500">বর্তমান ফিল্টার (স্ট্যাটাস/তারিখ) এই শিডিউলে প্রয়োগ হবে।</p>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2 bg-gray-50">
               <button
@@ -497,7 +512,6 @@ export default function SmartCRMPage() {
       {/* Schedule Center Drawer */}
       {showSchedulePanel && (
         <div className="fixed inset-0 z-40 flex sm:justify-end">
-          {/* overlay */}
           <div className="flex-1 bg-black/40 backdrop-blur-sm sm:block hidden" onClick={() => setShowSchedulePanel(false)} />
           <div className="w-full sm:w-[520px] bg-white shadow-2xl h-full overflow-y-auto sm:rounded-l-2xl sm:border-l sm:border-gray-200">
             <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-gray-50 sticky top-0 z-10">
@@ -557,46 +571,101 @@ export default function SmartCRMPage() {
               ) : schedules.length === 0 ? (
                 <p className="text-sm text-gray-400">No schedules.</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-gray-50">
-                      <tr className="text-left text-gray-500">
-                        <th className="px-3 py-2">Message</th>
-                        <th className="px-3 py-2">Run At</th>
-                        <th className="px-3 py-2">Status</th>
-                        <th className="px-3 py-2">Audience</th>
-                        <th className="px-3 py-2"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {schedules.map((s) => (
-                        <tr key={s.id}>
-                          <td className="px-3 py-2 max-w-xs truncate">{s.message}</td>
-                          <td className="px-3 py-2 whitespace-nowrap">{new Date(s.run_at).toLocaleString()}</td>
-                          <td className="px-3 py-2 capitalize">{s.status}</td>
-                          <td className="px-3 py-2">{s.audience_count}</td>
-                          <td className="px-3 py-2 text-right">
+                <div className="space-y-2">
+                  {schedules.map((s) => (
+                    <div key={s.id} className="border border-gray-200 rounded-lg p-3 shadow-sm">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 text-xs text-gray-500">
+                            <span className="capitalize px-2 py-0.5 rounded bg-gray-100 text-gray-700">{s.status}</span>
+                            <span>{new Date(s.run_at).toLocaleString()}</span>
+                          </div>
+                          <p className="mt-2 text-sm text-gray-800 line-clamp-2">{s.message}</p>
+                          <div className="mt-1 text-[11px] text-gray-500">Audience: {s.audience_count}</div>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <button
+                            onClick={() => handleViewSchedule(s)}
+                            className="text-xs text-blue-600 hover:text-blue-700 font-semibold mr-2"
+                          >
+                            View
+                          </button>
+                          {s.status === "pending" && (
                             <button
-                              onClick={() => setViewSchedule(s)}
-                              className="text-xs text-blue-600 hover:text-blue-700 font-semibold mr-2"
+                              onClick={() => handleDeleteSchedule(s.id)}
+                              className="text-xs text-rose-600 hover:text-rose-700 font-semibold"
                             >
-                              View
+                              Delete
                             </button>
-                            {s.status === "pending" && (
-                              <button
-                                onClick={() => handleDeleteSchedule(s.id)}
-                                className="text-xs text-rose-600 hover:text-rose-700 font-semibold"
-                              >
-                                Delete
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Schedule Detail Modal */}
+      {viewSchedule && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setViewSchedule(null)}></div>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 z-10 overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h2 className="text-lg font-bold text-gray-900">Schedule Details</h2>
+              <button 
+                onClick={() => setViewSchedule(null)}
+                className="text-gray-400 hover:text-gray-600 bg-white shadow-sm border border-gray-200 rounded-full w-8 h-8 flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-6 space-y-3 text-sm text-gray-700">
+              <div>
+                <p className="font-semibold">Message</p>
+                <p className="mt-1 bg-gray-50 p-2 rounded border border-gray-100 whitespace-pre-wrap">{scheduleDetail?.message || viewSchedule.message}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="font-semibold">Run At</p>
+                  <p>{new Date(scheduleDetail?.run_at || viewSchedule.run_at).toLocaleString()}</p>
+                </div>
+                <div>
+                  <p className="font-semibold">Status</p>
+                  <p className="capitalize">{scheduleDetail?.status || viewSchedule.status}</p>
+                </div>
+                <div>
+                  <p className="font-semibold">Audience Count</p>
+                  <p>{scheduleDetail?.audience_count ?? viewSchedule.audience_count}</p>
+                </div>
+                <div>
+                  <p className="font-semibold">Created</p>
+                  <p>{scheduleDetail?.created_at ? new Date(scheduleDetail.created_at).toLocaleString() : "-"}</p>
+                </div>
+              </div>
+              {scheduleDetail?.filter_payload && (
+                <div>
+                  <p className="font-semibold">Filters</p>
+                  <pre className="mt-1 bg-gray-50 p-2 rounded border border-gray-100 text-xs overflow-auto">{JSON.stringify(scheduleDetail.filter_payload, null, 2)}</pre>
+                </div>
+              )}
+              {scheduleDetail?.error_message && (
+                <div>
+                  <p className="font-semibold text-rose-600">Error</p>
+                  <p className="text-rose-500 bg-rose-50 border border-rose-100 rounded p-2 mt-1 whitespace-pre-wrap">{scheduleDetail.error_message}</p>
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50">
+              <button
+                onClick={() => setViewSchedule(null)}
+                className="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm font-semibold"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
@@ -604,3 +673,4 @@ export default function SmartCRMPage() {
     </div>
   );
 }
+
