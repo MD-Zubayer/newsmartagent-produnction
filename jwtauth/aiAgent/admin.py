@@ -18,6 +18,7 @@ import json
 import re
 from .cache.hybrid_similarity import clear_agent_cache, clear_global_cache, clear_agent_ranking, delete_specific_cache_entry, delete_by_message_text
 from .cache.ranking import get_top_message
+from django import forms
 
 class KeywordUploadForm(forms.Form):
     category = forms.ChoiceField(choices=SmartKeyword.CATEGORY_CHOICES)
@@ -86,11 +87,29 @@ class WidgetSettingsInline(admin.StackedInline):
 
 @admin.register(AgentAI)
 class AgentAIAdmin(ModelAdmin):
-    list_display = [ 'id', 'name', 'cache_tools', 'user', 'platform', 'number', 'page_id', 'is_active', 'ai_agent_type', 'is_special_agent', 'created_at']
+    list_display = [ 'id', 'name', 'cache_tools', 'user', 'platform', 'number', 'page_id', 'is_active', 'ai_agent_type', 'is_special_agent', 'created_at', 'schedule_max_batch', 'schedule_delay_seconds']
     list_filter = ['platform', 'special_agent_status', 'is_active', 'is_special_agent', 'user', 'ai_agent_type',]
     search_fields = ['name', 'page_id', 'number', 'user__username']
     inlines = [AgentAISettingsInline, WidgetSettingsInline]
     readonly_fields = ['cache_view_link', 'created_at']
+    fieldsets = (
+        (None, {
+            'fields': ('user', 'name', 'platform', 'page_id', 'number', 'system_prompt', 'greeting_message', 'ai_agent_type', 'is_active', 'is_special_agent', 'special_agent_status')
+        }),
+        ("Scheduling Defaults", {
+            'fields': ('schedule_max_batch', 'schedule_delay_seconds'),
+            'description': "এই এজেন্টের শিডিউলগুলোর ডিফল্ট ব্যাচ সাইজ ও প্রতি মেসেজ বিলম্ব (সেকেন্ড)"
+        }),
+        ("Tokens & Models", {
+            'fields': ('ai_model', 'selected_model', 'token_expires_at')
+        }),
+        ("Webhook & Keys", {
+            'fields': ('webhook_secret', 'access_token')
+        }),
+        ("Meta", {
+            'fields': ('cache_view_link', 'created_at')
+        }),
+    )
 
     def cache_view_link(self, obj):
         from django.utils.html import format_html
@@ -104,6 +123,25 @@ class AgentAIAdmin(ModelAdmin):
     created_short.short_description = "Created"
 
     actions = ['clear_cache_action', 'clear_ranking_action', 'clear_global_cache_action']
+
+    change_list_template = "admin/aiAgent/agentai_changelist.html"
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        if request.method == "POST" and "apply_schedule_defaults" in request.POST:
+            max_batch = request.POST.get("global_max_batch")
+            delay_sec = request.POST.get("global_delay_seconds")
+            updated = 0
+            qs = self.get_queryset(request)
+            for agent in qs:
+                if max_batch:
+                    agent.schedule_max_batch = int(max_batch)
+                if delay_sec is not None and delay_sec != "":
+                    agent.schedule_delay_seconds = int(delay_sec)
+                agent.save(update_fields=["schedule_max_batch", "schedule_delay_seconds"])
+                updated += 1
+            self.message_user(request, f"Updated scheduling defaults for {updated} agents.")
+        return super().changelist_view(request, extra_context=extra_context)
 
     def clear_cache_action(self, request, queryset):
         total_cleared = 0
@@ -124,6 +162,8 @@ class AgentAIAdmin(ModelAdmin):
         count = clear_global_cache()
         self.message_user(request, f"✅ Successfully cleared {count} global cache entries.")
     clear_global_cache_action.short_description = "🌐 Clear GLOBAL Cache (Universal)"
+
+    actions = ['clear_cache_action', 'clear_ranking_action', 'clear_global_cache_action']
 
     @display(description="🧠 Intelligence Cache", label=True)
     def cache_tools(self, obj):

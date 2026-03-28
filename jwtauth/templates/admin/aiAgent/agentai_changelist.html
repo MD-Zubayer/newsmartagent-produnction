@@ -1,0 +1,16 @@
+{% extends "admin/change_list.html" %}
+
+{% block content %}
+<div style="margin-bottom:16px;padding:12px;border:1px solid #e5e7eb;border-radius:12px;background:#f9fafb;">
+  <form method="post" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+    {% csrf_token %}
+    <strong>Bulk Scheduling Defaults (selected list filter scope):</strong>
+    <input type="number" min="1" name="global_max_batch" placeholder="Max batch (e.g. 500)" style="padding:6px;border:1px solid #d1d5db;border-radius:8px;">
+    <input type="number" min="0" name="global_delay_seconds" placeholder="Delay sec (e.g. 2)" style="padding:6px;border:1px solid #d1d5db;border-radius:8px;">
+    <button type="submit" name="apply_schedule_defaults" class="button default" style="padding:6px 12px;border-radius:8px;background:#059669;color:white;border:none;">
+      Apply to filtered agents
+    </button>
+  </form>
+</div>
+{{ block.super }}
+{% endblock %}
