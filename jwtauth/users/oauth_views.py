@@ -1,4 +1,5 @@
 import requests
+import json
 import logging
 from datetime import timedelta
 from django.shortcuts import redirect
@@ -88,7 +89,6 @@ def facebook_callback(request):
     token_expires_at = timezone.now() + timedelta(seconds=expires_in) if expires_in else None
 
     # DEBUG TRAP - COMPREHENSIVE LOGGING
-    import json
     import os
     debug_log_path = "/app/debug_fb_full.log"
     print(f"DEBUG: Starting FB callback for USER_ID: {user_id}")
@@ -389,7 +389,6 @@ def handle_youtube_callback_data(request, user_id, access_token, refresh_token, 
 
     # 3. Store in Redis for selection
     import uuid
-    import json
     from aiAgent.cache.client import get_redis_client
     
     session_id = str(uuid.uuid4())
@@ -455,7 +454,6 @@ def handle_gbp_callback_data(request, user_id, access_token, refresh_token, toke
         return redirect(f"{frontend_url}/dashboard/connect?error=no_gbp_locations&message=No locations found in your Google Business Profile accounts.")
 
     import uuid
-    import json
     from aiAgent.cache.client import get_redis_client
     
     session_id = str(uuid.uuid4())
@@ -485,7 +483,6 @@ def handle_gbp_callback_data(request, user_id, access_token, refresh_token, toke
     return HttpResponse(script)
 
 def build_postmessage_script(items, session_id, platform, frontend_url):
-    import json
     return f'''
     <script>
         if (window.opener) {{
@@ -517,7 +514,6 @@ def get_youtube_session_channels(request):
     if not session_id:
         return JsonResponse({"error": "Missing sessionId"}, status=400)
         
-    import json
     from aiAgent.cache.client import get_redis_client
     redis_client = get_redis_client()
     
@@ -556,7 +552,6 @@ def confirm_youtube_connection(request):
     if not session_id or not channel_id:
         return JsonResponse({"error": "Missing sessionId or channelId."}, status=400)
     
-    import json
     from aiAgent.cache.client import get_redis_client
     redis_client = get_redis_client()
     
@@ -636,7 +631,6 @@ def get_gbp_session_locations(request):
     if not session_id:
         return JsonResponse({"error": "Missing sessionId"}, status=400)
         
-    import json
     from aiAgent.cache.client import get_redis_client
     redis_client = get_redis_client()
     
@@ -674,7 +668,6 @@ def confirm_gbp_connection(request):
     if not session_id or not location_id:
         return JsonResponse({"error": "Missing sessionId or locationId."}, status=400)
     
-    import json
     from aiAgent.cache.client import get_redis_client
     redis_client = get_redis_client()
     
@@ -908,7 +901,6 @@ def tiktok_callback(request):
     </script>
     '''
     from django.http import HttpResponse
-    import json
     return HttpResponse(script)
 
 @api_view(['GET'])
@@ -941,7 +933,6 @@ def facebook_data_deletion(request):
     # Facebook sends a signed_request. Typically you need to parse/decode it
     # to get the user_id. Here we implement a simplified stub that responds correctly.
     import base64
-    import json
     import hashlib
     import hmac
 
