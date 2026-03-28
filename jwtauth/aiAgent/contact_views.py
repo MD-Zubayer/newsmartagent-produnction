@@ -13,6 +13,13 @@ from datetime import datetime
 from aiAgent.models import UserMemory
 from celery import shared_task
 from django.db import transaction
+from aiAgent.business_logic.logic_handler import (
+    deliver_whatsapp_reply,
+    deliver_instagram_reply,
+    deliver_facebook_reply,
+    deliver_telegram_reply,
+)
+from aiAgent.models import TelegramBot
 import uuid
 class ContactListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -232,7 +239,52 @@ def dispatch_scheduled_message(schedule_id):
                     content=sched.message,
                     platform=contact.platform
                 )
-                sent += 1
+
+                # attempt delivery per platform
+                try:
+                    if contact.platform == 'whatsapp':
+                        data = {
+                            "sender_id": contact.identifier,
+                            "message_id": "",
+                            "sessionId": f"user_{contact.agent.user.id}"
+                        }
+                        if deliver_whatsapp_reply(data, sched.message):
+                            sent += 1
+                    elif contact.platform in ['messenger', 'facebook_comment']:
+                        if contact.agent.page_id and contact.agent.access_token:
+                            if deliver_facebook_reply(
+                                {"sender_id": contact.identifier},
+                                sched.message,
+                                contact.agent.page_id,
+                                contact.agent.access_token
+                            ):
+                                sent += 1
+                    elif contact.platform == 'instagram':
+                        if contact.agent.page_id and contact.agent.access_token:
+                            if deliver_instagram_reply(
+                                {"sender_id": contact.identifier},
+                                sched.message,
+                                contact.agent.page_id,
+                                contact.agent.access_token
+                            ):
+                                sent += 1
+                    elif contact.platform == 'telegram':
+                        token = None
+                        bot = TelegramBot.objects.filter(agent=contact.agent, is_active=True).first()
+                        if bot and bot.bot_token:
+                            token = bot.bot_token
+                        if token:
+                            if deliver_telegram_reply(
+                                {"sender_id": contact.identifier, "chat_id": contact.identifier},
+                                sched.message,
+                                token
+                            ):
+                                sent += 1
+                    else:
+                        # platforms we don't deliver, still count as logged
+                        sent += 1
+                except Exception as send_err:
+                    logger.error(f"Scheduled delivery failed for contact {contact.id}: {send_err}")
 
             sched.status = 'sent'
             sched.audience_count = sent
