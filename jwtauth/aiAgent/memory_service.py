@@ -132,6 +132,24 @@ def extract_and_update_memory(ai_agent, sender_id, chat_history):
         memory, _ = UserMemory.objects.get_or_create(ai_agent=ai_agent, sender_id=sender_id)
 
         current_info = memory.data or {}
+
+        # --- Lead Stage Safety Net ---
+        allowed_stages = {"new", "cold", "warm", "hot", "converted", "lost"}
+        incoming_stage = reply_json.get("lead_stage")
+
+        if incoming_stage:
+            incoming_stage = incoming_stage.lower()
+            if incoming_stage not in allowed_stages:
+                incoming_stage = "warm"
+            reply_json["lead_stage"] = incoming_stage
+        else:
+            # If the model missed it, derive a sensible default
+            if current_info.get("lead_stage"):
+                reply_json["lead_stage"] = current_info["lead_stage"]
+            else:
+                # If we already got a memory_summary, treat as warm lead
+                reply_json["lead_stage"] = "warm" if reply_json.get("memory_summary") else "new"
+
         current_info.update({k: v for k, v in reply_json.items() if v is not None})
         
         memory.data = current_info
