@@ -59,3 +59,29 @@ Cookie: access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYW
     'email': 'junayed75489@gmail.com',
     'password': '1234'
 }
+
+
+###
+GET https://newsmartagent.com/api/AgentAI/schedule/
+Content-Type: application/json
+Cookie: access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc0NzIxNTU0LCJpYXQiOjE3NzQ3MTc5NTQsImp0aSI6IjQ1Mjc4YjcwMzgwNjRiNmJhNTliYjRkODgyMjg2YzIyIiwidXNlcl9pZCI6IjIifQ.Xv6W3vEcZJERKfEZmt2w8702yc-bFftFRy0NswmgHms
+
+{
+    'email': 'junayed75489@gmail.com',
+    'password': '1234'
+}
+
+
+curl -X POST http://localhost:8000/api/AgentAI/schedule/ \
+  -H "Content-Type: application/json" \
+  -H "Cookie: access_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzc0NzIxNTU0LCJpYXQiOjE3NzQ3MTc5NTQsImp0aSI6IjQ1Mjc4YjcwMzgwNjRiNmJhNTliYjRkODgyMjg2YzIyIiwidXNlcl9pZCI6IjIifQ.Xv6W3vEcZJERKfEZmt2w8702yc-bFftFRy0NswmgHms" \
+  -d '{
+    "agent_id": "24",
+    "message": "Hello from Container!",
+    "run_at": "2026-03-29T10:00:00+06:00",
+    "filters": {
+      "lead_stage": "all",
+      "start_date": null,
+      "end_date": null
+    }
+  }'

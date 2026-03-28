@@ -249,9 +249,13 @@ class ScheduledMessageView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        qs = ScheduledMessage.objects.filter(agent__user=request.user).order_by('-run_at')[:100]
-        ser = ScheduledMessageSerializer(qs, many=True)
-        return Response(ser.data, status=200)
+        sched_id = request.GET.get('id')
+        qs = ScheduledMessage.objects.filter(agent__user=request.user)
+        if sched_id:
+            qs = qs.filter(id=sched_id)
+        qs = qs.order_by('-run_at')[:200]
+        ser = ScheduledMessageSerializer(qs, many=True if not sched_id else False)
+        return Response(ser.data if not sched_id else ser.data, status=200)
 
     def post(self, request):
         data = request.data
@@ -298,6 +302,18 @@ class ScheduledMessageView(APIView):
             "scheduled_id": sched.id,
             "audience_count": audience_count
         }, status=201)
+
+    def delete(self, request):
+        sched_id = request.data.get('id') or request.query_params.get('id')
+        if not sched_id:
+            return Response({"error": "id required"}, status=400)
+        sched = ScheduledMessage.objects.filter(id=sched_id, agent__user=request.user).first()
+        if not sched:
+            return Response({"error": "Not found"}, status=404)
+        if sched.status != 'pending':
+            return Response({"error": "Only pending schedules can be deleted"}, status=400)
+        sched.delete()
+        return Response({"success": True}, status=200)
 
 class UnifiedReplyView(APIView):
     permission_classes = [IsAuthenticated]

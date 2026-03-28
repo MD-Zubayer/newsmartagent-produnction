@@ -32,6 +32,8 @@ export default function SmartCRMPage() {
   const [scheduleText, setScheduleText] = useState("");
   const [scheduleTime, setScheduleTime] = useState("");
   const [loading, setLoading] = useState(true);
+  const [schedules, setSchedules] = useState([]);
+  const [loadingSchedule, setLoadingSchedule] = useState(false);
   
   // For drag and drop
   const [draggingContactId, setDraggingContactId] = useState(null);
@@ -40,6 +42,7 @@ export default function SmartCRMPage() {
 
   useEffect(() => {
     fetchAgents();
+    fetchSchedules();
   }, []);
 
   useEffect(() => {
@@ -98,6 +101,18 @@ export default function SmartCRMPage() {
   useEffect(() => {
     applyFilters(contactsRaw, startDate, endDate, statusFilter);
   }, [startDate, endDate, statusFilter, contactsRaw]);
+
+  const fetchSchedules = async () => {
+    setLoadingSchedule(true);
+    try {
+      const res = await api.get("/AgentAI/schedule/");
+      setSchedules(Array.isArray(res?.data) ? res.data : []);
+    } catch (err) {
+      toast.error("Failed to load schedules");
+    } finally {
+      setLoadingSchedule(false);
+    }
+  };
 
   const currentBoard = STAGES.map(stage => ({
     ...stage,
@@ -163,8 +178,19 @@ export default function SmartCRMPage() {
       setIsScheduleModal(false);
       setScheduleText("");
       setScheduleTime("");
+      fetchSchedules();
     } catch (err) {
       toast.error(err.response?.data?.error || "Scheduling failed");
+    }
+  };
+
+  const handleDeleteSchedule = async (id) => {
+    try {
+      await api.delete("/AgentAI/schedule/", { data: { id } });
+      toast.success("Schedule deleted");
+      setSchedules(prev => prev.filter(s => s.id !== id));
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Delete failed");
     }
   };
 
@@ -228,6 +254,60 @@ export default function SmartCRMPage() {
 
       {/* Kanban Board Area */}
       <div className="flex-1 overflow-x-auto overflow-y-hidden p-6">
+        {/* Schedule list */}
+        <div className="bg-white border border-gray-200 rounded-lg shadow-sm mb-4 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold text-gray-800">Scheduled Messages</h3>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={fetchSchedules}
+                className="text-xs px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 border border-gray-200"
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+          {loadingSchedule ? (
+            <p className="text-sm text-gray-500">Loading...</p>
+          ) : schedules.length === 0 ? (
+            <p className="text-sm text-gray-400">No schedules.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr className="text-left text-gray-500">
+                    <th className="px-3 py-2">Message</th>
+                    <th className="px-3 py-2">Run At</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Audience</th>
+                    <th className="px-3 py-2"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {schedules.map((s) => (
+                    <tr key={s.id}>
+                      <td className="px-3 py-2 max-w-xs truncate">{s.message}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{new Date(s.run_at).toLocaleString()}</td>
+                      <td className="px-3 py-2 capitalize">{s.status}</td>
+                      <td className="px-3 py-2">{s.audience_count}</td>
+                      <td className="px-3 py-2 text-right">
+                        {s.status === "pending" && (
+                          <button
+                            onClick={() => handleDeleteSchedule(s.id)}
+                            className="text-xs text-rose-600 hover:text-rose-700 font-semibold"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
         {loading ? (
           <div className="h-full flex items-center justify-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600"></div>
