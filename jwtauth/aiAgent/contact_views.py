@@ -14,16 +14,17 @@ class ContactListView(APIView):
     def get(self, request, agent_id):
         try:
             query = request.GET.get('q', '')
+            platform_filter = request.GET.get('platform')
             
             if agent_id == 'all':
                 # Fetch contacts for all agents of this user
-                contacts = Contact.objects.filter(agent__user=request.user).order_by('-updated_at')
+                contacts = Contact.objects.filter(agent__user=request.user)
             else:
                 if agent_id.isdigit():
                     agent = AgentAI.objects.get(id=int(agent_id), user=request.user)
                 else:
                     agent = AgentAI.objects.get(models.Q(page_id=agent_id) | models.Q(number=agent_id), user=request.user)
-                contacts = Contact.objects.filter(agent=agent).order_by('-updated_at')
+                contacts = Contact.objects.filter(agent=agent)
             
             if query:
                 contacts = contacts.filter(
@@ -31,7 +32,14 @@ class ContactListView(APIView):
                     models.Q(push_name__icontains=query) | 
                     models.Q(identifier__icontains=query)
                 )
-                
+
+            # By default exclude YouTube contacts from the main list; allow explicit filter
+            if platform_filter:
+                contacts = contacts.filter(platform=platform_filter)
+            else:
+                contacts = contacts.exclude(platform='youtube')
+
+            contacts = contacts.order_by('-updated_at')
             serializer = ContactSerializer(contacts[:100], many=True)
             return Response({"contacts": serializer.data}, status=status.HTTP_200_OK)
         except AgentAI.DoesNotExist:

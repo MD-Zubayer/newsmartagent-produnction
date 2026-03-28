@@ -337,6 +337,9 @@ class Contact(models.Model):
         ('messenger', 'Messenger'),
         ('web_widget', 'Web Chat Widget'),
         ('facebook_comment', 'Facebook Comment'),
+        ('instagram', 'Instagram'),
+        ('telegram', 'Telegram'),
+        ('youtube', 'YouTube'),
     ]
     agent = models.ForeignKey(AgentAI, on_delete=models.CASCADE, related_name='contacts')
     identifier = models.CharField(max_length=255, db_index=True)  # Phone number or Messenger Sender ID

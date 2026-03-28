@@ -643,7 +643,7 @@ def process_ai_reply_task(self, data):
             contact_name = fetch_messenger_profile(sender_id, effective_access_token)
 
         # --- ROBUST CONTACT SYNC & STATE MIGRATION ---
-        p_type = request_type if request_type in ['whatsapp', 'messenger', 'web_widget', 'facebook_comment', 'instagram', 'telegram'] else 'messenger'
+        p_type = request_type if request_type in ['whatsapp', 'messenger', 'web_widget', 'facebook_comment', 'instagram', 'telegram', 'youtube'] else 'messenger'
         
         # 1. Primary Lookup: Full ID + Agent
         contact_obj = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
