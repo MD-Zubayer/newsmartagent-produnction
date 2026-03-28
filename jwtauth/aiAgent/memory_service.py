@@ -23,15 +23,25 @@ def extract_and_update_memory(ai_agent, sender_id, chat_history):
 
     # Optimized prompt for concise extraction and token savings
     extract_prompt = f"""
-    Analyze the chat history and extract significant user details. 
+    You are the CRM brain. Read the chat history and return ONLY a JSON object of extracted facts.
 
-    CRITICAL Rules:
-    - OMIT any field that would be null, empty string, or empty list. 
-    - Construct a compact JSON object containing ONLY the discovered data.
-    - Fields to look for (if available): name, phone_number, email, location, job, preferences (likes/dislikes), product_interest, order_details, needs_or_cahida, contextual_data (goals/urgency), sentiment, and key_requirements.
-    - CRM RULES (MANDATORY): Always evaluate and output a "lead_stage" field. It must be exactly one of: "new", "cold", "warm", "hot", "converted", or "lost".
-    - Include a "memory_summary" that briefly gists the user's core intent or relationship status (e.g., "Wants to buy red shoes, quoted 500 BDT").
-    - Return ONLY the JSON object. No preamble, no markdown formatting.
+    STRICT RULES:
+    - Output must be valid JSON object, no prose, no markdown.
+    - Drop any field that is null/empty.
+    - Fields to include when present: name, phone_number, email, location, job, preferences (likes/dislikes), product_interest, order_details, needs_or_cahida, contextual_data (goals/urgency), sentiment, key_requirements.
+    - memory_summary: 1 short sentence of the user's intent/status (e.g., "Wants 2 red shoes, budget 500 BDT").
+
+    LEAD STAGE (MANDATORY):
+    - lead_stage must be ONE of: new, cold, warm, hot, converted, lost.
+    - Use these hints:
+        • new: first contact, no intent yet.
+        • cold: old/idle lead or vague interest, no next step agreed.
+        • warm: clear interest/request or provided contact info, awaiting quote/demo.
+        • hot: strong intent with price/quantity/timeframe, or close to purchase.
+        • converted: deal/order/booking/payment confirmed.
+        • lost: user declined, went elsewhere, or explicitly stopped.
+
+    Return only the JSON object.
 
     Chat History:
     {chat_history}
