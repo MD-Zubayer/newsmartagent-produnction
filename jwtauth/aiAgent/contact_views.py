@@ -40,6 +40,14 @@ class ContactListView(APIView):
 class ContactDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
+    def get(self, request, contact_id):
+        try:
+            contact = Contact.objects.get(id=contact_id, agent__user=request.user)
+            serializer = ContactSerializer(contact)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Contact.DoesNotExist:
+            return Response({"error": "Contact not found"}, status=status.HTTP_404_NOT_FOUND)
+
     def patch(self, request, contact_id):
         try:
             contact = Contact.objects.get(id=contact_id, agent__user=request.user)
