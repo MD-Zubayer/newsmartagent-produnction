@@ -40,24 +40,27 @@ from webhooks.comment import deliver_public_comment_reply
 logger = logging.getLogger('aiAgent')
 
 def get_order_instructions(user):
-    order_instruction = ""
+    """
+    Fetch any order-specific instructions to enrich RAG/context.
+    Fallback: a polite default line.
+    """
     try:
-        logger.info(f'[Logic] Routing Telegram reply via n8n | chat={chat_id} | url={webhook_url}')
-        response = requests.post(
-            webhook_url,
-            json=payload,
-            timeout=15
-        )
-        if response.status_code != 200:
-            logger.error(f'[Logic] n8n Telegram delivery error: {response.status_code} - {response.text}')
-            return False
-        logger.info(f'[Logic] n8n Telegram delivery ok: {response.status_code}')
-        return True
+        order_instruction = ""
+        # Prefer latest OrderForm note if available
+        oform = OrderForm.objects.filter(user=user).order_by('-id').first()
+        if oform and getattr(oform, 'order_instructions', None):
+            order_instruction = oform.order_instructions
+
+        # Fallback to AgentSettings.order_instruction if present
+        if not order_instruction:
+            settings_obj = AgentSettings.objects.filter(user=user).order_by('-id').first()
+            if settings_obj and getattr(settings_obj, 'order_instruction', None):
+                order_instruction = settings_obj.order_instruction
+
+        return order_instruction or "Handle orders politely."
     except Exception as e:
-        logger.error(f'[Logic] Telegram delivery critical failure: {e}')
-        logger.error(f"Settings Error: {e}")
-        order_instruction = "Handle orders politely."
-        return order_instruction
+        logger.error(f"Settings Error while fetching order instructions: {e}")
+        return "Handle orders politely."
 
 def perform_rag_search(agent_config, text, post_context_text, order_instruction, existing_vector=None):
     sheet_context = ""
