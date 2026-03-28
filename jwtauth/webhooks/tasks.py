@@ -220,7 +220,9 @@ def sync_contact_profile_picture(self, contact_id, platform, sender_id, page_id,
                 image_url = url
             
         if not image_url:
-            cache.set(cache_key, "1", timeout=86400) # cache for 24h even if failed
+            # Only throttle failures briefly so Telegram avatars can be retried soon
+            cache_timeout = 300 if platform == 'telegram' else 86400
+            cache.set(cache_key, "1", timeout=cache_timeout)
             return
             
         img_resp = requests.get(image_url, timeout=15)
