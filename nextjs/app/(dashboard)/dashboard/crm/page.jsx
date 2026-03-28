@@ -23,7 +23,11 @@ const STAGES = [
 export default function SmartCRMPage() {
   const [agents, setAgents] = useState([]);
   const [selectedAgentId, setSelectedAgentId] = useState("all");
-  const [contacts, setContacts] = useState([]);
+  const [contacts, setContacts] = useState([]);           // filtered list
+  const [contactsRaw, setContactsRaw] = useState([]);     // unfiltered list
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   
   // For drag and drop
@@ -60,13 +64,37 @@ export default function SmartCRMPage() {
       const rows = res.data.contacts || [];
       // CRM বোর্ডে শুধু যারা অন্তত একটি মেসেজ/সারাংশ রয়েছে তাদেরই দেখাব
       const withActivity = rows.filter(c => c.last_message || c.crm_data?.ai_summary);
-      setContacts(withActivity);
+      setContactsRaw(withActivity);
+      applyFilters(withActivity, startDate, endDate, statusFilter);
     } catch (err) {
       toast.error("Failed to load CRM data");
     } finally {
       setLoading(false);
     }
   };
+
+  const applyFilters = (list, sDate, eDate, stage) => {
+    let filtered = list;
+    if (stage && stage !== "all") {
+      filtered = filtered.filter(c => (c.crm_data?.lead_stage || "new") === stage);
+    }
+    if (sDate) {
+      const sd = new Date(sDate);
+      filtered = filtered.filter(c => new Date(c.created_at) >= sd);
+    }
+    if (eDate) {
+      const ed = new Date(eDate);
+      // include end day fully by adding 1 day
+      ed.setHours(23,59,59,999);
+      filtered = filtered.filter(c => new Date(c.created_at) <= ed);
+    }
+    setContacts(filtered);
+  };
+
+  // Re-apply filters when user changes filters
+  useEffect(() => {
+    applyFilters(contactsRaw, startDate, endDate, statusFilter);
+  }, [startDate, endDate, statusFilter, contactsRaw]);
 
   const currentBoard = STAGES.map(stage => ({
     ...stage,
@@ -119,7 +147,7 @@ export default function SmartCRMPage() {
           <p className="text-sm text-gray-500 mt-1">AI-Powered Lead Management</p>
         </div>
         
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 flex-wrap justify-end">
           <select 
             value={selectedAgentId} 
             onChange={e => setSelectedAgentId(e.target.value)}
@@ -130,6 +158,30 @@ export default function SmartCRMPage() {
               <option key={a.id} value={a.page_id || a.number}>{a.name}</option>
             ))}
           </select>
+
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 outline-none transition-all shadow-sm font-medium"
+          >
+            <option value="all">All Stages</option>
+            {STAGES.map(s => (
+              <option key={s.id} value={s.id}>{s.label}</option>
+            ))}
+          </select>
+
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 outline-none transition-all shadow-sm font-medium"
+          />
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 outline-none transition-all shadow-sm font-medium"
+          />
         </div>
       </div>
 
