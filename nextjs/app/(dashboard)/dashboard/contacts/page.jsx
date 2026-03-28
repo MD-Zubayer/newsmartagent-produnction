@@ -351,7 +351,7 @@ export default function Contacts() {
                 >
                   {activeTab === "messages" ? (
                     <>
-                      <option value="all">সকল মেসেজ এজেন্ট</option>
+                      <option value="all">All Messages</option>
                       {messageAgents.map(agent => (
                         <option key={agent.id} value={agent.page_id}>
                           {agent.name}
@@ -360,7 +360,7 @@ export default function Contacts() {
                     </>
                   ) : (
                     <>
-                      <option value="all">সকল কমেন্ট এজেন্ট</option>
+                      <option value="all">All Comments</option>
                       {commentAgents.map(agent => (
                         <option key={agent.id} value={agent.page_id}>
                           {agent.name}
@@ -380,7 +380,7 @@ export default function Contacts() {
                     }`}
                   >
                     <ChatBubbleLeftRightIcon className="h-4 w-4" />
-                    মেসেজ
+                    Messages
                     <span className="ml-1 bg-white/20 text-[10px] px-1.5 py-0.5 rounded-full">
                       {unreadSummary.messages || 0}
                     </span>
@@ -394,7 +394,7 @@ export default function Contacts() {
                     }`}
                   >
                     <ChatBubbleLeftRightIcon className="h-4 w-4" />
-                    কমেন্ট
+                    Comments
                     <span className="ml-1 bg-white/20 text-[10px] px-1.5 py-0.5 rounded-full">
                       {unreadSummary.comments || 0}
                     </span>
