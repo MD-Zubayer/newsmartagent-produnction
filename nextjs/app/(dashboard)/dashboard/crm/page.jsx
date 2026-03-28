@@ -168,19 +168,26 @@ export default function SmartCRMPage() {
                       onDragStart={(e) => handleDragStart(e, card.id)}
                       className={`bg-white rounded-lg p-4 shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing group ${draggingContactId === card.id ? 'opacity-50 scale-95' : ''}`}
                     >
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          {card.profile_picture ? (
-                            <img 
-                              src={card.profile_picture} 
-                              alt={card.name || card.identifier} 
-                              className="w-10 h-10 rounded-full object-cover shadow-sm bg-white border border-gray-100"
-                            />
-                          ) : (
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${col.color}`}>
-                              {card.name ? card.name.charAt(0).toUpperCase() : '?'}
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            {card.profile_picture ? (
+                              <img 
+                                src={card.profile_picture} 
+                                alt={card.name || card.identifier} 
+                                className="w-10 h-10 rounded-full object-cover shadow-sm bg-white border border-gray-100"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                  const fallback = e.currentTarget.nextElementSibling;
+                                  if (fallback) fallback.style.display = 'flex';
+                                }}
+                              />
+                            ) : null}
+                            <div
+                              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${col.color}`}
+                              style={{ display: card.profile_picture ? 'none' : 'flex' }}
+                            >
+                              {(card.name || card.identifier || '?').charAt(0).toUpperCase()}
                             </div>
-                          )}
                           <div>
                             <h4 className="font-bold text-sm text-gray-900 line-clamp-1">{card.name || card.identifier}</h4>
                             <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider flex items-center gap-1">
