@@ -35,13 +35,15 @@ class ContactListView(APIView):
                     models.Q(identifier__icontains=query)
                 )
 
-            # By default exclude YouTube contacts from the main list; allow explicit filter
+            comment_platforms = ['youtube', 'facebook_comment']
+
+            # By default exclude comment platforms from the main list; allow explicit filter
             if comments_only:
-                contacts = contacts.filter(platform='youtube')
+                contacts = contacts.filter(platform__in=comment_platforms)
             elif platform_filter:
                 contacts = contacts.filter(platform=platform_filter)
             else:
-                contacts = contacts.exclude(platform='youtube')
+                contacts = contacts.exclude(platform__in=comment_platforms)
 
             contacts = contacts.order_by('-updated_at')
             serializer = ContactSerializer(contacts[:100], many=True)
@@ -58,7 +60,9 @@ class ContactSummaryView(APIView):
         summary = qs.values('platform').annotate(total=Count('id'))
         data = {item['platform']: item['total'] for item in summary}
         data.setdefault('youtube', 0)
-        data['messages'] = qs.exclude(platform='youtube').count()
+        data.setdefault('facebook_comment', 0)
+        data['comments'] = qs.filter(platform__in=['youtube', 'facebook_comment']).count()
+        data['messages'] = qs.exclude(platform__in=['youtube', 'facebook_comment']).count()
         return Response(data, status=status.HTTP_200_OK)
 
 class ContactDetailView(APIView):

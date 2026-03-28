@@ -283,7 +283,7 @@ class ContactSerializer(serializers.ModelSerializer):
         return {'lead_stage': 'new', 'phone': '', 'email': '', 'ai_summary': '', 'raw_data': {}}
 
     def get_is_comment(self, obj):
-        return obj.platform == 'youtube'
+        return obj.platform in ['youtube', 'facebook_comment']
 
 class MessageSerializer(serializers.ModelSerializer):
     class Meta:

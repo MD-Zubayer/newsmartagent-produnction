@@ -24,6 +24,7 @@ export default function Contacts() {
   const [selectedAgent, setSelectedAgent] = useState("");
   const [contacts, setContacts] = useState([]);
   const [summary, setSummary] = useState({ messages: 0, youtube: 0 });
+  const [unreadSummary, setUnreadSummary] = useState({ messages: 0, comments: 0 });
   const [activeTab, setActiveTab] = useState("messages"); // messages | comments
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -55,8 +56,8 @@ export default function Contacts() {
   const observer = useRef();
 
   // Agent buckets by platform
-  const messageAgents = agents.filter(a => a.platform !== "youtube");
-  const commentAgents = agents.filter(a => a.platform === "youtube");
+  const messageAgents = agents.filter(a => !["youtube", "facebook_comment"].includes(a.platform));
+  const commentAgents = agents.filter(a => ["youtube", "facebook_comment"].includes(a.platform));
 
   const scrollToBottom = () => {
     requestAnimationFrame(() => {
@@ -155,6 +156,8 @@ export default function Contacts() {
       const res = await api.get(`/AgentAI/contacts/${agentId}/${query}`);
       const list = Array.isArray(res?.data?.contacts) ? res.data.contacts : [];
       setContacts(list);
+      const unreadSum = list.reduce((acc, c) => acc + (c.unread_count || 0), 0);
+      setUnreadSummary(prev => commentsOnly ? { ...prev, comments: unreadSum } : { ...prev, messages: unreadSum });
     } catch (err) {
       console.error("Failed to load contacts:", err);
       toast.error("Failed to load contacts.");
@@ -393,7 +396,7 @@ export default function Contacts() {
                     <ChatBubbleLeftRightIcon className="h-4 w-4" />
                     মেসেজ
                     <span className="ml-1 bg-white/20 text-[10px] px-1.5 py-0.5 rounded-full">
-                      {summary.messages}
+                      {unreadSummary.messages || 0}
                     </span>
                   </button>
                   <button
@@ -411,7 +414,7 @@ export default function Contacts() {
                     <ChatBubbleLeftRightIcon className="h-4 w-4" />
                     কমেন্ট
                     <span className="ml-1 bg-white/20 text-[10px] px-1.5 py-0.5 rounded-full">
-                      {summary.youtube}
+                      {unreadSummary.comments || 0}
                     </span>
                   </button>
                 </div>
@@ -456,6 +459,7 @@ export default function Contacts() {
                         <div className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center text-white font-black text-lg ${
                           contact.platform === 'whatsapp' ? 'bg-[#25d366]' :
                           contact.platform === 'youtube' ? 'bg-red-500' :
+                          contact.platform === 'facebook_comment' ? 'bg-[#1877f2]' :
                           contact.platform === 'telegram' ? 'bg-sky-500' :
                           contact.platform === 'instagram' ? 'bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400' :
                           'bg-[#0084ff]'
@@ -807,6 +811,7 @@ export default function Contacts() {
     try {
       const res = await api.get(`/AgentAI/contacts/detail/${contactId}/`);
       const contact = res.data;
+      let updatedList = [];
       setContacts(prev => {
         if (activeTab === "comments" && contact.platform !== "youtube") return prev;
         if (activeTab === "messages" && contact.platform === "youtube") return prev;
@@ -814,10 +819,17 @@ export default function Contacts() {
         if (idx >= 0) {
           const copy = [...prev];
           copy[idx] = contact;
+          updatedList = copy;
           return copy;
         }
-        return [contact, ...prev].slice(0, 100);
+        const merged = [contact, ...prev].slice(0, 100);
+        updatedList = merged;
+        return merged;
       });
+      if (updatedList.length) {
+        const unreadSum = updatedList.reduce((acc, c) => acc + (c.unread_count || 0), 0);
+        setUnreadSummary(prev => activeTab === "comments" ? { ...prev, comments: unreadSum } : { ...prev, messages: unreadSum });
+      }
     } catch (err) {
       console.error("Single contact fetch failed", err);
     }
@@ -831,3 +843,6 @@ export default function Contacts() {
       console.error("Summary load failed", err);
     }
   };
+
+  // Unread counter derived from current list (per tab)
+  const unreadCount = contacts.reduce((acc, c) => acc + (c.unread_count || 0), 0);
