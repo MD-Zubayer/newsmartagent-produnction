@@ -38,6 +38,7 @@ export default function SmartCRMPage() {
   const [scheduleStart, setScheduleStart] = useState("");
   const [scheduleEnd, setScheduleEnd] = useState("");
   const [viewSchedule, setViewSchedule] = useState(null);
+  const [showSchedulePanel, setShowSchedulePanel] = useState(false);
   
   // For drag and drop
   const [draggingContactId, setDraggingContactId] = useState(null);
@@ -186,6 +187,7 @@ export default function SmartCRMPage() {
       setIsScheduleModal(false);
       setScheduleText("");
       setScheduleTime("");
+      setShowSchedulePanel(true);
       fetchSchedules();
     } catch (err) {
       toast.error(err.response?.data?.error || "Scheduling failed");
@@ -250,100 +252,16 @@ export default function SmartCRMPage() {
             className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 outline-none transition-all shadow-sm font-medium"
           />
           <button
-            onClick={() => setIsScheduleModal(true)}
+            onClick={() => setShowSchedulePanel(true)}
             className="px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm font-semibold shadow hover:bg-cyan-700 transition"
-            disabled={selectedAgentId === "all"}
-            title={selectedAgentId === "all" ? "একটি নির্দিষ্ট এজেন্ট সিলেক্ট করুন" : "Schedule message"}
           >
-            Schedule
+            Schedule Center
           </button>
         </div>
       </div>
 
       {/* Kanban Board Area */}
       <div className="flex-1 overflow-x-auto overflow-y-hidden p-6">
-        {/* Schedule list */}
-        <div className="bg-white border border-gray-200 rounded-lg shadow-sm mb-4 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-bold text-gray-800">Scheduled Messages</h3>
-            <div className="flex items-center gap-2">
-              <select
-                value={scheduleStatus}
-                onChange={(e) => setScheduleStatus(e.target.value)}
-                className="text-xs px-2 py-1 rounded border border-gray-200 bg-gray-50"
-              >
-                <option value="all">All</option>
-                <option value="pending">Pending</option>
-                <option value="sent">Sent</option>
-                <option value="failed">Failed</option>
-              </select>
-              <input
-                type="datetime-local"
-                value={scheduleStart}
-                onChange={(e) => setScheduleStart(e.target.value)}
-                className="text-xs px-2 py-1 rounded border border-gray-200 bg-gray-50"
-              />
-              <input
-                type="datetime-local"
-                value={scheduleEnd}
-                onChange={(e) => setScheduleEnd(e.target.value)}
-                className="text-xs px-2 py-1 rounded border border-gray-200 bg-gray-50"
-              />
-              <button
-                onClick={fetchSchedules}
-                className="text-xs px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 border border-gray-200"
-              >
-                Refresh
-              </button>
-            </div>
-          </div>
-          {loadingSchedule ? (
-            <p className="text-sm text-gray-500">Loading...</p>
-          ) : schedules.length === 0 ? (
-            <p className="text-sm text-gray-400">No schedules.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr className="text-left text-gray-500">
-                    <th className="px-3 py-2">Message</th>
-                    <th className="px-3 py-2">Run At</th>
-                    <th className="px-3 py-2">Status</th>
-                    <th className="px-3 py-2">Audience</th>
-                    <th className="px-3 py-2"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {schedules.map((s) => (
-                    <tr key={s.id}>
-                      <td className="px-3 py-2 max-w-xs truncate">{s.message}</td>
-                      <td className="px-3 py-2 whitespace-nowrap">{new Date(s.run_at).toLocaleString()}</td>
-                      <td className="px-3 py-2 capitalize">{s.status}</td>
-                      <td className="px-3 py-2">{s.audience_count}</td>
-                      <td className="px-3 py-2 text-right">
-                        <button
-                          onClick={() => setViewSchedule(s)}
-                          className="text-xs text-blue-600 hover:text-blue-700 font-semibold mr-2"
-                        >
-                          View
-                        </button>
-                        {s.status === "pending" && (
-                          <button
-                            onClick={() => handleDeleteSchedule(s.id)}
-                            className="text-xs text-rose-600 hover:text-rose-700 font-semibold"
-                          >
-                            Delete
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
         {loading ? (
           <div className="h-full flex items-center justify-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600"></div>
@@ -630,6 +548,113 @@ export default function SmartCRMPage() {
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Schedule Center Drawer */}
+      {showSchedulePanel && (
+        <div className="fixed inset-0 z-40 flex">
+          <div className="flex-1 bg-black/40 backdrop-blur-sm" onClick={() => setShowSchedulePanel(false)} />
+          <div className="w-full sm:w-[520px] bg-white shadow-2xl h-full overflow-y-auto">
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+              <h3 className="font-bold text-gray-800">Schedule Center</h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsScheduleModal(true)}
+                  className="px-3 py-2 rounded bg-cyan-600 text-white text-xs font-semibold shadow hover:bg-cyan-700"
+                  disabled={selectedAgentId === "all"}
+                  title={selectedAgentId === "all" ? "একটি নির্দিষ্ট এজেন্ট সিলেক্ট করুন" : "Schedule message"}
+                >
+                  + New
+                </button>
+                <button
+                  onClick={fetchSchedules}
+                  className="text-xs px-3 py-2 rounded border border-gray-200 bg-white hover:bg-gray-50"
+                >
+                  Refresh
+                </button>
+                <button
+                  onClick={() => setShowSchedulePanel(false)}
+                  className="text-gray-400 hover:text-gray-600 bg-white shadow-sm border border-gray-200 rounded-full w-8 h-8 flex items-center justify-center"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 space-y-3">
+              <div className="flex flex-wrap gap-2 text-xs">
+                <select
+                  value={scheduleStatus}
+                  onChange={(e) => setScheduleStatus(e.target.value)}
+                  className="px-2 py-2 rounded border border-gray-200 bg-gray-50"
+                >
+                  <option value="all">All</option>
+                  <option value="pending">Pending</option>
+                  <option value="sent">Sent</option>
+                  <option value="failed">Failed</option>
+                </select>
+                <input
+                  type="datetime-local"
+                  value={scheduleStart}
+                  onChange={(e) => setScheduleStart(e.target.value)}
+                  className="px-2 py-2 rounded border border-gray-200 bg-gray-50"
+                />
+                <input
+                  type="datetime-local"
+                  value={scheduleEnd}
+                  onChange={(e) => setScheduleEnd(e.target.value)}
+                  className="px-2 py-2 rounded border border-gray-200 bg-gray-50"
+                />
+              </div>
+
+              {loadingSchedule ? (
+                <p className="text-sm text-gray-500">Loading...</p>
+              ) : schedules.length === 0 ? (
+                <p className="text-sm text-gray-400">No schedules.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr className="text-left text-gray-500">
+                        <th className="px-3 py-2">Message</th>
+                        <th className="px-3 py-2">Run At</th>
+                        <th className="px-3 py-2">Status</th>
+                        <th className="px-3 py-2">Audience</th>
+                        <th className="px-3 py-2"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {schedules.map((s) => (
+                        <tr key={s.id}>
+                          <td className="px-3 py-2 max-w-xs truncate">{s.message}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">{new Date(s.run_at).toLocaleString()}</td>
+                          <td className="px-3 py-2 capitalize">{s.status}</td>
+                          <td className="px-3 py-2">{s.audience_count}</td>
+                          <td className="px-3 py-2 text-right">
+                            <button
+                              onClick={() => setViewSchedule(s)}
+                              className="text-xs text-blue-600 hover:text-blue-700 font-semibold mr-2"
+                            >
+                              View
+                            </button>
+                            {s.status === "pending" && (
+                              <button
+                                onClick={() => handleDeleteSchedule(s.id)}
+                                className="text-xs text-rose-600 hover:text-rose-700 font-semibold"
+                              >
+                                Delete
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </div>

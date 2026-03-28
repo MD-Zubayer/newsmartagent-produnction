@@ -338,6 +338,36 @@ class ScheduledMessageView(APIView):
         sched.delete()
         return Response({"success": True}, status=200)
 
+    def patch(self, request):
+        sched_id = request.data.get('id')
+        if not sched_id:
+            return Response({"error": "id required"}, status=400)
+        sched = ScheduledMessage.objects.filter(id=sched_id, agent__user=request.user).first()
+        if not sched:
+            return Response({"error": "Not found"}, status=404)
+        if sched.status != 'pending':
+            return Response({"error": "Only pending schedules can be updated"}, status=400)
+
+        message = request.data.get('message')
+        run_at = request.data.get('run_at')
+        filters = request.data.get('filters')
+
+        if message:
+            sched.message = message.strip()
+        if run_at:
+            try:
+                rt = datetime.fromisoformat(run_at)
+                if timezone.is_naive(rt):
+                    rt = timezone.make_aware(rt, timezone.get_current_timezone())
+                sched.run_at = rt
+            except Exception:
+                return Response({"error": "run_at invalid ISO datetime"}, status=400)
+        if isinstance(filters, dict):
+            sched.filter_payload = filters
+
+        sched.save(update_fields=['message', 'run_at', 'filter_payload', 'updated_at'])
+        return Response(ScheduledMessageSerializer(sched).data, status=200)
+
 class UnifiedReplyView(APIView):
     permission_classes = [IsAuthenticated]
 
