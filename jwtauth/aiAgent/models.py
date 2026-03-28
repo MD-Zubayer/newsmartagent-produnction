@@ -3,7 +3,7 @@ from django.conf import settings
 from django.utils import timezone
 from django.core.cache import cache
 from django_cryptography.fields import encrypt
-from minio_management.storages import ProfileStorage
+from minio_management.storages import ProfileStorage, ContactProfileStorage
 
 
 
@@ -342,11 +342,10 @@ class Contact(models.Model):
     identifier = models.CharField(max_length=255, db_index=True)  # Phone number or Messenger Sender ID
     name = models.CharField(max_length=255, blank=True, null=True)
     push_name = models.CharField(max_length=255, blank=True, null=True)
-    # Use presigned, path-style MinIO bucket (newsmartagent-profile) so contacts page gets
-    # a directly accessible URL instead of a relative MEDIA path.
+    # Use non-expiring public URLs for dashboard rendering; WhatsApp sync keeps uploading here.
     profile_picture = models.ImageField(
         upload_to='contact_profiles/',
-        storage=ProfileStorage(),
+        storage=ContactProfileStorage(),
         null=True,
         blank=True,
     )
