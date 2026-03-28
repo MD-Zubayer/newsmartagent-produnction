@@ -23,6 +23,8 @@ export default function Contacts() {
   const [agents, setAgents] = useState([]);
   const [selectedAgent, setSelectedAgent] = useState("");
   const [contacts, setContacts] = useState([]);
+  const [summary, setSummary] = useState({ messages: 0, youtube: 0 });
+  const [activeTab, setActiveTab] = useState("messages"); // messages | comments
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -80,9 +82,10 @@ export default function Contacts() {
 
   useEffect(() => {
     if (selectedAgent) {
-      fetchContacts(selectedAgent);
+      fetchContacts(selectedAgent, activeTab === "comments");
+      fetchSummary();
     }
-  }, [selectedAgent]);
+  }, [selectedAgent, activeTab]);
 
   useEffect(() => {
     if (historyContact && historyPage > 1) {
@@ -102,9 +105,13 @@ export default function Contacts() {
     const lastNotif = notifications[0];
 
     if (lastNotif.action === "CACHE_UPDATE" || lastNotif.action === "HUMAN_HANDOFF") {
-      // Refresh contact list if it belongs to selected agent or all
+      // Refresh only the relevant contact instead of full list
       if (selectedAgent === "all" || lastNotif.agent_id === selectedAgent) {
-        fetchContacts(selectedAgent);
+        if (lastNotif.contact_id) {
+          fetchSingleContact(lastNotif.contact_id);
+        } else {
+          fetchContacts(selectedAgent, activeTab === "comments");
+        }
       }
       
       // Refresh active chat history if match
@@ -128,10 +135,11 @@ export default function Contacts() {
     }
   };
 
-  const fetchContacts = async (agentId) => {
+  const fetchContacts = async (agentId, commentsOnly = false) => {
     setLoading(true);
     try {
-      const res = await api.get(`/AgentAI/contacts/${agentId}/`);
+      const query = commentsOnly ? "?comments_only=true" : "";
+      const res = await api.get(`/AgentAI/contacts/${agentId}/${query}`);
       const list = Array.isArray(res?.data?.contacts) ? res.data.contacts : [];
       setContacts(list);
     } catch (err) {
@@ -341,6 +349,33 @@ export default function Contacts() {
                     </option>
                   ))}
                 </select>
+
+                <div className="grid grid-cols-2 gap-2 text-xs font-bold">
+                  <button
+                    onClick={() => setActiveTab("messages")}
+                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl border transition ${
+                      activeTab === "messages" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-700 border-gray-200"
+                    }`}
+                  >
+                    <ChatBubbleLeftRightIcon className="h-4 w-4" />
+                    মেসেজ
+                    <span className="ml-1 bg-white/20 text-[10px] px-1.5 py-0.5 rounded-full">
+                      {summary.messages}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("comments")}
+                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl border transition ${
+                      activeTab === "comments" ? "bg-amber-500 text-white border-amber-500" : "bg-white text-gray-700 border-gray-200"
+                    }`}
+                  >
+                    <ChatBubbleLeftRightIcon className="h-4 w-4" />
+                    কমেন্ট
+                    <span className="ml-1 bg-white/20 text-[10px] px-1.5 py-0.5 rounded-full">
+                      {summary.youtube}
+                    </span>
+                  </button>
+                </div>
               </div>
 
               {/* Contact List */}
@@ -380,7 +415,11 @@ export default function Contacts() {
                           />
                         ) : null}
                         <div className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center text-white font-black text-lg ${
-                          contact.platform === 'whatsapp' ? 'bg-[#25d366]' : 'bg-[#0084ff]'
+                          contact.platform === 'whatsapp' ? 'bg-[#25d366]' :
+                          contact.platform === 'youtube' ? 'bg-red-500' :
+                          contact.platform === 'telegram' ? 'bg-sky-500' :
+                          contact.platform === 'instagram' ? 'bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400' :
+                          'bg-[#0084ff]'
                         }`} style={{ display: contact.profile_picture ? 'none' : 'flex' }}>
                           {(contact.name?.charAt(0) || contact.identifier.charAt(0))?.toUpperCase()}
                         </div>
@@ -388,6 +427,12 @@ export default function Contacts() {
                           <div className="flex justify-between items-baseline mb-1">
                             <h3 className="font-bold text-gray-900 truncate flex items-center gap-2">
                               {contact.name || contact.identifier}
+                              {contact.is_comment && (
+                                <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[10px] font-black px-1.5 py-0.5 rounded-md border border-amber-200">
+                                  <ChatBubbleLeftRightIcon className="h-3 w-3" />
+                                  Comment
+                                </span>
+                              )}
                               {contact.is_human_needed && (
                                 <span className="bg-rose-100 text-rose-600 text-[9px] font-black px-1.5 py-0.5 rounded-md animate-pulse border border-rose-200">
                                   🚨 HUMAN HELP
@@ -719,3 +764,31 @@ export default function Contacts() {
     </div>
   );
 }
+  const fetchSingleContact = async (contactId) => {
+    try {
+      const res = await api.get(`/AgentAI/contacts/detail/${contactId}/`);
+      const contact = res.data;
+      setContacts(prev => {
+        if (activeTab === "comments" && contact.platform !== "youtube") return prev;
+        if (activeTab === "messages" && contact.platform === "youtube") return prev;
+        const idx = prev.findIndex(c => c.id === contact.id);
+        if (idx >= 0) {
+          const copy = [...prev];
+          copy[idx] = contact;
+          return copy;
+        }
+        return [contact, ...prev].slice(0, 100);
+      });
+    } catch (err) {
+      console.error("Single contact fetch failed", err);
+    }
+  };
+
+  const fetchSummary = async () => {
+    try {
+      const res = await api.get("/AgentAI/contacts/summary/");
+      setSummary(res.data || { messages: 0, youtube: 0 });
+    } catch (err) {
+      console.error("Summary load failed", err);
+    }
+  };
