@@ -225,6 +225,11 @@ def dispatch_scheduled_message(schedule_id):
         agent = sched.agent
         contacts_with_stage = _filter_contacts_for_scheduling([agent], filters)
 
+        max_batch = sched.agent.schedule_max_batch or 500
+        delay_ms = sched.agent.schedule_delay_ms or 0
+
+        contacts_with_stage = contacts_with_stage[:max_batch]
+
         sent = 0
         with transaction.atomic():
             for contact, stage in contacts_with_stage:
@@ -285,6 +290,10 @@ def dispatch_scheduled_message(schedule_id):
                         sent += 1
                 except Exception as send_err:
                     logger.error(f"Scheduled delivery failed for contact {contact.id}: {send_err}")
+
+                if delay_ms > 0:
+                    import time
+                    time.sleep(delay_ms / 1000.0)
 
             sched.status = 'sent'
             sched.audience_count = sent
@@ -392,10 +401,10 @@ class ScheduledMessageView(APIView):
         sched = ScheduledMessage.objects.filter(id=sched_id, agent__user=request.user).first()
         if not sched:
             return Response({"error": "Not found"}, status=404)
-        if sched.status != 'pending':
-            return Response({"error": "Only pending schedules can be deleted"}, status=400)
-        sched.delete()
-        return Response({"success": True}, status=200)
+        if sched.status in ['sent', 'pending', 'failed']:
+            sched.delete()
+            return Response({"success": True}, status=200)
+        return Response({"error": "Cannot delete this status"}, status=400)
 
     def patch(self, request):
         sched_id = request.data.get('id')
