@@ -642,6 +642,21 @@ def process_ai_reply_task(self, data):
         if not contact_name and request_type == 'messenger' and effective_access_token:
             contact_name = fetch_messenger_profile(sender_id, effective_access_token)
 
+        # If Telegram and name is missing, pull from Telegram getChat
+        if not contact_name and request_type == 'telegram' and effective_access_token:
+            try:
+                tg_resp = requests.get(
+                    f"https://api.telegram.org/bot{effective_access_token}/getChat",
+                    params={'chat_id': sender_id},
+                    timeout=8
+                ).json()
+                if tg_resp.get('ok'):
+                    chat_data = tg_resp.get('result', {})
+                    full_name = " ".join(filter(None, [chat_data.get('first_name'), chat_data.get('last_name')])).strip()
+                    contact_name = full_name or chat_data.get('username')
+            except Exception as tg_err:
+                logger.error(f"Telegram getChat name fetch failed: {tg_err}")
+
         # --- ROBUST CONTACT SYNC & STATE MIGRATION ---
         p_type = request_type if request_type in ['whatsapp', 'messenger', 'web_widget', 'facebook_comment', 'instagram', 'telegram', 'youtube'] else 'messenger'
         
