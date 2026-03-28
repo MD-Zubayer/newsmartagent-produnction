@@ -387,6 +387,16 @@ export default function SmartCRMPage() {
         )}
       </div>
 
+      {/* Floating Schedule button (always visible, avoids header overlap) */}
+      <button
+        onClick={() => setShowSchedulePanel(true)}
+        className="fixed bottom-4 right-4 z-40 flex items-center gap-2 px-4 py-3 rounded-full shadow-lg bg-cyan-600 text-white text-sm font-semibold hover:bg-cyan-700 transition"
+        title="Open Schedule Center"
+      >
+        <QueueListIcon className="w-5 h-5" />
+        <span className="hidden sm:inline">Schedule Center</span>
+      </button>
+
       {/* Dynamic Attributes Modal */}
       {selectedCard && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -673,4 +683,3 @@ export default function SmartCRMPage() {
     </div>
   );
 }
-
