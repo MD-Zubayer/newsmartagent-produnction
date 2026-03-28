@@ -55,9 +55,9 @@ export default function Contacts() {
   const messagesEndRefMobile = useRef(null);
   const observer = useRef();
 
-  // Agent buckets by platform
-  const messageAgents = agents.filter(a => !["youtube", "facebook_comment"].includes(a.platform));
-  const commentAgents = agents.filter(a => ["youtube", "facebook_comment"].includes(a.platform));
+  // Agent lists (একই এজেন্ট মেসেজ + কমেন্ট দুটোই হ্যান্ডল করতে পারে, তাই আলাদা ফিল্টার দরকার নেই)
+  const messageAgents = agents;
+  const commentAgents = agents;
 
   const scrollToBottom = () => {
     requestAnimationFrame(() => {
@@ -87,15 +87,6 @@ export default function Contacts() {
 
   useEffect(() => {
     if (selectedAgent) {
-      // guard invalid selection when tab changes
-      if (activeTab === "comments" && selectedAgent !== "all" && !commentAgents.find(a => a.page_id === selectedAgent)) {
-        setSelectedAgent("all");
-        return;
-      }
-      if (activeTab === "messages" && selectedAgent !== "all" && !messageAgents.find(a => a.page_id === selectedAgent)) {
-        setSelectedAgent("all");
-        return;
-      }
       fetchContacts(selectedAgent, activeTab === "comments");
       fetchSummary();
     }
@@ -383,11 +374,6 @@ export default function Contacts() {
                   <button
                     onClick={() => {
                       setActiveTab("messages");
-                      // reset selection if currently youtube-only
-                      const currentAgent = agents.find(a => a.page_id === selectedAgent);
-                      if (currentAgent?.platform === "youtube") {
-                        setSelectedAgent("all");
-                      }
                     }}
                     className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl border transition ${
                       activeTab === "messages" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-700 border-gray-200"
@@ -402,10 +388,6 @@ export default function Contacts() {
                   <button
                     onClick={() => {
                       setActiveTab("comments");
-                      const currentAgent = agents.find(a => a.page_id === selectedAgent);
-                      if (selectedAgent !== "all" && currentAgent?.platform !== "youtube") {
-                        setSelectedAgent("all");
-                      }
                     }}
                     className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl border transition ${
                       activeTab === "comments" ? "bg-amber-500 text-white border-amber-500" : "bg-white text-gray-700 border-gray-200"
