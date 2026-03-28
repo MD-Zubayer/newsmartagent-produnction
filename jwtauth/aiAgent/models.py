@@ -83,7 +83,7 @@ class AgentAI(models.Model):
     is_active = models.BooleanField(default=True)
     is_special_agent = models.BooleanField(default=False, help_text="বিশেষ এজেন্টদের ডাটা দীর্ঘক্ষণ (১ বছর) ক্যাশে থাকবে")
     schedule_max_batch = models.PositiveIntegerField(default=500, help_text="একটি schedule রান-এ সর্বোচ্চ কতজনকে পাঠানো হবে")
-    schedule_delay_ms = models.PositiveIntegerField(default=0, help_text="প্রতি মেসেজের মাঝে বিলম্ব (মিলিসেকেন্ড)")
+    schedule_delay_seconds = models.PositiveIntegerField(default=0, help_text="প্রতি মেসেজের মাঝে বিলম্ব (সেকেন্ড)")
 
     SPECIAL_AGENT_STATUS_CHOICES = [
         ('none', 'None'),
