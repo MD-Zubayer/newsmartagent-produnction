@@ -57,7 +57,10 @@ export default function SmartCRMPage() {
     setLoading(true);
     try {
       const res = await api.get(`/AgentAI/contacts/${selectedAgentId}/`);
-      setContacts(res.data.contacts || []);
+      const rows = res.data.contacts || [];
+      // CRM বোর্ডে শুধু যারা অন্তত একটি মেসেজ/সারাংশ রয়েছে তাদেরই দেখাব
+      const withActivity = rows.filter(c => c.last_message || c.crm_data?.ai_summary);
+      setContacts(withActivity);
     } catch (err) {
       toast.error("Failed to load CRM data");
     } finally {
@@ -167,9 +170,17 @@ export default function SmartCRMPage() {
                     >
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex items-center gap-2">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${col.color}`}>
-                            {card.name ? card.name.charAt(0).toUpperCase() : '?'}
-                          </div>
+                          {card.profile_picture ? (
+                            <img 
+                              src={card.profile_picture} 
+                              alt={card.name || card.identifier} 
+                              className="w-10 h-10 rounded-full object-cover shadow-sm bg-white border border-gray-100"
+                            />
+                          ) : (
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${col.color}`}>
+                              {card.name ? card.name.charAt(0).toUpperCase() : '?'}
+                            </div>
+                          )}
                           <div>
                             <h4 className="font-bold text-sm text-gray-900 line-clamp-1">{card.name || card.identifier}</h4>
                             <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider flex items-center gap-1">
