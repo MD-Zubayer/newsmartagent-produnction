@@ -87,14 +87,14 @@ class WidgetSettingsInline(admin.StackedInline):
 
 @admin.register(AgentAI)
 class AgentAIAdmin(ModelAdmin):
-    list_display = [ 'id', 'name', 'cache_tools', 'user', 'platform', 'number', 'page_id', 'is_active', 'ai_agent_type', 'is_special_agent', 'created_at', 'schedule_max_batch', 'schedule_delay_seconds']
+    list_display = [ 'id', 'name', 'cache_tools', 'user', 'platform', 'number', 'page_id', 'is_active', 'ai_agent_type', 'is_special_agent', 'created_at', 'schedule_max_batch', 'schedule_delay_ms']
     list_filter = ['platform', 'special_agent_status', 'is_active', 'is_special_agent', 'user', 'ai_agent_type',]
     search_fields = ['name', 'page_id', 'number', 'user__username']
     inlines = [AgentAISettingsInline, WidgetSettingsInline]
     readonly_fields = ['cache_view_link', 'created_at']
     fieldsets = (
         (None, {
-            'fields': ('user', 'name', 'platform', 'page_id', 'number', 'system_prompt', 'greeting_message', 'ai_agent_type', 'is_active', 'is_special_agent', 'special_agent_status', 'schedule_max_batch', 'schedule_delay_seconds')
+            'fields': ('user', 'name', 'platform', 'page_id', 'number', 'system_prompt', 'greeting_message', 'ai_agent_type', 'is_active', 'is_special_agent', 'special_agent_status', 'schedule_max_batch', 'schedule_delay_ms')
         }),
         ("Tokens & Models", {
             'fields': ('ai_model', 'selected_model', 'token_expires_at')
@@ -126,15 +126,15 @@ class AgentAIAdmin(ModelAdmin):
         extra_context = extra_context or {}
         if request.method == "POST" and "apply_schedule_defaults" in request.POST:
             max_batch = request.POST.get("global_max_batch")
-            delay_sec = request.POST.get("global_delay_seconds")
+            delay_ms = request.POST.get("global_delay_ms")
             updated = 0
             qs = self.get_queryset(request)
             for agent in qs:
                 if max_batch:
                     agent.schedule_max_batch = int(max_batch)
-                if delay_sec is not None and delay_sec != "":
-                    agent.schedule_delay_seconds = int(delay_sec)
-                agent.save(update_fields=["schedule_max_batch", "schedule_delay_seconds"])
+                if delay_ms is not None and delay_ms != "":
+                    agent.schedule_delay_ms = int(delay_ms)
+                agent.save(update_fields=["schedule_max_batch", "schedule_delay_ms"])
                 updated += 1
             self.message_user(request, f"Updated scheduling defaults for {updated} agents.")
         return super().changelist_view(request, extra_context=extra_context)

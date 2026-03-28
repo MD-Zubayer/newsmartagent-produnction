@@ -6,7 +6,7 @@
     {% csrf_token %}
     <strong>Bulk Scheduling Defaults (selected list filter scope):</strong>
     <input type="number" min="1" name="global_max_batch" placeholder="Max batch (e.g. 500)" style="padding:6px;border:1px solid #d1d5db;border-radius:8px;">
-    <input type="number" min="0" name="global_delay_seconds" placeholder="Delay sec (e.g. 2)" style="padding:6px;border:1px solid #d1d5db;border-radius:8px;">
+    <input type="number" min="0" name="global_delay_ms" placeholder="Delay ms (e.g. 500)" style="padding:6px;border:1px solid #d1d5db;border-radius:8px;">
     <button type="submit" name="apply_schedule_defaults" class="button default" style="padding:6px 12px;border-radius:8px;background:#059669;color:white;border:none;">
       Apply to filtered agents
     </button>

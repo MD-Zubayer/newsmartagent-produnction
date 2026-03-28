@@ -26,7 +26,6 @@ class WidgetSettingsSerializer(serializers.ModelSerializer):
 
 
 
-
 class AgentAIListSerializer(serializers.ModelSerializer):
     """
     List & details
@@ -79,7 +78,6 @@ class AgentAIListSerializer(serializers.ModelSerializer):
 
 
 
-
 class AgentAISerializer(serializers.ModelSerializer):
     """
     create & update AgentAI model
@@ -112,6 +110,8 @@ class AgentAISerializer(serializers.ModelSerializer):
             'history_skip_keywords',
             'token_expires_at',
             'is_active',
+            'created_at',
+            'access_token',
             'is_special_agent',
             'special_agent_status',
             'shared_cache_agents',
