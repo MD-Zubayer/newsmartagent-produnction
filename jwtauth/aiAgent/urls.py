@@ -5,7 +5,7 @@ from aiAgent.views import AgentAIViewSet, TokenUsageAnalyticsView, dashboard_cha
 from aiAgent.contact_views import (
     ContactListView, ToggleAutoReplyView, ContactMessageHistoryView, ContactDetailView,
     UnifiedReplyView, ResolveHumanHandoffView, HumanHelpView, WhatsAppButtonClickView,
-    ContactSummaryView
+    ContactSummaryView, ScheduledMessageView
 )
 from aiAgent.widget_views import WidgetConfigView, WidgetChatView, WidgetIconUploadView, WidgetStatusView, WidgetControlView
 from chat.views import facebook_data_deletion_callback
@@ -35,6 +35,7 @@ urlpatterns = [
     path('contacts/whatsapp-click/', WhatsAppButtonClickView.as_view(), name='whatsapp-button-click'),
     path('contacts/<int:contact_id>/messages/', ContactMessageHistoryView.as_view(), name='contact-messages'),
     path('contacts/unified/reply/', UnifiedReplyView.as_view(), name='unified-reply'),
+    path('schedule/', ScheduledMessageView.as_view(), name='scheduled-message'),
     
     # Web Widget Public API
     path('widget/config/<str:widget_key>/', WidgetConfigView.as_view(), name='widget-config'),

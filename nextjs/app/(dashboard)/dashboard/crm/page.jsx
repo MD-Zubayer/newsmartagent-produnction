@@ -28,6 +28,9 @@ export default function SmartCRMPage() {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [isScheduleModal, setIsScheduleModal] = useState(false);
+  const [scheduleText, setScheduleText] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("");
   const [loading, setLoading] = useState(true);
   
   // For drag and drop
@@ -135,6 +138,36 @@ export default function SmartCRMPage() {
     }
   };
 
+  const handleSchedule = async () => {
+    if (selectedAgentId === "all") {
+      toast.error("একটি নির্দিষ্ট এজেন্ট নির্বাচন করুন");
+      return;
+    }
+    if (!scheduleText.trim() || !scheduleTime) {
+      toast.error("মেসেজ ও সময় দিন");
+      return;
+    }
+    try {
+      const payload = {
+        agent_id: selectedAgentId,
+        message: scheduleText,
+        run_at: scheduleTime,
+        filters: {
+          lead_stage: statusFilter,
+          start_date: startDate || null,
+          end_date: endDate || null,
+        }
+      };
+      const res = await api.post("/AgentAI/schedule/", payload);
+      toast.success(`Scheduled for ${scheduleTime} (${res.data.audience_count} contacts)`);
+      setIsScheduleModal(false);
+      setScheduleText("");
+      setScheduleTime("");
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Scheduling failed");
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-[#f8f9fa] overflow-hidden">
       {/* Header */}
@@ -182,6 +215,14 @@ export default function SmartCRMPage() {
             onChange={(e) => setEndDate(e.target.value)}
             className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 outline-none transition-all shadow-sm font-medium"
           />
+          <button
+            onClick={() => setIsScheduleModal(true)}
+            className="px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm font-semibold shadow hover:bg-cyan-700 transition"
+            disabled={selectedAgentId === "all"}
+            title={selectedAgentId === "all" ? "একটি নির্দিষ্ট এজেন্ট সিলেক্ট করুন" : "Schedule message"}
+          >
+            Schedule
+          </button>
         </div>
       </div>
 
@@ -357,6 +398,60 @@ export default function SmartCRMPage() {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Schedule Modal */}
+      {isScheduleModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIsScheduleModal(false)}></div>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 z-10 overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h2 className="text-lg font-bold text-gray-900">Schedule Message</h2>
+              <button 
+                onClick={() => setIsScheduleModal(false)}
+                className="text-gray-400 hover:text-gray-600 bg-white shadow-sm border border-gray-200 rounded-full w-8 h-8 flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-sm font-semibold text-gray-700">Message</label>
+                <textarea
+                  rows={4}
+                  value={scheduleText}
+                  onChange={(e) => setScheduleText(e.target.value)}
+                  className="mt-2 w-full border border-gray-200 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                  placeholder="Write the message to send..."
+                />
+              </div>
+              <div>
+                <label className="text-sm font-semibold text-gray-700">Send at (ISO)</label>
+                <input
+                  type="datetime-local"
+                  value={scheduleTime}
+                  onChange={(e) => setScheduleTime(e.target.value)}
+                  className="mt-2 w-full border border-gray-200 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                />
+              </div>
+              <p className="text-xs text-gray-500">ফিল্টার: বর্তমানে সেট করা স্ট্যাটাস/তারিখ ফিল্টারই প্রয়োগ হবে।</p>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2 bg-gray-50">
+              <button
+                onClick={() => setIsScheduleModal(false)}
+                className="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSchedule}
+                className="px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm font-semibold shadow hover:bg-cyan-700 transition"
+              >
+                Schedule
+              </button>
             </div>
           </div>
         </div>

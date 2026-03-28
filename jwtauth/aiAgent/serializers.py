@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from aiAgent.models import AgentAI, TokenUsageLog, AIProviderModel, Contact, WidgetSettings
+from aiAgent.models import AgentAI, TokenUsageLog, AIProviderModel, Contact, WidgetSettings, ScheduledMessage
 from chat.models import Message
 import uuid
 
@@ -289,3 +289,15 @@ class MessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = Message
         fields = ['id', 'role', 'content', 'platform', 'sent_at', 'tokens_used']
+
+
+class ScheduledMessageSerializer(serializers.ModelSerializer):
+    agent_name = serializers.CharField(source='agent.name', read_only=True)
+
+    class Meta:
+        model = ScheduledMessage
+        fields = [
+            'id', 'agent', 'agent_name', 'message', 'run_at', 'status',
+            'audience_count', 'filter_payload', 'error_message', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['status', 'audience_count', 'error_message', 'created_at', 'updated_at']

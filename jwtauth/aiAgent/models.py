@@ -370,6 +370,30 @@ class Contact(models.Model):
         return f"{self.name or self.identifier} ({self.platform}) - Agent: {self.agent.id}"
 
 
+class ScheduledMessage(models.Model):
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("sent", "Sent"),
+        ("failed", "Failed"),
+    ]
+
+    agent = models.ForeignKey(AgentAI, on_delete=models.CASCADE, related_name="scheduled_messages")
+    message = models.TextField()
+    run_at = models.DateTimeField()
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="pending", db_index=True)
+    audience_count = models.IntegerField(default=0)
+    filter_payload = models.JSONField(default=dict, blank=True)
+    error_message = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-run_at"]
+
+    def __str__(self):
+        return f"{self.agent.name or self.agent.id} @ {self.run_at} ({self.status})"
+
+
 class WidgetSettings(models.Model):
     agent = models.OneToOneField(AgentAI, on_delete=models.CASCADE, related_name='widget_settings')
     

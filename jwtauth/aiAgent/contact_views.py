@@ -3,11 +3,16 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework import status
-from .models import AgentAI, Contact
-from .serializers import ContactSerializer, MessageSerializer
+from .models import AgentAI, Contact, ScheduledMessage
+from .serializers import ContactSerializer, MessageSerializer, ScheduledMessageSerializer
 from chat.models import Conversation, Message
 from rest_framework.pagination import PageNumberPagination
 from django.db.models import Count
+from django.utils import timezone
+from datetime import datetime
+from aiAgent.models import UserMemory
+from celery import shared_task
+from django.db import transaction
 import uuid
 class ContactListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -153,6 +158,138 @@ class ContactMessageHistoryView(APIView):
             return Response({"error": "Contact not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+def _filter_contacts_for_scheduling(agent_qs, filters):
+    qs = Contact.objects.filter(agent__in=agent_qs)
+
+    platform = filters.get('platform')
+    if platform:
+        qs = qs.filter(platform=platform)
+
+    start_date = filters.get('start_date')
+    end_date = filters.get('end_date')
+    if start_date:
+        try:
+            sd = datetime.fromisoformat(start_date)
+            qs = qs.filter(created_at__gte=sd)
+        except Exception:
+            pass
+    if end_date:
+        try:
+            ed = datetime.fromisoformat(end_date)
+            qs = qs.filter(created_at__lte=ed)
+        except Exception:
+            pass
+
+    contacts = list(qs.select_related('agent'))
+
+    lead_stage = filters.get('lead_stage')
+    filtered = []
+    for c in contacts:
+        mem = UserMemory.objects.filter(ai_agent=c.agent, sender_id=c.identifier).first()
+        stage = (mem.data.get('lead_stage') if mem and isinstance(mem.data, dict) else None) or 'new'
+        if lead_stage and lead_stage != 'all' and stage != lead_stage:
+            continue
+        # Only include contacts with some activity
+        if not c.name and not c.push_name and not mem:
+            continue
+        filtered.append((c, stage))
+
+    return filtered
+
+
+@shared_task
+def dispatch_scheduled_message(schedule_id):
+    try:
+        sched = ScheduledMessage.objects.select_related('agent').get(id=schedule_id)
+        if sched.status != 'pending':
+            return
+
+        filters = sched.filter_payload or {}
+        agent = sched.agent
+        contacts_with_stage = _filter_contacts_for_scheduling([agent], filters)
+
+        sent = 0
+        with transaction.atomic():
+            for contact, stage in contacts_with_stage:
+                conv, _ = Conversation.objects.get_or_create(
+                    agentAi=contact.agent,
+                    contact_id=contact.identifier,
+                    platform=contact.platform
+                )
+                Message.objects.create(
+                    conversation=conv,
+                    role='assistant',
+                    content=sched.message,
+                    platform=contact.platform
+                )
+                sent += 1
+
+            sched.status = 'sent'
+            sched.audience_count = sent
+            sched.save(update_fields=['status', 'audience_count', 'updated_at'])
+    except Exception as e:
+        ScheduledMessage.objects.filter(id=schedule_id).update(
+            status='failed',
+            error_message=str(e),
+            updated_at=timezone.now()
+        )
+
+
+class ScheduledMessageView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = ScheduledMessage.objects.filter(agent__user=request.user).order_by('-run_at')[:100]
+        ser = ScheduledMessageSerializer(qs, many=True)
+        return Response(ser.data, status=200)
+
+    def post(self, request):
+        data = request.data
+        agent_id = data.get('agent_id')
+        message = data.get('message', '').strip()
+        run_at = data.get('run_at')
+        filters = data.get('filters', {}) or {}
+
+        if not agent_id or not message or not run_at:
+            return Response({"error": "agent_id, message এবং run_at আবশ্যক"}, status=400)
+
+        try:
+            agent = AgentAI.objects.get(user=request.user, id=agent_id) if str(agent_id).isdigit() else AgentAI.objects.get(user=request.user, page_id=agent_id)
+        except AgentAI.DoesNotExist:
+            return Response({"error": "Agent not found"}, status=404)
+
+        try:
+            run_time = datetime.fromisoformat(run_at)
+            if timezone.is_naive(run_time):
+                run_time = timezone.make_aware(run_time, timezone.get_current_timezone())
+        except Exception:
+            return Response({"error": "run_at invalid ISO datetime"}, status=400)
+
+        if run_time < timezone.now():
+            return Response({"error": "run_at must be in the future"}, status=400)
+
+        # quick audience count
+        contacts_with_stage = _filter_contacts_for_scheduling([agent], filters)
+        audience_count = len(contacts_with_stage)
+
+        sched = ScheduledMessage.objects.create(
+            agent=agent,
+            message=message,
+            run_at=run_time,
+            filter_payload=filters,
+            audience_count=audience_count,
+            status='pending'
+        )
+
+        dispatch_scheduled_message.apply_async(args=[sched.id], eta=run_time)
+
+        return Response({
+            "success": True,
+            "scheduled_id": sched.id,
+            "audience_count": audience_count
+        }, status=201)
 
 class UnifiedReplyView(APIView):
     permission_classes = [IsAuthenticated]
