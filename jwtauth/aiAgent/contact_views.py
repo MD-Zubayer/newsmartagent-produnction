@@ -277,7 +277,14 @@ class ScheduledMessageView(APIView):
                 pass
 
         qs = qs.order_by('-run_at')[:200]
-        ser = ScheduledMessageSerializer(qs, many=not bool(sched_id))
+
+        if sched_id:
+            obj = qs.first()
+            if not obj:
+                return Response({"error": "Not found"}, status=404)
+            ser = ScheduledMessageSerializer(obj)
+        else:
+            ser = ScheduledMessageSerializer(qs, many=True)
         return Response(ser.data, status=200)
 
     def post(self, request):
