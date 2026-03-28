@@ -845,4 +845,4 @@ export default function Contacts() {
   };
 
   // Unread counter derived from current list (per tab)
-  const unreadCount = contacts.reduce((acc, c) => acc + (c.unread_count || 0), 0);
+  // const unreadCount = contacts.reduce((acc, c) => acc + (c.unread_count || 0), 0);
