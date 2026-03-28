@@ -223,13 +223,7 @@ def _deliver_reply_with_buttons(request_type, data, clean_reply, sender_id, page
         return deliver_dashboard_reply(agent_config.user.id, clean_reply, data.get('message_id'))
 
     else: # This covers messenger and facebook_comment
-        if contact_obj:
-            try:
-                from aiAgent.business_logic.logic_handler import send_messenger_buttons
-                delivered = send_messenger_buttons(sender_id, page_id, effective_access_token, contact_obj, reply_text=clean_reply)
-                if delivered: return True
-            except Exception as e:
-                logger.warning(f"Combined buttons failed: {e}")
+        # Skip combined delivery for Facebook as the n8n workflow silently drops the text when quick_replies are present
         delivered = deliver_facebook_reply(data, clean_reply, page_id, effective_access_token)
         if delivered and contact_obj:
             from aiAgent.business_logic.logic_handler import send_messenger_buttons
