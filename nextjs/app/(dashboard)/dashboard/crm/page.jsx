@@ -268,16 +268,26 @@ export default function SmartCRMPage() {
             onChange={(e) => setEndDate(e.target.value)}
             className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 outline-none transition-all shadow-sm font-medium"
           />
-          <button
-            onClick={() => setShowSchedulePanel(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm font-semibold shadow hover:bg-cyan-700 transition"
-          >
-            <QueueListIcon className="w-4 h-4" />
-            <span>Schedule Center</span>
-            {schedules.length > 0 && (
-              <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-bold">{schedules.length}</span>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsScheduleModal(true)}
+              className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold shadow hover:bg-emerald-700 transition"
+              disabled={selectedAgentId === "all"}
+              title={selectedAgentId === "all" ? "একটি নির্দিষ্ট এজেন্ট সিলেক্ট করুন" : "নতুন Schedule তৈরি করুন"}
+            >
+              + New Schedule
+            </button>
+            <button
+              onClick={() => setShowSchedulePanel(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm font-semibold shadow hover:bg-cyan-700 transition"
+            >
+              <QueueListIcon className="w-4 h-4" />
+              <span>Schedule Center</span>
+              {schedules.length > 0 && (
+                <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-bold">{schedules.length}</span>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
