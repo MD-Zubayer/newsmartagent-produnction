@@ -181,7 +181,7 @@ export default function SmartCRMPage() {
           end_date: endDate || null,
         }
       };
-      const res = await api.post("/AgentAI/schedule/", payload);
+      const res = await api.post("/AgentAI/schedule", payload);
       toast.success(`Scheduled for ${scheduleTime} (${res.data.audience_count} contacts)`);
       setIsScheduleModal(false);
       setScheduleText("");
