@@ -94,11 +94,7 @@ class AgentAIAdmin(ModelAdmin):
     readonly_fields = ['cache_view_link', 'created_at']
     fieldsets = (
         (None, {
-            'fields': ('user', 'name', 'platform', 'page_id', 'number', 'system_prompt', 'greeting_message', 'ai_agent_type', 'is_active', 'is_special_agent', 'special_agent_status')
-        }),
-        ("Scheduling Defaults", {
-            'fields': ('schedule_max_batch', 'schedule_delay_seconds'),
-            'description': "এই এজেন্টের শিডিউলগুলোর ডিফল্ট ব্যাচ সাইজ ও প্রতি মেসেজ বিলম্ব (সেকেন্ড)"
+            'fields': ('user', 'name', 'platform', 'page_id', 'number', 'system_prompt', 'greeting_message', 'ai_agent_type', 'is_active', 'is_special_agent', 'special_agent_status', 'schedule_max_batch', 'schedule_delay_seconds')
         }),
         ("Tokens & Models", {
             'fields': ('ai_model', 'selected_model', 'token_expires_at')
