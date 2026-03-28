@@ -7,6 +7,7 @@ from .models import AgentAI, Contact
 from .serializers import ContactSerializer, MessageSerializer
 from chat.models import Conversation, Message
 from rest_framework.pagination import PageNumberPagination
+from django.db.models import Count
 import uuid
 class ContactListView(APIView):
     permission_classes = [IsAuthenticated]
@@ -15,6 +16,7 @@ class ContactListView(APIView):
         try:
             query = request.GET.get('q', '')
             platform_filter = request.GET.get('platform')
+            comments_only = request.GET.get('comments_only') == 'true'
             
             if agent_id == 'all':
                 # Fetch contacts for all agents of this user
@@ -34,7 +36,9 @@ class ContactListView(APIView):
                 )
 
             # By default exclude YouTube contacts from the main list; allow explicit filter
-            if platform_filter:
+            if comments_only:
+                contacts = contacts.filter(platform='youtube')
+            elif platform_filter:
                 contacts = contacts.filter(platform=platform_filter)
             else:
                 contacts = contacts.exclude(platform='youtube')
@@ -44,6 +48,18 @@ class ContactListView(APIView):
             return Response({"contacts": serializer.data}, status=status.HTTP_200_OK)
         except AgentAI.DoesNotExist:
             return Response({"error": "Agent not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+class ContactSummaryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = Contact.objects.filter(agent__user=request.user)
+        summary = qs.values('platform').annotate(total=Count('id'))
+        data = {item['platform']: item['total'] for item in summary}
+        data.setdefault('youtube', 0)
+        data['messages'] = qs.exclude(platform='youtube').count()
+        return Response(data, status=status.HTTP_200_OK)
 
 class ContactDetailView(APIView):
     permission_classes = [IsAuthenticated]

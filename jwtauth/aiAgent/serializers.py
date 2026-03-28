@@ -232,13 +232,15 @@ class ContactSerializer(serializers.ModelSerializer):
     last_message_time = serializers.SerializerMethodField()
     unread_count = serializers.SerializerMethodField()
     crm_data = serializers.SerializerMethodField()
+    is_comment = serializers.SerializerMethodField()
 
     class Meta:
         model = Contact
         fields = [
             'id', 'agent', 'agent_name', 'identifier', 'name', 'push_name', 'profile_picture',
             'is_auto_reply_enabled', 'is_human_needed', 'platform', 'created_at', 'updated_at',
-            'custom_prompt', 'custom_instructions', 'last_message', 'last_message_time', 'unread_count', 'crm_data'
+            'custom_prompt', 'custom_instructions', 'last_message', 'last_message_time', 'unread_count', 'crm_data',
+            'is_comment'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
@@ -279,6 +281,9 @@ class ContactSerializer(serializers.ModelSerializer):
                 'raw_data': raw_data
             }
         return {'lead_stage': 'new', 'phone': '', 'email': '', 'ai_summary': '', 'raw_data': {}}
+
+    def get_is_comment(self, obj):
+        return obj.platform == 'youtube'
 
 class MessageSerializer(serializers.ModelSerializer):
     class Meta:
