@@ -44,6 +44,7 @@ export default function SmartCRMPage() {
   const [scheduleStart, setScheduleStart] = useState("");
   const [scheduleEnd, setScheduleEnd] = useState("");
   const [viewSchedule, setViewSchedule] = useState(null);
+  const [scheduleAudienceCount, setScheduleAudienceCount] = useState(null);
   const [scheduleDetail, setScheduleDetail] = useState(null);
 
   useEffect(() => {
@@ -156,7 +157,7 @@ export default function SmartCRMPage() {
       };
       const res = await api.post("/AgentAI/schedule/", payload);
       toast.success(`Scheduled for ${scheduleTime} (${res.data.audience_count} contacts)`);
-      setIsScheduleModal(false);
+      setScheduleAudienceCount(res.data.audience_count ?? null);
       setScheduleText("");
       setScheduleTime("");
       setShowSchedulePanel(true);
@@ -270,7 +271,7 @@ export default function SmartCRMPage() {
           />
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setIsScheduleModal(true)}
+              onClick={() => { setScheduleAudienceCount(null); setIsScheduleModal(true); }}
               className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold shadow hover:bg-emerald-700 transition"
               disabled={selectedAgentId === "all"}
               title={selectedAgentId === "all" ? "একটি নির্দিষ্ট এজেন্ট সিলেক্ট করুন" : "নতুন Schedule তৈরি করুন"}
@@ -478,7 +479,7 @@ export default function SmartCRMPage() {
       {/* Schedule Modal */}
       {isScheduleModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setIsScheduleModal(false)}></div>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { setIsScheduleModal(false); setScheduleAudienceCount(null); }}></div>
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 z-10 overflow-hidden flex flex-col">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h2 className="text-lg font-bold text-gray-900">Schedule Message</h2>
@@ -490,6 +491,12 @@ export default function SmartCRMPage() {
               </button>
             </div>
             <div className="p-6 space-y-4">
+              {scheduleAudienceCount !== null && (
+                <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
+                  <span className="font-semibold">Audience:</span>
+                  <span>{scheduleAudienceCount} contacts</span>
+                </div>
+              )}
               <div>
                 <label className="text-sm font-semibold text-gray-700">Message</label>
                 <textarea
@@ -513,7 +520,7 @@ export default function SmartCRMPage() {
             </div>
             <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2 bg-gray-50">
               <button
-                onClick={() => setIsScheduleModal(false)}
+                onClick={() => { setIsScheduleModal(false); setScheduleAudienceCount(null); }}
                 className="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm font-semibold"
               >
                 Cancel
@@ -538,7 +545,7 @@ export default function SmartCRMPage() {
               <h3 className="font-bold text-gray-800">Schedule Center</h3>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setIsScheduleModal(true)}
+                  onClick={() => { setScheduleAudienceCount(null); setIsScheduleModal(true); }}
                   className="px-3 py-2 rounded bg-cyan-600 text-white text-xs font-semibold shadow hover:bg-cyan-700"
                   disabled={selectedAgentId === "all"}
                   title={selectedAgentId === "all" ? "একটি নির্দিষ্ট এজেন্ট সিলেক্ট করুন" : "Schedule message"}
