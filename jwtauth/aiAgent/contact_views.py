@@ -178,6 +178,20 @@ class ContactMessageHistoryView(APIView):
 def _filter_contacts_for_scheduling(agent_qs, filters):
     qs = Contact.objects.filter(agent__in=agent_qs)
 
+    contact_ids = filters.get('contact_ids') or []
+    if isinstance(contact_ids, str):
+        try:
+            contact_ids = json.loads(contact_ids)
+        except Exception:
+            contact_ids = contact_ids.split(',') if contact_ids else []
+    if contact_ids:
+        try:
+            contact_ids = [int(cid) for cid in contact_ids]
+        except Exception:
+            contact_ids = []
+    if contact_ids:
+        qs = qs.filter(id__in=contact_ids)
+
     platform = filters.get('platform')
     if platform:
         qs = qs.filter(platform=platform)
@@ -191,25 +205,30 @@ def _filter_contacts_for_scheduling(agent_qs, filters):
     for c in contacts:
         mem = UserMemory.objects.filter(ai_agent=c.agent, sender_id=c.identifier).first()
         stage = (mem.data.get('lead_stage') if mem and isinstance(mem.data, dict) else None) or 'new'
-        if lead_stage and lead_stage != 'all' and stage != lead_stage:
-            continue
-        # Date filter based on message timestamps (if provided)
-        if start_date or end_date:
-            msg_qs = Message.objects.filter(conversation__agentAi=c.agent, conversation__contact_id=c.identifier)
-            if start_date:
-                try:
-                    sd = datetime.fromisoformat(start_date)
-                    msg_qs = msg_qs.filter(sent_at__gte=sd)
-                except Exception:
-                    pass
-            if end_date:
-                try:
-                    ed = datetime.fromisoformat(end_date)
-                    msg_qs = msg_qs.filter(sent_at__lte=ed)
-                except Exception:
-                    pass
-            if not msg_qs.exists():
+        if contact_ids:
+            # explicit selection; skip lead_stage filtering
+            pass
+        else:
+            if lead_stage and lead_stage != 'all' and stage != lead_stage:
                 continue
+        if not contact_ids:
+            # Date filter based on message timestamps (if provided)
+            if start_date or end_date:
+                msg_qs = Message.objects.filter(conversation__agentAi=c.agent, conversation__contact_id=c.identifier)
+                if start_date:
+                    try:
+                        sd = datetime.fromisoformat(start_date)
+                        msg_qs = msg_qs.filter(sent_at__gte=sd)
+                    except Exception:
+                        pass
+                if end_date:
+                    try:
+                        ed = datetime.fromisoformat(end_date)
+                        msg_qs = msg_qs.filter(sent_at__lte=ed)
+                    except Exception:
+                        pass
+                if not msg_qs.exists():
+                    continue
 
         # Only include contacts with some activity
         if not c.name and not c.push_name and not mem:

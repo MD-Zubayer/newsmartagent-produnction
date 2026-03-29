@@ -45,6 +45,7 @@ export default function SmartCRMPage() {
   const [scheduleEnd, setScheduleEnd] = useState("");
   const [viewSchedule, setViewSchedule] = useState(null);
   const [scheduleAudienceCount, setScheduleAudienceCount] = useState(null);
+  const [selectedContacts, setSelectedContacts] = useState([]);
   const [scheduleDetail, setScheduleDetail] = useState(null);
 
   useEffect(() => {
@@ -144,6 +145,10 @@ export default function SmartCRMPage() {
       toast.error("মেসেজ ও সময় দিন");
       return;
     }
+    if (selectedContacts.length === 0 && statusFilter === "all" && !startDate && !endDate) {
+      toast.error("কমপক্ষে একজন কন্টাক্ট সিলেক্ট করুন বা ফিল্টার দিন");
+      return;
+    }
     try {
       const payload = {
         agent_id: selectedAgentId,
@@ -153,6 +158,7 @@ export default function SmartCRMPage() {
           lead_stage: statusFilter,
           start_date: startDate || null,
           end_date: endDate || null,
+          contact_ids: selectedContacts
         }
       };
       const res = await api.post("/AgentAI/schedule/", payload);
@@ -160,6 +166,7 @@ export default function SmartCRMPage() {
       setScheduleAudienceCount(res.data.audience_count ?? null);
       setScheduleText("");
       setScheduleTime("");
+      setSelectedContacts([]);
       setShowSchedulePanel(true);
       fetchSchedules();
     } catch (err) {
@@ -187,6 +194,12 @@ export default function SmartCRMPage() {
     ...stage,
     cards: contacts.filter(c => (c.crm_data?.lead_stage || "new") === stage.id)
   }));
+
+  const toggleContactSelect = (id) => {
+    setSelectedContacts((prev) =>
+      prev.includes(id) ? prev.filter(cid => cid !== id) : [...prev, id]
+    );
+  };
 
   const handleDragStart = (e, contactId) => {
     setDraggingContactId(contactId);
@@ -269,20 +282,23 @@ export default function SmartCRMPage() {
             onChange={(e) => setEndDate(e.target.value)}
             className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 outline-none transition-all shadow-sm font-medium"
           />
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => { setScheduleAudienceCount(null); setIsScheduleModal(true); }}
-              className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold shadow hover:bg-emerald-700 transition"
-              disabled={selectedAgentId === "all"}
-              title={selectedAgentId === "all" ? "একটি নির্দিষ্ট এজেন্ট সিলেক্ট করুন" : "নতুন Schedule তৈরি করুন"}
-            >
-              + New Schedule
-            </button>
-            <button
-              onClick={() => setShowSchedulePanel(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm font-semibold shadow hover:bg-cyan-700 transition"
-            >
-              <QueueListIcon className="w-4 h-4" />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { setScheduleAudienceCount(null); setIsScheduleModal(true); }}
+            className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold shadow hover:bg-emerald-700 transition"
+            disabled={selectedAgentId === "all"}
+            title={selectedAgentId === "all" ? "একটি নির্দিষ্ট এজেন্ট সিলেক্ট করুন" : "নতুন Schedule তৈরি করুন"}
+          >
+            + New Schedule
+          </button>
+          <div className="text-xs text-gray-500 bg-gray-100 px-3 py-2 rounded-lg border border-gray-200">
+            Selected: <span className="font-bold">{selectedContacts.length}</span>
+          </div>
+          <button
+            onClick={() => setShowSchedulePanel(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm font-semibold shadow hover:bg-cyan-700 transition"
+          >
+            <QueueListIcon className="w-4 h-4" />
               <span>Schedule Center</span>
               {schedules.length > 0 && (
                 <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-bold">{schedules.length}</span>
@@ -323,10 +339,16 @@ export default function SmartCRMPage() {
                       key={card.id}
                       draggable
                       onDragStart={(e) => handleDragStart(e, card.id)}
-                      className={`bg-white rounded-lg p-4 shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing group ${draggingContactId === card.id ? 'opacity-50 scale-95' : ''}`}
+                      className={`bg-white rounded-lg p-4 shadow-sm border ${selectedContacts.includes(card.id) ? 'border-emerald-400 ring-2 ring-emerald-100' : 'border-gray-200'} hover:shadow-md transition-shadow cursor-grab active:cursor-grabbing group ${draggingContactId === card.id ? 'opacity-50 scale-95' : ''}`}
                     >
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedContacts.includes(card.id)}
+                            onChange={() => toggleContactSelect(card.id)}
+                            className="mt-1 h-4 w-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 cursor-pointer"
+                          />
                           {card.profile_picture ? (
                             <img 
                               src={card.profile_picture} 
@@ -482,7 +504,14 @@ export default function SmartCRMPage() {
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => { setIsScheduleModal(false); setScheduleAudienceCount(null); }}></div>
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 z-10 overflow-hidden flex flex-col">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-              <h2 className="text-lg font-bold text-gray-900">Schedule Message</h2>
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                Schedule Message
+                {selectedContacts.length > 0 && (
+                  <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-full px-2 py-1">
+                    {selectedContacts.length} selected
+                  </span>
+                )}
+              </h2>
               <button 
                 onClick={() => setIsScheduleModal(false)}
                 className="text-gray-400 hover:text-gray-600 bg-white shadow-sm border border-gray-200 rounded-full w-8 h-8 flex items-center justify-center"
