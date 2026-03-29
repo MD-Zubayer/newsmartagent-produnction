@@ -57,6 +57,9 @@ export default function OfferDetailsPage() {
                 <span className="bg-slate-100 text-slate-500 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider italic">
                     {offer.tokens.toLocaleString()} Tokens
                 </span>
+                <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider italic">
+                    {offer.schedule_messages?.toLocaleString?.() ?? offer.schedule_messages} Schedules
+                </span>
             </div>
           </div>
           <div className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter">
