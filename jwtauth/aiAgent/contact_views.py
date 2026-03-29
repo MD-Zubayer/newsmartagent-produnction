@@ -70,7 +70,15 @@ class ContactListView(APIView):
 
             contacts = contacts.order_by('-updated_at')
             serializer = ContactSerializer(contacts[:500], many=True)
-            return Response({"contacts": serializer.data}, status=status.HTTP_200_OK)
+            
+            # Sort contacts: those with a recent message history float to the top
+            def sort_key(c):
+                time_str = c.get('last_message_time')
+                return (time_str is not None, time_str or "")
+            
+            sorted_contacts = sorted(serializer.data, key=sort_key, reverse=True)
+            
+            return Response({"contacts": sorted_contacts}, status=status.HTTP_200_OK)
         except AgentAI.DoesNotExist:
             return Response({"error": "Agent not found"}, status=status.HTTP_404_NOT_FOUND)
 
