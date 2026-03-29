@@ -399,13 +399,19 @@ def send_whatsapp_alert(phone_number: str, message_text: str):
         
     formatted_phone = phone_number.replace('+', '')
     
-    # Find an active WhatsApp session from the database
+    # Dynamic session lookup: Find the instance_name for the phone 01727358743 (NSA Official)
     from openwa.models import WhatsAppInstance
-    instance = WhatsAppInstance.objects.filter(status='open').first()
-    session_id = instance.instance_name if instance else "system"
     
-    if not instance:
-        logger.warning("No active WhatsApp instance found in database. Using 'system' as fallback.")
+    # We search by the last digits to match any formatting (017... or 88017...)
+    official_instance = WhatsAppInstance.objects.filter(phone_number__icontains='1727358743').first()
+    
+    if official_instance:
+        # If the number is found, use its real generated session ID (instance_name)
+        session_id = official_instance.instance_name
+    else:
+        # Fallback to any other active session if official one is not found
+        any_active = WhatsAppInstance.objects.filter(status='open').first()
+        session_id = any_active.instance_name if any_active else "system"
 
     payload = {
         "to": formatted_phone + "@s.whatsapp.net",
