@@ -26,7 +26,10 @@ export default function LoginPage() {
   };
 
   const handleInitialLogin = async (e, requestedMethod = 'mobile_approval') => {
-    if (e) e.preventDefault();
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     setLoading(true);
     setError("");
 
@@ -75,7 +78,7 @@ export default function LoginPage() {
           setViewState('password');
         }
       } catch (err) {
-        // silent fail on polling
+        console.error("Polling error:", err);
       }
     }, 3000);
   };
@@ -87,7 +90,10 @@ export default function LoginPage() {
   }, []);
 
   const handleVerify2FA = async (e, methodToVerify) => {
-    e.preventDefault();
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     setLoading(true);
     setError("");
 
@@ -153,7 +159,7 @@ export default function LoginPage() {
         </div>
 
         {viewState === 'password' && (
-          <form onSubmit={(e) => handleInitialLogin(e, 'mobile_approval')} className="space-y-6">
+          <form method="POST" onSubmit={(e) => handleInitialLogin(e, 'mobile_approval')} className="space-y-6">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
               <input
@@ -203,7 +209,7 @@ export default function LoginPage() {
         )}
 
         {['email_otp', 'recovery_code'].includes(viewState) && (
-          <form onSubmit={(e) => handleVerify2FA(e, viewState)} className="space-y-6">
+          <form method="POST" onSubmit={(e) => handleVerify2FA(e, viewState)} className="space-y-6">
             <div>
               <input
                 name="otp" type="text" required value={otpCode} onChange={(e) => setOtpCode(e.target.value)}
