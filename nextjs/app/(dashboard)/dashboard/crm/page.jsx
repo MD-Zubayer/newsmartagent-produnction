@@ -196,9 +196,26 @@ export default function SmartCRMPage() {
   }));
 
   const toggleContactSelect = (id) => {
-    setSelectedContacts((prev) =>
-      prev.includes(id) ? prev.filter(cid => cid !== id) : [...prev, id]
-    );
+    const card = contacts.find(c => c.id === id);
+    if (!card) return;
+
+    setSelectedContacts((prev) => {
+      if (prev.includes(id)) {
+        const next = prev.filter(cid => cid !== id);
+        if (next.length === 0) {
+          setSelectedAgentId("all");
+        }
+        return next;
+      }
+      if (selectedAgentId !== "all" && selectedAgentId !== card.agent) {
+        toast.error("একই এজেন্টের কন্টাক্ট সিলেক্ট করুন");
+        return prev;
+      }
+      if (selectedAgentId === "all") {
+        setSelectedAgentId(card.agent);
+      }
+      return [...prev, id];
+    });
   };
 
   const handleDragStart = (e, contactId) => {
@@ -282,15 +299,15 @@ export default function SmartCRMPage() {
             onChange={(e) => setEndDate(e.target.value)}
             className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 outline-none transition-all shadow-sm font-medium"
           />
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => { setScheduleAudienceCount(null); setIsScheduleModal(true); }}
-            className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold shadow hover:bg-emerald-700 transition"
-            disabled={selectedAgentId === "all"}
-            title={selectedAgentId === "all" ? "একটি নির্দিষ্ট এজেন্ট সিলেক্ট করুন" : "নতুন Schedule তৈরি করুন"}
-          >
-            + New Schedule
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setScheduleAudienceCount(null); setIsScheduleModal(true); }}
+              className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold shadow hover:bg-emerald-700 transition"
+              disabled={selectedAgentId === "all" && selectedContacts.length === 0}
+              title={selectedAgentId === "all" && selectedContacts.length === 0 ? "একটি এজেন্ট বা কন্টাক্ট সিলেক্ট করুন" : "নতুন Schedule তৈরি করুন"}
+            >
+              + New Schedule
+            </button>
           <div className="text-xs text-gray-500 bg-gray-100 px-3 py-2 rounded-lg border border-gray-200">
             Selected: <span className="font-bold">{selectedContacts.length}</span>
           </div>
