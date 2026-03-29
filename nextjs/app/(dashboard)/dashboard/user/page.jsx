@@ -435,8 +435,10 @@ export default function UserDashboard() {
                 const statusColorClass = log.success === false
                   ? "bg-rose-500 text-white shadow-rose-500/20"
                   : "bg-emerald-500 text-white shadow-emerald-500/20";
-                
-                const displayName = log.contact_name || log.sender_id || "Unknown";
+                let displayName = log.contact_name || log.sender_id || "Unknown";
+                if (displayName.startsWith('@')) {
+                  displayName = displayName.substring(1);
+                }
                 const avatarLabel = Array.from(displayName)[0].toUpperCase();
 
                 return (
