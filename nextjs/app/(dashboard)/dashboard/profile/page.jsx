@@ -312,7 +312,7 @@ export default function ProfilePage() {
                 </div>
                 <div className="bg-emerald-50 rounded-[2.5rem] p-8 text-emerald-900 flex items-center justify-between shadow-xl border border-emerald-100">
                     <div>
-                        <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em] mb-1">Schedules Left</p>
+                        <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em] mb-1">Schedule Contacts Left</p>
                         <h4 className="text-2xl font-black italic uppercase">{(remainingSchedules || 0).toLocaleString()}</h4>
                         <p className="text-[10px] font-black text-emerald-400 mt-1">Used: {usedSchedules.toLocaleString()} / {totalScheduleSlots.toLocaleString() || "0"}</p>
                     </div>

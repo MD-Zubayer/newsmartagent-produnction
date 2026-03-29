@@ -46,6 +46,9 @@ export default function SmartCRMPage() {
   const [viewSchedule, setViewSchedule] = useState(null);
   const [scheduleAudienceCount, setScheduleAudienceCount] = useState(null);
   const [selectedContacts, setSelectedContacts] = useState([]);
+  const selectionAgentId = selectedContacts.length > 0
+    ? (contacts.find(c => c.id === selectedContacts[0])?.agent ?? null)
+    : null;
   const [scheduleDetail, setScheduleDetail] = useState(null);
 
   useEffect(() => {
@@ -209,18 +212,14 @@ export default function SmartCRMPage() {
 
     setSelectedContacts((prev) => {
       if (prev.includes(id)) {
-        const next = prev.filter(cid => cid !== id);
-        if (next.length === 0) {
-          setSelectedAgentId("all");
-        }
-        return next;
+        return prev.filter(cid => cid !== id);
       }
-      if (selectedAgentId !== "all" && selectedAgentId !== card.agent) {
+      const currentAgent = prev.length > 0
+        ? contacts.find(c => c.id === prev[0])?.agent
+        : null;
+      if (currentAgent && currentAgent !== card.agent) {
         toast.error("একই এজেন্টের কন্টাক্ট সিলেক্ট করুন");
         return prev;
-      }
-      if (selectedAgentId === "all") {
-        setSelectedAgentId(card.agent);
       }
       return [...prev, id];
     });

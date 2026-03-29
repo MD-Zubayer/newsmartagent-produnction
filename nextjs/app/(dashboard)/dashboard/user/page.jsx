@@ -254,7 +254,7 @@ export default function UserDashboard() {
           <StatCard title="Memory Costs" value={summary.memory_extraction_tokens?.toLocaleString() || '0'} icon={<Activity />} color="orange" subValue="Background Sync" />
           <StatCard title="Avg Latency" value={`${summary.avg_response_ms || 0}ms`} icon={<Activity />} color="orange" />
           <StatCard title="Total Failed" value={summary.failed_count} icon={<Info />} color="red" />
-          <StatCard title="Schedule Slots" value={(remainingSchedules || 0).toLocaleString()} icon={<Calendar />} color="green" subValue={`Used: ${usedSchedules.toLocaleString()} / ${totalScheduleSlots.toLocaleString() || '0'}`} />
+          <StatCard title="Schedule Contacts" value={(remainingSchedules || 0).toLocaleString()} icon={<Calendar />} color="green" subValue={`Used: ${usedSchedules.toLocaleString()} / ${totalScheduleSlots.toLocaleString() || '0'}`} />
         </div>
 
         {/* Chart & Engine Usage */}

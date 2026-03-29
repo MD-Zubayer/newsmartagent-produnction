@@ -403,7 +403,7 @@ class ScheduledMessageView(APIView):
 
         try:
             with transaction.atomic():
-                consumed_sub = deduct_schedule_quota(request.user.profile, 1)
+                consumed_sub = deduct_schedule_quota(request.user.profile, audience_count or 1)
 
                 sched = ScheduledMessage.objects.create(
                     agent=agent,
@@ -413,7 +413,7 @@ class ScheduledMessageView(APIView):
                     audience_count=audience_count,
                     status='pending',
                     consumed_subscription=consumed_sub,
-                    consumed_quota=1
+                    consumed_quota=audience_count or 1
                 )
         except ValueError as e:
             return Response({"error": str(e)}, status=402)

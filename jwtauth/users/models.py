@@ -117,7 +117,7 @@ class Profile(models.Model):
     id_type = models.CharField(max_length=10, choices=ID_TYPE_CHOICES)
     unique_id = models.CharField(max_length=10, unique=True)
     word_balance = models.PositiveBigIntegerField(default=0)
-    schedule_balance = models.PositiveBigIntegerField(default=0, help_text="Remaining schedule message slots across active subscriptions")
+    schedule_balance = models.PositiveBigIntegerField(default=0, help_text="Remaining schedule recipients across active subscriptions")
     commission_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, blank=True, null=True)
     acount_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     otp_code = models.CharField(max_length=6, blank=True, null=True)
@@ -180,7 +180,7 @@ class Offer(models.Model):
     allowed_platforms = models.ManyToManyField(Platform, related_name='offers')
     allowed_models = models.ManyToManyField('aiAgent.AIProviderModel', related_name='offers', blank=True)
     tokens = models.PositiveIntegerField()
-    schedule_messages = models.PositiveIntegerField(default=0, help_text="এই অফারে মোট কতটি শিডিউল মেসেজ পাঠাতে পারবে")
+    schedule_messages = models.PositiveIntegerField(default=0, help_text="এই অফারে মোট কয়জন কন্টাক্টকে শিডিউল মেসেজ পাঠানো যাবে (মোট অডিয়েন্স)")
     shorthand_choices = models.CharField(max_length=10, blank=True, null=True)
     name = models.CharField(blank=True, null=True)
     description = models.TextField(blank=True, null=True)
@@ -297,7 +297,7 @@ class Subscription(models.Model):
     end_date = models.DateTimeField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
     remaining_tokens = models.PositiveBigIntegerField(default=0) # Track tokens separately per subscription
-    remaining_schedule_messages = models.PositiveBigIntegerField(default=0, help_text="Remaining schedule message slots for this subscription")
+    remaining_schedule_messages = models.PositiveBigIntegerField(default=0, help_text="এই সাবস্ক্রিপশনে বাকি থাকা শিডিউল অডিয়েন্স সংখ্যা")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):

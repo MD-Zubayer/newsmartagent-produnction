@@ -58,7 +58,7 @@ export default function OfferDetailsPage() {
                     {offer.tokens.toLocaleString()} Tokens
                 </span>
                 <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider italic">
-                    {offer.schedule_messages?.toLocaleString?.() ?? offer.schedule_messages} Schedules
+                    {offer.schedule_messages?.toLocaleString?.() ?? offer.schedule_messages} Contacts Allowed
                 </span>
             </div>
           </div>
