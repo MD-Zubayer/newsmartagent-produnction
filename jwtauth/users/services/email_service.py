@@ -324,3 +324,92 @@ def send_2fa_otp_email(to_email: str, otp_code: str):
         fail_silently=True,
         html_message=html_message,
     )
+
+def send_security_alert_email(to_email: str, device_name: str, ip_address: str, time_str: str):
+    """Send an alert when a login occurs from a new or unrecognized device."""
+    subject = "⚠️ Security Alert: New Login to your NSA Account"
+    message = (
+        f"A new login was detected on your New Smart Agent account.\n\n"
+        f"Device: {device_name}\n"
+        f"IP Address: {ip_address}\n"
+        f"Time: {time_str}\n\n"
+        "If this was you, you don't need to do anything. If you didn't log in recently, "
+        "please secure your account immediately by resetting your password."
+    )
+    
+    html_message = f"""
+    <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f9f9f9;">
+        <div style="max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; border-top: 4px solid #ef4444;">
+            <h2 style="color: #1f2937;">New Login Detected</h2>
+            <p style="color: #4b5563;">We noticed a new login to your New Smart Agent account from an unrecognized device.</p>
+            <div style="background-color: #f3f4f6; padding: 15px; border-radius: 6px; margin: 20px 0;">
+                <p style="margin: 5px 0;"><strong>Device:</strong> {device_name}</p>
+                <p style="margin: 5px 0;"><strong>IP Address:</strong> {ip_address}</p>
+                <p style="margin: 5px 0;"><strong>Time:</strong> {time_str}</p>
+            </div>
+            <p style="color: #4b5563;">If this was you, you can safely ignore this email.</p>
+            <p style="color: #4b5563;">If you don't recognize this activity, please change your password immediately.</p>
+        </div>
+    </div>
+    """
+    send_mail(
+        subject, message, settings.DEFAULT_FROM_EMAIL, [to_email], fail_silently=True, html_message=html_message
+    )
+
+
+def send_push_approval_email(to_email: str, approve_link: str, reject_link: str, device_name: str):
+    """Send Magic Link for Passwordless / Push Authentication login approval."""
+    subject = "🔑 Approve Login Request"
+    message = (
+        f"Are you trying to sign in to New Smart Agent from {device_name}?\n\n"
+        f"Yes, it's me: {approve_link}\n\n"
+        f"No, secure account: {reject_link}\n"
+    )
+    
+    html_message = f"""
+    <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f9f9f9;">
+        <div style="max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; border-top: 4px solid #2563eb; text-align: center;">
+            <h1 style="color: #1f2937; font-size: 24px;">Login Approval Request</h1>
+            <p style="color: #4b5563; font-size: 16px;">Are you trying to sign in to your New Smart Agent account from <strong>{device_name}</strong>?</p>
+            
+            <div style="margin: 30px 0;">
+                <a href="{approve_link}" style="background-color: #10b981; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; margin-right: 15px; display: inline-block;">✅ Yes, it's me</a>
+                <a href="{reject_link}" style="background-color: #ef4444; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">❌ No, it's not me</a>
+            </div>
+            
+            <p style="color: #9ca3af; font-size: 12px;">This link expires in 5 minutes. If you didn't request this, tap 'No' or ignore this email.</p>
+        </div>
+    </div>
+    """
+    send_mail(
+        subject, message, settings.DEFAULT_FROM_EMAIL, [to_email], fail_silently=True, html_message=html_message
+    )
+
+
+def send_whatsapp_alert(phone_number: str, message_text: str):
+    """Send Security Alert or Push Authentication message to WhatsApp."""
+    import os
+    import requests
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    webhook_url = os.getenv("N8N_WHATSAPP_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/whatsapp-delivery")
+    if not phone_number.startswith('+'):
+        phone_number = '+' + phone_number.lstrip('0')
+        
+    formatted_phone = phone_number.replace('+', '')
+    
+    payload = {
+        "to": formatted_phone + "@s.whatsapp.net",
+        "phone": formatted_phone,
+        "message": message_text,
+        "type": "whatsapp",
+        "system_alert": True
+    }
+    
+    try:
+        requests.post(webhook_url, json=payload, timeout=10)
+        logger.info(f"WhatsApp security alert sent to {formatted_phone}")
+    except Exception as e:
+        logger.error(f"Failed to send WhatsApp security alert: {e}")
+

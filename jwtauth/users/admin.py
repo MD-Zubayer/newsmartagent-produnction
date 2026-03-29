@@ -7,7 +7,7 @@ from .models import FacebookPage
 from .models import OrderForm, CustomerOrder, EmailVerificationToken
 
 from users.forms import UserAdminChangeForm, UserAdminCreationForm
-from .models import User, Profile, Payment, Offer, Subscription, Platform, NSATransfer, WithdrawMethod, CashoutRequest, TikTokAccount
+from .models import User, Profile, Payment, Offer, Subscription, Platform, NSATransfer, WithdrawMethod, CashoutRequest, TikTokAccount, LoginHistory, TrustedDevice, RecoveryCode, LoginSession
 from unfold.admin import ModelAdmin
 # Force Django Admin to use allauth login if enabled
 if settings.DJANGO_ADMIN_FORCE_ALLAUTH:
@@ -325,3 +325,27 @@ class TikTokAccountAdmin(admin.ModelAdmin):
             'fields': ('is_active', 'created_at', 'updated_at')
         }),
     )
+
+@admin.register(LoginHistory)
+class LoginHistoryAdmin(ModelAdmin):
+    list_display = ('user', 'ip_address', 'device_name', 'location', 'created_at')
+    search_fields = ('user__email', 'ip_address', 'device_name')
+    list_filter = ('created_at',)
+
+@admin.register(TrustedDevice)
+class TrustedDeviceAdmin(ModelAdmin):
+    list_display = ('user', 'device_name', 'expires_at', 'created_at')
+    search_fields = ('user__email', 'device_name', 'device_token')
+    list_filter = ('expires_at', 'created_at')
+
+@admin.register(RecoveryCode)
+class RecoveryCodeAdmin(ModelAdmin):
+    list_display = ('user', 'code', 'is_used', 'created_at')
+    search_fields = ('user__email', 'code')
+    list_filter = ('is_used', 'created_at')
+
+@admin.register(LoginSession)
+class LoginSessionAdmin(ModelAdmin):
+    list_display = ('user', 'status', 'ip_address', 'device_name', 'expires_at', 'created_at')
+    search_fields = ('user__email', 'session_token', 'ip_address')
+    list_filter = ('status', 'expires_at', 'created_at')

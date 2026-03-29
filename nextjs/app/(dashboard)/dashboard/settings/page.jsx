@@ -30,6 +30,16 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [offers, setOffers] = useState([]);
 
+  // Security States
+  const [securityData, setSecurityData] = useState({
+    recovery_email: "",
+    recovery_whatsapp: "",
+    recovery_codes_count: 0,
+    recovery_codes_available: []
+  });
+  const [loginHistory, setLoginHistory] = useState([]);
+  const [showCodes, setShowCodes] = useState(false);
+
   // Per-Contact Settings State
   const [agents, setAgents] = useState([]);
   const [selectedAgent, setSelectedAgent] = useState("");
@@ -46,6 +56,10 @@ export default function SettingsPage() {
     if (activeTab === "contacts" || activeTab === "automation") {
       fetchAgents();
       fetchOffers();
+    }
+    if (activeTab === "security") {
+      fetchSecurityData();
+      fetchLoginHistory();
     }
   }, [activeTab]);
 
@@ -197,6 +211,59 @@ export default function SettingsPage() {
     } catch (err) {
       console.error("Failed to toggle 2FA:", err);
       toast.error(err.response?.data?.error || "Failed to update 2FA setting.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const fetchSecurityData = async () => {
+    try {
+      const res = await api.get("/security/settings/");
+      setSecurityData(res.data);
+    } catch (err) {
+      console.error("Failed to fetch security data");
+    }
+  };
+
+  const fetchLoginHistory = async () => {
+    try {
+      const res = await api.get("/security/login-history/");
+      setLoginHistory(res.data || []);
+    } catch (err) {
+      console.error("Failed to fetch login history");
+    }
+  };
+
+  const handleUpdateRecovery = async () => {
+    setIsSaving(true);
+    try {
+      await api.post("/security/settings/", {
+        action: "update_recovery",
+        recovery_email: securityData.recovery_email,
+        recovery_whatsapp: securityData.recovery_whatsapp
+      });
+      toast.success("Recovery options updated!");
+    } catch (err) {
+      toast.error("Failed to update recovery options.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleGenerateCodes = async () => {
+    if (!confirm("This will replace your previous codes. Continue?")) return;
+    setIsSaving(true);
+    try {
+      const res = await api.post("/security/settings/", { action: "generate_codes" });
+      setSecurityData(prev => ({
+        ...prev,
+        recovery_codes_available: res.data.codes,
+        recovery_codes_count: res.data.codes.length
+      }));
+      setShowCodes(true);
+      toast.success("New recovery codes generated!");
+    } catch (err) {
+      toast.error("Failed to generate codes.");
     } finally {
       setIsSaving(false);
     }
@@ -653,18 +720,137 @@ export default function SettingsPage() {
           )}
 
           {activeTab === "security" && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500 pb-10">
+              {/* 2FA Toggle */}
               <section>
-                <h3 className="text-sm font-black uppercase tracking-widest text-gray-400 mb-6 ml-2">Account Protection</h3>
+                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Account Protection</h3>
                 <div className="space-y-4">
                   <SettingRow 
                     icon={FaShieldAlt} 
                     title="Two-Factor Authentication" 
-                    desc="Require a verification code sent to your email during login."
+                    desc="Require a verification code sent to your email or WhatsApp during login."
                     active={twoFactorEnabled}
                     onClick={handleToggle2FA}
                     color="text-amber-500"
                   />
+                </div>
+              </section>
+
+              {/* Recovery Options */}
+              <section className="pt-6 border-t border-slate-100">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Recovery Options</h3>
+                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Recovery Email</label>
+                      <input 
+                        type="email"
+                        value={securityData.recovery_email || ""}
+                        onChange={(e) => setSecurityData({...securityData, recovery_email: e.target.value})}
+                        placeholder="Backup email address"
+                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500/10"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">WhatsApp for Security</label>
+                      <input 
+                        type="text"
+                        value={securityData.recovery_whatsapp || ""}
+                        onChange={(e) => setSecurityData({...securityData, recovery_whatsapp: e.target.value})}
+                        placeholder="Country code + Number (e.g. 88017...)"
+                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500/10"
+                      />
+                    </div>
+                  </div>
+                  <button 
+                    onClick={handleUpdateRecovery}
+                    disabled={isSaving}
+                    className="w-full md:w-auto px-8 py-3 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-black transition-all shadow-lg shadow-slate-200"
+                  >
+                    {isSaving ? "Saving..." : "Update Recovery Info"}
+                  </button>
+                </div>
+              </section>
+
+              {/* Recovery Codes */}
+              <section className="pt-6 border-t border-slate-100">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">Backup Recovery Codes</h3>
+                  <button 
+                    onClick={handleGenerateCodes}
+                    className="text-[10px] font-black text-indigo-600 uppercase hover:underline"
+                  >
+                    Generate New Codes
+                  </button>
+                </div>
+                
+                <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100">
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className="p-2 bg-white rounded-lg border border-indigo-100 text-indigo-600">
+                      <FaShieldAlt />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">You have {securityData.recovery_codes_count} unused codes</p>
+                      <p className="text-xs text-slate-500 font-medium">Use these if you lose access to your email and phone.</p>
+                    </div>
+                  </div>
+
+                  {securityData.recovery_codes_available.length > 0 && (
+                    <div className="mt-4">
+                       <button 
+                        onClick={() => setShowCodes(!showCodes)}
+                        className="text-xs font-bold text-slate-600 bg-white border border-slate-200 px-4 py-2 rounded-lg hover:bg-slate-50 mb-4"
+                      >
+                        {showCodes ? "Hide Codes" : "Show Available Codes"}
+                      </button>
+
+                      {showCodes && (
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 animate-in fade-in zoom-in-95">
+                          {securityData.recovery_codes_available.map((code, i) => (
+                            <div key={i} className="bg-white border border-indigo-100 p-3 rounded-xl text-center font-mono font-bold text-indigo-600 text-sm shadow-sm select-all">
+                              {code}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {/* Login History */}
+              <section className="pt-6 border-t border-slate-100">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Recent Login Activity</h3>
+                <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-sm">
+                  <table className="w-full text-left bg-white text-sm">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200">
+                        <th className="px-6 py-4 font-bold text-slate-500 uppercase tracking-widest text-[10px]">Device / Browser</th>
+                        <th className="px-6 py-4 font-bold text-slate-500 uppercase tracking-widest text-[10px]">IP Address</th>
+                        <th className="px-6 py-4 font-bold text-slate-500 uppercase tracking-widest text-[10px]">Time</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {loginHistory.length > 0 ? loginHistory.map((login, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-6 py-4 font-bold text-slate-800">
+                            <div className="flex items-center gap-3">
+                              <FaGlobe className="text-slate-300" />
+                              {login.device_name || "Unknown Browser"}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 font-mono text-xs text-slate-500">{login.ip_address}</td>
+                          <td className="px-6 py-4 text-slate-400 font-medium">
+                            {new Date(login.created_at).toLocaleString()}
+                          </td>
+                        </tr>
+                      )) : (
+                        <tr>
+                          <td colSpan="3" className="px-6 py-10 text-center text-slate-400 italic font-medium">No recent activity logged.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </section>
             </div>

@@ -123,6 +123,8 @@ class Profile(models.Model):
     otp_code = models.CharField(max_length=6, blank=True, null=True)
     otp_created_at = models.DateTimeField(blank=True, null=True)
     two_factor_enabled = models.BooleanField(default=False)
+    recovery_email = models.EmailField(blank=True, null=True)
+    recovery_whatsapp = models.CharField(max_length=20, blank=True, null=True, help_text="Enter number with country code")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -542,3 +544,56 @@ class TikTokAccount(models.Model):
 
     def __str__(self):
         return f"{self.display_name or self.open_id} ({self.user.email})"
+
+class LoginHistory(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='login_histories')
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+    device_name = models.CharField(max_length=255, blank=True, null=True)
+    location = models.CharField(max_length=255, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.email} - {self.ip_address} on {self.created_at}"
+
+class TrustedDevice(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='trusted_devices')
+    device_token = models.CharField(max_length=255, unique=True, db_index=True)
+    device_name = models.CharField(max_length=255, blank=True, null=True)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def is_valid(self):
+        return timezone.now() < self.expires_at
+
+    def __str__(self):
+        return f"{self.user.email} - {self.device_name}"
+
+class RecoveryCode(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='recovery_codes')
+    code = models.CharField(max_length=255) 
+    is_used = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Recovery Code for {self.user.email} (Used: {self.is_used})"
+
+class LoginSession(models.Model):
+    SESSION_STATUS_CHOICES = (
+        ('pending', 'Pending Approval'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('expired', 'Expired'),
+    )
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    session_token = models.UUIDField(default=uuid.uuid4, unique=True, db_index=True)
+    status = models.CharField(max_length=20, choices=SESSION_STATUS_CHOICES, default='pending')
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+    device_name = models.CharField(max_length=255, blank=True, null=True)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def is_valid(self):
+        return self.status == 'pending' and timezone.now() < self.expires_at
+
+    def __str__(self):
+        return f"{self.user.email} Session - {self.status}"

@@ -11,7 +11,9 @@ from users.views import (
     ResetPasswordView, OfferViewSet, SubscriptionViewSet, 
     CookieTokenRefreshView, CookieTokenVerifyView, OrderSubmitView, NSABalanceTransferView, SendPaymentOTPView, SendTransferOTPView,
     WithdrawMethodViewSet, CashoutRequestViewSet, FinancialSummaryView,
-    Verify2FALoginView, Toggle2FAView
+    Verify2FALoginView, Toggle2FAView,
+    LoginSessionStatusView, ApproveLoginSessionView,
+    SecuritySettingsView, LoginHistoryView
 )
 from payments.views import PaymentViewSet
 from webhooks import views as webhook_views
@@ -53,6 +55,10 @@ urlpatterns = [
     path('api/token/refresh/', CookieTokenRefreshView.as_view(), name='token_refresh'),
     path('api/auth/2fa/verify/', Verify2FALoginView.as_view(), name='verify-2fa-login'),
     path('api/auth/2fa/toggle/', Toggle2FAView.as_view(), name='toggle-2fa'),
+    path('api/auth/session-status/', LoginSessionStatusView.as_view(), name='session-status'),
+    path('api/auth/approve-login/', ApproveLoginSessionView.as_view(), name='approve-login'),
+    path('api/security/settings/', SecuritySettingsView.as_view(), name='security-settings'),
+    path('api/security/login-history/', LoginHistoryView.as_view(), name='login-history'),
     path('api/forgot-password/', ForgotPasswordView.as_view(), name='forgot_password'),
     path("api/reset-password/", ResetPasswordView.as_view(), name="reset-password"),
     path('api/transfer/', NSABalanceTransferView.as_view(), name='tarnsfer'),
