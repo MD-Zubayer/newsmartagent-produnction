@@ -18,9 +18,14 @@ from aiAgent.business_logic.logic_handler import (
     deliver_instagram_reply,
     deliver_facebook_reply,
     deliver_telegram_reply,
+    check_schedule_quota,
+    deduct_schedule_quota,
+    restore_schedule_quota,
 )
 from aiAgent.models import TelegramBot
 import uuid
+import logging
+logger = logging.getLogger('aiAgent')
 class ContactListView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -377,14 +382,24 @@ class ScheduledMessageView(APIView):
         contacts_with_stage = _filter_contacts_for_scheduling([agent], filters)
         audience_count = len(contacts_with_stage)
 
-        sched = ScheduledMessage.objects.create(
-            agent=agent,
-            message=message,
-            run_at=run_time,
-            filter_payload=filters,
-            audience_count=audience_count,
-            status='pending'
-        )
+        try:
+            with transaction.atomic():
+                consumed_sub = deduct_schedule_quota(request.user.profile, 1)
+
+                sched = ScheduledMessage.objects.create(
+                    agent=agent,
+                    message=message,
+                    run_at=run_time,
+                    filter_payload=filters,
+                    audience_count=audience_count,
+                    status='pending',
+                    consumed_subscription=consumed_sub,
+                    consumed_quota=1
+                )
+        except ValueError as e:
+            return Response({"error": str(e)}, status=402)
+        except Exception as e:
+            return Response({"error": f"Scheduling failed: {e}"}, status=500)
 
         dispatch_scheduled_message.apply_async(args=[sched.id], eta=run_time)
 
@@ -402,6 +417,11 @@ class ScheduledMessageView(APIView):
         if not sched:
             return Response({"error": "Not found"}, status=404)
         if sched.status in ['sent', 'pending', 'failed']:
+            if sched.status == 'pending' and sched.consumed_quota:
+                try:
+                    restore_schedule_quota(request.user.profile, sched.consumed_subscription, sched.consumed_quota)
+                except Exception as e:
+                    logger.error(f"Schedule quota restore failed for {sched_id}: {e}")
             sched.delete()
             return Response({"success": True}, status=200)
         return Response({"error": "Cannot delete this status"}, status=400)

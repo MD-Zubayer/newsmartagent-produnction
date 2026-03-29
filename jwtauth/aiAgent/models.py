@@ -384,6 +384,8 @@ class ScheduledMessage(models.Model):
     run_at = models.DateTimeField()
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="pending", db_index=True)
     audience_count = models.IntegerField(default=0)
+    consumed_subscription = models.ForeignKey('users.Subscription', on_delete=models.SET_NULL, null=True, blank=True, related_name='consumed_schedules')
+    consumed_quota = models.PositiveIntegerField(default=1, help_text="How many schedule slots this entry consumed")
     filter_payload = models.JSONField(default=dict, blank=True)
     error_message = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)

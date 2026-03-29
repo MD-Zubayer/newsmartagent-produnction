@@ -28,7 +28,7 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profile
-        fields = ["user", "id_type", "unique_id", "profile_photo", "created_at", "updated_at", "two_factor_enabled", "word_balance", 'acount_balance', 'commission_balance']
+        fields = ["user", "id_type", "unique_id", "profile_photo", "created_at", "updated_at", "two_factor_enabled", "word_balance", "schedule_balance", 'acount_balance', 'commission_balance']
 
 
 class UserSerializer(serializers.ModelSerializer[User]):
@@ -188,7 +188,7 @@ class OfferSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Offer
-        fields = ["id", "name","allowed_platforms", "allowed_models", "tokens", "description", "price", "duration_days", "is_active", 'target_audience']
+        fields = ["id", "name","allowed_platforms", "allowed_models", "tokens", "schedule_messages", "description", "price", "duration_days", "is_active", 'target_audience']
 
 
 class SubscriptionSerializer(serializers.ModelSerializer):
@@ -198,13 +198,18 @@ class SubscriptionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Subscription
-        fields = ["id", "profile", "offer", "offer_id", "start_date", "end_date", "is_active", "remaining_tokens"]
-        read_only_fields = ["profile", "start_date", "end_date", "is_active", "remaining_tokens"]
+        fields = ["id", "profile", "offer", "offer_id", "start_date", "end_date", "is_active", "remaining_tokens", "remaining_schedule_messages"]
+        read_only_fields = ["profile", "start_date", "end_date", "is_active", "remaining_tokens", "remaining_schedule_messages"]
     
     def create(self, validated_data):
         user_profile = self.context['request'].user.profile
         validated_data['profile'] = user_profile
         subscription = super().create(validated_data)
+        # initialize schedule quota from offer
+        if subscription.offer and subscription.remaining_schedule_messages == 0:
+            subscription.remaining_schedule_messages = getattr(subscription.offer, "schedule_messages", 0)
+            subscription.save(update_fields=["remaining_schedule_messages"])
+        user_profile.sync_balances()
         return subscription
 
 

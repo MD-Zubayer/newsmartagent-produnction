@@ -1,7 +1,7 @@
 # aiAgent/admin.py
 from django.contrib import admin
 from unfold.admin import ModelAdmin
-from .models import AgentAI,MissingRequirement, Contact, WidgetSettings
+from .models import AgentAI,MissingRequirement, Contact, WidgetSettings, ScheduledMessage
 from django.utils.html import format_html
 from .models import UserMemory, AgentAI
 import json
@@ -820,3 +820,11 @@ class WebsiteVisitorAdmin(ModelAdmin):
         else:
             self.message_user(request, "No emails found in selection.", level='warning')
     export_emails_action.short_description = "📋 Show Email List of Selected"
+
+
+@admin.register(ScheduledMessage)
+class ScheduledMessageAdmin(ModelAdmin):
+    list_display = ('id', 'agent', 'status', 'run_at', 'audience_count', 'consumed_subscription', 'consumed_quota', 'created_at')
+    list_filter = ('status', 'run_at', 'agent')
+    search_fields = ('agent__name', 'agent__user__email')
+    readonly_fields = ('created_at', 'updated_at')

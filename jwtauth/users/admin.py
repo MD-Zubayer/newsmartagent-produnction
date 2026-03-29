@@ -78,7 +78,7 @@ class UserAdmin(auth_admin.UserAdmin):
 # Profile Admin
 @admin.register(Profile)
 class ProfileAdmin(ModelAdmin):
-    list_display = ('id', 'user', 'id_type','word_balance', 'unique_id', 'commission_balance', 'acount_balance', 'created_at', 'updated_at')
+    list_display = ('id', 'user', 'id_type','word_balance', 'schedule_balance', 'unique_id', 'commission_balance', 'acount_balance', 'created_at', 'updated_at')
     search_fields = ('user__email', 'unique_id')
     list_filter = ('id_type',)
 
@@ -110,7 +110,7 @@ class PlatformInline(admin.TabularInline):
 
 @admin.register(Offer)
 class OfferAdmin(ModelAdmin):
-    list_display = ['name', 'tokens', 'price', 'duration_days', 'is_active', 'platform_count', 'target_audience']
+    list_display = ['name', 'tokens', 'schedule_messages', 'price', 'duration_days', 'is_active', 'platform_count', 'target_audience']
     inlines = [PlatformInline]
 
     @admin.display(description="Count platforms")
@@ -127,8 +127,8 @@ class OfferAdmin(ModelAdmin):
 # Subscription Admin
 @admin.register(Subscription)
 class SubscriptionAdmin(ModelAdmin):
-    list_display = ('profile', 'offer', 'remaining_tokens', 'start_date', 'end_date', 'is_active', 'created_at')
-    list_filter = ('is_active',)
+    list_display = ('profile', 'offer', 'remaining_tokens', 'remaining_schedule_messages', 'start_date', 'end_date', 'is_active', 'created_at')
+    list_filter = ('is_active', 'offer')
     search_fields = ('profile__user__email', 'offer__name')
 
 

@@ -27,7 +27,7 @@ import redis
 import signal
 import logging
 import uuid
-from django.db.models import F
+from django.db.models import F, Sum
 from webhooks.utils import fetch_facebook_post_text, get_message_cache, set_message_cache
 from chat.utils import get_smart_post_context
 from aiAgent.cache.hybrid_similarity import get_cached_reply, set_cached_reply
@@ -280,7 +280,7 @@ def deduct_user_tokens(user_profile, total_tokens, ai_model_name):
                     logger.info(f"Sub {sub.id} exhausted. Still need to deduct {remaining_to_deduct}")
 
             # Final sync of global balance
-            user_profile.sync_word_balance()
+            user_profile.sync_balances()
 
             # Trigger auto-renew if balance is low
             try:
@@ -294,6 +294,78 @@ def deduct_user_tokens(user_profile, total_tokens, ai_model_name):
             
         except Exception as e:
             logger.error(f"Token Deduction Error: {e}")
+
+
+def check_schedule_quota(user_profile, required=1):
+    """
+    Checks whether user has at least `required` schedule slots available.
+    """
+    from users.models import Subscription
+    from django.utils import timezone
+    from django.db.models import Sum
+    total = Subscription.objects.filter(
+        profile=user_profile,
+        is_active=True,
+        end_date__gt=timezone.now(),
+        remaining_schedule_messages__gt=0
+    ).aggregate(total=Sum('remaining_schedule_messages'))['total']
+    return (total or 0) >= required
+
+
+def deduct_schedule_quota(user_profile, required=1):
+    """
+    Deduct schedule message quota similar to token deduction logic.
+    Returns the subscription used for deduction (first one).
+    Raises ValueError if insufficient quota.
+    """
+    if required <= 0:
+        return None
+
+    from users.models import Subscription
+    from django.utils import timezone
+
+    remaining = required
+    used_sub = None
+
+    subs = Subscription.objects.filter(
+        profile=user_profile,
+        is_active=True,
+        end_date__gt=timezone.now(),
+        remaining_schedule_messages__gt=0
+    ).order_by('end_date')
+
+    for sub in subs:
+        if remaining <= 0:
+            break
+        if sub.remaining_schedule_messages > remaining:
+            sub.remaining_schedule_messages -= remaining
+            sub.save(update_fields=['remaining_schedule_messages'])
+            used_sub = used_sub or sub
+            remaining = 0
+        else:
+            remaining -= sub.remaining_schedule_messages
+            sub.remaining_schedule_messages = 0
+            sub.is_active = False
+            sub.save(update_fields=['remaining_schedule_messages', 'is_active'])
+            used_sub = used_sub or sub
+
+    user_profile.sync_balances()
+
+    if remaining > 0:
+        raise ValueError("No schedule quota left. Please upgrade your plan.")
+
+    return used_sub
+
+
+def restore_schedule_quota(user_profile, subscription, count=1):
+    """
+    Refund schedule quota to the provided subscription (if any) and resync balances.
+    """
+    if subscription and count > 0:
+        subscription.remaining_schedule_messages += count
+        subscription.is_active = True
+        subscription.save(update_fields=['remaining_schedule_messages', 'is_active'])
+    user_profile.sync_balances()
 
 def build_ai_context(agent_config, sender_id, text, extra_instruction=None, sheet_context=None, platform='messenger'):
     from aiAgent.utils import get_memory_context

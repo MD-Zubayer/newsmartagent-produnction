@@ -175,6 +175,10 @@ export default function UserDashboard() {
   const { analytics, user, subscriptions } = data;
   const { summary, charts, recent_logs } = analytics;
   const currentSub = subscriptions?.find(sub => sub.is_active) || subscriptions?.[subscriptions.length - 1];
+  const activeSubs = subscriptions?.filter(s => s.is_active) || [];
+  const totalScheduleSlots = activeSubs.reduce((acc, s) => acc + (s.offer?.schedule_messages || 0), 0);
+  const remainingSchedules = user?.profile?.schedule_balance || 0;
+  const usedSchedules = Math.max(totalScheduleSlots - remainingSchedules, 0);
 
   return (
     <div className="p-3 md:p-10 bg-[#f8fafc] min-h-screen font-sans overflow-x-hidden">
@@ -244,12 +248,13 @@ export default function UserDashboard() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 md:gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 md:gap-6">
           <StatCard title="Total Tokens" value={summary.total_tokens.toLocaleString()} icon={<Zap />} color="blue" subValue={`In: ${summary.input_tokens.toLocaleString()} | Out: ${summary.output_tokens.toLocaleString()}`} />
           <StatCard title="Total Requests" value={summary.total_messages} icon={<MessageSquare />} color="purple" />
           <StatCard title="Memory Costs" value={summary.memory_extraction_tokens?.toLocaleString() || '0'} icon={<Activity />} color="orange" subValue="Background Sync" />
           <StatCard title="Avg Latency" value={`${summary.avg_response_ms || 0}ms`} icon={<Activity />} color="orange" />
           <StatCard title="Total Failed" value={summary.failed_count} icon={<Info />} color="red" />
+          <StatCard title="Schedule Slots" value={(remainingSchedules || 0).toLocaleString()} icon={<Calendar />} color="green" subValue={`Used: ${usedSchedules.toLocaleString()} / ${totalScheduleSlots.toLocaleString() || '0'}`} />
         </div>
 
         {/* Chart & Engine Usage */}
@@ -299,9 +304,11 @@ export default function UserDashboard() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
-            {subscriptions?.filter(s => s.is_active).map((sub) => {
+            {activeSubs.map((sub) => {
               const percent = Math.round((sub.remaining_tokens / sub.offer.tokens) * 100);
               const isLow = percent < 15;
+              const schedTotal = sub.offer?.schedule_messages || 0;
+              const schedRemaining = sub.remaining_schedule_messages ?? 0;
 
               return (
                 <div key={sub.id} className="relative bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 hover:shadow-2xl transition-all group overflow-hidden">
@@ -323,6 +330,11 @@ export default function UserDashboard() {
                                 {model.model_name}
                               </span>
                             ))}
+                          </div>
+                          <div className="flex gap-2 text-[10px] text-gray-500 mt-2 flex-wrap">
+                            <span className="px-2 py-1 bg-gray-100 rounded-full">Duration: {sub.offer.duration_days}d</span>
+                            <span className="px-2 py-1 bg-gray-100 rounded-full">Price: {sub.offer.price} BDT</span>
+                            <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-full">Schedules: {schedRemaining}/{schedTotal}</span>
                           </div>
                         </div>
                       </div>
@@ -471,7 +483,8 @@ function StatCard({ title, value, icon, color, subValue }) {
     blue: "text-blue-600 bg-blue-50",
     purple: "text-purple-600 bg-purple-50",
     orange: "text-orange-600 bg-orange-50",
-    red: "text-red-600 bg-red-50"
+    red: "text-red-600 bg-red-50",
+    green: "text-emerald-600 bg-emerald-50"
   };
   return (
     <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 flex flex-col gap-4 group hover:-translate-y-1 transition-all">

@@ -9,7 +9,7 @@ import {
   FaUserEdit, FaSignOutAlt, FaEnvelope, FaPhone, 
   FaMapMarkerAlt, FaHashtag, FaGlobeAsia, FaTimes, 
   FaWallet, FaChartLine, FaCopy, FaCheckCircle, FaVenusMars, FaHistory,
-  FaShieldAlt, FaKey, FaIdCard, FaCube, FaCoins, FaPercent
+  FaShieldAlt, FaKey, FaIdCard, FaCube, FaCoins, FaPercent, FaCalendar
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 
@@ -102,6 +102,10 @@ export default function ProfilePage() {
   const usagePercentage = totalInitialTokens > 0 
     ? Math.min(Math.round((totalUsedTokens / (totalUsedTokens + (user?.profile?.word_balance || 0))) * 100), 100)
     : 0;
+  const totalScheduleSlots = activeSubs.reduce((acc, s) => acc + (s.offer?.schedule_messages || 0), 0);
+  const remainingSchedules = user?.profile?.schedule_balance || 0;
+  const usedSchedules = Math.max(totalScheduleSlots - remainingSchedules, 0);
+  const scheduleUsage = totalScheduleSlots > 0 ? Math.min(Math.round((usedSchedules / totalScheduleSlots) * 100), 100) : 0;
 
   if (loading) return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
@@ -291,7 +295,7 @@ export default function ProfilePage() {
           
           {/* Left: Identity Details */}
           <div className="lg:col-span-8 space-y-8">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                 <div className="bg-indigo-600 rounded-[2.5rem] p-8 text-white flex items-center justify-between shadow-xl shadow-indigo-100 border border-indigo-500">
                     <div>
                         <p className="text-[10px] font-black text-indigo-200 uppercase tracking-[0.3em] mb-1">Tokens Remaining</p>
@@ -305,6 +309,14 @@ export default function ProfilePage() {
                         <h4 className="text-2xl font-black italic uppercase">{analytics?.summary?.total_tokens?.toLocaleString() || "0"}</h4>
                     </div>
                     <FaChartLine size={32} className="text-emerald-500" />
+                </div>
+                <div className="bg-emerald-50 rounded-[2.5rem] p-8 text-emerald-900 flex items-center justify-between shadow-xl border border-emerald-100">
+                    <div>
+                        <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em] mb-1">Schedules Left</p>
+                        <h4 className="text-2xl font-black italic uppercase">{(remainingSchedules || 0).toLocaleString()}</h4>
+                        <p className="text-[10px] font-black text-emerald-400 mt-1">Used: {usedSchedules.toLocaleString()} / {totalScheduleSlots.toLocaleString() || "0"}</p>
+                    </div>
+                    <FaCalendar size={32} className="text-emerald-500/60" />
                 </div>
             </div>
 
@@ -332,18 +344,19 @@ export default function ProfilePage() {
                  <div className="space-y-4">
                     {subscriptions.map((sub, i) => (
                       <div key={i} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:bg-slate-100 transition-colors">
-                        <div>
-                          <p className="text-sm font-black text-slate-800">{sub.offer?.name || sub.offer_tokens}</p>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Expires: {new Date(sub.end_date || sub.expiration_date).toLocaleDateString()}</p>
-                        </div>
-                        <div className="text-right">
-                            <span className="bg-white text-emerald-600 text-[9px] font-black px-3 py-1 rounded-lg uppercase tracking-widest border border-emerald-100 block mb-1 text-center">
-                              {sub.is_active ? "Verified Active" : "Deprioritized"}
-                            </span>
-                            <p className="text-[10px] font-black text-slate-400 uppercase">{sub.remaining_tokens.toLocaleString()} Left</p>
-                        </div>
+                      <div>
+                        <p className="text-sm font-black text-slate-800">{sub.offer?.name || sub.offer_tokens}</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Expires: {new Date(sub.end_date || sub.expiration_date).toLocaleDateString()}</p>
                       </div>
-                    ))}
+                      <div className="text-right">
+                          <span className="bg-white text-emerald-600 text-[9px] font-black px-3 py-1 rounded-lg uppercase tracking-widest border border-emerald-100 block mb-1 text-center">
+                            {sub.is_active ? "Verified Active" : "Deprioritized"}
+                          </span>
+                            <p className="text-[10px] font-black text-slate-400 uppercase">{sub.remaining_tokens.toLocaleString()} Tokens Left</p>
+                            <p className="text-[10px] font-black text-emerald-500 uppercase">{(sub.remaining_schedule_messages ?? 0).toLocaleString()} Schedules Left</p>
+                      </div>
+                    </div>
+                  ))}
                  </div>
                ) : (
                  <div className="text-center py-10 text-slate-400 font-bold uppercase tracking-widest text-xs bg-slate-50 rounded-3xl border border-dashed border-slate-200">
@@ -413,6 +426,10 @@ export default function ProfilePage() {
                     <div className="flex justify-between items-center bg-slate-50 p-3 rounded-2xl">
                         <span className="text-[9px] font-black text-slate-400 uppercase">Node region</span>
                         <span className="text-xs font-black text-slate-700 capitalize">{user?.division || "Global"}</span>
+                    </div>
+                    <div className="flex justify-between items-center bg-emerald-50 p-3 rounded-2xl border border-emerald-100">
+                        <span className="text-[9px] font-black text-emerald-500 uppercase">Schedule Usage</span>
+                        <span className="text-xs font-black text-emerald-700">{scheduleUsage}% ({usedSchedules.toLocaleString()}/{totalScheduleSlots.toLocaleString() || "0"})</span>
                     </div>
                 </div>
 

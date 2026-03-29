@@ -117,6 +117,7 @@ class Profile(models.Model):
     id_type = models.CharField(max_length=10, choices=ID_TYPE_CHOICES)
     unique_id = models.CharField(max_length=10, unique=True)
     word_balance = models.PositiveBigIntegerField(default=0)
+    schedule_balance = models.PositiveBigIntegerField(default=0, help_text="Remaining schedule message slots across active subscriptions")
     commission_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, blank=True, null=True)
     acount_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     otp_code = models.CharField(max_length=6, blank=True, null=True)
@@ -126,8 +127,12 @@ class Profile(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def sync_word_balance(self):
+        """Deprecated wrapper, use sync_balances instead."""
+        return self.sync_balances()
+    
+    def sync_balances(self):
         """
-        সকল একটিভ সাবস্ক্রিপশনের অবশিষ্ট টোকেন যোগ করে প্রোফাইলের word_balance আপডেট করে।
+        একটিভ সাবস্ক্রিপশনগুলোর টোকেন ও শিডিউল কোটা যোগ করে প্রোফাইলে আপডেট করে।
         """
         from django.apps import apps
         from django.db.models import Sum
@@ -135,20 +140,20 @@ class Profile(models.Model):
         
         Subscription = apps.get_model('users', 'Subscription')
         
-        # একটিভ এবং মেয়াদের মধ্যে থাকা সকল সাবস্ক্রিপশনের টোকেন যোগ করা
         active_subs = Subscription.objects.filter(
             profile=self, 
             is_active=True,
             end_date__gt=timezone.now()
         )
         
-        total_remaining = active_subs.aggregate(total=Sum('remaining_tokens'))['total'] or 0
+        token_total = active_subs.aggregate(total=Sum('remaining_tokens'))['total'] or 0
+        schedule_total = active_subs.aggregate(total=Sum('remaining_schedule_messages'))['total'] or 0
 
-        # প্রোফাইলের word_balance আপডেট
-        self.word_balance = total_remaining
-        self.save(update_fields=['word_balance'])
+        self.word_balance = token_total
+        self.schedule_balance = schedule_total
+        self.save(update_fields=['word_balance', 'schedule_balance'])
         
-        print(f"✅ SYNC: {self.user.email} | Total Active Tokens Summed: {total_remaining} from {active_subs.count()} subs")
+        print(f"✅ SYNC: {self.user.email} | Tokens: {token_total}, Schedules: {schedule_total} from {active_subs.count()} subs")
             
     def __str__(self):
         return f"{self.user.email} | {self.id_type} | {self.unique_id}"
@@ -175,6 +180,7 @@ class Offer(models.Model):
     allowed_platforms = models.ManyToManyField(Platform, related_name='offers')
     allowed_models = models.ManyToManyField('aiAgent.AIProviderModel', related_name='offers', blank=True)
     tokens = models.PositiveIntegerField()
+    schedule_messages = models.PositiveIntegerField(default=0, help_text="এই অফারে মোট কতটি শিডিউল মেসেজ পাঠাতে পারবে")
     shorthand_choices = models.CharField(max_length=10, blank=True, null=True)
     name = models.CharField(blank=True, null=True)
     description = models.TextField(blank=True, null=True)
@@ -250,9 +256,10 @@ class Payment(models.Model):
                         start_date=timezone.now(),
                         end_date=timezone.now() + timedelta(days=offer.duration_days),
                         is_active=True,
-                        remaining_tokens=offer.tokens
+                        remaining_tokens=offer.tokens,
+                        remaining_schedule_messages=getattr(offer, "schedule_messages", 0)
                     )
-                    profile.sync_word_balance()
+                    profile.sync_balances()
                     if not notif_msg:
                         notif_msg = f"Payment Successful! {offer.price} plan activated. {offer.tokens} words added."
 
@@ -290,6 +297,7 @@ class Subscription(models.Model):
     end_date = models.DateTimeField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
     remaining_tokens = models.PositiveBigIntegerField(default=0) # Track tokens separately per subscription
+    remaining_schedule_messages = models.PositiveBigIntegerField(default=0, help_text="Remaining schedule message slots for this subscription")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
