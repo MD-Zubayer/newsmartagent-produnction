@@ -839,27 +839,36 @@ export default function SettingsPage() {
                 </div>
               </section>
 
-              {/* Trusted Devices Section */}
+              {/* Connected Devices Section */}
               <section className="pt-6 border-t border-slate-100">
-                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Trusted Devices</h3>
-                <div className="space-y-4">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Connected Devices</h3>
+                <p className="text-[10px] text-slate-400 mb-4">Disconnecting a device will immediately log it out.</p>
+                <div className="space-y-3">
                   {securityData.trusted_devices && securityData.trusted_devices.length > 0 ? (
                     securityData.trusted_devices.map((device) => (
                       <div key={device.id} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:shadow-sm transition-all">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className={`p-2.5 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600`}>
+                          <div className="p-2.5 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600">
                             <FaGlobe className="text-sm" />
                           </div>
                           <div className="min-w-0">
-                            <h4 className="font-bold text-slate-800 text-sm truncate">{device.device_name}</h4>
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-bold text-slate-800 text-sm truncate">{device.device_name}</h4>
+                              {device.is_trusted && (
+                                <span className="px-1.5 py-0.5 text-[9px] font-black bg-emerald-100 text-emerald-700 rounded-md uppercase tracking-wide">Trusted</span>
+                              )}
+                              {device.is_expired && (
+                                <span className="px-1.5 py-0.5 text-[9px] font-black bg-slate-100 text-slate-500 rounded-md uppercase tracking-wide">Expired</span>
+                              )}
+                            </div>
                             <p className="text-[10px] text-slate-400 font-medium">
-                              Added {new Date(device.created_at).toLocaleDateString()} • {device.is_expired ? 'Expired' : 'Active'}
+                              Added {new Date(device.created_at).toLocaleDateString()}
                             </p>
                           </div>
                         </div>
                         <button 
                           onClick={() => handleRemoveDevice(device.id)}
-                          className="px-3 py-1.5 text-[10px] font-black text-rose-600 uppercase border border-rose-100 rounded-lg hover:bg-rose-50 transition-colors"
+                          className="flex-shrink-0 px-3 py-1.5 text-[10px] font-black text-rose-600 uppercase border border-rose-100 rounded-lg hover:bg-rose-50 transition-colors"
                         >
                           Disconnect
                         </button>
@@ -867,8 +876,8 @@ export default function SettingsPage() {
                     ))
                   ) : (
                     <div className="p-10 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                      <p className="text-slate-400 text-sm font-medium italic">No trusted devices found.</p>
-                      <p className="text-[10px] text-slate-400 mt-1">Checking "Don't ask again" during login will list devices here.</p>
+                      <p className="text-slate-400 text-sm font-medium italic">No active sessions found.</p>
+                      <p className="text-[10px] text-slate-400 mt-1">All your logged-in devices will appear here.</p>
                     </div>
                   )}
                 </div>

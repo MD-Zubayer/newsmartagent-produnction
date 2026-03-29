@@ -559,6 +559,7 @@ class TrustedDevice(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='trusted_devices')
     device_token = models.CharField(max_length=255, unique=True, db_index=True)
     device_name = models.CharField(max_length=255, blank=True, null=True)
+    is_trusted = models.BooleanField(default=False)
     expires_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
 

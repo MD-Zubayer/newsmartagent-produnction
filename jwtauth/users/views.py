@@ -397,6 +397,18 @@ class LoginView(APIView):
 
         response.set_cookie(key='access_token', value=access_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/')
         response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/')
+
+        # ALWAYS create a session record so the device can be remotely revoked
+        import uuid as _uuid
+        _device_token = str(_uuid.uuid4())
+        TrustedDevice.objects.create(
+            user=user,
+            device_token=_device_token,
+            device_name=device_name or "Unknown Device",
+            is_trusted=False,
+            expires_at=timezone.now() + timedelta(days=30)
+        )
+        response.set_cookie(key='trusted_device', value=_device_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/', max_age=30*24*60*60)
         return response
     
 
@@ -1136,31 +1148,18 @@ class Verify2FALoginView(APIView):
         response.set_cookie(key='access_token', value=access_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/')
         response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/')
         
-        # Trust Device Setup
-        if str(trust_device).lower() == 'true':
-            import uuid
-            device_token = str(uuid.uuid4())
-            device_name = request.META.get('HTTP_USER_AGENT', 'Unknown Device')[:250]
-            
-            # Create the database record
-            TrustedDevice.objects.create(
-                user=user,
-                device_token=device_token,
-                device_name=device_name,
-                expires_at=timezone.now() + timedelta(days=30)
-            )
-            
-            # Set the cookie with proper production flags
-            is_prod = not settings.DEBUG
-            response.set_cookie(
-                key='trusted_device', 
-                value=device_token, 
-                httponly=True, 
-                samesite="Lax", 
-                secure=is_prod, 
-                path='/',
-                max_age=30*24*60*60 # 30 days
-            )
+        # ALWAYS create a session record (is_trusted=True only if user checked the box)
+        import uuid as _uuid
+        _device_token = str(_uuid.uuid4())
+        _device_name = request.META.get('HTTP_USER_AGENT', 'Unknown Device')[:250]
+        TrustedDevice.objects.create(
+            user=user,
+            device_token=_device_token,
+            device_name=_device_name,
+            is_trusted=str(trust_device).lower() == 'true',
+            expires_at=timezone.now() + timedelta(days=30)
+        )
+        response.set_cookie(key='trusted_device', value=_device_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/', max_age=30*24*60*60)
 
         return response
 
@@ -1220,26 +1219,17 @@ class LoginSessionStatusView(APIView):
             response.set_cookie(key='access_token', value=access_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/')
             response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/')
             
-            # Set Trust Device Cookie if requested
-            if getattr(session, 'trust_device', False):
-                import uuid
-                device_token = str(uuid.uuid4())
-                from users.models import TrustedDevice
-                TrustedDevice.objects.create(
-                    user=session.user,
-                    device_token=device_token,
-                    device_name=session.device_name or "Trusted via Push Approval",
-                    expires_at=timezone.now() + timedelta(days=30)
-                )
-                response.set_cookie(
-                    key='trusted_device',
-                    value=device_token,
-                    httponly=True,
-                    samesite="Lax",
-                    secure=settings.DEBUG is False,
-                    path='/',
-                    max_age=30*24*60*60
-                )
+            # Session/Trust Device Setup (Always create for remote logout)
+            import uuid
+            device_token = str(uuid.uuid4())
+            TrustedDevice.objects.create(
+                user=session.user,
+                device_token=device_token,
+                device_name=session.device_name or "Unknown Device",
+                is_trusted=getattr(session, 'trust_device', False),
+                expires_at=timezone.now() + timedelta(days=30)
+            )
+            response.set_cookie(key='trusted_device', value=device_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/', max_age=30*24*60*60)
             
             return response
             
@@ -1309,18 +1299,17 @@ class ApproveLoginSessionView(APIView):
             response.set_cookie(key='access_token', value=access_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/')
             response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/')
             
-            # Trust Device Cookie if requested
-            if getattr(session, 'trust_device', False):
-                import uuid
-                from users.models import TrustedDevice
-                device_token = str(uuid.uuid4())
-                TrustedDevice.objects.create(
-                    user=session.user,
-                    device_token=device_token,
-                    device_name=session.device_name or "Trusted via Mobile Approval",
-                    expires_at=timezone.now() + timedelta(days=30)
-                )
-                response.set_cookie(key='trusted_device', value=device_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/', max_age=30*24*60*60)
+            # Session/Trust Device Setup (Always create for remote logout)
+            import uuid
+            device_token = str(uuid.uuid4())
+            TrustedDevice.objects.create(
+                user=session.user,
+                device_token=device_token,
+                device_name=session.device_name or "Mobile Approval Device",
+                is_trusted=getattr(session, 'trust_device', False),
+                expires_at=timezone.now() + timedelta(days=30)
+            )
+            response.set_cookie(key='trusted_device', value=device_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/', max_age=30*24*60*60)
             
             return response
         else:
@@ -1343,6 +1332,7 @@ class SecuritySettingsView(APIView):
         device_list = [{
             "id": d.id,
             "device_name": d.device_name or "Unknown Device",
+            "is_trusted": d.is_trusted,
             "created_at": d.created_at,
             "is_expired": not d.is_valid()
         } for d in devices]
