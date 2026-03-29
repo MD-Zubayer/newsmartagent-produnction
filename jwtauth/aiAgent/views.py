@@ -141,7 +141,13 @@ class TokenUsageAnalyticsView(APIView):
         #<!---------------- 2. Model and Platform Distribution (Pie/Donut Charts) ---------------!>
 
         model_dist = user_logs.values('model_name').annotate(count=Count('id'))
-        platform_dist = user_logs.values('platform').annotate(count=Count("id"))
+        platform_dist = user_logs.values('platform').annotate(
+            count=Count('id'),
+            input_tokens=Sum('input_tokens'),
+            output_tokens=Sum('output_tokens'),
+            total_tokens=Sum('total_tokens')
+        )
+
 
         # <!------------- 3. Summary Stats ----------------!>
 

@@ -288,7 +288,10 @@ export default function UserDashboard() {
 
         {/* Platform Analytics */}
         <div className="bg-white py-8 px-5 rounded-[2.5rem] shadow-xl border border-gray-100">
-          <PlatformTokenChart recentLogs={recent_logs} />
+           <h3 className="text-lg md:text-xl font-black text-gray-800 mb-8 flex items-center gap-2 italic uppercase px-4">
+              <BarChart3 size={24} className="text-cyan-500" /> Platform Wise Analytics
+            </h3>
+          <PlatformTokenChart data={charts.platform_distribution} />
         </div>
 
         {/* --- Detailed Subscription Breakdown (Moved & Redesigned) --- */}
@@ -409,7 +412,24 @@ export default function UserDashboard() {
                 const { date, time } = formatDateTime(log.created_at);
                 const platformSlug = (log.platform || "").toLowerCase();
                 const isMessenger = platformSlug.includes("messenger");
+
                 const platformLabel = platformSlug ? platformSlug.replace(/_/g, " ") : "Unknown Platform";
+                
+                // --- Platform Branding Colors ---
+                const getPlatformColor = (slug) => {
+                  if (!slug) return "bg-gray-600";
+                  if (slug.includes("messenger")) return "bg-blue-600";
+                  if (slug.includes("whatsapp")) return "bg-emerald-600";
+                  if (slug.includes("instagram")) return "bg-rose-500";
+                  if (slug.includes("telegram")) return "bg-sky-500";
+                  if (slug.includes("youtube")) return "bg-red-600";
+                  if (slug.includes("tiktok")) return "bg-zinc-900";
+                  if (slug.includes("widget")) return "bg-indigo-600";
+                  if (slug.includes("facebook_comment")) return "bg-blue-800";
+                  return "bg-pink-600";
+                };
+
+                const platformColorClass = getPlatformColor(platformSlug);
                 const requestLabel = log.request_type ? log.request_type.replace(/_/g, " ") : "Unknown Operation";
                 const statusLabel = log.success === false ? "Failed" : "Success";
                 const statusColorClass = log.success === false
@@ -419,14 +439,14 @@ export default function UserDashboard() {
 
                 return (
                   <div key={log.id} className="group relative bg-white border border-slate-100 rounded-[1.5rem] md:rounded-[2.5rem] p-4 md:p-6 hover:shadow-2xl transition-all overflow-hidden hover:-translate-y-1">
-                    <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${isMessenger ? 'bg-blue-500' : 'bg-pink-500'}`} />
+                    <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${platformColorClass}`} />
 
                     {/* Mobile View: Vertical Stack */}
                     <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 md:gap-8 min-w-0">
 
                       {/* Source Device/Account */}
                       <div className="flex items-center gap-4 flex-1 min-w-0">
-                        <div className={`w-12 h-12 md:w-16 md:h-16 shrink-0 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-xl ${isMessenger ? 'bg-blue-600' : 'bg-pink-600'} group-hover:scale-110 transition-transform duration-500`}>
+                        <div className={`w-12 h-12 md:w-16 md:h-16 shrink-0 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-xl ${platformColorClass} group-hover:scale-110 transition-transform duration-500`}>
                           {avatarLabel}
                         </div>
                         <div className="min-w-0">
