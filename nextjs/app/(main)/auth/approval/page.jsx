@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import api from "../../../lib/api";
 
 function ApprovalContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const token = searchParams.get("token");
   const action = searchParams.get("action"); // 'approve' or 'reject'
 
@@ -33,6 +34,15 @@ function ApprovalContent() {
 
     processApproval();
   }, [token, action]);
+
+  useEffect(() => {
+    if (status === "success") {
+      const timer = setTimeout(() => {
+        router.push("/dashboard");
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [status, router]);
 
   return (
     <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-xl text-center">

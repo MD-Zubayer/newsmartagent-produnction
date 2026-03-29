@@ -289,12 +289,19 @@ SIMPLE_JWT = {
 }
 JWT_AUTH_SECURE = False
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # Next.js dev
+    "https://newsmartagent.com",
+    "https://api.newsmartagent.com",
+    "https://n8n.newsmartagent.com",
+    "https://monitor.newsmartagent.com",
+    "https://dev.newsmartagent.com",
+    "https://dev-api.newsmartagent.com",
+    "https://dev-n8n.newsmartagent.com",
+    "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "http://localhost:3001",  # Next.js dev
+    "http://localhost:3001",
     "http://127.0.0.1:3001",
 ]
 

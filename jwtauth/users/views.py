@@ -1294,11 +1294,39 @@ class ApproveLoginSessionView(APIView):
         if action == 'approve':
             session.status = 'approved'
             session.save(update_fields=['status'])
-            return Response({"message": "Successfully Approved! You can go back to your PC."})
+            
+            # For Mobile Users: Generate JWT and set cookies so they are logged in immediately on this device
+            refresh = RefreshToken.for_user(session.user)
+            access_token = str(refresh.access_token)
+            refresh_token = str(refresh)
+            
+            response = Response({
+                "message": "Successfully Approved! Redirecting you to the dashboard...",
+                "status": "approved"
+            }, status=status.HTTP_200_OK)
+            
+            # Standard Cookie Setup (Matches LoginSessionStatusView)
+            response.set_cookie(key='access_token', value=access_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/')
+            response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/')
+            
+            # Trust Device Cookie if requested
+            if getattr(session, 'trust_device', False):
+                import uuid
+                from users.models import TrustedDevice
+                device_token = str(uuid.uuid4())
+                TrustedDevice.objects.create(
+                    user=session.user,
+                    device_token=device_token,
+                    device_name=session.device_name or "Trusted via Mobile Approval",
+                    expires_at=timezone.now() + timedelta(days=30)
+                )
+                response.set_cookie(key='trusted_device', value=device_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/', max_age=30*24*60*60)
+            
+            return response
         else:
             session.status = 'rejected'
             session.save(update_fields=['status'])
-            return Response({"message": "Request Blocked. We recommend resetting your password."})
+            return Response({"message": "Request Blocked. We recommend resetting your password.", "status": "rejected"})
 
 class SecuritySettingsView(APIView):
     """Fetch or generate recovery codes and update WhatsApp/Email Recovery fields"""
