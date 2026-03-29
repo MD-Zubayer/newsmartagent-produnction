@@ -402,7 +402,10 @@ def send_whatsapp_alert(phone_number: str, message_text: str):
     payload = {
         "to": formatted_phone + "@s.whatsapp.net",
         "phone": formatted_phone,
+        "sender_id": formatted_phone,
         "message": message_text,
+        "reply": message_text,
+        "sessionId": "system",
         "type": "whatsapp",
         "system_alert": True
     }

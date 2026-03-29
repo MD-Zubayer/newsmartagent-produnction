@@ -37,6 +37,7 @@ export default function SettingsPage() {
     recovery_codes_count: 0,
     recovery_codes_available: []
   });
+  const [countryCode, setCountryCode] = useState("880");
   const [loginHistory, setLoginHistory] = useState([]);
   const [showCodes, setShowCodes] = useState(false);
 
@@ -219,7 +220,33 @@ export default function SettingsPage() {
   const fetchSecurityData = async () => {
     try {
       const res = await api.get("/security/settings/");
-      setSecurityData(res.data);
+      const data = res.data;
+      
+      // Parse country code from recovery_whatsapp
+      if (data.recovery_whatsapp) {
+        let whatsapp = data.recovery_whatsapp.replace(/^\+/, '');
+        if (whatsapp.startsWith("880")) {
+          setCountryCode("880");
+          data.recovery_whatsapp = whatsapp.substring(3);
+        } else if (whatsapp.startsWith("91")) {
+          setCountryCode("91");
+          data.recovery_whatsapp = whatsapp.substring(2);
+        } else if (whatsapp.startsWith("1")) {
+          setCountryCode("1");
+          data.recovery_whatsapp = whatsapp.substring(1);
+        } else if (whatsapp.startsWith("44")) {
+          setCountryCode("44");
+          data.recovery_whatsapp = whatsapp.substring(2);
+        } else if (whatsapp.startsWith("971")) {
+          setCountryCode("971");
+          data.recovery_whatsapp = whatsapp.substring(3);
+        } else if (whatsapp.startsWith("966")) {
+          setCountryCode("966");
+          data.recovery_whatsapp = whatsapp.substring(3);
+        }
+      }
+      
+      setSecurityData(data);
     } catch (err) {
       console.error("Failed to fetch security data");
     }
@@ -237,10 +264,14 @@ export default function SettingsPage() {
   const handleUpdateRecovery = async () => {
     setIsSaving(true);
     try {
+      // Clean number (remove any leading zeros the user might add)
+      const cleanNumber = securityData.recovery_whatsapp.replace(/^0+/, '');
+      const fullNumber = countryCode + cleanNumber;
+      
       await api.post("/security/settings/", {
         action: "update_recovery",
         recovery_email: securityData.recovery_email,
-        recovery_whatsapp: securityData.recovery_whatsapp
+        recovery_whatsapp: fullNumber
       });
       toast.success("Recovery options updated!");
     } catch (err) {
@@ -753,13 +784,28 @@ export default function SettingsPage() {
                     </div>
                     <div className="space-y-2">
                       <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">WhatsApp for Security</label>
-                      <input 
-                        type="text"
-                        value={securityData.recovery_whatsapp || ""}
-                        onChange={(e) => setSecurityData({...securityData, recovery_whatsapp: e.target.value})}
-                        placeholder="Country code + Number (e.g. 88017...)"
-                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500/10"
-                      />
+                      <div className="flex bg-white border border-slate-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/10 transition-all shadow-sm">
+                        <select 
+                          value={countryCode}
+                          onChange={(e) => setCountryCode(e.target.value)}
+                          className="bg-slate-50 px-3 py-3 border-r border-slate-200 text-xs font-black text-slate-600 outline-none cursor-pointer hover:bg-slate-100 transition-colors"
+                        >
+                          <option value="880">BD +880</option>
+                          <option value="91">IN +91</option>
+                          <option value="1">US +1</option>
+                          <option value="44">UK +44</option>
+                          <option value="971">UAE +971</option>
+                          <option value="966">KSA +966</option>
+                        </select>
+                        <input 
+                          type="text"
+                          value={securityData.recovery_whatsapp || ""}
+                          onChange={(e) => setSecurityData({...securityData, recovery_whatsapp: e.target.value.replace(/\D/g, '')})}
+                          placeholder="17XXXXXXXX"
+                          className="flex-1 px-4 py-3 text-sm font-bold text-slate-700 outline-none placeholder:text-slate-300"
+                        />
+                      </div>
+                      <p className="text-[9px] text-slate-400 ml-2 italic">Select country code and enter number without 0.</p>
                     </div>
                   </div>
                   <button 
