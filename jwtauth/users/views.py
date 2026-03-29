@@ -305,6 +305,12 @@ class LoginView(APIView):
                 is_new_device = False
                 break
         
+        # Check for trust_device from request data as well
+        req_trust_device = request.data.get("trust_device", False)
+        if str(req_trust_device).lower() == 'true':
+            # This is only for the initial check, actual trust logic is in 2FA verify
+            pass
+
         # If no history AND no trust, consider it new device (or if it strictly doesn't match recent)
         if is_new_device and not is_trusted:
             time_str = timezone.now().strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -314,7 +320,7 @@ class LoginView(APIView):
                 send_security_alert_email(profile.recovery_email, device_name, ip_address, time_str)
             if profile.recovery_whatsapp:
                 wa_msg = f"⚠️ *New Login Alert*\nDevice: {device_name}\nIP: {ip_address}\nTime: {time_str}\nIf this wasn't you, reset your password!"
-                send_whatsapp_alert(profile.recovery_whatsapp, wa_msg)
+                # send_whatsapp_alert(profile.recovery_whatsapp, wa_msg)
 
         # Log History
         LoginHistory.objects.create(user=user, ip_address=ip_address, device_name=device_name)
@@ -322,11 +328,17 @@ class LoginView(APIView):
         # 3. Handle 2FA (if enabled and NOT trusted device)
         if profile.two_factor_enabled and not is_trusted:
             if auth_method == 'mobile_approval':
-                import uuid
+                trust_device = request.data.get("trust_device", False)
+                if str(trust_device).lower() == 'true':
+                    trust_device = True
+                else:
+                    trust_device = False
+
                 session = LoginSession.objects.create(
                     user=user, 
                     ip_address=ip_address, 
                     device_name=device_name,
+                    trust_device=trust_device,
                     expires_at=timezone.now() + timedelta(minutes=5)
                 )
                 
@@ -340,7 +352,7 @@ class LoginView(APIView):
                     send_push_approval_email(profile.recovery_email, approve_link, reject_link, device_name)
                 if profile.recovery_whatsapp:
                     wa_msg = f"🔑 *Login Approval Request*\nDevice: {device_name}\nIP: {ip_address}\n\n✅ YES: {approve_link}\n\n❌ NO: {reject_link}"
-                    send_whatsapp_alert(profile.recovery_whatsapp, wa_msg)
+                    # send_whatsapp_alert(profile.recovery_whatsapp, wa_msg)
 
                 return Response({
                     "two_factor_required": True,
@@ -361,7 +373,8 @@ class LoginView(APIView):
                     if profile.recovery_email:
                         send_2fa_otp_email(profile.recovery_email, otp)
                     if profile.recovery_whatsapp:
-                        send_whatsapp_alert(profile.recovery_whatsapp, f"🔐 Your NSA Login OTP is: *{otp}*. Expires in 5 mins.")
+                        # send_whatsapp_alert(profile.recovery_whatsapp, f"🔐 Your NSA Login OTP is: *{otp}*. Expires in 5 mins.")
+                        pass
                 except Exception as e:
                     print(f"2FA email/wa send failed: {e}")
 
@@ -1128,18 +1141,23 @@ class Verify2FALoginView(APIView):
             import uuid
             device_token = str(uuid.uuid4())
             device_name = request.META.get('HTTP_USER_AGENT', 'Unknown Device')[:250]
+            
+            # Create the database record
             TrustedDevice.objects.create(
                 user=user,
                 device_token=device_token,
                 device_name=device_name,
                 expires_at=timezone.now() + timedelta(days=30)
             )
+            
+            # Set the cookie with proper production flags
+            is_prod = not settings.DEBUG
             response.set_cookie(
                 key='trusted_device', 
                 value=device_token, 
                 httponly=True, 
                 samesite="Lax", 
-                secure=settings.DEBUG is False, 
+                secure=is_prod, 
                 path='/',
                 max_age=30*24*60*60 # 30 days
             )
@@ -1201,6 +1219,28 @@ class LoginSessionStatusView(APIView):
             }, status=status.HTTP_200_OK)
             response.set_cookie(key='access_token', value=access_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/')
             response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/')
+            
+            # Set Trust Device Cookie if requested
+            if getattr(session, 'trust_device', False):
+                import uuid
+                device_token = str(uuid.uuid4())
+                from users.models import TrustedDevice
+                TrustedDevice.objects.create(
+                    user=session.user,
+                    device_token=device_token,
+                    device_name=session.device_name or "Trusted via Push Approval",
+                    expires_at=timezone.now() + timedelta(days=30)
+                )
+                response.set_cookie(
+                    key='trusted_device',
+                    value=device_token,
+                    httponly=True,
+                    samesite="Lax",
+                    secure=settings.DEBUG is False,
+                    path='/',
+                    max_age=30*24*60*60
+                )
+            
             return response
             
         elif session.status == 'rejected':
@@ -1212,6 +1252,25 @@ class LoginSessionStatusView(APIView):
             return Response({"status": "expired", "error": "Login request expired"}, status=408)
             
         return Response({"status": "pending"})
+
+    def post(self, request):
+        session_token = request.data.get("session_token")
+        trust_device = request.data.get("trust_device", False)
+        
+        if not session_token:
+            return Response({"error": "Session token required"}, status=400)
+            
+        session = LoginSession.objects.filter(session_token=session_token).first()
+        if not session:
+            return Response({"error": "Invalid session"}, status=404)
+        
+        if str(trust_device).lower() == 'true':
+            session.trust_device = True
+        else:
+            session.trust_device = False
+            
+        session.save(update_fields=['trust_device'])
+        return Response({"message": "Trust preference updated"})
 
 
 class ApproveLoginSessionView(APIView):

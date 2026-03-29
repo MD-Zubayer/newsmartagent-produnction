@@ -589,6 +589,7 @@ class LoginSession(models.Model):
     status = models.CharField(max_length=20, choices=SESSION_STATUS_CHOICES, default='pending')
     ip_address = models.GenericIPAddressField(blank=True, null=True)
     device_name = models.CharField(max_length=255, blank=True, null=True)
+    trust_device = models.BooleanField(default=False)
     expires_at = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
 

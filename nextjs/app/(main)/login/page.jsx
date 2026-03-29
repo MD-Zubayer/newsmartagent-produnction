@@ -111,6 +111,16 @@ export default function LoginPage() {
     }
   };
 
+  // Sync trustDevice state to LoginSession for Mobile Approval
+  useEffect(() => {
+    if (viewState === 'mobile_approval' && sessionToken) {
+        api.post(`/auth/session-status/`, {
+            session_token: sessionToken,
+            trust_device: trustDevice
+        }).catch(() => {});
+    }
+  }, [trustDevice, viewState, sessionToken]);
+
   const handleTryAnotherWay = () => {
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     setViewState('try_another_way');
