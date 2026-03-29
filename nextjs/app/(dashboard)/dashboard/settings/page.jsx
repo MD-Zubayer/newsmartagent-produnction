@@ -35,7 +35,8 @@ export default function SettingsPage() {
     recovery_email: "",
     recovery_whatsapp: "",
     recovery_codes_count: 0,
-    recovery_codes_available: []
+    recovery_codes_available: [],
+    trusted_devices: []
   });
   const [countryCode, setCountryCode] = useState("880");
   const [loginHistory, setLoginHistory] = useState([]);
@@ -295,6 +296,26 @@ export default function SettingsPage() {
       toast.success("New recovery codes generated!");
     } catch (err) {
       toast.error("Failed to generate codes.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRemoveDevice = async (deviceId) => {
+    if (!confirm("Are you sure you want to disconnect this device? It will require 2FA next time you log in.")) return;
+    setIsSaving(true);
+    try {
+      await api.post("/security/settings/", { 
+        action: "remove_device", 
+        device_id: deviceId 
+      });
+      setSecurityData(prev => ({
+        ...prev,
+        trusted_devices: prev.trusted_devices.filter(d => d.id !== deviceId)
+      }));
+      toast.success("Device disconnected successfully!");
+    } catch (err) {
+      toast.error("Failed to disconnect device.");
     } finally {
       setIsSaving(false);
     }
@@ -815,6 +836,41 @@ export default function SettingsPage() {
                   >
                     {isSaving ? "Saving..." : "Update Recovery Info"}
                   </button>
+                </div>
+              </section>
+
+              {/* Trusted Devices Section */}
+              <section className="pt-6 border-t border-slate-100">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Trusted Devices</h3>
+                <div className="space-y-4">
+                  {securityData.trusted_devices && securityData.trusted_devices.length > 0 ? (
+                    securityData.trusted_devices.map((device) => (
+                      <div key={device.id} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:shadow-sm transition-all">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`p-2.5 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600`}>
+                            <FaGlobe className="text-sm" />
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-slate-800 text-sm truncate">{device.device_name}</h4>
+                            <p className="text-[10px] text-slate-400 font-medium">
+                              Added {new Date(device.created_at).toLocaleDateString()} • {device.is_expired ? 'Expired' : 'Active'}
+                            </p>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => handleRemoveDevice(device.id)}
+                          className="px-3 py-1.5 text-[10px] font-black text-rose-600 uppercase border border-rose-100 rounded-lg hover:bg-rose-50 transition-colors"
+                        >
+                          Disconnect
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-10 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                      <p className="text-slate-400 text-sm font-medium italic">No trusted devices found.</p>
+                      <p className="text-[10px] text-slate-400 mt-1">Checking "Don't ask again" during login will list devices here.</p>
+                    </div>
+                  )}
                 </div>
               </section>
 

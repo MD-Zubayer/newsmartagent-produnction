@@ -1308,11 +1308,23 @@ class SecuritySettingsView(APIView):
     def get(self, request):
         profile = request.user.profile
         codes = RecoveryCode.objects.filter(user=request.user, is_used=False).values_list('code', flat=True)
+        
+        # Fetch trusted devices
+        from users.models import TrustedDevice
+        devices = TrustedDevice.objects.filter(user=request.user).order_by('-created_at')
+        device_list = [{
+            "id": d.id,
+            "device_name": d.device_name or "Unknown Device",
+            "created_at": d.created_at,
+            "is_expired": not d.is_valid()
+        } for d in devices]
+
         return Response({
             "recovery_email": profile.recovery_email,
             "recovery_whatsapp": profile.recovery_whatsapp,
             "recovery_codes_count": codes.count(),
-            "recovery_codes_available": list(codes) if codes.count() > 0 else []
+            "recovery_codes_available": list(codes) if codes.count() > 0 else [],
+            "trusted_devices": device_list
         })
 
     def post(self, request):
@@ -1336,6 +1348,16 @@ class SecuritySettingsView(APIView):
             profile.recovery_whatsapp = wa
             profile.save(update_fields=["recovery_email", "recovery_whatsapp"])
             return Response({"message": "Recovery options updated successfully"})
+            
+        elif action == "remove_device":
+            device_id = request.data.get("device_id")
+            from users.models import TrustedDevice
+            try:
+                device = TrustedDevice.objects.get(id=device_id, user=request.user)
+                device.delete()
+                return Response({"message": "Device disconnected successfully"})
+            except TrustedDevice.DoesNotExist:
+                return Response({"error": "Device not found"}, status=404)
 
         return Response({"error": "Invalid action"}, status=400)
 
