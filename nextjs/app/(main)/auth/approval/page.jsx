@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import api from "../../../../lib/api";
+import api from "../../../lib/api";
 
 export default function MobileApprovalPage() {
   const searchParams = useSearchParams();
