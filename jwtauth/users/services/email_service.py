@@ -399,13 +399,21 @@ def send_whatsapp_alert(phone_number: str, message_text: str):
         
     formatted_phone = phone_number.replace('+', '')
     
+    # Find an active WhatsApp session from the database
+    from openwa.models import WhatsAppInstance
+    instance = WhatsAppInstance.objects.filter(status='open').first()
+    session_id = instance.instance_name if instance else "system"
+    
+    if not instance:
+        logger.warning("No active WhatsApp instance found in database. Using 'system' as fallback.")
+
     payload = {
         "to": formatted_phone + "@s.whatsapp.net",
         "phone": formatted_phone,
         "sender_id": formatted_phone,
         "message": message_text,
         "reply": message_text,
-        "sessionId": "system",
+        "sessionId": session_id,
         "type": "whatsapp",
         "system_alert": True
     }
