@@ -137,10 +137,6 @@ export default function SmartCRMPage() {
   };
 
   const handleSchedule = async () => {
-    if (selectedAgentId === "all") {
-      toast.error("একটি নির্দিষ্ট এজেন্ট নির্বাচন করুন");
-      return;
-    }
     if (!scheduleText.trim() || !scheduleTime) {
       toast.error("মেসেজ ও সময় দিন");
       return;
@@ -149,9 +145,21 @@ export default function SmartCRMPage() {
       toast.error("কমপক্ষে একজন কন্টাক্ট সিলেক্ট করুন বা ফিল্টার দিন");
       return;
     }
+    const agentId =
+      selectedAgentId !== "all"
+        ? selectedAgentId
+        : (() => {
+            const firstId = selectedContacts[0];
+            const first = contacts.find((c) => c.id === firstId);
+            return first?.agent || null;
+          })();
+    if (!agentId) {
+      toast.error("একটি নির্দিষ্ট এজেন্ট নির্বাচন করুন");
+      return;
+    }
     try {
       const payload = {
-        agent_id: selectedAgentId,
+        agent_id: agentId,
         message: scheduleText,
         run_at: scheduleTime,
         filters: {
