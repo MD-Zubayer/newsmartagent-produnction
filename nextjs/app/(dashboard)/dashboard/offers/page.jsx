@@ -36,7 +36,7 @@ export default function OffersPage() {
                     <span className="text-[10px] font-black bg-slate-900 text-white px-3 py-1 rounded-full">{offer.duration_days} Days</span>
                   </div>
                   <h2 className="text-4xl font-black text-slate-900 italic uppercase">{offer.tokens} Tokens</h2>
-                  <p className="text-lg font-black text-emerald-600 mt-1">Contacts Allowed: {offer.schedule_messages?.toLocaleString?.() ?? offer.schedule_messages}</p>
+                  <p className="text-lg font-black text-emerald-600 mt-1">Schedule Messages: {offer.schedule_messages?.toLocaleString?.() ?? offer.schedule_messages}</p>
                   <p className="text-2xl font-black text-blue-600 mt-2">৳{offer.price}</p>
                 </div>
                 <div className="mt-8 flex justify-between items-center">

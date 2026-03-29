@@ -450,7 +450,22 @@ export default function UserDashboard() {
                       <div className="flex items-center gap-4 flex-1 min-w-0">
                         <div className={`relative w-12 h-12 md:w-16 md:h-16 shrink-0 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-xl ${platformColorClass} group-hover:scale-110 transition-transform duration-500 overflow-hidden`}>
                           {log.contact_profile ? (
-                             <img src={log.contact_profile} alt={displayName} className="w-full h-full object-cover" />
+                             <>
+                               <img 
+                                 src={log.contact_profile} 
+                                 alt={displayName} 
+                                 className="w-full h-full object-cover" 
+                                 onError={(e) => {
+                                   e.currentTarget.style.display = 'none';
+                                   if (e.currentTarget.nextElementSibling) {
+                                     e.currentTarget.nextElementSibling.style.display = 'flex';
+                                   }
+                                 }} 
+                               />
+                               <span className="hidden w-full h-full items-center justify-center font-black text-xl text-white">
+                                 {avatarLabel}
+                               </span>
+                             </>
                           ) : (
                              avatarLabel
                           )}
