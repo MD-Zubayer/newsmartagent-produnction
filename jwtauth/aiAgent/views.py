@@ -182,7 +182,7 @@ class TokenUsageAnalyticsView(APIView):
 
         #<!------------------- 4. Recent Logs (Table) ---------------!>
 
-        recent_logs = user_logs.order_by("-created_at")[:20]
+        recent_logs = user_logs.order_by("-created_at")[:100]
         serializer = TokenUsageAnalyticsSerializer(recent_logs, many=True)
 
         return Response({

@@ -49,10 +49,13 @@ class ContactListView(APIView):
                 contacts = Contact.objects.filter(agent=agent)
             
             if query:
+                # Normalize query for more robust searching
+                cleaned_query = query.strip().lower()
                 contacts = contacts.filter(
                     models.Q(name__icontains=query) | 
                     models.Q(push_name__icontains=query) | 
-                    models.Q(identifier__icontains=query)
+                    models.Q(identifier__icontains=cleaned_query) |
+                    models.Q(identifier__icontains=cleaned_query.replace('@s.whatsapp.net', ''))
                 )
 
             comment_platforms = ['youtube', 'facebook_comment']
@@ -66,7 +69,7 @@ class ContactListView(APIView):
                 contacts = contacts.exclude(platform__in=comment_platforms)
 
             contacts = contacts.order_by('-updated_at')
-            serializer = ContactSerializer(contacts[:100], many=True)
+            serializer = ContactSerializer(contacts[:500], many=True)
             return Response({"contacts": serializer.data}, status=status.HTTP_200_OK)
         except AgentAI.DoesNotExist:
             return Response({"error": "Agent not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -147,21 +150,33 @@ class ContactMessageHistoryView(APIView):
         try:
             contact = Contact.objects.get(id=contact_id, agent__user=request.user)
             
-            # Find the conversation
-            conversation = Conversation.objects.filter(
-                agentAi=contact.agent,
-                contact_id=contact.identifier,
-                platform=contact.platform
-            ).first()
+            platform_val = contact.platform or ""
+            identifier_val = contact.identifier or ""
+            identifier_bare = identifier_val.replace('@s.whatsapp.net', '')
 
-            if not conversation:
+            # Query conversations flexibly to capture both legacy and new formats
+            conversations = Conversation.objects.filter(
+                agentAi=contact.agent,
+                platform__iexact=platform_val
+            )
+            
+            if platform_val.lower() == 'whatsapp':
+                conversations = conversations.filter(
+                    models.Q(contact_id__iexact=identifier_val) |
+                    models.Q(contact_id__iexact=identifier_bare) |
+                    models.Q(contact_id__iexact=f"{identifier_bare}@s.whatsapp.net")
+                )
+            else:
+                conversations = conversations.filter(contact_id__iexact=identifier_val)
+
+            if not conversations.exists():
                 return Response({"messages": [], "count": 0}, status=status.HTTP_200_OK)
 
-            unread_msgs = Message.objects.filter(conversation=conversation, role='user', is_read=False)
+            unread_msgs = Message.objects.filter(conversation__in=conversations, role='user', is_read=False)
             if unread_msgs.exists():
                 unread_msgs.update(is_read=True)
 
-            messages = Message.objects.filter(conversation=conversation).order_by('-sent_at')
+            messages = Message.objects.filter(conversation__in=conversations).order_by('-sent_at')
             
             paginator = MessagePagination()
             result_page = paginator.paginate_queryset(messages, request)

@@ -395,11 +395,11 @@ def process_ai_reply_task(self, data):
     start_time = time.time()
 
     # 1. Platform Detection (Early)
-    request_type = data.get('platform') or data.get('type') or 'messenger'
+    request_type = (data.get('platform') or data.get('type') or 'messenger').lower()
     logger.info(f"🔍 [Task] Raw data received (Platform: {request_type}): {data}")
     
     # Extract sender_id: from (WhatsApp JID), phone (WA), or sender_id (FB)
-    sender_id = data.get('sender_id') or data.get('from') or data.get('phone')
+    sender_id = str(data.get('sender_id') or data.get('from') or data.get('phone')).strip()
     
     # 2. Identifier Normalization (Safety)
     if request_type == 'whatsapp' and sender_id and isinstance(sender_id, str):
@@ -703,12 +703,12 @@ def process_ai_reply_task(self, data):
 
         # ── Profile Picture Sync Trigger ──
         sync_contact_profile_picture.apply_async(args=[
-            contact_obj.id, p_type, sender_id, page_id, effective_access_token, data
+            contact_obj.id, p_type, sender_id.lower(), page_id, effective_access_token, data
         ])
 
         # ── Message Logging & Dashboard Sync (Always) ──
         # Save early so even if AI doesn't reply (Human Mode), message is in history & dashboard
-        save_message(agent_config, sender_id, text, 'user', platform=agent_config.platform)
+        save_message(agent_config, sender_id.lower(), text, 'user', platform=agent_config.platform)
         send_cache_update_ws(agent_config.user.id, page_id, sender_id=sender_id, contact_id=contact_obj.id)
         handle_smart_memory_update(agent_config, sender_id, text)
         

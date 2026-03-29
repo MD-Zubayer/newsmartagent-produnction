@@ -102,6 +102,12 @@ class AgentAI(models.Model):
     
 
     def save(self, *args, **kwargs):
+        # Standardize platform and identifier to lowercase
+        if self.platform:
+            self.platform = self.platform.lower()
+        if self.page_id:
+            self.page_id = self.page_id.lower()
+
         # Sync legacy ai_model field with selected_model if present
         if self.selected_model:
             self.ai_model = self.selected_model.model_id
@@ -258,6 +264,13 @@ class TokenUsageLog(models.Model):
         ordering = ['-created_at']
         verbose_name = 'Token Usage Log'
 
+    def save(self, *args, **kwargs):
+        if self.platform:
+            self.platform = self.platform.lower()
+        if self.sender_id:
+            self.sender_id = self.sender_id.lower()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.platform} | {self.total_tokens} tokens | {self.created_at.strftime('%Y-%m-%d %H:%M')}"
 
@@ -367,6 +380,13 @@ class Contact(models.Model):
         unique_together = ('agent', 'identifier')
         verbose_name = "Contact"
         verbose_name_plural = "Contacts"
+
+    def save(self, *args, **kwargs):
+        if self.platform:
+            self.platform = self.platform.lower()
+        if self.identifier:
+            self.identifier = self.identifier.lower()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.name or self.identifier} ({self.platform}) - Agent: {self.agent.id}"

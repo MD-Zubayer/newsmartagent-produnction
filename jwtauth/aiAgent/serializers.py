@@ -244,28 +244,46 @@ class ContactSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
-    def get_last_message(self, obj):
+    def _get_conversations(self, obj):
         from chat.models import Conversation
-        conv = Conversation.objects.filter(agentAi=obj.agent, contact_id=obj.identifier).first()
-        if conv:
-            last_msg = conv.messages.order_by('-sent_at').first()
-            return last_msg.content if last_msg else None
-        return None
+        from django.db import models
+        
+        platform_val = obj.platform or ""
+        identifier_val = obj.identifier or ""
+        identifier_bare = identifier_val.replace('@s.whatsapp.net', '')
+
+        conversations = Conversation.objects.filter(
+            agentAi=obj.agent,
+            platform__iexact=platform_val
+        )
+        
+        if platform_val.lower() == 'whatsapp':
+            conversations = conversations.filter(
+                models.Q(contact_id__iexact=identifier_val) |
+                models.Q(contact_id__iexact=identifier_bare) |
+                models.Q(contact_id__iexact=f"{identifier_bare}@s.whatsapp.net")
+            )
+        else:
+            conversations = conversations.filter(contact_id__iexact=identifier_val)
+            
+        return conversations
+
+    def get_last_message(self, obj):
+        conversations = self._get_conversations(obj)
+        from chat.models import Message
+        last_msg = Message.objects.filter(conversation__in=conversations).order_by('-sent_at').first()
+        return last_msg.content if last_msg else None
 
     def get_last_message_time(self, obj):
-        from chat.models import Conversation
-        conv = Conversation.objects.filter(agentAi=obj.agent, contact_id=obj.identifier).first()
-        if conv:
-            last_msg = conv.messages.order_by('-sent_at').first()
-            return last_msg.sent_at if last_msg else None
-        return None
+        conversations = self._get_conversations(obj)
+        from chat.models import Message
+        last_msg = Message.objects.filter(conversation__in=conversations).order_by('-sent_at').first()
+        return last_msg.sent_at if last_msg else None
 
     def get_unread_count(self, obj):
-        from chat.models import Conversation
-        conv = Conversation.objects.filter(agentAi=obj.agent, contact_id=obj.identifier).first()
-        if conv:
-            return conv.messages.filter(role='user', is_read=False).count()
-        return 0
+        conversations = self._get_conversations(obj)
+        from chat.models import Message
+        return Message.objects.filter(conversation__in=conversations, role='user', is_read=False).count()
 
     def get_crm_data(self, obj):
         from aiAgent.models import UserMemory
