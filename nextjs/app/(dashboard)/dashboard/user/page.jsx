@@ -435,7 +435,9 @@ export default function UserDashboard() {
                 const statusColorClass = log.success === false
                   ? "bg-rose-500 text-white shadow-rose-500/20"
                   : "bg-emerald-500 text-white shadow-emerald-500/20";
-                const avatarLabel = platformSlug ? platformSlug[0].toUpperCase() : "#";
+                
+                const displayName = log.contact_name || log.sender_id || "Unknown";
+                const avatarLabel = Array.from(displayName)[0].toUpperCase();
 
                 return (
                   <div key={log.id} className="group relative bg-white border border-slate-100 rounded-[1.5rem] md:rounded-[2.5rem] p-4 md:p-6 hover:shadow-2xl transition-all overflow-hidden hover:-translate-y-1">
@@ -446,11 +448,15 @@ export default function UserDashboard() {
 
                       {/* Source Device/Account */}
                       <div className="flex items-center gap-4 flex-1 min-w-0">
-                        <div className={`w-12 h-12 md:w-16 md:h-16 shrink-0 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-xl ${platformColorClass} group-hover:scale-110 transition-transform duration-500`}>
-                          {avatarLabel}
+                        <div className={`relative w-12 h-12 md:w-16 md:h-16 shrink-0 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-xl ${platformColorClass} group-hover:scale-110 transition-transform duration-500 overflow-hidden`}>
+                          {log.contact_profile ? (
+                             <img src={log.contact_profile} alt={displayName} className="w-full h-full object-cover" />
+                          ) : (
+                             avatarLabel
+                          )}
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm md:text-base font-black text-slate-800 leading-tight truncate">ID: {log.sender_id?.slice(-8) || "—"}</p>
+                          <p className="text-sm md:text-base font-black text-slate-800 leading-tight truncate">{displayName}</p>
                           <div className="flex items-center gap-2 mt-1">
                             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isMessenger ? 'bg-blue-400' : 'bg-pink-400'}`}></span>
                             <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest truncate">{platformLabel}</p>

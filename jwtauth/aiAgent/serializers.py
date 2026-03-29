@@ -222,9 +222,60 @@ class AgentAISerializer(serializers.ModelSerializer):
 
 
 class TokenUsageAnalyticsSerializer(serializers.ModelSerializer):
+    contact_name = serializers.SerializerMethodField()
+    contact_profile = serializers.SerializerMethodField()
+
     class Meta:
         model = TokenUsageLog
         fields = '__all__'
+
+    def _get_contact(self, obj):
+        if not hasattr(self, '_contacts_cache'):
+            self._contacts_cache = {}
+            
+        cache_key = f"{obj.ai_agent_id}_{obj.platform}_{obj.sender_id}"
+        if cache_key in self._contacts_cache:
+            return self._contacts_cache[cache_key]
+
+        from aiAgent.models import Contact
+        from django.db import models
+        
+        platform_val = obj.platform or ""
+        identifier_val = obj.sender_id or ""
+        identifier_bare = identifier_val.replace('@s.whatsapp.net', '')
+
+        qs = Contact.objects.filter(
+            agent=obj.ai_agent,
+            platform__iexact=platform_val
+        )
+
+        if platform_val.lower() == 'whatsapp':
+            qs = qs.filter(
+                models.Q(identifier__iexact=identifier_val) |
+                models.Q(identifier__iexact=identifier_bare) |
+                models.Q(identifier__iexact=f"{identifier_bare}@s.whatsapp.net")
+            )
+        else:
+            qs = qs.filter(identifier__iexact=identifier_val)
+
+        contact = qs.first()
+        self._contacts_cache[cache_key] = contact
+        return contact
+
+    def get_contact_name(self, obj):
+        contact = self._get_contact(obj)
+        if contact:
+            return contact.name or contact.push_name or contact.identifier
+        return obj.sender_id
+
+    def get_contact_profile(self, obj):
+        contact = self._get_contact(obj)
+        if contact and contact.profile_picture:
+            try:
+                return contact.profile_picture.url
+            except ValueError:
+                return None
+        return None
 
 class ContactSerializer(serializers.ModelSerializer):
     agent_name = serializers.CharField(source='agent.name', read_only=True)
