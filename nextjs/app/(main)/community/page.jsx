@@ -1,287 +1,244 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import toast from 'react-hot-toast';
-import { MessageSquare, Bug, CheckCircle2, Loader2, Send, Reply, Sparkles } from 'lucide-react';
+import Link from 'next/link';
+import { motion } from 'framer-motion';
+import {
+  Bug, TrendingUp, Lightbulb, Rocket, MessageCircle,
+  BookOpen, MessageSquare, Users, ArrowRight, Sparkles, Star
+} from 'lucide-react';
 
-const categories = ['Bug', 'Feedback', 'Feature'];
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://newsmartagent.com/api';
+const communityItems = [
+  {
+    slug: 'feedback',
+    name: 'Feedback',
+    emoji: '📢',
+    icon: TrendingUp,
+    desc: 'আমাদের platform সম্পর্কে আপনার মতামত দিন। আপনার feedback আমাদের আরও ভালো হতে সাহায্য করে।',
+    color: '#6366f1',
+    bg: 'rgba(99,102,241,0.12)',
+    border: 'rgba(99,102,241,0.25)',
+    tag: 'General',
+    category: 'Feedback',
+  },
+  {
+    slug: 'bug-report',
+    name: 'Report a Bug',
+    emoji: '🐞',
+    icon: Bug,
+    desc: 'কোনো সমস্যা বা error হচ্ছে? আমাদের জানান, আমরা দ্রুত fix করব।',
+    color: '#ef4444',
+    bg: 'rgba(239,68,68,0.12)',
+    border: 'rgba(239,68,68,0.25)',
+    tag: 'Bug',
+    category: 'Bug',
+  },
+  {
+    slug: 'feature-request',
+    name: 'Feature Request',
+    emoji: '💡',
+    icon: Lightbulb,
+    desc: 'নতুন কোনো feature চান? আইডিয়া দিন, আমরা roadmap এ যোগ করব।',
+    color: '#eab308',
+    bg: 'rgba(234,179,8,0.12)',
+    border: 'rgba(234,179,8,0.25)',
+    tag: 'Feature',
+    category: 'Feature',
+  },
+  {
+    slug: 'roadmap',
+    name: 'Product Roadmap',
+    emoji: '🚀',
+    icon: Rocket,
+    desc: 'আমরা কী কী নতুন feature আনছি তা দেখুন। Community vote দিয়ে প্রাধান্য ঠিক করুন।',
+    color: '#8b5cf6',
+    bg: 'rgba(139,92,246,0.12)',
+    border: 'rgba(139,92,246,0.25)',
+    tag: 'Roadmap',
+    category: 'Feature',
+  },
+  {
+    slug: 'review',
+    name: 'Write a Review',
+    emoji: '⭐',
+    icon: Star,
+    desc: 'আমাদের service ব্যবহার করে কেমন লাগলো? অন্যদের জানতে সাহায্য করুন।',
+    color: '#f59e0b',
+    bg: 'rgba(245,158,11,0.12)',
+    border: 'rgba(245,158,11,0.25)',
+    tag: 'Review',
+    category: 'Feedback',
+  },
+  {
+    slug: 'whatsapp',
+    name: 'Join WhatsApp Group',
+    emoji: '💬',
+    icon: MessageCircle,
+    desc: 'আমাদের WhatsApp community তে যোগ দিন। সরাসরি অন্য users এবং team এর সাথে কথা বলুন।',
+    color: '#22c55e',
+    bg: 'rgba(34,197,94,0.12)',
+    border: 'rgba(34,197,94,0.25)',
+    tag: 'Community',
+    category: null, // external link
+    external: true,
+    href: 'https://wa.me/yourgroup',
+  },
+  {
+    slug: 'guide',
+    name: 'User Guide & Templates',
+    emoji: '📖',
+    icon: BookOpen,
+    desc: 'New Smart Agent কিভাবে ব্যবহার করবেন — step by step guide এবং ready-made templates।',
+    color: '#0ea5e9',
+    bg: 'rgba(14,165,233,0.12)',
+    border: 'rgba(14,165,233,0.25)',
+    tag: 'Guide',
+    category: null,
+    href: '/docs',
+  },
+];
 
-export default function CommunityDesk() {
-  const [reports, setReports] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [isSubmitting, setSubmitting] = useState(false);
-  const [replyDrafts, setReplyDrafts] = useState({});
+export { communityItems };
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/community/`, { cache: 'no-store', credentials: 'include' });
-        if (!res.ok) throw new Error('Failed to load');
-        const data = await res.json();
-        setReports(data.reports || []);
-      } catch (err) {
-        console.error(err);
-        toast.error('লোড করা যাচ্ছে না');
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
-  }, []);
-
-  const handleSubmit = async (formData) => {
-    setSubmitting(true);
-    try {
-      const res = await fetch(`${API_BASE}/community/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-        credentials: 'include',
-      });
-      if (!res.ok) {
-        if (res.status === 403) throw new Error('Submit blocked, please login.');
-        throw new Error('Submit failed');
-      }
-      const payload = await res.json();
-      setReports((prev) => [payload, ...prev]);
-      toast.success('Report submitted. আমরা দ্রুত দেখে নিচ্ছি!');
-    } catch (err) {
-      console.error(err);
-      toast.error('পাঠানো যায়নি, আবার চেষ্টা করুন');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleReply = async (id) => {
-    const text = replyDrafts[id]?.trim();
-    if (!text) return toast.error('Reply লিখুন');
-    try {
-      const res = await fetch(`${API_BASE}/community/${id}/reply/`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-        credentials: 'include',
-      });
-      if (!res.ok) {
-        if (res.status === 403) {
-          toast.error('Reply করতে লগইন প্রয়োজন (admin only)');
-          return;
-        }
-        throw new Error('Reply failed');
-      }
-      const updated = await res.json();
-      setReports((prev) => prev.map((r) => (r.id === id ? updated : r)));
-      setReplyDrafts((d) => ({ ...d, [id]: '' }));
-      toast.success('Reply posted');
-    } catch (err) {
-      console.error(err);
-      toast.error('Reply জমা হয়নি');
-    }
-  };
-
-  const openCount = useMemo(() => reports.filter((r) => r.status === 'Open').length, [reports]);
-  const resolvedCount = useMemo(() => reports.filter((r) => r.status === 'Resolved').length, [reports]);
-
+export default function CommunityHub() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50 pb-20">
-      <header className="pt-28 pb-10 max-w-6xl mx-auto px-6 text-center space-y-4">
-        <p className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold">
-          <Sparkles className="w-4 h-4" /> Community Desk
-        </p>
-        <h1 className="text-3xl md:text-4xl font-black tracking-tight text-gray-900">Report • Review • Resolve</h1>
-        <p className="text-gray-500 max-w-2xl mx-auto text-sm md:text-base">
-          Feedback, bug report, roadmap—everything এক জায়গায়। Submit করুন, আর আমাদের টিম এখানেই আপডেট দেবে।
-        </p>
-        <div className="flex flex-wrap justify-center gap-3 text-sm font-bold text-gray-600">
-          <span className="px-3 py-1 bg-white rounded-full shadow-sm">Open: {openCount}</span>
-          <span className="px-3 py-1 bg-white rounded-full shadow-sm">Resolved: {resolvedCount}</span>
-          <span className="px-3 py-1 bg-white rounded-full shadow-sm">Total: {reports.length}</span>
-        </div>
+    <div
+      className="min-h-screen"
+      style={{ background: 'linear-gradient(135deg, #0f0f1a 0%, #0d1b2a 50%, #1a0f2e 100%)' }}
+    >
+      {/* ── Hero ── */}
+      <header className="relative pt-28 pb-14 px-6 text-center overflow-hidden">
+        {/* BG orbs */}
+        <div style={{
+          position: 'absolute', top: '10%', left: '5%', width: 400, height: 400,
+          background: 'radial-gradient(circle, rgba(99,102,241,0.13) 0%, transparent 70%)',
+          borderRadius: '50%', filter: 'blur(50px)', pointerEvents: 'none',
+        }} />
+        <div style={{
+          position: 'absolute', bottom: '0%', right: '5%', width: 300, height: 300,
+          background: 'radial-gradient(circle, rgba(168,85,247,0.1) 0%, transparent 70%)',
+          borderRadius: '50%', filter: 'blur(50px)', pointerEvents: 'none',
+        }} />
+
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            padding: '6px 18px', borderRadius: 999,
+            background: 'rgba(99,102,241,0.15)',
+            border: '1px solid rgba(99,102,241,0.3)',
+            color: '#a5b4fc', fontSize: 12, fontWeight: 700,
+            letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 20,
+          }}>
+            <Sparkles size={13} /> Community Hub
+          </span>
+
+          <h1 style={{
+            fontSize: 'clamp(2rem,5vw,3.5rem)', fontWeight: 900, lineHeight: 1.15,
+            background: 'linear-gradient(135deg, #e0e7ff 0%, #a5b4fc 50%, #c4b5fd 100%)',
+            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text', marginBottom: 16,
+          }}>
+            আপনার কথা শুনতে চাই
+          </h1>
+          <p style={{ color: '#94a3b8', fontSize: 15, maxWidth: 540, margin: '0 auto 12px' }}>
+            Feedback দিন, bug জানান, নতুন feature চান — সব এক জায়গায়।
+            Community-র সাথে connect হন।
+          </p>
+
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#64748b', fontSize: 13 }}>
+              <Users size={14} />
+              <span>যে কেউ report করতে পারবেন</span>
+            </div>
+            <span style={{ color: '#334155' }}>•</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#64748b', fontSize: 13 }}>
+              <MessageSquare size={14} />
+              <span>Like ও Comment করুন</span>
+            </div>
+          </div>
+        </motion.div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-6 grid lg:grid-cols-3 gap-8">
-        <section className="lg:col-span-1">
-          <SubmissionForm onSubmit={handleSubmit} isSubmitting={isSubmitting} />
-        </section>
+      {/* ── Cards Grid ── */}
+      <main style={{ maxWidth: 1100, margin: '0 auto', padding: '0 20px 100px' }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+            gap: 20,
+          }}
+        >
+          {communityItems.map((item, i) => {
+            const Icon = item.icon;
+            const href = item.href || `/community/${item.slug}`;
+            const isExternal = !!item.external;
 
-        <section className="lg:col-span-2 space-y-4">
-          {loading && (
-            <div className="bg-white/70 border border-slate-100 rounded-2xl p-5 text-sm text-gray-500">
-              Loading reports...
-            </div>
-          )}
-          {!loading && reports.length === 0 && (
-            <div className="bg-white/80 border border-slate-100 rounded-2xl p-8 text-center text-sm text-gray-500">
-              এখনও কোনো রিপোর্ট নেই। প্রথমটি সাবমিট করুন!
-            </div>
-          )}
-          {reports.map((report) => (
-            <article key={report.id} className="bg-white/80 backdrop-blur shadow-sm border border-slate-100 rounded-2xl p-5 hover:shadow-lg transition-shadow">
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-3">
-                    <Badge tone={report.category === 'Bug' ? 'red' : report.category === 'Feature' ? 'blue' : 'amber'}>
-                      {report.category}
-                    </Badge>
-                    <StatusPill status={report.status} />
-                    <span className="text-xs text-gray-400 font-bold">{report.id}</span>
+            const CardContent = (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.07 }}
+                whileHover={{ scale: 1.025, y: -4 }}
+                style={{
+                  display: 'flex', flexDirection: 'column',
+                  padding: 24, borderRadius: 20, cursor: 'pointer',
+                  background: 'rgba(255,255,255,0.05)',
+                  backdropFilter: 'blur(16px)',
+                  border: `1px solid ${item.border}`,
+                  transition: 'box-shadow 0.3s',
+                  height: '100%', boxSizing: 'border-box',
+                }}
+                whileTap={{ scale: 0.99 }}
+              >
+                {/* Icon + tag */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <div style={{
+                    width: 48, height: 48, borderRadius: 14, flexShrink: 0,
+                    background: item.bg, border: `1px solid ${item.border}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 22,
+                  }}>
+                    {item.emoji}
                   </div>
-                  <h3 className="text-lg font-black text-gray-900">{report.title}</h3>
-                  <p className="text-sm text-gray-600 leading-relaxed">{report.details}</p>
-                  <p className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.2em]">
-                    {report.submittedBy} • {report.submittedAt}
-                  </p>
+                  <span style={{
+                    padding: '4px 12px', borderRadius: 999, fontSize: 11, fontWeight: 700,
+                    background: item.bg, border: `1px solid ${item.border}`, color: item.color,
+                  }}>
+                    {item.tag}
+                  </span>
                 </div>
-              </div>
 
-              <div className="mt-4 space-y-3">
-                {report.replies.map((reply, idx) => (
-                  <div key={idx} className="rounded-xl bg-indigo-50/70 border border-indigo-100 p-3">
-                    <p className="text-xs font-bold text-indigo-700 uppercase tracking-[0.2em] mb-1">
-                      {reply.by} • {reply.at}
-                    </p>
-                    <p className="text-sm text-indigo-900 leading-relaxed">{reply.text}</p>
-                  </div>
-                ))}
+                {/* Text */}
+                <h2 style={{ fontSize: 17, fontWeight: 800, color: '#e2e8f0', marginBottom: 8, lineHeight: 1.3 }}>
+                  {item.name}
+                </h2>
+                <p style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.7, flex: 1 }}>
+                  {item.desc}
+                </p>
 
-                <div className="flex items-start gap-2">
-                  <textarea
-                    value={replyDrafts[report.id] || ''}
-                    onChange={(e) => setReplyDrafts((d) => ({ ...d, [report.id]: e.target.value }))}
-                    placeholder="Reply here…"
-                    className="flex-1 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition px-3 py-2 text-sm"
-                    rows={2}
-                  />
-                  <button
-                    onClick={() => handleReply(report.id)}
-                    className="h-10 px-3 rounded-xl bg-indigo-600 text-white text-sm font-black flex items-center gap-1 hover:bg-indigo-700 active:scale-95 transition"
-                  >
-                    <Reply className="w-4 h-4" /> Post
-                  </button>
+                {/* CTA */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 6, marginTop: 18,
+                  color: item.color, fontSize: 13, fontWeight: 700,
+                }}>
+                  {isExternal ? 'যোগ দিন' : item.category ? 'Report করুন / দেখুন' : 'দেখুন'}
+                  <ArrowRight size={14} />
                 </div>
-              </div>
-            </article>
-          ))}
-        </section>
+              </motion.div>
+            );
+
+            return isExternal ? (
+              <a key={item.slug} href={href} target="_blank" rel="noopener noreferrer"
+                style={{ textDecoration: 'none', display: 'block' }}>
+                {CardContent}
+              </a>
+            ) : (
+              <Link key={item.slug} href={href} style={{ textDecoration: 'none', display: 'block' }}>
+                {CardContent}
+              </Link>
+            );
+          })}
+        </div>
       </main>
     </div>
-  );
-}
-
-function SubmissionForm({ onSubmit, isSubmitting }) {
-  const [form, setForm] = useState({ name: '', email: '', category: 'Bug', title: '', details: '' });
-
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
-
-  const submit = (e) => {
-    e.preventDefault();
-    if (!form.title || !form.details) return toast.error('Title & details লাগবে');
-    onSubmit(form);
-    setForm((f) => ({ ...f, title: '', details: '' }));
-  };
-
-  return (
-    <div className="bg-white/90 backdrop-blur border border-slate-100 shadow-sm rounded-2xl p-6 space-y-4">
-      <div className="flex items-center gap-3">
-        <MessageSquare className="w-5 h-5 text-indigo-600" />
-        <div>
-          <h2 className="text-lg font-black text-gray-900">Submit a report</h2>
-          <p className="text-xs text-gray-500">বাগ, ফিডব্যাক বা নতুন আইডিয়া—সবই স্বাগতম</p>
-        </div>
-      </div>
-
-      <form onSubmit={submit} className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <input
-            name="name"
-            value={form.name}
-            onChange={handleChange}
-            placeholder="Your name (optional)"
-            className="rounded-xl border border-slate-200 px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition"
-          />
-          <input
-            type="email"
-            name="email"
-            value={form.email}
-            onChange={handleChange}
-            placeholder="Email (for follow-up)"
-            className="rounded-xl border border-slate-200 px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition"
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <select
-            name="category"
-            value={form.category}
-            onChange={handleChange}
-            className="rounded-xl border border-slate-200 px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition"
-          >
-            {categories.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-
-          <select
-            name="status"
-            value={form.status}
-            onChange={() => {}}
-            disabled
-            className="rounded-xl border border-slate-200 px-3 py-2 text-sm bg-slate-50 text-gray-400"
-          >
-            <option>Will set to Open</option>
-          </select>
-        </div>
-
-        <input
-          name="title"
-          value={form.title}
-          onChange={handleChange}
-          placeholder="Short title"
-          className="rounded-xl border border-slate-200 px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition"
-          required
-        />
-
-        <textarea
-          name="details"
-          value={form.details}
-          onChange={handleChange}
-          placeholder="Describe the issue or idea"
-          rows={4}
-          className="rounded-xl border border-slate-200 px-3 py-2 text-sm bg-slate-50 focus:bg-white focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition"
-          required
-        />
-
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 text-white font-black px-4 py-3 hover:bg-indigo-700 active:scale-95 transition disabled:opacity-60"
-        >
-          {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          {isSubmitting ? 'Submitting…' : 'Submit Report'}
-        </button>
-      </form>
-    </div>
-  );
-}
-
-function Badge({ children, tone = 'blue' }) {
-  const tones = {
-    red: 'bg-red-50 text-red-700 border-red-100',
-    amber: 'bg-amber-50 text-amber-700 border-amber-100',
-    blue: 'bg-blue-50 text-blue-700 border-blue-100',
-  };
-  return <span className={`px-2.5 py-1 text-[11px] font-black rounded-full border ${tones[tone]}`}>{children}</span>;
-}
-
-function StatusPill({ status }) {
-  const tone = status === 'Resolved' ? 'text-emerald-700 bg-emerald-50 border-emerald-100' : status === 'In Review' ? 'text-amber-700 bg-amber-50 border-amber-100' : 'text-slate-700 bg-slate-50 border-slate-200';
-  const Icon = status === 'Resolved' ? CheckCircle2 : status === 'In Review' ? Sparkles : Bug;
-  return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-black rounded-full border ${tone}`}>
-      <Icon className="w-3.5 h-3.5" />
-      {status}
-    </span>
   );
 }

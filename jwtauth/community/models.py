@@ -36,6 +36,14 @@ class CommunityReport(models.Model):
   def __str__(self):
     return f"{self.public_id} | {self.title}"
 
+  @property
+  def like_count(self):
+    return self.likes.count()
+
+  @property
+  def comment_count(self):
+    return self.comments.count()
+
 
 class CommunityReply(models.Model):
   report = models.ForeignKey(CommunityReport, related_name="replies", on_delete=models.CASCADE)
@@ -48,3 +56,31 @@ class CommunityReply(models.Model):
 
   def __str__(self):
     return f"{self.report.public_id} reply by {self.author_name}"
+
+
+class ReportLike(models.Model):
+  """IP-ভিত্তিক anonymous like — প্রতি IP একটি করে like দিতে পারবে।"""
+  report = models.ForeignKey(CommunityReport, related_name="likes", on_delete=models.CASCADE)
+  ip_address = models.GenericIPAddressField()
+  created_at = models.DateTimeField(default=timezone.now)
+
+  class Meta:
+    unique_together = ("report", "ip_address")
+    ordering = ("-created_at",)
+
+  def __str__(self):
+    return f"Like on {self.report.public_id} from {self.ip_address}"
+
+
+class ReportComment(models.Model):
+  """যে কেউ comment করতে পারবে (login ছাড়া)।"""
+  report = models.ForeignKey(CommunityReport, related_name="comments", on_delete=models.CASCADE)
+  author_name = models.CharField(max_length=120, default="Anonymous")
+  text = models.TextField()
+  created_at = models.DateTimeField(default=timezone.now)
+
+  class Meta:
+    ordering = ("created_at",)
+
+  def __str__(self):
+    return f"Comment on {self.report.public_id} by {self.author_name}"
