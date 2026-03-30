@@ -39,7 +39,7 @@ class CommunityReportViewSet(viewsets.ModelViewSet):
     if search:
       qs = qs.filter(title__icontains=search)
 
-    serializer = self.get_serializer(qs, many=True)
+    serializer = self.get_serializer(qs, many=True, context={'request': request})
     reports = serializer.data
 
     # Summary stats filtered by current category

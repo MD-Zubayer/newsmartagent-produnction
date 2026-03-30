@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import CommunityReport, CommunityReply, ReportComment
+from .models import CommunityReport, CommunityReply, ReportComment, ReportLike
 
 
 class CommunityReplySerializer(serializers.ModelSerializer):
@@ -34,6 +34,7 @@ class CommunityReportSerializer(serializers.ModelSerializer):
   comments = ReportCommentSerializer(many=True, read_only=True)
   like_count = serializers.IntegerField(read_only=True)
   comment_count = serializers.IntegerField(read_only=True)
+  is_liked = serializers.SerializerMethodField()
 
   class Meta:
     model = CommunityReport
@@ -51,7 +52,25 @@ class CommunityReportSerializer(serializers.ModelSerializer):
         "comments",
         "like_count",
         "comment_count",
+        "is_liked",
     )
 
   def get_submittedAt(self, obj):
     return obj.created_at.strftime("%d %b %Y")
+
+  def get_is_liked(self, obj):
+    request = self.context.get("request")
+    if not request:
+      return False
+    
+    # Extract IP
+    x_forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
+    if x_forwarded:
+      ip = x_forwarded.split(",")[0].strip()
+    else:
+      ip = request.META.get("REMOTE_ADDR")
+    
+    if not ip:
+      return False
+      
+    return obj.likes.filter(ip_address=ip).exists()

@@ -457,8 +457,17 @@ export default function CommunitySlugPage({ params }) {
       const res = await fetch(`${API_BASE}/community/?${p}`, { cache: 'no-store', credentials: 'include' });
       if (!res.ok) throw new Error();
       const data = await res.json();
-      setReports(data.reports || []);
+      const loadedReports = data.reports || [];
+      setReports(loadedReports);
       if (data.stats) setStats(data.stats);
+
+      // Sync likedMap with server data
+      const newLikedMap = { ...getLikedReports() };
+      loadedReports.forEach(r => {
+        if (r.is_liked) newLikedMap[String(r.id)] = true;
+      });
+      setLikedMap(newLikedMap);
+      setLikedReports(newLikedMap);
     } catch {
       toast.error('Reports লোড হয়নি');
     } finally {
