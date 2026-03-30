@@ -8,7 +8,7 @@ import toast from 'react-hot-toast';
 import {
   Bug, TrendingUp, Lightbulb, Rocket, MessageCircle,
   BookOpen, MessageSquare, Users, ThumbsUp, ChevronDown,
-  ChevronUp, Send, Reply, Loader2, Search, X, ArrowLeft,
+  ChevronUp, Send, Reply, Loader2, Search, X, ArrowLeft, Plus,
   Sparkles, CheckCircle2, Clock, AlertCircle, Star,
   Zap, Target, Trophy, Heart, Flag, BarChart3
 } from 'lucide-react';
