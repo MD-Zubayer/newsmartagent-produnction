@@ -163,11 +163,13 @@ export default function CommunityHub() {
           position: 'absolute', top: '10%', left: '5%', width: 400, height: 400,
           background: 'radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 70%)',
           borderRadius: '50%', filter: 'blur(50px)', pointerEvents: 'none',
+          transform: 'translateZ(0)', willChange: 'filter',
         }} />
         <div style={{
           position: 'absolute', bottom: '0%', right: '5%', width: 300, height: 300,
           background: 'radial-gradient(circle, rgba(168,85,247,0.06) 0%, transparent 70%)',
           borderRadius: '50%', filter: 'blur(50px)', pointerEvents: 'none',
+          transform: 'translateZ(0)', willChange: 'filter',
         }} />
 
         {/* Language Toggle */}
@@ -262,6 +264,8 @@ export default function CommunityHub() {
                   transition: 'all 0.3s',
                   height: '100%', boxSizing: 'border-box',
                   boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+                  transform: 'translateZ(0)',
+                  WebkitBackfaceVisibility: 'hidden',
                 }}
                 whileTap={{ scale: 0.99 }}
               >

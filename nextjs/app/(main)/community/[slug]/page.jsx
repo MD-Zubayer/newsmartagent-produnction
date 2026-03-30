@@ -568,8 +568,8 @@ export default function CommunitySlugPage({ params }) {
     <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
 
       {/* ── Decorative BG orbs ── */}
-      <div style={{ position: 'fixed', top: '10%', left: '5%', width: 500, height: 500, background: `radial-gradient(circle, ${config.color}08 0%, transparent 70%)`, borderRadius: '50%', filter: 'blur(80px)', pointerEvents: 'none', zIndex: 0 }} />
-      <div style={{ position: 'fixed', bottom: '5%', right: '5%', width: 400, height: 400, background: 'radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 70%)', borderRadius: '50%', filter: 'blur(80px)', pointerEvents: 'none', zIndex: 0 }} />
+      <div style={{ position: 'fixed', top: '10%', left: '5%', width: 500, height: 500, background: `radial-gradient(circle, ${config.color}08 0%, transparent 70%)`, borderRadius: '50%', filter: 'blur(80px)', pointerEvents: 'none', zIndex: 0, transform: 'translateZ(0)', willChange: 'filter' }} />
+      <div style={{ position: 'fixed', bottom: '5%', right: '5%', width: 400, height: 400, background: 'radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 70%)', borderRadius: '50%', filter: 'blur(80px)', pointerEvents: 'none', zIndex: 0, transform: 'translateZ(0)', willChange: 'filter' }} />
 
       {/* ── Hero Header ── */}
       <header style={{ padding: '110px 24px 40px', maxWidth: 920, margin: '0 auto', position: 'relative', zIndex: 1 }}>
@@ -757,6 +757,8 @@ function ReportCard({ report, idx, config, slug, isLiked, onLike, expandedCommen
         border: '1px solid rgba(0,0,0,0.06)', borderRadius: 20, padding: '22px 24px',
         borderLeft: `3px solid ${config.color}`,
         boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+        transform: 'translateZ(0)',
+        WebkitBackfaceVisibility: 'hidden',
       }}
       whileHover={{ boxShadow: `0 8px 30px rgba(0,0,0,0.06)`, y: -2 }}
     >
