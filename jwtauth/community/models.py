@@ -12,6 +12,8 @@ class CommunityReport(models.Model):
       ("Bug", "Bug"),
       ("Feedback", "Feedback"),
       ("Feature", "Feature"),
+      ("Review", "Review"),
+      ("Roadmap", "Roadmap"),
   ]
   STATUS_CHOICES = [
       ("Open", "Open"),
@@ -25,6 +27,7 @@ class CommunityReport(models.Model):
   details = models.TextField()
   name = models.CharField(max_length=120, blank=True)
   email = models.EmailField(blank=True)
+  rating = models.IntegerField(default=0, blank=True)
   status = models.CharField(max_length=12, choices=STATUS_CHOICES, default="Open")
   created_at = models.DateTimeField(default=timezone.now)
   updated_at = models.DateTimeField(auto_now=True)

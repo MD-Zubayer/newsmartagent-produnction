@@ -6,92 +6,121 @@ import {
   Bug, TrendingUp, Lightbulb, Rocket, MessageCircle,
   BookOpen, MessageSquare, Users, ArrowRight, Sparkles, Star
 } from 'lucide-react';
+import { useLanguage } from '@/context/LanguageContext';
 
 const communityItems = [
   {
     slug: 'feedback',
-    name: 'Feedback',
     emoji: '📢',
     icon: TrendingUp,
-    desc: 'আমাদের platform সম্পর্কে আপনার মতামত দিন। আপনার feedback আমাদের আরও ভালো হতে সাহায্য করে।',
-    color: '#6366f1',
-    bg: 'rgba(99,102,241,0.12)',
-    border: 'rgba(99,102,241,0.25)',
-    tag: 'General',
+    color: '#4f46e5',
+    bg: 'rgba(79,70,229,0.06)',
+    border: 'rgba(79,70,229,0.1)',
+    tag: { en: 'General', bn: 'সাধারণ' },
+    name: { en: 'Feedback', bn: 'ফিডব্যাক' },
+    desc: {
+      en: 'Share your thoughts about our platform. Your feedback helps us improve.',
+      bn: 'আমাদের platform সম্পর্কে আপনার মতামত দিন। আপনার feedback আমাদের আরও ভালো হতে সাহায্য করে।',
+    },
+    cta: { en: 'Give Feedback', bn: 'মতামত দিন' },
     category: 'Feedback',
   },
   {
     slug: 'bug-report',
-    name: 'Report a Bug',
     emoji: '🐞',
     icon: Bug,
-    desc: 'কোনো সমস্যা বা error হচ্ছে? আমাদের জানান, আমরা দ্রুত fix করব।',
-    color: '#ef4444',
-    bg: 'rgba(239,68,68,0.12)',
-    border: 'rgba(239,68,68,0.25)',
-    tag: 'Bug',
+    color: '#dc2626',
+    bg: 'rgba(220,38,38,0.06)',
+    border: 'rgba(220,38,38,0.1)',
+    tag: { en: 'Bug', bn: 'বাগ' },
+    name: { en: 'Report a Bug', bn: 'বাগ রিপোর্ট করুন' },
+    desc: {
+      en: 'Found an issue or error? Let us know and we will fix it quickly.',
+      bn: 'কোনো সমস্যা বা error হচ্ছে? আমাদের জানান, আমরা দ্রুত fix করব।',
+    },
+    cta: { en: 'Report Bug', bn: 'বাগ জানান' },
     category: 'Bug',
   },
   {
     slug: 'feature-request',
-    name: 'Feature Request',
     emoji: '💡',
     icon: Lightbulb,
-    desc: 'নতুন কোনো feature চান? আইডিয়া দিন, আমরা roadmap এ যোগ করব।',
-    color: '#eab308',
-    bg: 'rgba(234,179,8,0.12)',
-    border: 'rgba(234,179,8,0.25)',
-    tag: 'Feature',
+    color: '#ca8a04',
+    bg: 'rgba(202,138,4,0.06)',
+    border: 'rgba(202,138,4,0.1)',
+    tag: { en: 'Feature', bn: 'ফিচার' },
+    name: { en: 'Feature Request', bn: 'ফিচার রিকোয়েস্ট' },
+    desc: {
+      en: 'Want a new feature? Share your idea and we will add it to our roadmap.',
+      bn: 'নতুন কোনো feature চান? আইডিয়া দিন, আমরা roadmap এ যোগ করব।',
+    },
+    cta: { en: 'Suggest Feature', bn: 'আইডিয়া দিন' },
     category: 'Feature',
   },
   {
     slug: 'roadmap',
-    name: 'Product Roadmap',
     emoji: '🚀',
     icon: Rocket,
-    desc: 'আমরা কী কী নতুন feature আনছি তা দেখুন। Community vote দিয়ে প্রাধান্য ঠিক করুন।',
-    color: '#8b5cf6',
-    bg: 'rgba(139,92,246,0.12)',
-    border: 'rgba(139,92,246,0.25)',
-    tag: 'Roadmap',
-    category: 'Feature',
+    color: '#7c3aed',
+    bg: 'rgba(124,58,237,0.06)',
+    border: 'rgba(124,58,237,0.1)',
+    tag: { en: 'Roadmap', bn: 'রোডম্যাপ' },
+    name: { en: 'Product Roadmap', bn: 'প্রোডাক্ট রোডম্যাপ' },
+    desc: {
+      en: 'See what new features we are building. Vote to set priority.',
+      bn: 'আমরা কী কী নতুন feature আনছি তা দেখুন। Community vote দিয়ে প্রাধান্য ঠিক করুন।',
+    },
+    cta: { en: 'View Roadmap', bn: 'রোডম্যাপ দেখুন' },
+    category: 'Roadmap',
   },
   {
     slug: 'review',
-    name: 'Write a Review',
     emoji: '⭐',
     icon: Star,
-    desc: 'আমাদের service ব্যবহার করে কেমন লাগলো? অন্যদের জানতে সাহায্য করুন।',
-    color: '#f59e0b',
-    bg: 'rgba(245,158,11,0.12)',
-    border: 'rgba(245,158,11,0.25)',
-    tag: 'Review',
-    category: 'Feedback',
+    color: '#d97706',
+    bg: 'rgba(217,119,6,0.06)',
+    border: 'rgba(217,119,6,0.1)',
+    tag: { en: 'Review', bn: 'রিভিউ' },
+    name: { en: 'Write a Review', bn: 'রিভিউ লিখুন' },
+    desc: {
+      en: 'How was your experience with our service? Help others make the right choice.',
+      bn: 'আমাদের service ব্যবহার করে কেমন লাগলো? অন্যদের জানতে সাহায্য করুন।',
+    },
+    cta: { en: 'Write Review', bn: 'রিভিউ লিখুন' },
+    category: 'Review',
   },
   {
     slug: 'whatsapp',
-    name: 'Join WhatsApp Group',
     emoji: '💬',
     icon: MessageCircle,
-    desc: 'আমাদের WhatsApp community তে যোগ দিন। সরাসরি অন্য users এবং team এর সাথে কথা বলুন।',
-    color: '#22c55e',
-    bg: 'rgba(34,197,94,0.12)',
-    border: 'rgba(34,197,94,0.25)',
-    tag: 'Community',
-    category: null, // external link
+    color: '#16a34a',
+    bg: 'rgba(22,163,74,0.06)',
+    border: 'rgba(22,163,74,0.1)',
+    tag: { en: 'Community', bn: 'কমিউনিটি' },
+    name: { en: 'Join WhatsApp Group', bn: 'WhatsApp গ্রুপে যোগ দিন' },
+    desc: {
+      en: 'Join our WhatsApp community. Talk directly with other users and our team.',
+      bn: 'আমাদের WhatsApp community তে যোগ দিন। সরাসরি অন্য users এবং team এর সাথে কথা বলুন।',
+    },
+    cta: { en: 'Join Now', bn: 'যোগ দিন' },
+    category: null,
     external: true,
     href: 'https://wa.me/yourgroup',
   },
   {
     slug: 'guide',
-    name: 'User Guide & Templates',
     emoji: '📖',
     icon: BookOpen,
-    desc: 'New Smart Agent কিভাবে ব্যবহার করবেন — step by step guide এবং ready-made templates।',
-    color: '#0ea5e9',
-    bg: 'rgba(14,165,233,0.12)',
-    border: 'rgba(14,165,233,0.25)',
-    tag: 'Guide',
+    color: '#0284c7',
+    bg: 'rgba(2,132,199,0.06)',
+    border: 'rgba(2,132,199,0.1)',
+    tag: { en: 'Guide', bn: 'গাইড' },
+    name: { en: 'User Guide & Templates', bn: 'ইউজার গাইড ও টেমপ্লেট' },
+    desc: {
+      en: 'How to use New Smart Agent — step by step guide and ready-made templates.',
+      bn: 'New Smart Agent কিভাবে ব্যবহার করবেন — step by step guide এবং ready-made templates।',
+    },
+    cta: { en: 'View Docs', bn: 'ডকস দেখুন' },
     category: null,
     href: '/docs',
   },
@@ -99,60 +128,109 @@ const communityItems = [
 
 export { communityItems };
 
+const t = {
+  en: {
+    badge: 'Community Hub',
+    title: 'We Want to Hear From You',
+    subtitle: 'Give feedback, report bugs, request features — all in one place. Connect with the community.',
+    stat1: 'Anyone can report',
+    stat2: 'Like & Comment',
+    langBtn: 'বাংলা',
+  },
+  bn: {
+    badge: 'কমিউনিটি হাব',
+    title: 'আপনার কথা শুনতে চাই',
+    subtitle: 'Feedback দিন, bug জানান, নতুন feature চান — সব এক জায়গায়। Community-র সাথে connect হন।',
+    stat1: 'যে কেউ report করতে পারবেন',
+    stat2: 'Like ও Comment করুন',
+    langBtn: 'English',
+  },
+};
+
 export default function CommunityHub() {
+  const { lang, setLang } = useLanguage();
+  const tx = t[lang];
+
   return (
     <div
       className="min-h-screen"
-      style={{ background: 'linear-gradient(135deg, #0f0f1a 0%, #0d1b2a 50%, #1a0f2e 100%)' }}
+      style={{ background: '#f8fafc' }}
     >
       {/* ── Hero ── */}
       <header className="relative pt-28 pb-14 px-6 text-center overflow-hidden">
         {/* BG orbs */}
         <div style={{
           position: 'absolute', top: '10%', left: '5%', width: 400, height: 400,
-          background: 'radial-gradient(circle, rgba(99,102,241,0.13) 0%, transparent 70%)',
+          background: 'radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 70%)',
           borderRadius: '50%', filter: 'blur(50px)', pointerEvents: 'none',
         }} />
         <div style={{
           position: 'absolute', bottom: '0%', right: '5%', width: 300, height: 300,
-          background: 'radial-gradient(circle, rgba(168,85,247,0.1) 0%, transparent 70%)',
+          background: 'radial-gradient(circle, rgba(168,85,247,0.06) 0%, transparent 70%)',
           borderRadius: '50%', filter: 'blur(50px)', pointerEvents: 'none',
         }} />
+
+        {/* Language Toggle */}
+        <div style={{ position: 'absolute', top: 100, right: 24, zIndex: 10 }}>
+          <div style={{
+            display: 'inline-flex', borderRadius: 10, overflow: 'hidden',
+            border: '1px solid rgba(0,0,0,0.08)', background: 'rgba(255,255,255,0.8)',
+            backdropFilter: 'blur(8px)',
+          }}>
+            <button
+              onClick={() => setLang('en')}
+              style={{
+                padding: '6px 16px', fontSize: 12, fontWeight: 800, cursor: 'pointer', border: 'none',
+                background: lang === 'en' ? 'rgba(79,70,229,0.1)' : 'transparent',
+                color: lang === 'en' ? '#4f46e5' : '#64748b',
+                transition: 'all 0.2s',
+              }}
+            >EN</button>
+            <button
+              onClick={() => setLang('bn')}
+              style={{
+                padding: '6px 16px', fontSize: 12, fontWeight: 800, cursor: 'pointer', border: 'none',
+                background: lang === 'bn' ? 'rgba(79,70,229,0.1)' : 'transparent',
+                color: lang === 'bn' ? '#4f46e5' : '#64748b',
+                borderLeft: '1px solid rgba(0,0,0,0.05)',
+                transition: 'all 0.2s',
+              }}
+            >বাং</button>
+          </div>
+        </div>
 
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
           <span style={{
             display: 'inline-flex', alignItems: 'center', gap: 8,
             padding: '6px 18px', borderRadius: 999,
-            background: 'rgba(99,102,241,0.15)',
-            border: '1px solid rgba(99,102,241,0.3)',
-            color: '#a5b4fc', fontSize: 12, fontWeight: 700,
+            background: 'rgba(79,70,229,0.08)',
+            border: '1px solid rgba(79,70,229,0.15)',
+            color: '#4f46e5', fontSize: 12, fontWeight: 800,
             letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 20,
           }}>
-            <Sparkles size={13} /> Community Hub
+            <Sparkles size={13} /> {tx.badge}
           </span>
 
           <h1 style={{
-            fontSize: 'clamp(2rem,5vw,3.5rem)', fontWeight: 900, lineHeight: 1.15,
-            background: 'linear-gradient(135deg, #e0e7ff 0%, #a5b4fc 50%, #c4b5fd 100%)',
-            WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-            backgroundClip: 'text', marginBottom: 16,
+            fontSize: 'clamp(2.2rem,6vw,4rem)', fontWeight: 900, lineHeight: 1.1,
+            color: '#1e293b',
+            marginBottom: 16,
           }}>
-            আপনার কথা শুনতে চাই
+            {tx.title}
           </h1>
-          <p style={{ color: '#94a3b8', fontSize: 15, maxWidth: 540, margin: '0 auto 12px' }}>
-            Feedback দিন, bug জানান, নতুন feature চান — সব এক জায়গায়।
-            Community-র সাথে connect হন।
+          <p style={{ color: '#475569', fontSize: 16, maxWidth: 540, margin: '0 auto 12px', lineHeight: 1.6 }}>
+            {tx.subtitle}
           </p>
 
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#64748b', fontSize: 13 }}>
               <Users size={14} />
-              <span>যে কেউ report করতে পারবেন</span>
+              <span>{tx.stat1}</span>
             </div>
             <span style={{ color: '#334155' }}>•</span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#64748b', fontSize: 13 }}>
               <MessageSquare size={14} />
-              <span>Like ও Comment করুন</span>
+              <span>{tx.stat2}</span>
             </div>
           </div>
         </motion.div>
@@ -160,13 +238,11 @@ export default function CommunityHub() {
 
       {/* ── Cards Grid ── */}
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: '0 20px 100px' }}>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-            gap: 20,
-          }}
-        >
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+          gap: 20,
+        }}>
           {communityItems.map((item, i) => {
             const Icon = item.icon;
             const href = item.href || `/community/${item.slug}`;
@@ -177,15 +253,15 @@ export default function CommunityHub() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.07 }}
-                whileHover={{ scale: 1.025, y: -4 }}
+                whileHover={{ scale: 1.03, y: -6, boxShadow: '0 12px 30px rgba(0,0,0,0.08)' }}
                 style={{
                   display: 'flex', flexDirection: 'column',
-                  padding: 24, borderRadius: 20, cursor: 'pointer',
-                  background: 'rgba(255,255,255,0.05)',
-                  backdropFilter: 'blur(16px)',
-                  border: `1px solid ${item.border}`,
-                  transition: 'box-shadow 0.3s',
+                  padding: 26, borderRadius: 24, cursor: 'pointer',
+                  background: '#fff',
+                  border: '1px solid rgba(0,0,0,0.06)',
+                  transition: 'all 0.3s',
                   height: '100%', boxSizing: 'border-box',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
                 }}
                 whileTap={{ scale: 0.99 }}
               >
@@ -203,16 +279,16 @@ export default function CommunityHub() {
                     padding: '4px 12px', borderRadius: 999, fontSize: 11, fontWeight: 700,
                     background: item.bg, border: `1px solid ${item.border}`, color: item.color,
                   }}>
-                    {item.tag}
+                    {item.tag[lang]}
                   </span>
                 </div>
 
                 {/* Text */}
-                <h2 style={{ fontSize: 17, fontWeight: 800, color: '#e2e8f0', marginBottom: 8, lineHeight: 1.3 }}>
-                  {item.name}
+                <h2 style={{ fontSize: 18, fontWeight: 800, color: '#1e293b', marginBottom: 10, lineHeight: 1.3 }}>
+                  {item.name[lang]}
                 </h2>
-                <p style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.7, flex: 1 }}>
-                  {item.desc}
+                <p style={{ fontSize: 14, color: '#64748b', lineHeight: 1.7, flex: 1 }}>
+                  {item.desc[lang]}
                 </p>
 
                 {/* CTA */}
@@ -220,7 +296,7 @@ export default function CommunityHub() {
                   display: 'flex', alignItems: 'center', gap: 6, marginTop: 18,
                   color: item.color, fontSize: 13, fontWeight: 700,
                 }}>
-                  {isExternal ? 'যোগ দিন' : item.category ? 'Report করুন / দেখুন' : 'দেখুন'}
+                  {item.cta[lang]}
                   <ArrowRight size={14} />
                 </div>
               </motion.div>

@@ -46,6 +46,7 @@ class CommunityReportSerializer(serializers.ModelSerializer):
         "submittedBy",
         "submittedAt",
         "email",
+        "rating",
         "replies",
         "comments",
         "like_count",
