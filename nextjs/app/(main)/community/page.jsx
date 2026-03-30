@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { MessageSquare, Bug, CheckCircle2, Loader2, Send, Reply, Sparkles } from 'lucide-react';
 
 const categories = ['Bug', 'Feedback', 'Feature'];
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://newsmartagent.com/api';
 
 export default function CommunityDesk() {
   const [reports, setReports] = useState([]);
@@ -15,7 +16,7 @@ export default function CommunityDesk() {
   useEffect(() => {
     const load = async () => {
       try {
-        const res = await fetch('/api/community/', { cache: 'no-store', credentials: 'include' });
+        const res = await fetch(`${API_BASE}/community/`, { cache: 'no-store', credentials: 'include' });
         if (!res.ok) throw new Error('Failed to load');
         const data = await res.json();
         setReports(data.reports || []);
@@ -32,13 +33,16 @@ export default function CommunityDesk() {
   const handleSubmit = async (formData) => {
     setSubmitting(true);
     try {
-      const res = await fetch('/api/community/', {
+      const res = await fetch(`${API_BASE}/community/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
         credentials: 'include',
       });
-      if (!res.ok) throw new Error('Submit failed');
+      if (!res.ok) {
+        if (res.status === 403) throw new Error('Submit blocked, please login.');
+        throw new Error('Submit failed');
+      }
       const payload = await res.json();
       setReports((prev) => [payload, ...prev]);
       toast.success('Report submitted. আমরা দ্রুত দেখে নিচ্ছি!');
@@ -54,13 +58,19 @@ export default function CommunityDesk() {
     const text = replyDrafts[id]?.trim();
     if (!text) return toast.error('Reply লিখুন');
     try {
-      const res = await fetch(`/api/community/${id}/reply/`, {
+      const res = await fetch(`${API_BASE}/community/${id}/reply/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text }),
         credentials: 'include',
       });
-      if (!res.ok) throw new Error('Reply failed');
+      if (!res.ok) {
+        if (res.status === 403) {
+          toast.error('Reply করতে লগইন প্রয়োজন (admin only)');
+          return;
+        }
+        throw new Error('Reply failed');
+      }
       const updated = await res.json();
       setReports((prev) => prev.map((r) => (r.id === id ? updated : r)));
       setReplyDrafts((d) => ({ ...d, [id]: '' }));
