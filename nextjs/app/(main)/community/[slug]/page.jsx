@@ -496,22 +496,45 @@ export default function CommunitySlugPage({ params }) {
     }
   };
 
-  const handleLike = async (id) => {
-    const wasLiked = !!likedMap[id];
-    const newMap = { ...likedMap, [id]: !wasLiked };
-    if (wasLiked) delete newMap[id];
-    setLikedMap(newMap);
-    setLikedReports(newMap);
+  const handleLike = async (reportId) => {
+    const wasLiked = !!likedMap[reportId];
+    
+    // Toggle likedMap locally
+    const nextLikedMap = { ...likedMap };
+    if (wasLiked) {
+      delete nextLikedMap[reportId];
+    } else {
+      nextLikedMap[reportId] = true;
+    }
+    setLikedMap(nextLikedMap);
+    setLikedReports(nextLikedMap);
+
+    // Optimistic report state update
     setReports((prev) =>
-      prev.map((r) => r.id === id ? { ...r, like_count: wasLiked ? Math.max(0, r.like_count - 1) : r.like_count + 1 } : r)
+      prev.map((r) => {
+        if (String(r.id) === String(reportId)) {
+          const count = r.like_count || 0;
+          return { ...r, like_count: wasLiked ? Math.max(0, count - 1) : count + 1 };
+        }
+        return r;
+      })
     );
+
     try {
-      const res = await fetch(`${API_BASE}/community/${id}/like/`, { method: 'POST', credentials: 'include' });
+      const res = await fetch(`${API_BASE}/community/${reportId}/like/`, { 
+        method: 'POST', 
+        credentials: 'include' 
+      });
       if (res.ok) {
         const data = await res.json();
-        setReports((prev) => prev.map((r) => r.id === id ? { ...r, like_count: data.like_count } : r));
+        // Sync with server data (exact count)
+        setReports((prev) =>
+          prev.map((r) => String(r.id) === String(reportId) ? { ...r, like_count: data.like_count } : r)
+        );
       }
-    } catch {}
+    } catch (err) {
+      console.error('Like error:', err);
+    }
   };
 
   const handleComment = async (reportId) => {
