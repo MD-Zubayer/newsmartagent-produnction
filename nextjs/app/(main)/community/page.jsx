@@ -172,34 +172,7 @@ export default function CommunityHub() {
           transform: 'translateZ(0)', willChange: 'filter',
         }} />
 
-        {/* Language Toggle */}
-        <div style={{ position: 'absolute', top: 100, right: 24, zIndex: 10 }}>
-          <div style={{
-            display: 'inline-flex', borderRadius: 10, overflow: 'hidden',
-            border: '1px solid rgba(0,0,0,0.08)', background: 'rgba(255,255,255,0.8)',
-            backdropFilter: 'blur(8px)',
-          }}>
-            <button
-              onClick={() => setLang('en')}
-              style={{
-                padding: '6px 16px', fontSize: 12, fontWeight: 800, cursor: 'pointer', border: 'none',
-                background: lang === 'en' ? 'rgba(79,70,229,0.1)' : 'transparent',
-                color: lang === 'en' ? '#4f46e5' : '#64748b',
-                transition: 'all 0.2s',
-              }}
-            >EN</button>
-            <button
-              onClick={() => setLang('bn')}
-              style={{
-                padding: '6px 16px', fontSize: 12, fontWeight: 800, cursor: 'pointer', border: 'none',
-                background: lang === 'bn' ? 'rgba(79,70,229,0.1)' : 'transparent',
-                color: lang === 'bn' ? '#4f46e5' : '#64748b',
-                borderLeft: '1px solid rgba(0,0,0,0.05)',
-                transition: 'all 0.2s',
-              }}
-            >বাং</button>
-          </div>
-        </div>
+        {/* Language Toggle Removed */}
 
         <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
           <span style={{

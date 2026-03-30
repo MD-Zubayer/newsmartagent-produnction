@@ -98,6 +98,8 @@ const TX = {
     toastCommentWrite: 'Please write a comment', toastAdminOnly: 'Admin only',
     notFound: 'Page not found.', notFoundLink: '← Back to Community Hub',
     recognizedUser: 'Welcome back!',
+    roadmapPlanned: 'Planned', roadmapProgress: 'In Progress', roadmapDone: 'Completed',
+    roadmapSuggest: 'Suggest a Roadmap Item', roadmapBack: 'Close Form',
     langBtn: 'বাংলা',
   },
   bn: {
@@ -135,6 +137,8 @@ const TX = {
     toastCommentWrite: 'Comment লিখুন', toastAdminOnly: 'Admin only',
     notFound: 'Page পাওয়া যায়নি।', notFoundLink: '← Community Hub এ ফিরুন',
     recognizedUser: 'আপনাকে চিনে ফেলেছি!',
+    roadmapPlanned: 'পরিকল্পিত', roadmapProgress: 'চলমান', roadmapDone: 'সম্পন্ন',
+    roadmapSuggest: 'একটি প্রস্তাব দিন', roadmapBack: 'ফর্ম বন্ধ করুন',
     langBtn: 'English',
   },
 };
@@ -506,6 +510,7 @@ export default function CommunitySlugPage({ params }) {
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [showRoadmapForm, setShowRoadmapForm] = useState(false);
   const searchTimer = useRef(null);
 
   // Identity Persistence & Recognition
@@ -697,6 +702,32 @@ export default function CommunitySlugPage({ params }) {
   // ── Choose Submission Form per slug ────────────────────────────────────
   const renderForm = () => {
     const props = { onSubmit: handleSubmit, isSubmitting, config, tx, lang, lookupUser, persistedIdentity };
+    
+    if (slug === 'roadmap') {
+      return (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: showRoadmapForm ? 24 : 0 }}>
+            <button onClick={() => setShowRoadmapForm(!showRoadmapForm)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8, padding: '10px 24px', borderRadius: 12,
+                background: showRoadmapForm ? '#fff' : config.bg, border: `1px solid ${showRoadmapForm ? 'rgba(0,0,0,0.1)' : config.border}`,
+                color: config.color, fontWeight: 800, fontSize: 13, cursor: 'pointer', transition: 'all 0.3s'
+              }}>
+              {showRoadmapForm ? <X size={15} /> : <Plus size={15} />}
+              {showRoadmapForm ? tx.roadmapBack : tx.roadmapSuggest}
+            </button>
+          </div>
+          <AnimatePresence>
+            {showRoadmapForm && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden' }}>
+                <GeneralForm {...props} />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      );
+    }
+
     if (slug === 'bug-report') return <BugReportForm {...props} />;
     if (slug === 'feature-request') return <FeatureRequestForm {...props} />;
     if (slug === 'review') return <ReviewForm {...props} />;
@@ -712,13 +743,7 @@ export default function CommunitySlugPage({ params }) {
 
       {/* ── Hero Header ── */}
       <header style={{ padding: '110px 24px 40px', maxWidth: 920, margin: '0 auto', position: 'relative', zIndex: 1 }}>
-        {/* Language toggle */}
-        <div style={{ position: 'absolute', top: 16, right: 0, zIndex: 10 }}>
-          <div style={{ display: 'inline-flex', borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(0,0,0,0.08)', background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(8px)' }}>
-            <button onClick={() => setLang('en')} style={{ padding: '6px 14px', fontSize: 12, fontWeight: 800, cursor: 'pointer', border: 'none', background: lang === 'en' ? 'rgba(79,70,229,0.1)' : 'transparent', color: lang === 'en' ? '#4f46e5' : '#64748b', transition: 'all 0.2s' }}>EN</button>
-            <button onClick={() => setLang('bn')} style={{ padding: '6px 14px', fontSize: 12, fontWeight: 800, cursor: 'pointer', border: 'none', borderLeft: '1px solid rgba(0,0,0,0.05)', background: lang === 'bn' ? 'rgba(79,70,229,0.1)' : 'transparent', color: lang === 'bn' ? '#4f46e5' : '#64748b', transition: 'all 0.2s' }}>বাং</button>
-          </div>
-        </div>
+        {/* Language toggle removed */}
 
         <Link href="/community" style={{
           display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 28,
@@ -812,86 +837,135 @@ export default function CommunitySlugPage({ params }) {
         {/* Submission Form */}
         {renderForm()}
 
-        {/* Filter + Search */}
-        <div style={{
-          display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
-          padding: '14px 18px', borderRadius: 16,
-          background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
-        }}>
-          <div style={{ position: 'relative', flex: '1 1 200px', minWidth: 160 }}>
-            <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-            <input
-              value={searchInput}
-              onChange={(e) => handleSearchInput(e.target.value)}
-              placeholder={`${config.name[lang] || config.name.en} ${tx.searchPlaceholder}`}
-              style={{
-                width: '100%', paddingLeft: 36, paddingRight: searchInput ? 36 : 14,
-                paddingTop: 10, paddingBottom: 10,
-                background: '#fff', border: '1px solid rgba(0,0,0,0.08)',
-                borderRadius: 12, color: '#1e293b', fontSize: 13, outline: 'none', boxSizing: 'border-box',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
-              }}
-            />
-            {searchInput && (
-              <button onClick={() => { setSearchInput(''); setSearch(''); }}
-                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                <X size={13} />
-              </button>
-            )}
+        {/* ── ROADMAP BOARD VIEW ── */}
+        {slug === 'roadmap' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
+            {[
+              { status: 'Open', label: tx.roadmapPlanned, color: '#818cf8' },
+              { status: 'In Review', label: tx.roadmapProgress, color: '#facc15' },
+              { status: 'Resolved', label: tx.roadmapDone, color: '#4ade80' },
+            ].map((col) => {
+              const colReports = reports.filter(r => r.status === col.status);
+              // Only hide empty columns if it's not "In Progress"
+              if (colReports.length === 0 && col.status !== 'In Review') return null;
+              
+              return (
+                <div key={col.status}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                    <div style={{ width: 12, height: 12, borderRadius: '50%', background: col.color }} />
+                    <h2 style={{ fontSize: 18, fontWeight: 900, color: '#1e293b', margin: 0 }}>{col.label}</h2>
+                    <span style={{ fontSize: 12, color: '#64748b', fontWeight: 700, padding: '2px 8px', background: '#f1f5f9', borderRadius: 999 }}>{colReports.length}</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {colReports.length > 0 ? (
+                      colReports.map((r, i) => (
+                        <ReportCard key={r.id} report={r} idx={i} config={config} slug={slug} tx={tx} lang={lang}
+                          isLiked={!!likedMap[r.id]} onLike={handleLike}
+                          expandedComments={expandedComments} expandedReplies={expandedReplies}
+                          toggleComments={toggleComments} toggleReplies={toggleReplies}
+                          commentDraft={commentDrafts[r.id] || ''} commentName={commentingName[r.id] || ''}
+                          onCommentDraft={(v) => setCommentDrafts((d) => ({ ...d, [r.id]: v }))}
+                          onCommentName={(v) => setCommentingName((d) => ({ ...d, [r.id]: v }))}
+                          onComment={handleComment} replyDraft={replyDrafts[r.id] || ''}
+                          onReplyDraft={(v) => setReplyDrafts((d) => ({ ...d, [r.id]: v }))}
+                          onReply={handleReply}
+                        />
+                      ))
+                    ) : (
+                      <div style={{ padding: '40px 20px', textAlign: 'center', background: 'rgba(255,255,255,0.4)', borderRadius: 20, border: '1px dashed rgba(0,0,0,0.1)', color: '#94a3b8', fontSize: 13, fontWeight: 600 }}>
+                        {tx.emptyTitle}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          {[tx.filterAll, tx.filterOpen, tx.filterReview, tx.filterResolved].map((label, i) => {
-            const val = ['All', 'Open', 'In Review', 'Resolved'][i];
-            return (
-              <button key={val} onClick={() => setStatusFilter(val)}
-                style={{
-                  padding: '7px 16px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: '1px solid',
-                  ...(statusFilter === val
-                    ? { background: config.bg, borderColor: config.color, color: config.color }
-                    : { background: 'transparent', borderColor: 'rgba(255,255,255,0.1)', color: '#64748b' }
-                  ), transition: 'all 0.2s'
-                }}>{label}</button>
-            );
-          })}
-        </div>
+        ) : (
+          <>
+            {/* Filter + Search */}
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
+              padding: '14px 18px', borderRadius: 16,
+              background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+            }}>
+              <div style={{ position: 'relative', flex: '1 1 200px', minWidth: 160 }}>
+                <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                <input
+                  value={searchInput}
+                  onChange={(e) => handleSearchInput(e.target.value)}
+                  placeholder={`${config.name[lang] || config.name.en} ${tx.searchPlaceholder}`}
+                  style={{
+                    width: '100%', paddingLeft: 36, paddingRight: searchInput ? 36 : 14,
+                    paddingTop: 10, paddingBottom: 10,
+                    background: '#fff', border: '1px solid rgba(0,0,0,0.08)',
+                    borderRadius: 12, color: '#1e293b', fontSize: 13, outline: 'none', boxSizing: 'border-box',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+                  }}
+                />
+                {searchInput && (
+                  <button onClick={() => { setSearchInput(''); setSearch(''); }}
+                    style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748b', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+              {[tx.filterAll, tx.filterOpen, tx.filterReview, tx.filterResolved].map((label, i) => {
+                const val = ['All', 'Open', 'In Review', 'Resolved'][i];
+                return (
+                  <button key={val} onClick={() => setStatusFilter(val)}
+                    style={{
+                      padding: '7px 16px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: '1px solid',
+                      ...(statusFilter === val
+                        ? { background: config.bg, borderColor: config.color, color: config.color }
+                        : { background: 'transparent', borderColor: 'rgba(255,255,255,0.1)', color: '#64748b' }
+                      ), transition: 'all 0.2s'
+                    }}
+                  >{label}</button>
+                );
+              })}
+            </div>
 
-        {/* Reports List */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {loading && Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)}
+            {/* List entries */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {loading && Array.from({ length: 3 }).map((_, i) => <SkeletonCard key={i} />)}
 
-          {!loading && reports.length === 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-              style={{
-                textAlign: 'center', padding: '70px 20px',
-                background: 'rgba(255,255,255,0.03)',
-                border: `1px dashed ${config.border}`, borderRadius: 20, color: '#475569',
-              }}>
-              <div style={{ fontSize: 56, marginBottom: 16 }}>{config.emoji}</div>
-              <p style={{ fontSize: 16, color: '#64748b', marginBottom: 8 }}>{tx.emptyTitle}</p>
-              <p style={{ fontSize: 13, color: '#374151' }}>{tx.emptyBtn}</p>
-            </motion.div>
-          )}
+              {!loading && reports.length === 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+                  style={{
+                    textAlign: 'center', padding: '70px 20px',
+                    background: 'rgba(255,255,255,0.03)',
+                    border: `1px dashed ${config.border}`, borderRadius: 20, color: '#475569',
+                  }}>
+                  <div style={{ fontSize: 56, marginBottom: 16 }}>{config.emoji}</div>
+                  <p style={{ fontSize: 16, color: '#64748b', marginBottom: 8 }}>{tx.emptyTitle}</p>
+                  <p style={{ fontSize: 13, color: '#374151' }}>{tx.emptyBtn}</p>
+                </motion.div>
+              )}
 
-          <AnimatePresence>
-            {reports.map((report, idx) => (
-              <ReportCard
-                key={report.id} report={report} idx={idx} config={config} slug={slug}
-                isLiked={!!likedMap[report.id]}
-                onLike={handleLike}
-                expandedComments={expandedComments} expandedReplies={expandedReplies}
-                toggleComments={toggleComments} toggleReplies={toggleReplies}
-                commentDraft={commentDrafts[report.id] || ''} commentName={commentingName[report.id] || ''}
-                onCommentDraft={(v) => setCommentDrafts((d) => ({ ...d, [report.id]: v }))}
-                onCommentName={(v) => setCommentingName((d) => ({ ...d, [report.id]: v }))}
-                onComment={handleComment}
-                replyDraft={replyDrafts[report.id] || ''}
-                onReplyDraft={(v) => setReplyDrafts((d) => ({ ...d, [report.id]: v }))}
-                onReply={handleReply}
-                tx={tx} lang={lang}
-              />
-            ))}
-          </AnimatePresence>
-        </div>
+              <AnimatePresence mode="popLayout">
+                {reports.map((report, idx) => (
+                  <ReportCard
+                    key={report.id} report={report} idx={idx} config={config} slug={slug}
+                    isLiked={!!likedMap[report.id]}
+                    onLike={handleLike}
+                    expandedComments={expandedComments} expandedReplies={expandedReplies}
+                    toggleComments={toggleComments} toggleReplies={toggleReplies}
+                    commentDraft={commentDrafts[report.id] || ''} commentName={commentingName[report.id] || ''}
+                    onCommentDraft={(v) => setCommentDrafts((d) => ({ ...d, [report.id]: v }))}
+                    onCommentName={(v) => setCommentingName((d) => ({ ...d, [report.id]: v }))}
+                    onComment={handleComment}
+                    replyDraft={replyDrafts[report.id] || ''}
+                    onReplyDraft={(v) => setReplyDrafts((d) => ({ ...d, [report.id]: v }))}
+                    onReply={handleReply}
+                    tx={tx} lang={lang}
+                  />
+                ))}
+              </AnimatePresence>
+            </div>
+          </>
+        )}
       </main>
     </div>
   );
