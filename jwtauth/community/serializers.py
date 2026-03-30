@@ -17,13 +17,17 @@ class CommunityReplySerializer(serializers.ModelSerializer):
 class ReportCommentSerializer(serializers.ModelSerializer):
   by = serializers.CharField(source="author_name", read_only=True)
   at = serializers.SerializerMethodField()
+  is_verified = serializers.SerializerMethodField()
 
   class Meta:
     model = ReportComment
-    fields = ("id", "by", "at", "text")
+    fields = ("id", "by", "at", "text", "is_verified")
 
   def get_at(self, obj):
     return obj.created_at.strftime("%d %b %Y, %I:%M %p")
+
+  def get_is_verified(self, obj):
+    return bool(obj.author_email)
 
 
 class CommunityReportSerializer(serializers.ModelSerializer):
@@ -35,6 +39,7 @@ class CommunityReportSerializer(serializers.ModelSerializer):
   like_count = serializers.IntegerField(read_only=True)
   comment_count = serializers.IntegerField(read_only=True)
   is_liked = serializers.SerializerMethodField()
+  is_verified = serializers.SerializerMethodField()
 
   class Meta:
     model = CommunityReport
@@ -53,10 +58,14 @@ class CommunityReportSerializer(serializers.ModelSerializer):
         "like_count",
         "comment_count",
         "is_liked",
+        "is_verified",
     )
 
   def get_submittedAt(self, obj):
     return obj.created_at.strftime("%d %b %Y")
+
+  def get_is_verified(self, obj):
+    return bool(obj.email)
 
   def get_is_liked(self, obj):
     request = self.context.get("request")

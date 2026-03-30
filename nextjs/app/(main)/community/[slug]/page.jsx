@@ -97,6 +97,7 @@ const TX = {
     toastReply: '↩ Reply posted!', toastReplyFail: 'Reply could not be posted',
     toastCommentWrite: 'Please write a comment', toastAdminOnly: 'Admin only',
     notFound: 'Page not found.', notFoundLink: '← Back to Community Hub',
+    recognizedUser: 'Welcome back!',
     langBtn: 'বাংলা',
   },
   bn: {
@@ -133,6 +134,7 @@ const TX = {
     toastReply: '↩ Reply হয়েছে!', toastReplyFail: 'Reply জমা হয়নি',
     toastCommentWrite: 'Comment লিখুন', toastAdminOnly: 'Admin only',
     notFound: 'Page পাওয়া যায়নি।', notFoundLink: '← Community Hub এ ফিরুন',
+    recognizedUser: 'আপনাকে চিনে ফেলেছি!',
     langBtn: 'English',
   },
 };
@@ -143,6 +145,17 @@ function getLikedReports() {
 }
 function setLikedReports(obj) {
   localStorage.setItem('nsa_liked', JSON.stringify(obj));
+}
+
+function VerifiedBadge({ lang, size = 12 }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '2px 8px', borderRadius: 999, background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}>
+      <CheckCircle2 size={size} color="#22c55e" />
+      <span style={{ fontSize: size - 3, fontWeight: 800, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+        {lang === 'bn' ? 'Verified' : 'Verified'}
+      </span>
+    </div>
+  );
 }
 
 // ── Star Rating Component ──────────────────────────────────────────────────
@@ -207,8 +220,56 @@ function StarRating({ value, onChange, size = 36, readonly = false, lang = 'bn' 
   );
 }
 
+function UserRecognitionField({ form, setForm, tx, lang, lookupUser, persistedIdentity }) {
+  const [recognizedName, setRecognizedName] = useState(null);
+  const lookupTimer = useRef(null);
+
+  // Auto-fill from persisted identity on mount
+  useEffect(() => {
+    if (!form.name && !form.email && persistedIdentity.email) {
+      setForm(prev => ({ ...prev, name: persistedIdentity.name, email: persistedIdentity.email }));
+    }
+  }, []);
+
+  const handleEmailChange = (e) => {
+    const val = e.target.value;
+    setForm(prev => ({ ...prev, email: val }));
+    setRecognizedName(null);
+
+    clearTimeout(lookupTimer.current);
+    if (val.includes('@')) {
+      lookupTimer.current = setTimeout(async () => {
+        const name = await lookupUser(val);
+        if (name) {
+          setRecognizedName(name);
+          setForm(prev => ({ ...prev, name: name }));
+        }
+      }, 1000);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <AnimatePresence>
+        {recognizedName && (
+          <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+            style={{ fontSize: 11, color: '#15803d', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+            <Sparkles size={12} /> {tx.recognizedUser} ({recognizedName})
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <input name="name" value={form.name} onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
+          placeholder={tx.namePh} style={inp} />
+        <input type="email" name="email" value={form.email} onChange={handleEmailChange}
+          placeholder={tx.emailPh} style={inp} />
+      </div>
+    </div>
+  );
+}
+
 // ── Bug Report Extra Fields ────────────────────────────────────────────────
-function BugReportForm({ onSubmit, isSubmitting, config, tx, lang }) {
+function BugReportForm({ onSubmit, isSubmitting, config, tx, lang, lookupUser, persistedIdentity }) {
   const [form, setForm] = useState({ name: '', email: '', title: '', details: '', steps: '', expected: '', actual: '' });
   const h = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -224,10 +285,7 @@ function BugReportForm({ onSubmit, isSubmitting, config, tx, lang }) {
     <div style={formCardStyle(config)}>
       <FormHeader config={config} tx={tx} lang={lang} />
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <input name="name" value={form.name} onChange={h} placeholder={tx.namePh} style={inp} />
-          <input type="email" name="email" value={form.email} onChange={h} placeholder={tx.emailPh} style={inp} />
-        </div>
+        <UserRecognitionField form={form} setForm={setForm} tx={tx} lang={lang} lookupUser={lookupUser} persistedIdentity={persistedIdentity} />
         <input name="title" value={form.title} onChange={h} placeholder={tx.bugTitlePh} required style={inp} />
         <textarea name="details" value={form.details} onChange={h} placeholder={tx.bugDetailsPh} rows={3} required style={{ ...inp, resize: 'vertical' }} />
 
@@ -255,7 +313,7 @@ function BugReportForm({ onSubmit, isSubmitting, config, tx, lang }) {
 }
 
 // ── Feature Request Form ───────────────────────────────────────────────────
-function FeatureRequestForm({ onSubmit, isSubmitting, config, tx, lang }) {
+function FeatureRequestForm({ onSubmit, isSubmitting, config, tx, lang, lookupUser, persistedIdentity }) {
   const [form, setForm] = useState({ name: '', email: '', title: '', details: '', useCase: '', priority: 'Medium' });
   const h = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -271,10 +329,7 @@ function FeatureRequestForm({ onSubmit, isSubmitting, config, tx, lang }) {
     <div style={formCardStyle(config)}>
       <FormHeader config={config} tx={tx} lang={lang} />
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <input name="name" value={form.name} onChange={h} placeholder={tx.namePh} style={inp} />
-          <input type="email" name="email" value={form.email} onChange={h} placeholder={tx.emailPh} style={inp} />
-        </div>
+        <UserRecognitionField form={form} setForm={setForm} tx={tx} lang={lang} lookupUser={lookupUser} persistedIdentity={persistedIdentity} />
         <input name="title" value={form.title} onChange={h} placeholder={tx.featTitlePh} required style={inp} />
         <textarea name="details" value={form.details} onChange={h} placeholder={tx.featDetailsPh} rows={3} required style={{ ...inp, resize: 'vertical' }} />
         <div>
@@ -307,7 +362,7 @@ function FeatureRequestForm({ onSubmit, isSubmitting, config, tx, lang }) {
 }
 
 // ── Review Form ────────────────────────────────────────────────────────────
-function ReviewForm({ onSubmit, isSubmitting, config, tx, lang }) {
+function ReviewForm({ onSubmit, isSubmitting, config, tx, lang, lookupUser, persistedIdentity }) {
   const [form, setForm] = useState({ name: '', email: '', title: '', details: '', rating: 0 });
   const h = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -338,10 +393,7 @@ function ReviewForm({ onSubmit, isSubmitting, config, tx, lang }) {
             <p style={{ fontSize: 11, color: '#64748b', marginTop: 10 }}>{tx.starHint}</p>
           )}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <input name="name" value={form.name} onChange={h} placeholder={tx.namePh} style={inp} />
-          <input type="email" name="email" value={form.email} onChange={h} placeholder={tx.emailPh} style={inp} />
-        </div>
+        <UserRecognitionField form={form} setForm={setForm} tx={tx} lang={lang} lookupUser={lookupUser} persistedIdentity={persistedIdentity} />
         <input name="title" value={form.title} onChange={h} placeholder={tx.reviewTitlePh} style={inp} />
         <textarea name="details" value={form.details} onChange={h}
           placeholder={tx.reviewDetailsPh}
@@ -353,7 +405,7 @@ function ReviewForm({ onSubmit, isSubmitting, config, tx, lang }) {
 }
 
 // ── General Form (Feedback / Roadmap) ─────────────────────────────────────
-function GeneralForm({ onSubmit, isSubmitting, config, tx, lang }) {
+function GeneralForm({ onSubmit, isSubmitting, config, tx, lang, lookupUser, persistedIdentity }) {
   const [form, setForm] = useState({ name: '', email: '', title: '', details: '' });
   const h = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -368,10 +420,7 @@ function GeneralForm({ onSubmit, isSubmitting, config, tx, lang }) {
     <div style={formCardStyle(config)}>
       <FormHeader config={config} tx={tx} lang={lang} />
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <input name="name" value={form.name} onChange={h} placeholder={tx.namePh} style={inp} />
-          <input type="email" name="email" value={form.email} onChange={h} placeholder={tx.emailPh} style={inp} />
-        </div>
+        <UserRecognitionField form={form} setForm={setForm} tx={tx} lang={lang} lookupUser={lookupUser} persistedIdentity={persistedIdentity} />
         <input name="title" value={form.title} onChange={h} placeholder={tx.titlePh} required style={inp} />
         <textarea name="details" value={form.details} onChange={h} placeholder={config.placeholder[lang] || config.placeholder.en} rows={4} required style={{ ...inp, resize: 'vertical' }} />
         <SubmitButton isSubmitting={isSubmitting} config={config} label={tx.submitGeneral} lang={lang} />
@@ -459,6 +508,37 @@ export default function CommunitySlugPage({ params }) {
   const [statusFilter, setStatusFilter] = useState('All');
   const searchTimer = useRef(null);
 
+  // Identity Persistence & Recognition
+  const [persistedIdentity, setPersistedIdentity] = useState({ name: '', email: '' });
+  
+  useEffect(() => {
+    const saved = localStorage.getItem('community_identity');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setPersistedIdentity(parsed);
+      } catch (e) {}
+    }
+  }, []);
+
+  const saveIdentity = (name, email) => {
+    const newId = { name, email };
+    setPersistedIdentity(newId);
+    localStorage.setItem('community_identity', JSON.stringify(newId));
+  };
+
+  const lookupUser = async (email) => {
+    if (!email || !email.includes('@')) return null;
+    try {
+      const res = await fetch(`${API_BASE}/community/lookup/?email=${encodeURIComponent(email)}`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        return data.recognized ? data.name : null;
+      }
+    } catch (e) {}
+    return null;
+  };
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -507,6 +587,12 @@ export default function CommunitySlugPage({ params }) {
       });
       if (!res.ok) throw new Error();
       const payload = await res.json();
+      
+      // Save identity locally
+      if (payload.submittedBy && payload.email) {
+        saveIdentity(payload.submittedBy, payload.email);
+      }
+
       setReports((prev) => [payload, ...prev]);
       setStats((s) => ({ ...s, total: s.total + 1, open: s.open + 1 }));
       toast.success(tx.toastSuccess);
@@ -566,11 +652,17 @@ export default function CommunitySlugPage({ params }) {
       const res = await fetch(`${API_BASE}/community/${reportId}/comment/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, by: name }),
+        body: JSON.stringify({ text, by: name, email: persistedIdentity.email }),
         credentials: 'include',
       });
       if (!res.ok) throw new Error();
       const newComment = await res.json();
+
+      // If user provided a name but was anonymous in identity, save it
+      if (name && !persistedIdentity.name) {
+        saveIdentity(name, persistedIdentity.email);
+      }
+
       setReports((prev) => prev.map((r) =>
         r.id === reportId
           ? { ...r, comments: [...(r.comments || []), newComment], comment_count: (r.comment_count || 0) + 1 }
@@ -604,10 +696,11 @@ export default function CommunitySlugPage({ params }) {
 
   // ── Choose Submission Form per slug ────────────────────────────────────
   const renderForm = () => {
-    if (slug === 'bug-report') return <BugReportForm onSubmit={handleSubmit} isSubmitting={isSubmitting} config={config} tx={tx} lang={lang} />;
-    if (slug === 'feature-request') return <FeatureRequestForm onSubmit={handleSubmit} isSubmitting={isSubmitting} config={config} tx={tx} lang={lang} />;
-    if (slug === 'review') return <ReviewForm onSubmit={handleSubmit} isSubmitting={isSubmitting} config={config} tx={tx} lang={lang} />;
-    return <GeneralForm onSubmit={handleSubmit} isSubmitting={isSubmitting} config={config} tx={tx} lang={lang} />;
+    const props = { onSubmit: handleSubmit, isSubmitting, config, tx, lang, lookupUser, persistedIdentity };
+    if (slug === 'bug-report') return <BugReportForm {...props} />;
+    if (slug === 'feature-request') return <FeatureRequestForm {...props} />;
+    if (slug === 'review') return <ReviewForm {...props} />;
+    return <GeneralForm {...props} />;
   };
 
   return (
@@ -837,7 +930,10 @@ function ReportCard({ report, idx, config, slug, isLiked, onLike, expandedCommen
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#475569' }}>
           <Users size={11} />
-          <span style={{ fontWeight: 600 }}>{report.submittedBy || 'Anonymous'}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ fontWeight: 600 }}>{report.submittedBy || 'Anonymous'}</span>
+            {report.is_verified && <VerifiedBadge lang={lang} />}
+          </div>
           <span style={{ color: '#334155' }}>•</span>
           <Clock size={11} />
           <span>{report.submittedAt}</span>
@@ -943,8 +1039,9 @@ function ReportCard({ report, idx, config, slug, isLiked, onLike, expandedCommen
                     {c.by?.[0]?.toUpperCase() || 'A'}
                   </div>
                   <div style={{ background: '#f8fafc', border: '1px solid rgba(0,0,0,0.05)', borderRadius: 12, padding: '10px 14px', flex: 1 }}>
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 4, alignItems: 'center' }}>
                       <span style={{ fontSize: 12, color: '#1e293b', fontWeight: 800 }}>{c.by || tx.anonymous}</span>
+                      {c.is_verified && <VerifiedBadge lang={lang} size={10} />}
                       <span style={{ fontSize: 11, color: '#64748b' }}>• {c.at}</span>
                     </div>
                     <p style={{ fontSize: 13, color: '#475569', lineHeight: 1.6, margin: 0 }}>{c.text}</p>
@@ -954,7 +1051,7 @@ function ReportCard({ report, idx, config, slug, isLiked, onLike, expandedCommen
 
               {/* New Comment */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
-                <input value={commentName} onChange={(e) => onCommentName(e.target.value)}
+                <input value={commentName || persistedIdentity.name} onChange={(e) => onCommentName(e.target.value)}
                   placeholder={tx.commentNamePlaceholder}
                   style={{ padding: '8px 13px', borderRadius: 9, fontSize: 12, background: '#fff', border: '1px solid rgba(0,0,0,0.08)', color: '#1e293b', outline: 'none' }} />
                 <div style={{ display: 'flex', gap: 8 }}>

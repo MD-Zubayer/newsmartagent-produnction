@@ -79,6 +79,7 @@ class ReportComment(models.Model):
   """যে কেউ comment করতে পারবে (login ছাড়া)।"""
   report = models.ForeignKey(CommunityReport, related_name="comments", on_delete=models.CASCADE)
   author_name = models.CharField(max_length=120, default="Anonymous")
+  author_email = models.EmailField(blank=True, null=True)
   text = models.TextField()
   created_at = models.DateTimeField(default=timezone.now)
 

@@ -141,7 +141,37 @@ class CommunityReportViewSet(viewsets.ModelViewSet):
     comment_obj = ReportComment.objects.create(
       report=report,
       author_name=author or "Anonymous",
+      author_email=request.data.get("email"),
       text=text,
     )
     serializer = ReportCommentSerializer(comment_obj)
     return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+  # ─── Guest Lookup (Cross-device recognition) ───────────
+  @action(
+      detail=False,
+      methods=["get"],
+      permission_classes=[permissions.AllowAny],
+      url_path="lookup",
+  )
+  def lookup(self, request):
+    email = request.query_params.get("email", "").strip().lower()
+    if not email:
+      return Response({"detail": "Email is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Search for the latest name used with this email in Reports or Comments
+    name = None
+    latest_report = CommunityReport.objects.filter(email__iexact=email).order_by("-created_at").first()
+    if latest_report:
+      name = latest_report.name
+
+    latest_comment = ReportComment.objects.filter(author_email__iexact=email).order_by("-created_at").first()
+    if latest_comment:
+      # If comment is newer than report, use that name
+      if not latest_report or latest_comment.created_at > latest_report.created_at:
+        name = latest_comment.author_name
+
+    if name:
+      return Response({"name": name, "recognized": True})
+    
+    return Response({"recognized": False}, status=status.HTTP_404_NOT_FOUND)
