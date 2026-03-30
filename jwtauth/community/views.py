@@ -42,11 +42,22 @@ class CommunityReportViewSet(viewsets.ModelViewSet):
     serializer = self.get_serializer(qs, many=True)
     reports = serializer.data
 
-    # Summary stats
-    total = CommunityReport.objects.count()
-    open_count = CommunityReport.objects.filter(status="Open").count()
-    resolved_count = CommunityReport.objects.filter(status="Resolved").count()
-    in_review_count = CommunityReport.objects.filter(status="In Review").count()
+    # Summary stats filtered by current category
+    stats_qs = CommunityReport.objects.all()
+    if category and category != "All":
+      stats_qs = stats_qs.filter(category=category)
+
+    total = stats_qs.count()
+    open_count = stats_qs.filter(status="Open").count()
+    resolved_count = stats_qs.filter(status="Resolved").count()
+    in_review_count = stats_qs.filter(status="In Review").count()
+
+    # Optional: Average rating for Review category
+    avg_rating = 0
+    if category == "Review" and total > 0:
+      from django.db.models import Avg
+      avg_rating = stats_qs.aggregate(Avg("rating"))["rating__avg"] or 0
+      avg_rating = round(avg_rating, 1)
 
     return Response({
       "reports": reports,
@@ -55,6 +66,7 @@ class CommunityReportViewSet(viewsets.ModelViewSet):
         "open": open_count,
         "resolved": resolved_count,
         "in_review": in_review_count,
+        "avg_rating": avg_rating,
       }
     })
 

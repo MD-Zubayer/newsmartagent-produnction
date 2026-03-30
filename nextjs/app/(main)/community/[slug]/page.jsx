@@ -87,6 +87,7 @@ const TX = {
     reviewTitlePh: 'Review title (optional)',
     reviewDetailsPh: 'Share your experience in detail — what you liked and what could be improved… *',
     submitBug: 'Submit Bug Report', submitFeature: 'Submit Feature Request', submitReview: 'Submit Review', submitGeneral: 'Submit',
+    avgRating: 'Average Rating', totalReviews: 'Total Reviews',
     toastTitle: 'Please provide Title and Details',
     toastRating: 'Please give a star rating',
     toastDetails: 'Please write your review',
@@ -122,6 +123,7 @@ const TX = {
     reviewTitlePh: 'Review-এর শিরোনাম (optional)',
     reviewDetailsPh: 'আপনার experience বিস্তারিত লিখুন — কী ভালো লাগলো, কী আরও উন্নত হতে পারে… *',
     submitBug: 'Bug Report জমা দিন', submitFeature: 'Feature Request Submit করুন', submitReview: 'Review Submit করুন', submitGeneral: 'Submit করুন',
+    avgRating: 'গড় রেটিং', totalReviews: 'মোট রিভিউ',
     toastTitle: 'Title ও Details দিন',
     toastRating: 'অনুগ্রহ করে star rating দিন',
     toastDetails: 'Review লিখুন',
@@ -630,20 +632,39 @@ export default function CommunitySlugPage({ params }) {
 
           {/* Stats bar */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 22 }}>
-            {[
-              { label: tx.totalLabel, value: stats.total, color: '#818cf8', icon: '📊' },
-              { label: tx.openLabel, value: stats.open, color: '#fb923c', icon: '🔓' },
-              { label: tx.reviewLabel, value: stats.in_review, color: '#facc15', icon: '👀' },
-              { label: tx.resolvedLabel, value: stats.resolved, color: '#4ade80', icon: '✅' },
-            ].map((s) => (
-              <div key={s.label} style={{
-                padding: '7px 18px', borderRadius: 999, fontSize: 12, fontWeight: 700,
-                background: `${s.color}15`, border: `1px solid ${s.color}30`, color: s.color,
-                display: 'flex', alignItems: 'center', gap: 6,
-              }}>
-                <span>{s.icon}</span> {s.label}: {s.value}
-              </div>
-            ))}
+            {slug === 'review' ? (
+              <>
+                <div style={{
+                  padding: '7px 18px', borderRadius: 999, fontSize: 12, fontWeight: 700,
+                  background: 'rgba(217,119,6,0.1)', border: '1px solid rgba(217,119,6,0.2)', color: '#d97706',
+                  display: 'flex', alignItems: 'center', gap: 8,
+                }}>
+                  <span>⭐</span> {tx.avgRating}: {stats.avg_rating || 0}/5
+                </div>
+                <div style={{
+                  padding: '7px 18px', borderRadius: 999, fontSize: 12, fontWeight: 700,
+                  background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', color: '#4f46e5',
+                  display: 'flex', alignItems: 'center', gap: 8,
+                }}>
+                  <span>📊</span> {tx.totalReviews}: {stats.total}
+                </div>
+              </>
+            ) : (
+              [
+                { label: tx.totalLabel, value: stats.total, color: '#818cf8', icon: '📊' },
+                { label: tx.openLabel, value: stats.open, color: '#fb923c', icon: '🔓' },
+                { label: tx.reviewLabel, value: stats.in_review, color: '#facc15', icon: '👀' },
+                { label: tx.resolvedLabel, value: stats.resolved, color: '#4ade80', icon: '✅' },
+              ].map((s) => (
+                <div key={s.label} style={{
+                  padding: '7px 18px', borderRadius: 999, fontSize: 12, fontWeight: 700,
+                  background: `${s.color}15`, border: `1px solid ${s.color}30`, color: s.color,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}>
+                  <span>{s.icon}</span> {s.label}: {s.value}
+                </div>
+              ))
+            )}
           </div>
         </motion.div>
       </header>
