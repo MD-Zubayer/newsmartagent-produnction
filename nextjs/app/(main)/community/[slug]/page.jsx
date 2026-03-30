@@ -497,11 +497,12 @@ export default function CommunitySlugPage({ params }) {
 
   const handleSubmit = async (formData) => {
     setSubmitting(true);
+    const { name, ...rest } = formData;
     try {
       const res = await fetch(`${API_BASE}/community/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...formData, category: config.category }),
+        body: JSON.stringify({ ...rest, submittedBy: name, category: config.category }),
         credentials: 'include',
       });
       if (!res.ok) throw new Error();
@@ -565,7 +566,7 @@ export default function CommunitySlugPage({ params }) {
       const res = await fetch(`${API_BASE}/community/${reportId}/comment/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, name }),
+        body: JSON.stringify({ text, by: name }),
         credentials: 'include',
       });
       if (!res.ok) throw new Error();
