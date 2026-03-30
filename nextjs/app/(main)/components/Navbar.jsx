@@ -4,11 +4,14 @@ import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
 import { FaBars, FaTimes, FaChevronRight } from 'react-icons/fa';
 import Image from 'next/image';
-import { ChevronDown, Package, Wrench, Megaphone, Bug, Star, Rocket, Lightbulb, MessageCircle, BookOpen, MessageSquare } from 'lucide-react';
+import { ChevronDown, Package, Wrench } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
 
 // Navbar copy stays English even when the site language is Bengali
-const navLabels = { home: 'Home', docs: 'Docs', services: 'Services', contact: 'Contact', about: 'About', blog: 'Blog', community: 'Community', signin: 'Sign In', tools: 'Tools' };
+const navLabels = {
+  home: 'Home', docs: 'Docs', services: 'Services', contact: 'Contact',
+  about: 'About', blog: 'Blog', community: 'Community', signin: 'Sign In', tools: 'Tools'
+};
 const toolsLabels = { name: 'Order Tracking', desc: 'Track orders by phone number' };
 
 export default function Navbar() {
@@ -19,9 +22,7 @@ export default function Navbar() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
-  const [communityOpen, setCommunityOpen] = useState(false);
   const toolsRef = useRef(null);
-  const communityRef = useRef(null);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -33,9 +34,6 @@ export default function Navbar() {
     const handleClickOutside = (e) => {
       if (toolsRef.current && !toolsRef.current.contains(e.target)) {
         setToolsOpen(false);
-      }
-      if (communityRef.current && !communityRef.current.contains(e.target)) {
-        setCommunityOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -61,16 +59,6 @@ export default function Navbar() {
     },
   ];
 
-  const communityItems = [
-    { name: '📢 Feedback', desc: 'আমাদের আরও ভালো হতে সাহায্য করুন', path: '/contact', icon: <MessageSquare className="w-4 h-4" /> },
-    { name: '🐞 Report a Bug', desc: 'কোনো সমস্যা হচ্ছে? আমাদের জানান', path: '/contact', icon: <Bug className="w-4 h-4" /> },
-    { name: '⭐ Write a Review', desc: 'আপনার অভিজ্ঞতা শেয়ার করুন', path: '/about', icon: <Star className="w-4 h-4" /> },
-    { name: '🚀 Product Roadmap', desc: 'আমরা কী বানাচ্ছি দেখুন', path: '/blog', icon: <Rocket className="w-4 h-4" /> },
-    { name: '💡 Suggest a Feature', desc: 'আইডিয়া দিন', path: '/contact', icon: <Lightbulb className="w-4 h-4" /> },
-    { name: '💬 Join WhatsApp Group', desc: 'সরাসরি আলাপ', path: '#', icon: <MessageCircle className="w-4 h-4" /> },
-    { name: '📖 User Guide & Templates', desc: 'কিভাবে ব্যবহার করবেন', path: '/docs', icon: <BookOpen className="w-4 h-4" /> },
-  ];
-
   // Language toggle button (reusable)
   const LangToggle = () => (
     <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
@@ -93,24 +81,24 @@ export default function Navbar() {
     <>
       <nav
         className={`fixed top-0 w-full z-[100] transition-all duration-300 ${scrolled
-            ? 'bg-white/90 backdrop-blur-md border-b border-gray-100 py-3 shadow-sm'
-            : 'bg-transparent py-5'
+          ? 'bg-white/90 backdrop-blur-md border-b border-gray-100 py-3 shadow-sm'
+          : 'bg-transparent py-5'
           }`}
       >
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
 
           {/* Brand Logo */}
-          <Link href="/" className="flex items-center group">
-            <div className="relative overflow-hidden rounded-xl">
+          <Link href="/" className="flex items-center gap-2 group">
+            <div className="relative overflow-hidden rounded-xl flex-shrink-0">
               <Image
-                width={65}
-                height={65}
+                width={56}
+                height={56}
                 src="/newsmartagent.png"
                 alt="Logo"
-                className="h-20w-20 object-contain rounded-lg"
+                className="h-14 w-14 object-contain rounded-lg"
               />
             </div>
-            <span className="text-xl md:block hidden font-black tracking-tighter flex items-center">
+            <span className="hidden md:flex items-center text-xl font-black tracking-tighter">
               <span className="text-indigo-600">New</span>
               <span className="text-gray-900 ml-1">Smart</span>
               <span className="text-indigo-600 ml-1">Agent</span>
@@ -162,42 +150,6 @@ export default function Navbar() {
                         </div>
                       </Link>
                     ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Community Dropdown */}
-              <div className="relative" ref={communityRef}>
-                <button
-                  onClick={() => setCommunityOpen(!communityOpen)}
-                  className={`flex items-center gap-1.5 px-4 py-2 text-sm font-bold transition-all relative group rounded-lg ${communityOpen ? 'text-indigo-600 bg-indigo-50' : 'text-gray-600 hover:text-indigo-600'}`}
-                >
-                  <Megaphone className="w-3.5 h-3.5" />
-                  Community
-                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${communityOpen ? 'rotate-180' : ''}`} />
-                </button>
-
-                {communityOpen && (
-                  <div className="absolute top-full left-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 p-3 animate-in fade-in slide-in-from-top-2 duration-200 z-50">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-3 pt-2 pb-1">Community</p>
-                    <div className="max-h-96 overflow-y-auto pr-1">
-                      {communityItems.map((item) => (
-                        <Link
-                          key={item.name}
-                          href={item.path}
-                          onClick={() => setCommunityOpen(false)}
-                          className="flex items-start gap-3 p-3 rounded-xl hover:bg-indigo-50 hover:text-indigo-600 transition-all group"
-                        >
-                          <div className="w-9 h-9 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-100 transition-colors">
-                            {item.icon}
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold text-gray-800 group-hover:text-indigo-600 leading-tight">{item.name}</p>
-                            <p className="text-xs text-gray-400 leading-tight">{item.desc}</p>
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
                   </div>
                 )}
               </div>
@@ -269,27 +221,6 @@ export default function Navbar() {
               {toolsItems.map((item) => (
                 <Link
                   key={item.path}
-                  href={item.path}
-                  onClick={() => setOpen(false)}
-                  className="flex items-center gap-3 p-4 rounded-2xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition-all"
-                >
-                  <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
-                    {item.icon}
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold">{item.name}</p>
-                    <p className="text-xs text-gray-400 font-normal">{item.desc}</p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-
-            {/* Mobile Community Section */}
-            <div className="pt-3">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-4 py-2">Community</p>
-              {communityItems.map((item) => (
-                <Link
-                  key={item.name}
                   href={item.path}
                   onClick={() => setOpen(false)}
                   className="flex items-center gap-3 p-4 rounded-2xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition-all"
