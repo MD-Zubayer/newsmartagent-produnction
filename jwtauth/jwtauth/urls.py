@@ -23,6 +23,7 @@ from man_agent.views import ManAgentConfigViewSet
 from man_agent.views import AgentDashboardStatsView
 from users import oauth_views
 from blog import views as blog_views
+from community.views import CommunityReportViewSet
 
 
 router = DefaultRouter()
@@ -37,6 +38,7 @@ router.register(r'blog/categories', blog_views.CategoryViewSet, basename='blog-c
 router.register(r'withdraw-methods', WithdrawMethodViewSet, basename='withdraw-methods')
 router.register(r'cashout-requests', CashoutRequestViewSet, basename='cashout-requests')
 router.register(r'agents', ai_views.AgentAIViewSet, basename='agent-ai')
+router.register(r'community', CommunityReportViewSet, basename='community')
 
 
 urlpatterns = [

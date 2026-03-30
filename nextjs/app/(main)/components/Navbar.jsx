@@ -8,7 +8,7 @@ import { ChevronDown, Package, Wrench, Megaphone, Bug, Star, Rocket, Lightbulb, 
 import { useLanguage } from '@/context/LanguageContext';
 
 // Navbar copy stays English even when the site language is Bengali
-const navLabels = { home: 'Home', docs: 'Docs', services: 'Services', contact: 'Contact', about: 'About', blog: 'Blog', signin: 'Sign In', tools: 'Tools' };
+const navLabels = { home: 'Home', docs: 'Docs', services: 'Services', contact: 'Contact', about: 'About', blog: 'Blog', community: 'Community', signin: 'Sign In', tools: 'Tools' };
 const toolsLabels = { name: 'Order Tracking', desc: 'Track orders by phone number' };
 
 export default function Navbar() {
@@ -49,6 +49,7 @@ export default function Navbar() {
     { name: l.contact, path: '/contact' },
     { name: l.about, path: '/about' },
     { name: l.blog, path: '/blog' },
+    { name: l.community, path: '/community' },
   ];
 
   const toolsItems = [
