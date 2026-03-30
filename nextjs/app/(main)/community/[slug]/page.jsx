@@ -152,39 +152,50 @@ function StarRating({ value, onChange, size = 36, readonly = false, lang = 'bn' 
   const display = readonly ? value : (hovered || value);
 
   return (
-    <div>
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-        {[1, 2, 3, 4, 5].map((s) => (
-          <motion.button
-            key={s}
-            type="button"
-            onClick={() => !readonly && onChange(s)}
-            onMouseEnter={() => !readonly && setHovered(s)}
-            onMouseLeave={() => !readonly && setHovered(0)}
-            whileTap={readonly ? {} : { scale: 0.8 }}
-            animate={{ scale: display >= s ? 1.1 : 1 }}
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+          {[1, 2, 3, 4, 5].map((s) => (
+            <motion.button
+              key={s}
+              type="button"
+              onClick={() => !readonly && onChange(s)}
+              onMouseEnter={() => !readonly && setHovered(s)}
+              onMouseLeave={() => !readonly && setHovered(0)}
+              whileTap={readonly ? {} : { scale: 0.8 }}
+              animate={{ scale: display >= s ? 1.1 : 1 }}
+              style={{
+                background: 'none', border: 'none', cursor: readonly ? 'default' : 'pointer',
+                padding: '4px 2px', lineHeight: 1,
+              }}
+            >
+              <Star
+                size={size}
+                fill={display >= s ? '#f59e0b' : 'none'}
+                color={display >= s ? '#f59e0b' : '#475569'}
+                style={{
+                  transition: 'all 0.15s',
+                  filter: display >= s ? 'drop-shadow(0 0 6px #f59e0b88)' : 'none',
+                  width: 'clamp(24px, 8vw, 42px)',
+                  height: 'auto'
+                }}
+              />
+            </motion.button>
+          ))}
+        </div>
+        {!readonly && display > 0 && (
+          <motion.div
+            key={display}
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
             style={{
-              background: 'none', border: 'none', cursor: readonly ? 'default' : 'pointer',
-              padding: 2, lineHeight: 1,
+              fontSize: 14, color: '#f59e0b', fontWeight: 800,
+              padding: '2px 10px', background: '#f59e0b15', borderRadius: 6,
+              minWidth: 80, textAlign: 'center'
             }}
           >
-            <Star
-              size={size}
-              fill={display >= s ? '#f59e0b' : 'none'}
-              color={display >= s ? '#f59e0b' : '#475569'}
-              style={{ transition: 'all 0.15s', filter: display >= s ? 'drop-shadow(0 0 6px #f59e0b88)' : 'none' }}
-            />
-          </motion.button>
-        ))}
-        {!readonly && display > 0 && (
-          <motion.span
-            key={display}
-            initial={{ opacity: 0, x: -6 }}
-            animate={{ opacity: 1, x: 0 }}
-            style={{ fontSize: 13, color: '#f59e0b', fontWeight: 700, marginLeft: 6 }}
-          >
             {labels[display]}
-          </motion.span>
+          </motion.div>
         )}
       </div>
       {readonly && value > 0 && (
@@ -321,7 +332,7 @@ function ReviewForm({ onSubmit, isSubmitting, config, tx, lang }) {
             {tx.starPrompt}
           </p>
           <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <StarRating value={form.rating} onChange={(r) => setForm({ ...form, rating: r })} size={42} lang={lang} />
+            <StarRating value={form.rating} onChange={(r) => setForm({ ...form, rating: r })} size={38} lang={lang} />
           </div>
           {form.rating === 0 && (
             <p style={{ fontSize: 11, color: '#64748b', marginTop: 10 }}>{tx.starHint}</p>
@@ -1008,7 +1019,7 @@ const labelStyle = {
 function formCardStyle(config) {
   return {
     background: '#fff',
-    border: `1px solid rgba(0,0,0,0.05)`, borderRadius: 24, padding: 28,
+    border: `1px solid rgba(0,0,0,0.05)`, borderRadius: 24, padding: 'clamp(16px, 5vw, 28px)',
     boxShadow: `0 10px 30px rgba(0,0,0,0.04)`,
     position: 'relative', overflow: 'hidden',
   };
