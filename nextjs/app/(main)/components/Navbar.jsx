@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
 import { FaBars, FaTimes, FaChevronRight } from 'react-icons/fa';
 import Image from 'next/image';
-import { ChevronDown, Package, Wrench } from 'lucide-react';
+import { ChevronDown, Package, Wrench, Megaphone, Bug, Star, Rocket, Lightbulb, MessageCircle, BookOpen, MessageSquare } from 'lucide-react';
 import { useLanguage } from '@/context/LanguageContext';
 
 // Navbar copy stays English even when the site language is Bengali
@@ -19,7 +19,9 @@ export default function Navbar() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [communityOpen, setCommunityOpen] = useState(false);
   const toolsRef = useRef(null);
+  const communityRef = useRef(null);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -31,6 +33,9 @@ export default function Navbar() {
     const handleClickOutside = (e) => {
       if (toolsRef.current && !toolsRef.current.contains(e.target)) {
         setToolsOpen(false);
+      }
+      if (communityRef.current && !communityRef.current.contains(e.target)) {
+        setCommunityOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -53,6 +58,16 @@ export default function Navbar() {
       icon: <Package className="w-4 h-4" />,
       desc: tl.desc,
     },
+  ];
+
+  const communityItems = [
+    { name: '📢 Feedback', desc: 'আমাদের আরও ভালো হতে সাহায্য করুন', path: '/contact', icon: <MessageSquare className="w-4 h-4" /> },
+    { name: '🐞 Report a Bug', desc: 'কোনো সমস্যা হচ্ছে? আমাদের জানান', path: '/contact', icon: <Bug className="w-4 h-4" /> },
+    { name: '⭐ Write a Review', desc: 'আপনার অভিজ্ঞতা শেয়ার করুন', path: '/about', icon: <Star className="w-4 h-4" /> },
+    { name: '🚀 Product Roadmap', desc: 'আমরা কী বানাচ্ছি দেখুন', path: '/blog', icon: <Rocket className="w-4 h-4" /> },
+    { name: '💡 Suggest a Feature', desc: 'আইডিয়া দিন', path: '/contact', icon: <Lightbulb className="w-4 h-4" /> },
+    { name: '💬 Join WhatsApp Group', desc: 'সরাসরি আলাপ', path: '#', icon: <MessageCircle className="w-4 h-4" /> },
+    { name: '📖 User Guide & Templates', desc: 'কিভাবে ব্যবহার করবেন', path: '/docs', icon: <BookOpen className="w-4 h-4" /> },
   ];
 
   // Language toggle button (reusable)
@@ -149,6 +164,42 @@ export default function Navbar() {
                   </div>
                 )}
               </div>
+
+              {/* Community Dropdown */}
+              <div className="relative" ref={communityRef}>
+                <button
+                  onClick={() => setCommunityOpen(!communityOpen)}
+                  className={`flex items-center gap-1.5 px-4 py-2 text-sm font-bold transition-all relative group rounded-lg ${communityOpen ? 'text-indigo-600 bg-indigo-50' : 'text-gray-600 hover:text-indigo-600'}`}
+                >
+                  <Megaphone className="w-3.5 h-3.5" />
+                  Community
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${communityOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {communityOpen && (
+                  <div className="absolute top-full left-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-gray-100 p-3 animate-in fade-in slide-in-from-top-2 duration-200 z-50">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-3 pt-2 pb-1">Community</p>
+                    <div className="max-h-96 overflow-y-auto pr-1">
+                      {communityItems.map((item) => (
+                        <Link
+                          key={item.name}
+                          href={item.path}
+                          onClick={() => setCommunityOpen(false)}
+                          className="flex items-start gap-3 p-3 rounded-xl hover:bg-indigo-50 hover:text-indigo-600 transition-all group"
+                        >
+                          <div className="w-9 h-9 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-100 transition-colors">
+                            {item.icon}
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-gray-800 group-hover:text-indigo-600 leading-tight">{item.name}</p>
+                            <p className="text-xs text-gray-400 leading-tight">{item.desc}</p>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center gap-3 border-l border-gray-100 pl-6">
@@ -217,6 +268,27 @@ export default function Navbar() {
               {toolsItems.map((item) => (
                 <Link
                   key={item.path}
+                  href={item.path}
+                  onClick={() => setOpen(false)}
+                  className="flex items-center gap-3 p-4 rounded-2xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition-all"
+                >
+                  <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+                    {item.icon}
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold">{item.name}</p>
+                    <p className="text-xs text-gray-400 font-normal">{item.desc}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+
+            {/* Mobile Community Section */}
+            <div className="pt-3">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-4 py-2">Community</p>
+              {communityItems.map((item) => (
+                <Link
+                  key={item.name}
                   href={item.path}
                   onClick={() => setOpen(false)}
                   className="flex items-center gap-3 p-4 rounded-2xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition-all"

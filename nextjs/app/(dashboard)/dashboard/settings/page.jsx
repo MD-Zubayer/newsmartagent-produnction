@@ -42,6 +42,13 @@ export default function SettingsPage() {
   const [loginHistory, setLoginHistory] = useState([]);
   const [showCodes, setShowCodes] = useState(false);
 
+  // Custom Confirm Modal State
+  const [confirmModal, setConfirmModal] = useState({ open: false, title: "", message: "", icon: null, confirmLabel: "Confirm", confirmColor: "rose", onConfirm: null });
+  const showConfirm = ({ title, message, icon, confirmLabel, confirmColor = "rose", onConfirm }) => {
+    setConfirmModal({ open: true, title, message, icon, confirmLabel, confirmColor, onConfirm });
+  };
+  const closeConfirm = () => setConfirmModal(prev => ({ ...prev, open: false, onConfirm: null }));
+
   // Per-Contact Settings State
   const [agents, setAgents] = useState([]);
   const [selectedAgent, setSelectedAgent] = useState("");
@@ -283,42 +290,60 @@ export default function SettingsPage() {
   };
 
   const handleGenerateCodes = async () => {
-    if (!confirm("This will replace your previous codes. Continue?")) return;
-    setIsSaving(true);
-    try {
-      const res = await api.post("/security/settings/", { action: "generate_codes" });
-      setSecurityData(prev => ({
-        ...prev,
-        recovery_codes_available: res.data.codes,
-        recovery_codes_count: res.data.codes.length
-      }));
-      setShowCodes(true);
-      toast.success("New recovery codes generated!");
-    } catch (err) {
-      toast.error("Failed to generate codes.");
-    } finally {
-      setIsSaving(false);
-    }
+    showConfirm({
+      title: "Generate New Codes?",
+      message: "This will permanently delete your previous recovery codes and generate 10 new ones. Make sure to save them in a safe place.",
+      icon: "🔑",
+      confirmLabel: "Yes, Generate",
+      confirmColor: "amber",
+      onConfirm: async () => {
+        closeConfirm();
+        setIsSaving(true);
+        try {
+          const res = await api.post("/security/settings/", { action: "generate_codes" });
+          setSecurityData(prev => ({
+            ...prev,
+            recovery_codes_available: res.data.codes,
+            recovery_codes_count: res.data.codes.length
+          }));
+          setShowCodes(true);
+          toast.success("New recovery codes generated!");
+        } catch (err) {
+          toast.error("Failed to generate codes.");
+        } finally {
+          setIsSaving(false);
+        }
+      }
+    });
   };
 
   const handleRemoveDevice = async (deviceId) => {
-    if (!confirm("Are you sure you want to disconnect this device? It will require 2FA next time you log in.")) return;
-    setIsSaving(true);
-    try {
-      await api.post("/security/settings/", { 
-        action: "remove_device", 
-        device_id: deviceId 
-      });
-      setSecurityData(prev => ({
-        ...prev,
-        trusted_devices: prev.trusted_devices.filter(d => d.id !== deviceId)
-      }));
-      toast.success("Device disconnected successfully!");
-    } catch (err) {
-      toast.error("Failed to disconnect device.");
-    } finally {
-      setIsSaving(false);
-    }
+    showConfirm({
+      title: "Disconnect Device?",
+      message: "This will immediately log out this device. They will need to complete 2-Step Verification to log in again.",
+      icon: "🔒",
+      confirmLabel: "Disconnect",
+      confirmColor: "rose",
+      onConfirm: async () => {
+        closeConfirm();
+        setIsSaving(true);
+        try {
+          await api.post("/security/settings/", {
+            action: "remove_device",
+            device_id: deviceId
+          });
+          setSecurityData(prev => ({
+            ...prev,
+            trusted_devices: prev.trusted_devices.filter(d => d.id !== deviceId)
+          }));
+          toast.success("Device disconnected successfully!");
+        } catch (err) {
+          toast.error("Failed to disconnect device.");
+        } finally {
+          setIsSaving(false);
+        }
+      }
+    });
   };
 
   const SettingRow = ({ icon: Icon, title, desc, active, onClick, color }) => (
@@ -350,8 +375,50 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-6xl mx-auto py-6 px-4 sm:px-6 animate-in fade-in slide-in-from-bottom-6 duration-500">
-      
-      {/* Header */}
+
+      {/* ── Custom Confirm Modal ── */}
+      {confirmModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+            onClick={closeConfirm}
+          />
+          {/* Dialog */}
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in zoom-in-95 fade-in duration-200">
+            {/* Icon */}
+            <div className="text-4xl text-center mb-4">{confirmModal.icon}</div>
+            {/* Title */}
+            <h3 className="text-lg font-black text-slate-900 text-center mb-2">
+              {confirmModal.title}
+            </h3>
+            {/* Message */}
+            <p className="text-sm text-slate-500 font-medium text-center mb-6 leading-relaxed">
+              {confirmModal.message}
+            </p>
+            {/* Actions */}
+            <div className="flex gap-3">
+              <button
+                onClick={closeConfirm}
+                className="flex-1 px-4 py-2.5 text-sm font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmModal.onConfirm}
+                className={`flex-1 px-4 py-2.5 text-sm font-black text-white rounded-xl transition-all shadow-lg ${
+                  confirmModal.confirmColor === 'rose'
+                    ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200'
+                    : 'bg-amber-500 hover:bg-amber-600 shadow-amber-200'
+                }`}
+              >
+                {confirmModal.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-slate-900 rounded-xl text-white shadow-sm">
