@@ -149,7 +149,7 @@ const t = {
 
 export default function CommunityHub() {
   const { lang, setLang } = useLanguage();
-  const tx = t[lang];
+  const tx = t[lang] || t.en;
 
   return (
     <div
@@ -279,16 +279,16 @@ export default function CommunityHub() {
                     padding: '4px 12px', borderRadius: 999, fontSize: 11, fontWeight: 700,
                     background: item.bg, border: `1px solid ${item.border}`, color: item.color,
                   }}>
-                    {item.tag[lang]}
+                    {item.tag[lang] || item.tag.en}
                   </span>
                 </div>
 
                 {/* Text */}
                 <h2 style={{ fontSize: 18, fontWeight: 800, color: '#1e293b', marginBottom: 10, lineHeight: 1.3 }}>
-                  {item.name[lang]}
+                  {item.name[lang] || item.name.en}
                 </h2>
                 <p style={{ fontSize: 14, color: '#64748b', lineHeight: 1.7, flex: 1 }}>
-                  {item.desc[lang]}
+                  {item.desc[lang] || item.desc.en}
                 </p>
 
                 {/* CTA */}
@@ -296,7 +296,7 @@ export default function CommunityHub() {
                   display: 'flex', alignItems: 'center', gap: 6, marginTop: 18,
                   color: item.color, fontSize: 13, fontWeight: 700,
                 }}>
-                  {item.cta[lang]}
+                  {item.cta[lang] || item.cta.en}
                   <ArrowRight size={14} />
                 </div>
               </motion.div>

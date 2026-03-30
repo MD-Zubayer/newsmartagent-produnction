@@ -195,7 +195,7 @@ function StarRating({ value, onChange, size = 36, readonly = false, lang = 'bn' 
 }
 
 // ── Bug Report Extra Fields ────────────────────────────────────────────────
-function BugReportForm({ onSubmit, isSubmitting, config, tx }) {
+function BugReportForm({ onSubmit, isSubmitting, config, tx, lang }) {
   const [form, setForm] = useState({ name: '', email: '', title: '', details: '', steps: '', expected: '', actual: '' });
   const h = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -209,7 +209,7 @@ function BugReportForm({ onSubmit, isSubmitting, config, tx }) {
 
   return (
     <div style={formCardStyle(config)}>
-      <FormHeader config={config} tx={tx} />
+      <FormHeader config={config} tx={tx} lang={lang} />
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <input name="name" value={form.name} onChange={h} placeholder={tx.namePh} style={inp} />
@@ -235,14 +235,14 @@ function BugReportForm({ onSubmit, isSubmitting, config, tx }) {
           </div>
         </div>
 
-        <SubmitButton isSubmitting={isSubmitting} config={config} label={tx.submitBug} />
+        <SubmitButton isSubmitting={isSubmitting} config={config} label={tx.submitBug} lang={lang} />
       </form>
     </div>
   );
 }
 
 // ── Feature Request Form ───────────────────────────────────────────────────
-function FeatureRequestForm({ onSubmit, isSubmitting, config, tx }) {
+function FeatureRequestForm({ onSubmit, isSubmitting, config, tx, lang }) {
   const [form, setForm] = useState({ name: '', email: '', title: '', details: '', useCase: '', priority: 'Medium' });
   const h = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -256,7 +256,7 @@ function FeatureRequestForm({ onSubmit, isSubmitting, config, tx }) {
 
   return (
     <div style={formCardStyle(config)}>
-      <FormHeader config={config} tx={tx} />
+      <FormHeader config={config} tx={tx} lang={lang} />
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <input name="name" value={form.name} onChange={h} placeholder={tx.namePh} style={inp} />
@@ -287,7 +287,7 @@ function FeatureRequestForm({ onSubmit, isSubmitting, config, tx }) {
             ))}
           </div>
         </div>
-        <SubmitButton isSubmitting={isSubmitting} config={config} label={tx.submitFeature} />
+        <SubmitButton isSubmitting={isSubmitting} config={config} label={tx.submitFeature} lang={lang} />
       </form>
     </div>
   );
@@ -309,7 +309,7 @@ function ReviewForm({ onSubmit, isSubmitting, config, tx, lang }) {
 
   return (
     <div style={formCardStyle(config)}>
-      <FormHeader config={config} tx={tx} />
+      <FormHeader config={config} tx={tx} lang={lang} />
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div style={{
           padding: '20px 24px', borderRadius: 16, textAlign: 'center',
@@ -333,7 +333,7 @@ function ReviewForm({ onSubmit, isSubmitting, config, tx, lang }) {
         <textarea name="details" value={form.details} onChange={h}
           placeholder={tx.reviewDetailsPh}
           rows={4} required style={{ ...inp, resize: 'vertical' }} />
-        <SubmitButton isSubmitting={isSubmitting} config={config} label={tx.submitReview} />
+        <SubmitButton isSubmitting={isSubmitting} config={config} label={tx.submitReview} lang={lang} />
       </form>
     </div>
   );
@@ -353,22 +353,22 @@ function GeneralForm({ onSubmit, isSubmitting, config, tx, lang }) {
 
   return (
     <div style={formCardStyle(config)}>
-      <FormHeader config={config} tx={tx} />
+      <FormHeader config={config} tx={tx} lang={lang} />
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <input name="name" value={form.name} onChange={h} placeholder={tx.namePh} style={inp} />
           <input type="email" name="email" value={form.email} onChange={h} placeholder={tx.emailPh} style={inp} />
         </div>
         <input name="title" value={form.title} onChange={h} placeholder={tx.titlePh} required style={inp} />
-        <textarea name="details" value={form.details} onChange={h} placeholder={config.placeholder[lang] || config.placeholder.bn} rows={4} required style={{ ...inp, resize: 'vertical' }} />
-        <SubmitButton isSubmitting={isSubmitting} config={config} label={tx.submitGeneral} />
+        <textarea name="details" value={form.details} onChange={h} placeholder={config.placeholder[lang] || config.placeholder.en} rows={4} required style={{ ...inp, resize: 'vertical' }} />
+        <SubmitButton isSubmitting={isSubmitting} config={config} label={tx.submitGeneral} lang={lang} />
       </form>
     </div>
   );
 }
 
 // ── Shared Form Sub-components ─────────────────────────────────────────────
-function FormHeader({ config, tx }) {
+function FormHeader({ config, tx, lang }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
       <div style={{
@@ -377,14 +377,16 @@ function FormHeader({ config, tx }) {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>{config.emoji}</div>
       <div>
-        <h2 style={{ fontSize: 16, fontWeight: 800, color: '#1e293b', margin: 0 }}>{tx.newTitle} {typeof config.name === 'object' ? config.name[lang] : config.name}</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 800, color: '#1e293b', margin: 0 }}>
+          {tx.newTitle} {config.name[lang] || config.name.en}
+        </h2>
         <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>{tx.formSubtitle}</p>
       </div>
     </div>
   );
 }
 
-function SubmitButton({ isSubmitting, config, label }) {
+function SubmitButton({ isSubmitting, config, label, lang }) {
   return (
     <motion.button type="submit" disabled={isSubmitting}
       whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
@@ -556,8 +558,8 @@ export default function CommunitySlugPage({ params }) {
 
   // ── Choose Submission Form per slug ────────────────────────────────────
   const renderForm = () => {
-    if (slug === 'bug-report') return <BugReportForm onSubmit={handleSubmit} isSubmitting={isSubmitting} config={config} tx={tx} />;
-    if (slug === 'feature-request') return <FeatureRequestForm onSubmit={handleSubmit} isSubmitting={isSubmitting} config={config} tx={tx} />;
+    if (slug === 'bug-report') return <BugReportForm onSubmit={handleSubmit} isSubmitting={isSubmitting} config={config} tx={tx} lang={lang} />;
+    if (slug === 'feature-request') return <FeatureRequestForm onSubmit={handleSubmit} isSubmitting={isSubmitting} config={config} tx={tx} lang={lang} />;
     if (slug === 'review') return <ReviewForm onSubmit={handleSubmit} isSubmitting={isSubmitting} config={config} tx={tx} lang={lang} />;
     return <GeneralForm onSubmit={handleSubmit} isSubmitting={isSubmitting} config={config} tx={tx} lang={lang} />;
   };
@@ -618,12 +620,12 @@ export default function CommunitySlugPage({ params }) {
                 color: '#1e293b',
                 margin: 0,
               }}>
-                {typeof config.name === 'object' ? config.name[lang] : config.name}
+                {config.name[lang] || config.name.en}
               </h1>
             </div>
           </div>
           <p style={{ color: '#475569', fontSize: 15, lineHeight: 1.7, maxWidth: 620, margin: 0 }}>
-            {typeof config.desc === 'object' ? config.desc[lang] : config.desc}
+            {config.desc[lang] || config.desc.en}
           </p>
 
           {/* Stats bar */}
@@ -663,7 +665,7 @@ export default function CommunitySlugPage({ params }) {
             <input
               value={searchInput}
               onChange={(e) => handleSearchInput(e.target.value)}
-              placeholder={`${typeof config.name === 'object' ? config.name[lang] : config.name} ${tx.searchPlaceholder}`}
+              placeholder={`${config.name[lang] || config.name.en} ${tx.searchPlaceholder}`}
               style={{
                 width: '100%', paddingLeft: 36, paddingRight: searchInput ? 36 : 14,
                 paddingTop: 10, paddingBottom: 10,
