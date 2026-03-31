@@ -181,7 +181,7 @@ def facebook_callback(request):
             from aiAgent.models import AgentAI
             
             # 1. Messenger Agent
-            messenger_agent, m_created = AgentAI.objects.filter(page_id=page_id, platform='messenger').defer('access_token').get_or_create(
+            messenger_agent, m_created = AgentAI.objects.get_or_create(
                 page_id=page_id,
                 platform='messenger',
                 defaults={
@@ -200,7 +200,7 @@ def facebook_callback(request):
 
             # 2. Instagram Agent (if applicable)
             if insta_id:
-                insta_agent, i_created = AgentAI.objects.filter(page_id=insta_id, platform='instagram').defer('access_token').get_or_create(
+                insta_agent, i_created = AgentAI.objects.get_or_create(
                     page_id=insta_id,
                     platform='instagram',
                     defaults={
@@ -597,7 +597,7 @@ def confirm_youtube_connection(request):
     from aiAgent.models import AgentAI
     agent_name = f"{channel_title} ({custom_url})" if custom_url else f"{channel_title} ({channel_id})"
     
-    agent, created = AgentAI.objects.filter(page_id=channel_id, platform='youtube').defer('access_token').get_or_create(
+    agent, created = AgentAI.objects.get_or_create(
         page_id=channel_id,
         platform='youtube',
         defaults={
