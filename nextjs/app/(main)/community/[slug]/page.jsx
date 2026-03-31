@@ -841,13 +841,13 @@ export default function CommunitySlugPage({ params }) {
         {slug === 'roadmap' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
             {[
-              { status: 'Open', label: tx.roadmapPlanned, color: '#818cf8' },
-              { status: 'In Review', label: tx.roadmapProgress, color: '#facc15' },
-              { status: 'Resolved', label: tx.roadmapDone, color: '#4ade80' },
+              { status: 'Planned', label: tx.roadmapPlanned, color: '#818cf8' },
+              { status: 'In Progress', label: tx.roadmapProgress, color: '#facc15' },
+              { status: 'Completed', label: tx.roadmapDone, color: '#4ade80' },
             ].map((col) => {
               const colReports = reports.filter(r => r.status === col.status);
               // Only hide empty columns if it's not "In Progress"
-              if (colReports.length === 0 && col.status !== 'In Review') return null;
+              if (colReports.length === 0 && col.status !== 'In Progress') return null;
               
               return (
                 <div key={col.status}>
@@ -1150,8 +1150,13 @@ function ReportCard({ report, idx, config, slug, isLiked, onLike, expandedCommen
 function StatusPill({ status, tx }) {
   const c = {
     Open: { bg: 'rgba(251,146,60,0.12)', border: 'rgba(251,146,60,0.25)', color: '#fb923c', icon: Clock, label: tx.filterOpen },
+    Planned: { bg: 'rgba(129,140,248,0.12)', border: 'rgba(129,140,248,0.25)', color: '#818cf8', icon: Rocket, label: tx.roadmapPlanned },
     'In Review': { bg: 'rgba(250,204,21,0.12)', border: 'rgba(250,204,21,0.25)', color: '#facc15', icon: Sparkles, label: tx.filterReview },
+    'In Progress': { bg: 'rgba(217,119,6,0.12)', border: 'rgba(217,119,6,0.25)', color: '#d97706', icon: Zap, label: tx.roadmapProgress },
     Resolved: { bg: 'rgba(74,222,128,0.12)', border: 'rgba(74,222,128,0.25)', color: '#4ade80', icon: CheckCircle2, label: tx.filterResolved },
+    Fixed: { bg: 'rgba(34,197,94,0.12)', border: 'rgba(34,197,94,0.25)', color: '#22c55e', icon: CheckCircle2, label: 'Fixed' },
+    Completed: { bg: 'rgba(16,185,129,0.12)', border: 'rgba(16,185,129,0.25)', color: '#10b981', icon: Trophy, label: tx.roadmapDone },
+    Closed: { bg: 'rgba(100,116,139,0.12)', border: 'rgba(100,116,139,0.2)', color: '#94a3b8', icon: AlertCircle, label: 'Closed' },
   }[status] || { bg: 'rgba(100,116,139,0.12)', border: 'rgba(100,116,139,0.2)', color: '#94a3b8', icon: AlertCircle, label: status || tx.unknown };
   const StatusIcon = c.icon;
   return (

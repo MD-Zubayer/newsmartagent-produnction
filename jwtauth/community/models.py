@@ -17,8 +17,13 @@ class CommunityReport(models.Model):
   ]
   STATUS_CHOICES = [
       ("Open", "Open"),
+      ("Planned", "Planned"),
       ("In Review", "In Review"),
+      ("In Progress", "In Progress"),
       ("Resolved", "Resolved"),
+      ("Fixed", "Fixed"),
+      ("Completed", "Completed"),
+      ("Closed", "Closed"),
   ]
 
   public_id = models.CharField(max_length=16, unique=True, default=generate_public_id, editable=False)

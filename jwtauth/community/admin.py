@@ -33,6 +33,9 @@ class CommunityReportAdmin(admin.ModelAdmin):
   readonly_fields = ("public_id", "created_at", "updated_at", "like_count", "comment_count")
   inlines = [CommunityReplyInline, ReportCommentInline, ReportLikeInline]
 
+  class Media:
+      js = ('community/js/admin_status_filter.js',)
+
 
 @admin.register(CommunityReply)
 class CommunityReplyAdmin(admin.ModelAdmin):
