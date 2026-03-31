@@ -600,79 +600,135 @@ def confirm_youtube_connection(request):
     """
     Finalizes the connection for a selected YouTube channel using the session stored in Redis.
     """
+    import traceback
+    logger.info(f"[YT CONFIRM] Called by user={request.user.id} | data={request.data}")
+
     session_id = request.data.get("sessionId")
     channel_id = request.data.get("channelId")
-    
+
     if not session_id or not channel_id:
+        logger.error(f"[YT CONFIRM] Missing sessionId or channelId. sessionId={session_id}, channelId={channel_id}")
         return JsonResponse({"error": "Missing sessionId or channelId."}, status=400)
-    
-    from aiAgent.cache.client import get_redis_client
-    redis_client = get_redis_client()
-    
+
+    try:
+        from aiAgent.cache.client import get_redis_client
+        redis_client = get_redis_client()
+    except Exception as e:
+        logger.error(f"[YT CONFIRM] Redis connection failed: {e}")
+        return JsonResponse({"error": "Internal server error (Redis)."}, status=500)
+
     session_raw = redis_client.get(f"yt_session:{session_id}")
     if not session_raw:
+        logger.error(f"[YT CONFIRM] Session not found in Redis: yt_session:{session_id}")
         return JsonResponse({"error": "Session expired or invalid. Please try connecting again."}, status=400)
-    
-    session_data = json.loads(session_raw)
-    
+
+    try:
+        session_data = json.loads(session_raw)
+    except Exception as e:
+        logger.error(f"[YT CONFIRM] Failed to parse session JSON: {e}")
+        return JsonResponse({"error": "Corrupt session data."}, status=500)
+
     # Verify user matches
     if str(session_data.get("user_id")) != str(request.user.id):
+        logger.warning(f"[YT CONFIRM] User mismatch: session={session_data.get('user_id')}, request={request.user.id}")
         return JsonResponse({"error": "Unauthorized session."}, status=403)
-    
+
     # Find the selected channel in session data
-    selected_channel = next((c for c in session_data["channels"] if c["id"] == channel_id), None)
+    channels_in_session = session_data.get("channels", [])
+    logger.info(f"[YT CONFIRM] Session has {len(channels_in_session)} channels. Looking for id={channel_id}")
+    logger.info(f"[YT CONFIRM] Channel IDs in session: {[c.get('id') for c in channels_in_session]}")
+
+    selected_channel = next((c for c in channels_in_session if c.get("id") == channel_id), None)
     if not selected_channel:
+        logger.error(f"[YT CONFIRM] Channel {channel_id} not found in session channels!")
         return JsonResponse({"error": "Selected channel not found in this session."}, status=404)
-    
-    access_token = session_data["access_token"]
-    refresh_token = session_data["refresh_token"]
-    token_expires_at_str = session_data["token_expires_at"]
-    token_expires_at = timezone.datetime.fromisoformat(token_expires_at_str) if token_expires_at_str else None
-    
+
+    access_token = session_data.get("access_token")
+    refresh_token = session_data.get("refresh_token", "")
+    token_expires_at_str = session_data.get("token_expires_at")
+
+    try:
+        token_expires_at = timezone.datetime.fromisoformat(token_expires_at_str) if token_expires_at_str else None
+    except Exception as e:
+        logger.warning(f"[YT CONFIRM] Could not parse token_expires_at: {e}")
+        token_expires_at = None
+
+    # Extract title and custom_url — handle both full API response and display format
     snippet = selected_channel.get("snippet", {})
-    channel_title = snippet.get("title")
-    custom_url = snippet.get("customUrl")
-    
-    # Save to database
-    YouTubeChannel.objects.update_or_create(
-        channel_id=channel_id,
-        defaults={
-            'user': request.user,
-            'channel_title': channel_title,
-            'custom_url': custom_url,
-            'access_token': access_token,
-            'refresh_token': refresh_token,
-            'token_expires_at': token_expires_at,
-            'is_active': True
-        }
-    )
-    
-    # Create or update AgentAI
-    from aiAgent.models import AgentAI
-    agent_name = f"{channel_title} ({custom_url})" if custom_url else f"{channel_title} ({channel_id})"
-    
-    agent, created = AgentAI.objects.get_or_create(
-        page_id=channel_id,
-        platform='youtube',
-        defaults={
-            'user': request.user,
-            'name': agent_name,
-            'access_token': access_token,
-            'token_expires_at': token_expires_at,
-            'system_prompt': f"You are the personal assistant for {channel_title}'s YouTube channel. Reply concisely to the user's comment. STRICTLY PROHIBITED: Do not mention you are an AI. Do not add any closing phrases like 'feel free to ask' or 'I am here to help'. Just provide the direct answer or a friendly engagement.",
-            'is_active': True
-        }
-    )
-    if not created:
-        agent.access_token = access_token
-        agent.token_expires_at = token_expires_at
-        agent.name = agent_name # Update name too in case it changed
-        agent.save(update_fields=['access_token', 'token_expires_at', 'name'])
-        
-    # Optional: Delete session after success
+    channel_title = snippet.get("title") if snippet else None
+    custom_url = snippet.get("customUrl") if snippet else None
+
+    # Fallback: if snippet missing, use display-format fields
+    if not channel_title:
+        channel_title = selected_channel.get("name") or selected_channel.get("title") or f"Channel ({channel_id})"
+    if not custom_url:
+        custom_url = selected_channel.get("handle") or selected_channel.get("customUrl") or ""
+
+    logger.info(f"[YT CONFIRM] Saving channel: id={channel_id}, title={channel_title}, handle={custom_url}")
+
+    try:
+        # Save YouTubeChannel to database
+        yt_channel, yt_created = YouTubeChannel.objects.update_or_create(
+            channel_id=channel_id,
+            defaults={
+                'user': request.user,
+                'channel_title': channel_title,
+                'custom_url': custom_url,
+                'access_token': access_token,
+                'refresh_token': refresh_token,
+                'token_expires_at': token_expires_at,
+                'is_active': True
+            }
+        )
+        logger.info(f"[YT CONFIRM] YouTubeChannel {'created' if yt_created else 'updated'}: id={yt_channel.pk}")
+    except Exception as e:
+        logger.error(f"[YT CONFIRM] ERROR saving YouTubeChannel: {e}\n{traceback.format_exc()}")
+        return JsonResponse({"error": f"Failed to save channel: {str(e)}"}, status=500)
+
+    try:
+        # Create or update AgentAI
+        from aiAgent.models import AgentAI
+        agent_name = f"{channel_title} ({custom_url})" if custom_url else f"{channel_title} ({channel_id})"
+        system_prompt = (
+            f"You are the personal assistant for {channel_title}'s YouTube channel. "
+            f"Reply concisely to the user's comment. "
+            f"STRICTLY PROHIBITED: Do not mention you are an AI. "
+            f"Do not add any closing phrases like 'feel free to ask' or 'I am here to help'. "
+            f"Just provide the direct answer or a friendly engagement."
+        )
+
+        agent, agent_created = AgentAI.objects.get_or_create(
+            page_id=channel_id,
+            platform='youtube',
+            defaults={
+                'user': request.user,
+                'name': agent_name,
+                'access_token': access_token,
+                'token_expires_at': token_expires_at,
+                'system_prompt': system_prompt,
+                'is_active': True
+            }
+        )
+        if not agent_created:
+            agent.access_token = access_token
+            agent.token_expires_at = token_expires_at
+            agent.name = agent_name
+            agent.save(update_fields=['access_token', 'token_expires_at', 'name'])
+
+        logger.info(f"[YT CONFIRM] AgentAI {'created' if agent_created else 'updated'}: id={agent.pk}, name={agent_name}")
+    except Exception as e:
+        logger.error(f"[YT CONFIRM] ERROR saving AgentAI: {e}\n{traceback.format_exc()}")
+        # Channel was saved — return partial success
+        return JsonResponse({
+            "status": "partial_success",
+            "message": f"Channel {channel_title} connected, but AI agent creation failed: {str(e)}"
+        }, status=207)
+
+    # Cleanup Redis session
     redis_client.delete(f"yt_session:{session_id}")
-    
-    return JsonResponse({"status": "success", "message": f"Channel {channel_title} connected successfully!"})
+    logger.info(f"[YT CONFIRM] Success! Channel={channel_title}, Agent={'created' if agent_created else 'updated'}")
+
+    return JsonResponse({"status": "success", "message": f"Channel '{channel_title}' connected successfully!"})
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
