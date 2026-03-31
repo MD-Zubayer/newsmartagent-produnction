@@ -141,11 +141,37 @@ export default function IntegrationManager() {
     if (sessionId) {
       if (type === "gbp_auth" && !gbpSessionId) {
         fetchGbpSessionLocations(sessionId);
-      } else if (type === "yt_auth" && !youtubeSessionId) {
+      } else if (type === "youtube_auth" && !youtubeSessionId) {  // Fixed: was "yt_auth"
         fetchSessionChannels(sessionId);
       }
     }
+
+    // Auto-select platform if returning from OAuth redirect
+    if (sessionId && type === "youtube_auth") {
+      setSelectedPlatform({
+        id: "youtube",
+        name: "YouTube",
+        icon: <FaYoutube />,
+        color: "from-red-600 via-rose-600 to-red-700",
+        iconBg: "bg-red-600",
+        devLink: "https://console.cloud.google.com/",
+        btnText: "Google Console",
+        description: "Automate your YouTube Channel comments and engagement with AI."
+      });
+    } else if (sessionId && type === "gbp_auth") {
+      setSelectedPlatform({
+        id: "gbp",
+        name: "Google Business",
+        icon: <FaShieldAlt />,
+        color: "from-blue-500 via-indigo-500 to-blue-600",
+        iconBg: "bg-blue-500",
+        devLink: "https://business.google.com/",
+        btnText: "Business Profile",
+        description: "Manage and automate your Google Business Profile reviews and queries."
+      });
+    }
   }, [youtubeSessionId, gbpSessionId]);
+
 
   useEffect(() => {
     if (selectedPlatform?.id === 'facebook' || selectedPlatform?.id === 'instagram') {
@@ -641,14 +667,8 @@ export default function IntegrationManager() {
                   <button
                     onClick={() => {
                       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://newsmartagent.com/api";
-                      const width = 600, height = 700;
-                      const left = (window.innerWidth - width) / 2;
-                      const top = (window.innerHeight - height) / 2;
-                      window.open(
-                        `${apiUrl}/youtube/login/`,
-                        "YouTube Login",
-                        `width=${width},height=${height},top=${top},left=${left}`
-                      );
+                      // Full-page redirect (more reliable than popup for OAuth)
+                      window.location.href = `${apiUrl}/youtube/login/`;
                     }}
                     className="group relative flex items-center justify-center gap-4 md:gap-5 bg-[#FF0000] text-white px-6 md:px-10 py-4 md:py-6 rounded-[1.5rem] md:rounded-[2rem] text-[10px] md:text-[11px] font-black uppercase tracking-[0.15em] md:tracking-[0.2em] hover:bg-[#cc0000] transition-all shadow-[0_20px_40px_-10px_rgba(255,0,0,0.3)] active:scale-95 overflow-hidden w-full lg:w-auto"
                   >
@@ -765,14 +785,8 @@ export default function IntegrationManager() {
                   <button
                     onClick={() => {
                       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://newsmartagent.com/api";
-                      const width = 600, height = 700;
-                      const left = (window.innerWidth - width) / 2;
-                      const top = (window.innerHeight - height) / 2;
-                      window.open(
-                        `${apiUrl}/youtube/login/?type=gbp`,
-                        "GBP Login",
-                        `width=${width},height=${height},top=${top},left=${left}`
-                      );
+                      // Full-page redirect (more reliable than popup for OAuth)
+                      window.location.href = `${apiUrl}/youtube/login/?type=gbp`;
                     }}
                     className="group relative flex items-center justify-center gap-4 md:gap-5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white px-6 md:px-10 py-4 md:py-6 rounded-[1.5rem] md:rounded-[2rem] text-[10px] md:text-[11px] font-black uppercase tracking-[0.15em] md:tracking-[0.2em] hover:opacity-90 transition-all shadow-[0_20px_40px_-10px_rgba(37,99,235,0.3)] active:scale-95 overflow-hidden w-full lg:w-auto"
                   >
