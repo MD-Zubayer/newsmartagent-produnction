@@ -341,7 +341,18 @@ def youtube_callback(request):
     frontend_url = getattr(settings, 'NEXT_PUBLIC_BASE_URL', 'https://newsmartagent.com')
 
     if error or not code:
-        return redirect(f"{frontend_url}/dashboard/connect?error=auth_failed&message=Google authentication failed.")
+        script = f'''
+        <script>
+            if (window.opener) {{
+                window.opener.postMessage({{status: "error", message: "Google authentication failed or was cancelled."}}, "*");
+                setTimeout(() => window.close(), 1000);
+            }} else {{
+                window.location.href = "{frontend_url}/dashboard/connect?error=auth_failed&message=Google+authentication+failed";
+            }}
+        </script>
+        '''
+        from django.http import HttpResponse
+        return HttpResponse(script)
 
     # Split state to get user_id and auth_type
     try:
@@ -380,12 +391,30 @@ def youtube_callback(request):
 
 def handle_youtube_callback_data(request, user_id, access_token, refresh_token, token_expires_at, frontend_url):
     # 2. Get YouTube Channel info
-    channels_url = f"https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails&mine=true&access_token={access_token}"
-    channels_resp = requests.get(channels_url).json()
+    headers = {"Authorization": f"Bearer {access_token}"}
+    channels_url = "https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails&mine=true"
+    channels_resp_raw = requests.get(channels_url, headers=headers)
+    channels_resp = channels_resp_raw.json()
     channels_data = channels_resp.get("items", [])
 
     if not channels_data:
-        return redirect(f"{frontend_url}/dashboard/connect?error=no_channels&message=No YouTube channels found for this account.")
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"YouTube OAuth Error: status={channels_resp_raw.status_code}, resp={channels_resp}")
+        error_detail = channels_resp.get("error", {}).get("message", "No channels found")
+        
+        script = f'''
+        <script>
+            if (window.opener) {{
+                window.opener.postMessage({{status: "error", message: "No YouTube channels found for this account. Detail: {error_detail}"}}, "*");
+                setTimeout(() => window.close(), 1000);
+            }} else {{
+                window.location.href = "{frontend_url}/dashboard/connect?error=no_channels&message=No+YouTube+channels+found+for+this+account";
+            }}
+        </script>
+        '''
+        from django.http import HttpResponse
+        return HttpResponse(script)
 
     # 3. Store in Redis for selection
     import uuid
@@ -431,8 +460,22 @@ def handle_gbp_callback_data(request, user_id, access_token, refresh_token, toke
     if not accounts_data:
         # Log the error or response for debugging
         error_detail = accounts_resp.get("error", {}).get("message", "No accounts returned by Google.")
+        import logging
+        logger = logging.getLogger(__name__)
         logger.error(f"GBP OAuth Error: status={accounts_resp_raw.status_code}, resp={accounts_resp}")
-        return redirect(f"{frontend_url}/dashboard/connect?error=no_gbp_accounts&message=No Google Business Profile accounts found. Detail: {error_detail}")
+        
+        script = f'''
+        <script>
+            if (window.opener) {{
+                window.opener.postMessage({{status: "error", message: "No Google Business Profile accounts found. Detail: {error_detail}"}}, "*");
+                setTimeout(() => window.close(), 1000);
+            }} else {{
+                window.location.href = "{frontend_url}/dashboard/connect?error=no_gbp_accounts&message=No+Google+Business+Profile+accounts+found";
+            }}
+        </script>
+        '''
+        from django.http import HttpResponse
+        return HttpResponse(script)
 
     # Fetch locations for each account
     all_locations = []
@@ -451,7 +494,18 @@ def handle_gbp_callback_data(request, user_id, access_token, refresh_token, toke
             })
 
     if not all_locations:
-        return redirect(f"{frontend_url}/dashboard/connect?error=no_gbp_locations&message=No locations found in your Google Business Profile accounts.")
+        script = f'''
+        <script>
+            if (window.opener) {{
+                window.opener.postMessage({{status: "error", message: "No locations found in your Google Business Profile accounts."}}, "*");
+                setTimeout(() => window.close(), 1000);
+            }} else {{
+                window.location.href = "{frontend_url}/dashboard/connect?error=no_gbp_locations&message=No+locations+found";
+            }}
+        </script>
+        '''
+        from django.http import HttpResponse
+        return HttpResponse(script)
 
     import uuid
     from aiAgent.cache.client import get_redis_client
@@ -802,7 +856,18 @@ def tiktok_callback(request):
     frontend_url = getattr(settings, 'NEXT_PUBLIC_BASE_URL', 'https://newsmartagent.com')
 
     if error or not code:
-        return redirect(f"{frontend_url}/dashboard/connect?error=auth_failed&message={error_msg}")
+        script = f'''
+        <script>
+            if (window.opener) {{
+                window.opener.postMessage({{status: "error", message: "{error_msg}"}}, "*");
+                setTimeout(() => window.close(), 1000);
+            }} else {{
+                window.location.href = "{frontend_url}/dashboard/connect?error=auth_failed&message={error_msg}";
+            }}
+        </script>
+        '''
+        from django.http import HttpResponse
+        return HttpResponse(script)
 
     client_key = getattr(settings, 'TIKTOK_CLIENT_KEY', None)
     client_secret = getattr(settings, 'TIKTOK_CLIENT_SECRET', None)
@@ -831,8 +896,21 @@ def tiktok_callback(request):
     open_id = resp.get("open_id")
 
     if not access_token or not open_id:
+        import logging
+        logger = logging.getLogger(__name__)
         logger.error(f"TikTok Token Error: {resp}")
-        return JsonResponse({"error": "Failed to get TikTok access token.", "details": resp}, status=400)
+        script = f'''
+        <script>
+            if (window.opener) {{
+                window.opener.postMessage({{status: "error", message: "Failed to get TikTok access token."}}, "*");
+                setTimeout(() => window.close(), 1000);
+            }} else {{
+                window.location.href = "{frontend_url}/dashboard/connect?error=token_failed&message=Failed+to+get+TikTok+access+token";
+            }}
+        </script>
+        '''
+        from django.http import HttpResponse
+        return HttpResponse(script)
 
     token_expires_at = timezone.now() + timedelta(seconds=expires_in) if expires_in else None
 

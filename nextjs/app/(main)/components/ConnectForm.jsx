@@ -45,6 +45,8 @@ export default function IntegrationManager() {
         import("react-hot-toast").then(({ toast }) => toast.success(`TikTok account ${event.data.account.display_name} connected!`));
         // Refresh TikTok accounts if we are on the tiktok platform view
         axiosInstance.get("/tiktok/accounts/").then(res => setConnectedPages(res.data.accounts || []));
+      } else if (event.data?.status === "error") {
+        import("react-hot-toast").then(({ toast }) => toast.error(event.data.message || "Authentication failed."));
       }
     };
 
