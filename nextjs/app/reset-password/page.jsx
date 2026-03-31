@@ -31,7 +31,8 @@ function ResetPasswordForm() {
     setLoading(true);
     const loadingToast = toast.loading("Updating password...");
     try {
-      const res = await axios.post("https://newsmartagent.com/api/reset-password/", {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "/api";
+      const res = await axios.post(`${apiUrl.replace(/\/$/, "")}/reset-password/`, {
         token,
         new_password: password,
       });

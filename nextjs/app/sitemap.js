@@ -1,7 +1,7 @@
 // app/sitemap.js
 
 export default async function sitemap() {
-  const baseUrl = "https://newsmartagent.com";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "https://newsmartagent.com";
 
   // ১. আপনার ব্যাকএন্ড থেকে ব্লগ পোস্টগুলো নিয়ে আসার চেষ্টা করুন
   let blogPosts = [];

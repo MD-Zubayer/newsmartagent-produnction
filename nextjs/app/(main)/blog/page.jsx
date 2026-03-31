@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { HiOutlineArrowRight, HiOutlineCalendar, HiOutlineUser, HiOutlineTag, HiOutlineSearch, HiOutlineEye } from 'react-icons/hi';
 import axios from 'axios';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://newsmartagent.com/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 export default function BlogIndex() {
   const [posts, setPosts] = useState([]);

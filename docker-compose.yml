@@ -8,11 +8,8 @@ services:
 
   db:
     image: pgvector/pgvector:pg16
-    container_name: newsmartagent-db
-    #!!!! must be named volume in production
-
+    container_name: ${PROJECT_NAME}-db
     volumes:
-    # named volume
       - postgres_data:/var/lib/postgresql/data
     env_file:
       - .env
@@ -31,7 +28,7 @@ services:
       
   redis:
     image: redis/redis-stack-server:latest
-    container_name: newsmartagent-redis
+    container_name: ${PROJECT_NAME}-redis
     restart: always
     logging: *default-logging
     deploy:
@@ -40,7 +37,7 @@ services:
     networks:
       smart-network:
         aliases:
-          - newsmartagent-redis
+          - ${PROJECT_NAME}-redis
     volumes:
       - redis_data:/data
     command: >
@@ -56,24 +53,24 @@ services:
 
   backend:
     build: ./jwtauth
-    container_name: newsmartagent-django
+    container_name: ${PROJECT_NAME}-django
     command: gunicorn jwtauth.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --workers 5 --threads 4 --timeout 120
     volumes:
       - ./jwtauth:/app
       - static_volume:/app/static
       - media_volume:/app/media
-      - /home/ubuntu/configs/service_account.json:/app/gdrive_key.json:ro
+      - ${HOST_CONFIG_PATH}/service_account.json:/app/gdrive_key.json:ro
     
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@newsmartagent-db:5432/${POSTGRES_DB}     
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${PROJECT_NAME}-db:5432/${POSTGRES_DB}     
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - REDIS_URL=${REDIS_URL}
-      - FB_APP_ID=890689390590685
-      - FB_APP_SECRET=7c0693dacfc6211613d16437be2192b8
-      - FB_REDIRECT_URI=https://newsmartagent.com/api/facebook/callback/
+      - FB_APP_ID=${FB_APP_ID}
+      - FB_APP_SECRET=${FB_APP_SECRET}
+      - FB_REDIRECT_URI=${FB_REDIRECT_URI}
       - GOOGLE_DRIVE_LOG_FOLDER_ID=${GOOGLE_DRIVE_LOG_FOLDER_ID}
       - GOOGLE_DRIVE_LOG_SUBFOLDER=${GOOGLE_DRIVE_LOG_SUBFOLDER}
       - GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE=/app/gdrive_key.json
@@ -86,7 +83,7 @@ services:
     restart: always
     deploy:
       update_config:
-        order: start-first # জিরো ডাউনটাইম নিশ্চিত করবে
+        order: start-first
       resources:
         limits:
           memory: 4G
@@ -96,10 +93,10 @@ services:
 
   frontend:
     build: ./nextjs
-    container_name: newsmartagent-nextjs
+    container_name: ${PROJECT_NAME}-nextjs
     environment:
-      - NEXT_PUBLIC_BASE_URL=https://newsmartagent.com
-      - NEXT_PUBLIC_API_URL=https://newsmartagent.com/api
+      - NEXT_PUBLIC_BASE_URL=https://${MAIN_DOMAIN}
+      - NEXT_PUBLIC_API_URL=https://${MAIN_DOMAIN}/api
     restart: always
     logging: *default-logging
     depends_on:
@@ -116,13 +113,17 @@ services:
 
   nginx:
     build: ./nginx
-    container_name: newsmartagent-nginx
+    container_name: ${PROJECT_NAME}-nginx
     ports:
       - "80:80"
     volumes:
       - static_volume:/app/static
       - media_volume:/app/media
-
+    environment:
+      - MAIN_DOMAIN=${MAIN_DOMAIN}
+      - N8N_DOMAIN=${N8N_DOMAIN}
+      - MINIO_CONSOLE_DOMAIN=${MINIO_CONSOLE_DOMAIN}
+      - MINIO_API_DOMAIN=${MINIO_API_DOMAIN}
     depends_on:
        - backend
        - frontend
@@ -137,16 +138,16 @@ services:
 
   celery_worker:
     build: ./jwtauth
-    container_name: newsmartagent-celery-worker
+    container_name: ${PROJECT_NAME}-celery-worker
     command: celery -A jwtauth worker -Q chat_queue,celery -c 8 --prefetch-multiplier 1 --max-tasks-per-child 1000 --loglevel=info
     volumes:
       - ./jwtauth:/app
-      - /home/ubuntu/configs/service_account.json:/app/gdrive_key.json:ro
+      - ${HOST_CONFIG_PATH}/service_account.json:/app/gdrive_key.json:ro
     env_file:
       - .env
     
     environment:
-      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@newsmartagent-db:5432/${POSTGRES_DB}
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${PROJECT_NAME}-db:5432/${POSTGRES_DB}
       - REDIS_URL=${REDIS_URL}
       - GOOGLE_DRIVE_LOG_FOLDER_ID=${GOOGLE_DRIVE_LOG_FOLDER_ID}
       - GOOGLE_DRIVE_LOG_SUBFOLDER=${GOOGLE_DRIVE_LOG_SUBFOLDER}
@@ -166,15 +167,15 @@ services:
 
   celery_beat:
     build: ./jwtauth
-    container_name: newsmartagent-celery-beat
+    container_name: ${PROJECT_NAME}-celery-beat
     command: celery -A jwtauth beat -l info
     volumes:
       - ./jwtauth:/app
-      - /home/ubuntu/configs/service_account.json:/app/gdrive_key.json:ro
+      - ${HOST_CONFIG_PATH}/service_account.json:/app/gdrive_key.json:ro
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@newsmartagent-db:5432/${POSTGRES_DB}
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${PROJECT_NAME}-db:5432/${POSTGRES_DB}
       - REDIS_URL=${REDIS_URL}
       - GOOGLE_DRIVE_LOG_FOLDER_ID=${GOOGLE_DRIVE_LOG_FOLDER_ID}
       - GOOGLE_DRIVE_LOG_SUBFOLDER=${GOOGLE_DRIVE_LOG_SUBFOLDER}
@@ -192,21 +193,20 @@ services:
 
   n8n:
     image: n8nio/n8n:latest
-    container_name: newsmartagent-n8n
+    container_name: ${PROJECT_NAME}-n8n
     environment:
-      N8N_HOST: n8n.newsmartagent.com
-      N8N_URL: https://n8n.newsmartagent.com
-      WEBHOOK_URL: https://n8n.newsmartagent.com
+      N8N_HOST: ${N8N_DOMAIN}
+      N8N_URL: https://${N8N_DOMAIN}
+      WEBHOOK_URL: https://${N8N_DOMAIN}
       N8N_TRUST_PROXY: "true"
-      EXPLICIT_TRUST_PROXY: "true" # এটি মাস্ট যোগ করুন
-      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "false" # কনফিগ ফাইল পারমিশন ইস্যু এড়াতে
+      EXPLICIT_TRUST_PROXY: "true"
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "false"
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
       N8N_PROTOCOL: https
       GENERIC_TIMEZONE: Asia/Dhaka
       NODE_OPTIONS: --max-old-space-size=2048
-      # 🔥 Add these
       DB_TYPE: postgresdb
-      DB_POSTGRESDB_HOST: newsmartagent-db
+      DB_POSTGRESDB_HOST: ${PROJECT_NAME}-db
       DB_POSTGRESDB_PORT: 5432
       DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
       DB_POSTGRESDB_USER: ${POSTGRES_USER}
@@ -227,7 +227,7 @@ services:
   
   flower:
     image: mher/flower
-    container_name: newsmartagent-flower
+    container_name: ${PROJECT_NAME}-flower
     command: celery --broker=${REDIS_URL} flower --basic_auth=${FLOWER_BASIC_AUTH}
     environment:
       - CELERY_BROKER_URL=${REDIS_URL}
@@ -245,7 +245,7 @@ services:
 
   cloudflare-tunnel:
     image: cloudflare/cloudflared:latest
-    container_name: newsmartagent-cloudflare-tunnel
+    container_name: ${PROJECT_NAME}-cloudflare-tunnel
     user: root
     restart: always
     deploy:
@@ -256,7 +256,7 @@ services:
     networks:
       - smart-network
     volumes:
-      - /home/ubuntu/cloudflare-config:/etc/cloudflared:ro
+      - ${HOST_CONFIG_PATH}/cloudflare-config:/etc/cloudflared:ro
     command: tunnel --config /etc/cloudflared/config.yml run
     logging: *default-logging
     depends_on:
@@ -265,18 +265,15 @@ services:
 
   baileys:
     build: ./baileys
-    container_name: newsmartagent-baileys
+    container_name: ${PROJECT_NAME}-baileys
     environment:
       - PORT=3001
-      # n8n webhook URL — incoming WhatsApp message এখানে forward হবে
       - N8N_WEBHOOK_URL=${N8N_WHATSAPP_WEBHOOK_URL}
-      # n8n থেকে /send-message call করার সময় এই secret দিতে হবে
       - SYNC_AGENT_URL=http://backend:8000/api/whatsapp/sync-agent/
       - BAILEYS_API_SECRET=${BAILEYS_API_SECRET}
-      - BAILEYS_API_URL=http://newsmartagent-baileys:3001
+      - BAILEYS_API_URL=http://${PROJECT_NAME}-baileys:3001
       - LOG_LEVEL=info
     volumes:
-      # WhatsApp session persistent করার জন্য (QR rescan এড়াতে)
       - baileys_auth:/app/auth_info_baileys
     depends_on:
       - n8n
@@ -290,15 +287,15 @@ services:
 
   minio:
     image: quay.io/minio/minio:latest
-    container_name: newsmartagent-minio
+    container_name: ${PROJECT_NAME}-minio
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER}
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
-      - MINIO_SERVER_URL=https://s3.newsmartagent.com
-      - MINIO_BROWSER_REDIRECT_URL=https://minio.newsmartagent.com
+      - MINIO_SERVER_URL=https://${MINIO_API_DOMAIN}
+      - MINIO_BROWSER_REDIRECT_URL=https://${MINIO_CONSOLE_DOMAIN}
     restart: always
     logging: *default-logging
     deploy:
@@ -310,22 +307,22 @@ services:
 volumes:
   postgres_data:
     external: true
-    name: production_pg_data
+    name: ${VOLUME_PREFIX}_pg_data
   redis_data:
-    name: production_redis_data
+    name: ${VOLUME_PREFIX}_redis_data
   static_volume:
-    name: newsmartagent-static
+    name: ${VOLUME_PREFIX}-static
   media_volume:
-    name: newsmartagent-media
+    name: ${VOLUME_PREFIX}-media
   n8n_data:
-    name: production_n8n_data
+    name: ${VOLUME_PREFIX}_n8n_data
   baileys_auth:
-    name: newsmartagent-baileys-auth
+    name: ${VOLUME_PREFIX}-baileys-auth
   minio_data:
-    name: newsmartagent-minio-data
+    name: ${VOLUME_PREFIX}-minio-data
   
 
 networks:
   smart-network:
-    name: smart-network 
+    name: ${NETWORK_NAME}
     driver: bridge

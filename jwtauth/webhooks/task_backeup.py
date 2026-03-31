@@ -37,7 +37,9 @@ logger = logging.getLogger(__name__)
 
 
 
-r = redis.Redis(host='newsmartagent-redis', port=6379, db=0)
+import os
+PROJECT_NAME = os.environ.get('PROJECT_NAME', 'newsmartagent')
+r = redis.Redis(host=os.environ.get('REDIS_HOST', f'{PROJECT_NAME}-redis'), port=6379, db=0)
 
 
 
@@ -147,7 +149,7 @@ def process_ai_reply_task(self,data):
             if settings.is_order_enable:
                 try:
                     order_form = OrderForm.objects.get(user=agent_config.user)
-                    link = f'https://newsmartagent.com/orders/{order_form.form_id}'
+                    link = f'{settings.SITE_URL}/orders/{order_form.form_id}'
                     order_instruction = f"If user wants to buy/order, strictly give this link: {link}."
                 except OrderForm.DoesNotExist:
                     order_instruction = "If they want to buy, say order form is not ready yet."
@@ -400,7 +402,7 @@ def process_ai_reply_task(self,data):
     
 
         # n8n response webhook url
-        N8N_RESPONSE_WEBHOOK = "https://n8n.newsmartagent.com/webhook/fb-comment-message-delivery"
+        N8N_RESPONSE_WEBHOOK = f"https://{settings.N8N_DOMAIN}/webhook/fb-comment-message-delivery"
 
         payload = {
             "sender_id": data.get('sender_id'),

@@ -30,24 +30,24 @@ server {
     gzip on;
     gzip_types text/plain application/xml text/css application/javascript application/json;
     gzip_min_length 1000;
-    server_name dev.newsmartagent.com dev-api.newsmartagent.com;
+    
+    server_name ${MAIN_DOMAIN} api.${MAIN_DOMAIN};
+    
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
-    # ১. Django Static Files (এটি মাস্ট লাগবেই)
+    
+    # ১. Django Static Files
     location /static/ {
         alias /app/static/;
-        # expires 30d;
-        # add_header Cache-Control "public, no-transform";
-        
     }
 
     # ২. Django Media Files
     location /media/ {
-        alias /app/media/;  # এনজিনেক্স সরাসরি ভলিউম থেকে ছবি নিবে
-    expires 30d;
-    add_header Cache-Control "public, no-transform";
+        alias /app/media/;
+        expires 30d;
+        add_header Cache-Control "public, no-transform";
     }
 
     # Django Admin
@@ -74,35 +74,34 @@ server {
     # Django API
     location /api/ {
         proxy_pass http://django_backend;
-        proxy_http_version 1.1;       # Keepalive এর জন্য HTTP 1.1 দরকার
-        proxy_set_header Connection ""; # ডিফল্ট "close" হেডার মুছে ফেলতে হবে
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
+    
     location ~ ^/flower/(static|assets)/ {
-        proxy_pass http://flower_backend; # শেষে স্ল্যাশ দিবেন না
+        proxy_pass http://flower_backend;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Script-Name /flower; # এটি এখানেও লাগবে
-}
+        proxy_set_header X-Script-Name /flower;
+    }
 
-# ২. মূল Flower লোকেশন
+    # মূল Flower লোকেশন
     location /flower/ {
-        proxy_pass http://flower_backend/; # শেষে স্ল্যাশ মাস্ট
+        proxy_pass http://flower_backend/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https; 
-
-         proxy_redirect off;
-         proxy_set_header X-Script-Name /flower; 
-        
-         proxy_http_version 1.1;
-         proxy_set_header Upgrade $http_upgrade;
-         proxy_set_header Connection "upgrade";
-         proxy_buffering off;
-}
+        proxy_redirect off;
+        proxy_set_header X-Script-Name /flower; 
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_buffering off;
+    }
 
     location /ws/ {
         proxy_pass http://django_backend; 
@@ -114,67 +113,55 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-
-        # 🔥 এই লাইনটি মাস্ট! এটিই কুকি চুরি হওয়া আটকাবে
         proxy_set_header Cookie $http_cookie;
 
-        # কানেকশন জ্যান্ত রাখতে
         proxy_read_timeout 86400s;
         proxy_send_timeout 86400s;
-        proxy_connect_timeout 86400s; # এটিও যোগ করুন
+        proxy_connect_timeout 86400s;
         proxy_redirect off;
     }
 
-    
     location /assets/ {
          proxy_pass http://n8n_backend/assets/;
          proxy_set_header Host $host;
          proxy_set_header X-Real-IP $remote_addr;
-}
+    }
 
-    # Next.js Frontend (বাকি সব রিকোয়েস্টের জন্য)
+    # Next.js Frontend
     location / {
         proxy_pass http://nextjs_frontend;
-        
-        # রাইট স্ক্রল এবং বড় ডেটা স্ট্রিম করার জন্য
         proxy_buffering off;
         proxy_redirect off;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
-    
-
 }
-
 
 server {
     listen 80;
-    server_name dev-n8n.newsmartagent.com;
+    server_name ${N8N_DOMAIN};
 
     location / {
-        proxy_pass http://n8n_backend; # এখানে স্ল্যাশ দেওয়ার দরকার নেই
+        proxy_pass http://n8n_backend;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
 
-        # WebSocket Support (n8n এর রিয়েল-টাইম এডিটরের জন্য জরুরি)
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
-        
         proxy_read_timeout 86400;
     }
 }
 
 server {
     listen 80;
-    server_name minio.newsmartagent.com;
+    server_name ${MINIO_CONSOLE_DOMAIN};
 
     location / {
         proxy_pass http://minio_console;
@@ -183,7 +170,6 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         
-        # WebSocket support for MinIO console
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -192,9 +178,8 @@ server {
 
 server {
     listen 80;
-    server_name s3.newsmartagent.com;
+    server_name ${MINIO_API_DOMAIN};
 
-    # Allow large uploads
     client_max_body_size 100M;
 
     location / {
@@ -205,5 +190,3 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
-
-

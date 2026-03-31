@@ -9,6 +9,6 @@ export default function robots() {
         disallow: ["/dashboard"],
       },
     ],
-    sitemap: "https://newsmartagent.com/sitemap.xml",
+    sitemap: `${process.env.NEXT_PUBLIC_BASE_URL || "https://newsmartagent.com"}/sitemap.xml`,
   };
 }

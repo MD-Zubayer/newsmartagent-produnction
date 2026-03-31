@@ -6,7 +6,7 @@
     
     // Dynamically determine apiBase from the script URL
     var scriptSrc = scriptTag ? scriptTag.src : "";
-    var origin    = scriptSrc ? new URL(scriptSrc).origin : "https://newsmartagent.com";
+    var origin    = scriptSrc ? new URL(scriptSrc).origin : window.location.origin;
     var apiBase   = origin + "/api/aiAgent/widget";
     var DEFAULT_ICON = origin + "/newsmartagent_ai_logo.jpeg";
 
@@ -115,7 +115,7 @@
             '      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>',
             '    </button>',
             '  </div>',
-            '  <div class="nsa-footer"><a href="https://newsmartagent.com" target="_blank">Powered by New Smart Agent</a></div>',
+            '  <div class="nsa-footer"><a href="' + origin + '" target="_blank">Powered by New Smart Agent</a></div>',
             '</div>'
         ];
         
