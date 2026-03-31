@@ -243,14 +243,45 @@ class PromptTokenReportAdmin(ModelAdmin):
         
         # Analytics calculations
         from django.db.models import Sum, Count
+        from datasheet.models import Spreadsheet
+        from embedding.models import Document
+        
         total_global = PromptTokenReport.objects.aggregate(total=Sum('prompt_tokens'))['total'] or 0
-        user_breakdown = PromptTokenReport.objects.values('user__email', 'user__name').annotate(
+        total_sheet = Spreadsheet.objects.aggregate(total=Sum('tokens_count'))['total'] or 0
+        total_doc = Document.objects.aggregate(total=Sum('tokens_count'))['total'] or 0
+        
+        user_breakdown = PromptTokenReport.objects.values('user__id', 'user__email', 'user__name').annotate(
             total_tokens=Sum('prompt_tokens'),
             agent_count=Count('id')
         ).order_by('-total_tokens')[:50]
         
+        user_ids = [u['user__id'] for u in user_breakdown]
+        sheet_breakdown = Spreadsheet.objects.filter(user__id__in=user_ids).values('user__id').annotate(sheet_tokens=Sum('tokens_count'))
+        doc_breakdown = Document.objects.filter(user__id__in=user_ids).values('user__id').annotate(doc_tokens=Sum('tokens_count'))
+
+        sheet_dict = {d['user__id']: d['sheet_tokens'] for d in sheet_breakdown}
+        doc_dict = {d['user__id']: d['doc_tokens'] for d in doc_breakdown}
+
+        user_list = []
+        for u in user_breakdown:
+            uid = u['user__id']
+            st = sheet_dict.get(uid) or 0
+            dt = doc_dict.get(uid) or 0
+            user_list.append({
+                'user__email': u['user__email'],
+                'user__name': u['user__name'],
+                'agent_count': u['agent_count'],
+                'total_prompt_tokens': u['total_tokens'],
+                'sheet_tokens': st,
+                'doc_tokens': dt,
+                'grand_total': u['total_tokens'] + st + dt
+            })
+        
         extra_context['total_platform_tokens'] = total_global
-        extra_context['user_breakdown'] = user_breakdown
+        extra_context['total_sheet_tokens'] = total_sheet
+        extra_context['total_doc_tokens'] = total_doc
+        extra_context['grand_platform_total'] = total_global + total_sheet + total_doc
+        extra_context['user_breakdown'] = user_list
         
         return super().changelist_view(request, extra_context=extra_context)
 

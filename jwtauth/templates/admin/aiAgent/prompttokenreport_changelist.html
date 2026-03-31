@@ -3,11 +3,25 @@
 {% block content %}
 <div style="margin-bottom:24px;padding:20px;border:1px solid #d1d5db;border-radius:12px;background:#f3f4f6;color:#111827;">
     <h2 style="margin:0 0 8px 0;font-size:20px;">🌐 Global Platform Token Analytics</h2>
-    <p style="margin:0 0 16px 0;font-size:14px;color:#4b5563;">Overall system prompt tokens used across all AI agents system-wide.</p>
+    <p style="margin:0 0 16px 0;font-size:14px;color:#4b5563;">Overall token consumption sum for Prompts, Dashboards Spreadsheets, and RAG Documents.</p>
     
-    <div style="background:white;padding:16px;border-radius:8px;border:1px solid #e5e7eb;display:inline-block;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-        <p style="margin:0;font-size:14px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;">Grand Total Tokens</p>
-        <p style="margin:4px 0 0 0;font-size:32px;font-weight:bold;color:#1d4ed8;">{{ total_platform_tokens|default:"0" }}</p>
+    <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+        <div style="background:white;padding:16px;border-radius:8px;border:1px solid #e5e7eb;display:inline-block;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+            <p style="margin:0;font-size:14px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;">Agent Prompt Tokens</p>
+            <p style="margin:4px 0 0 0;font-size:28px;font-weight:bold;color:#1d4ed8;">{{ total_platform_tokens|default:"0" }}</p>
+        </div>
+        <div style="background:white;padding:16px;border-radius:8px;border:1px solid #e5e7eb;display:inline-block;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+            <p style="margin:0;font-size:14px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;">Knowledge Sheet Tokens</p>
+            <p style="margin:4px 0 0 0;font-size:28px;font-weight:bold;color:#059669;">{{ total_sheet_tokens|default:"0" }}</p>
+        </div>
+        <div style="background:white;padding:16px;border-radius:8px;border:1px solid #e5e7eb;display:inline-block;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+            <p style="margin:0;font-size:14px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;">RAG Document Tokens</p>
+            <p style="margin:4px 0 0 0;font-size:28px;font-weight:bold;color:#d97706;">{{ total_doc_tokens|default:"0" }}</p>
+        </div>
+        <div style="background:white;padding:16px;border-radius:8px;border:2px solid #7c3aed;display:inline-block;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+            <p style="margin:0;font-size:14px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;font-weight:bold;">Grand Total</p>
+            <p style="margin:4px 0 0 0;font-size:32px;font-weight:bold;color:#7c3aed;">{{ grand_platform_total|default:"0" }}</p>
+        </div>
     </div>
 </div>
 
@@ -20,7 +34,10 @@
                     <th style="padding:12px 16px;font-weight:600;color:#374151;">User Email</th>
                     <th style="padding:12px 16px;font-weight:600;color:#374151;">User Name</th>
                     <th style="padding:12px 16px;font-weight:600;color:#374151;">Active Agents</th>
-                    <th style="padding:12px 16px;font-weight:600;color:#374151;">Total Tokens</th>
+                    <th style="padding:12px 16px;font-weight:600;color:#374151;">Prompt Tokens</th>
+                    <th style="padding:12px 16px;font-weight:600;color:#374151;">Sheet Tokens</th>
+                    <th style="padding:12px 16px;font-weight:600;color:#374151;">Doc Tokens</th>
+                    <th style="padding:12px 16px;font-weight:600;color:#374151;">Gross Total</th>
                 </tr>
             </thead>
             <tbody>
@@ -29,11 +46,14 @@
                     <td style="padding:12px 16px;color:#111827;font-weight:500;">{{ stat.user__email }}</td>
                     <td style="padding:12px 16px;color:#4b5563;">{{ stat.user__name|default:"-" }}</td>
                     <td style="padding:12px 16px;color:#4b5563;">{{ stat.agent_count }}</td>
-                    <td style="padding:12px 16px;color:#1d4ed8;font-weight:600;">{{ stat.total_tokens }}</td>
+                    <td style="padding:12px 16px;color:#1d4ed8;font-weight:600;">{{ stat.total_prompt_tokens }}</td>
+                    <td style="padding:12px 16px;color:#059669;font-weight:600;">{{ stat.sheet_tokens }}</td>
+                    <td style="padding:12px 16px;color:#d97706;font-weight:600;">{{ stat.doc_tokens }}</td>
+                    <td style="padding:12px 16px;color:#7c3aed;font-weight:bold;">{{ stat.grand_total }}</td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="4" style="padding:16px;text-align:center;color:#6b7280;">No token data found.</td>
+                    <td colspan="7" style="padding:16px;text-align:center;color:#6b7280;">No token data found.</td>
                 </tr>
                 {% endfor %}
             </tbody>
