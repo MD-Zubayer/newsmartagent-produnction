@@ -8,7 +8,7 @@ import json
 from django.db.models import Sum, Count, Avg
 from django.utils.html import format_html
 from .models import TokenUsageLog
-from .models import AIProviderModel, SmartKeyword, SmartTranslationMap, TelegramBot, TelegramBotMapping
+from .models import AIProviderModel, SmartKeyword, SmartTranslationMap, TelegramBot, TelegramBotMapping, PromptTokenReport
 from django import forms
 from django.urls import path, reverse
 from django.shortcuts import render, redirect, get_object_or_404
@@ -229,6 +229,39 @@ class AgentAIAdmin(ModelAdmin):
 
 
 
+
+@admin.register(PromptTokenReport)
+class PromptTokenReportAdmin(ModelAdmin):
+    list_display = ('id', 'name', 'user', 'platform', 'prompt_tokens', 'is_active', 'created_at')
+    list_filter = ('platform', 'is_active')
+    search_fields = ('name', 'user__username', 'user__email')
+    
+    change_list_template = "admin/aiAgent/prompttokenreport_changelist.html"
+    
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        
+        # Analytics calculations
+        from django.db.models import Sum, Count
+        total_global = PromptTokenReport.objects.aggregate(total=Sum('prompt_tokens'))['total'] or 0
+        user_breakdown = PromptTokenReport.objects.values('user__email', 'user__name').annotate(
+            total_tokens=Sum('prompt_tokens'),
+            agent_count=Count('id')
+        ).order_by('-total_tokens')[:50]
+        
+        extra_context['total_platform_tokens'] = total_global
+        extra_context['user_breakdown'] = user_breakdown
+        
+        return super().changelist_view(request, extra_context=extra_context)
+
+    def has_add_permission(self, request):
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        return False
+        
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 @admin.register(MissingRequirement)
 class MissingRequirementAdmin(ModelAdmin):

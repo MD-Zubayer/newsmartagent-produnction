@@ -488,5 +488,12 @@ class WidgetSettings(models.Model):
 
 
 
+
     def __str__(self):
         return f"Widget Settings for {self.agent.name}"
+
+class PromptTokenReport(AgentAI):
+    class Meta:
+        proxy = True
+        verbose_name = 'Prompt Token Analytics'
+        verbose_name_plural = 'Prompt Token Analytics'
