@@ -87,17 +87,17 @@ class WidgetSettingsInline(admin.StackedInline):
 
 @admin.register(AgentAI)
 class AgentAIAdmin(ModelAdmin):
-    list_display = [ 'id', 'name', 'cache_tools', 'user', 'platform', 'number', 'page_id', 'is_active', 'ai_agent_type', 'is_special_agent', 'created_at', 'schedule_max_batch', 'schedule_delay_ms']
+    list_display = [ 'id', 'name', 'cache_tools', 'user', 'platform', 'number', 'page_id', 'is_active', 'ai_agent_type', 'prompt_tokens', 'created_at']
     list_filter = ['platform', 'special_agent_status', 'is_active', 'is_special_agent', 'user', 'ai_agent_type',]
     search_fields = ['name', 'page_id', 'number', 'user__username']
     inlines = [AgentAISettingsInline, WidgetSettingsInline]
-    readonly_fields = ['cache_view_link', 'created_at']
+    readonly_fields = ['cache_view_link', 'created_at', 'prompt_tokens']
     fieldsets = (
         (None, {
             'fields': ('user', 'name', 'platform', 'page_id', 'number', 'system_prompt', 'greeting_message', 'ai_agent_type', 'is_active', 'is_special_agent', 'special_agent_status', 'schedule_max_batch', 'schedule_delay_ms')
         }),
         ("Tokens & Models", {
-            'fields': ('ai_model', 'selected_model', 'token_expires_at')
+            'fields': ('ai_model', 'selected_model', 'prompt_tokens', 'token_expires_at')
         }),
         ("Webhook & Keys", {
             'fields': ('webhook_secret', 'access_token')
@@ -124,6 +124,11 @@ class AgentAIAdmin(ModelAdmin):
 
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
+        
+        # Calculate Grand Total Prompt Tokens globally for entire platform
+        total_platform = AgentAI.objects.aggregate(total=Sum('prompt_tokens'))['total'] or 0
+        extra_context['global_prompt_tokens_total'] = total_platform
+
         if request.method == "POST" and "apply_schedule_defaults" in request.POST:
             max_batch = request.POST.get("global_max_batch")
             delay_ms = request.POST.get("global_delay_ms")

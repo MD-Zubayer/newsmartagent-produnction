@@ -63,7 +63,12 @@ class UserAdmin(auth_admin.UserAdmin):
     )
 
     # List display in user list
-    list_display = ["id","email", "name", "phone_number", "division", "is_superuser", "is_staff", "id_type", "created_by", "created_at"]
+    list_display = ["id","email", "name", "phone_number", "division", "is_superuser", "is_staff", "id_type", "total_prompt_tokens", "created_by", "created_at"]
+    
+    from django.db.models import Sum
+    @admin.display(description="Total Prompt Tokens")
+    def total_prompt_tokens(self, obj):
+        return obj.agentsAi.aggregate(t=Sum('prompt_tokens'))['t'] or 0
 
     # Searchable fields
     search_fields = ["email", "name", "phone_number", "division", "district"]

@@ -63,6 +63,7 @@ class AgentAI(models.Model):
     widget_key = models.CharField(max_length=100, unique=True, blank=True, null=True, db_index=True)
 
     system_prompt = models.TextField()
+    prompt_tokens = models.IntegerField(default=0, help_text="Total tokens consumed by the system prompt")
     greeting_message = models.TextField(blank=True, null=True)
 
     custom_keywords = models.TextField(
@@ -115,6 +116,18 @@ class AgentAI(models.Model):
         # Auto-activate is_special_agent when approved
         if self.special_agent_status == 'approved':
             self.is_special_agent = True
+            
+        # Calculate prompt tokens
+        if self.system_prompt:
+            try:
+                import tiktoken
+                encoding = tiktoken.get_encoding('cl100k_base')
+                self.prompt_tokens = len(encoding.encode(self.system_prompt))
+            except Exception:
+                # Fallback approximation (1 token ≈ 4 chars)
+                self.prompt_tokens = len(self.system_prompt) // 4
+        else:
+            self.prompt_tokens = 0
             
         super().save(*args, **kwargs)
 

@@ -1,6 +1,15 @@
 {% extends "admin/change_list.html" %}
 
 {% block content %}
+<div style="margin-bottom:16px;padding:12px;border:1px solid #d1d5db;border-radius:12px;background:#f3f4f6;">
+  <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <h3 style="margin:0; color:#111827; font-size:16px;">🌐 Platform Live Statistics</h3>
+        <p style="margin:4px 0 0 0; color:#4b5563; font-size:14px;">Grand Total Prompt Tokens Usage across the entire platform: <strong>{{ global_prompt_tokens_total }}</strong> tokens</p>
+      </div>
+  </div>
+</div>
+
 <div style="margin-bottom:16px;padding:12px;border:1px solid #e5e7eb;border-radius:12px;background:#f9fafb;">
   <form method="post" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
     {% csrf_token %}
