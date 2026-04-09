@@ -43,12 +43,13 @@ jobs:
             exit 1
           fi
 
-          # ৩. হেলথ চেক: ১৫ সেকেন্ড অপেক্ষা করে দেখবে কন্টেইনারগুলো স্টেবল কি না
-          echo "⏳ Waiting for services to stabilize..."
+          # ৩. হেলথ চেক: ভেরিয়েবল লোড করা এবং ১৫ সেকেন্ড অপেক্ষা করা
+          export $(grep -v '^#' .env | xargs)
+          echo "⏳ Waiting for services to stabilize for project: ${PROJECT_NAME}..."
           sleep 15
           
-          # চেক করা হচ্ছে মেইন সার্ভিস (Django) রানিং কি না
-          if ! docker ps | grep -q "${PROJECT_NAME}-django"; then
+          # চেক করা হচ্ছে মেইন সার্ভিস (Django) রানিং কি না (grep safety added)
+          if ! docker ps | grep -q -- "${PROJECT_NAME}-django"; then
             echo "❌ New version is not stable! Rolling back..."
             # রোলব্যাক লজিক: এখানে প্রয়োজনে আগের ইমেজ দিয়ে রিকভারি কমান্ড দেওয়া যায়
             exit 1
