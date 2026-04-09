@@ -42,8 +42,28 @@ class Document(models.Model):
     agent = models.ForeignKey('aiAgent.AgentAI', on_delete=models.SET_NULL, null=True, blank=True, related_name='knowledge_documents')
 
     full_content = models.TextField(blank=True, null=True)
+    tokens_count = models.IntegerField(default=0, help_text="Total tokens consumed by the document content")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        if getattr(self, 'full_content', None):
+            try:
+                import tiktoken
+                encoding = tiktoken.get_encoding('cl100k_base')
+                
+                # Some approximation if tiktoken throws issue or exact length
+                if self.full_content.strip():
+                    self.tokens_count = len(encoding.encode(self.full_content))
+                else:
+                    self.tokens_count = 0
+            except Exception:
+                # Fallback approximation
+                self.tokens_count = len(self.full_content) // 4
+        else:
+            self.tokens_count = 0
+            
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.title} - {self.user.email}"

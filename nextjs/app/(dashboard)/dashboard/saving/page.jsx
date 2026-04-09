@@ -211,6 +211,28 @@ export default function RankingReportPage() {
     }
   };
 
+  // ৭. Toggle Sharing লজিক
+  const handleToggleSharing = async (msg_hash, currentIsShareable) => {
+    if (!selectedAgent) return;
+    try {
+      setIsUpdatingSharing(msg_hash);
+      const agentId = selectedAgent.page_id;
+      const newIsShareable = !currentIsShareable;
+      
+      await api.post(`/AgentAI/ranking/toggle-sharing/${agentId}/${msg_hash}/`, {
+        is_shareable: newIsShareable
+      });
+      
+      toast.success(newIsShareable ? "Message is now shareable" : "Message excluded from sharing");
+      fetchData(); // Refresh to show new status
+    } catch (err) {
+      console.error("Toggle Sharing Error:", err);
+      toast.error("Failed to update sharing settings");
+    } finally {
+      setIsUpdatingSharing(null);
+    }
+  };
+
   const handleClearGlobalCache = async () => {
     if (!window.confirm("Are you sure you want to CLEAR ALL GLOBAL CACHE? This cannot be undone.")) return;
     
@@ -441,7 +463,14 @@ export default function RankingReportPage() {
                   </div>
                   
                   <div className="flex items-center justify-between gap-4">
-                    <p className="text-sm font-bold text-slate-800 bg-slate-50/50 p-4 rounded-xl border border-slate-100 flex-1">{item.text}</p>
+                    <div className="flex-1 space-y-2">
+                      <p className="text-sm font-bold text-slate-800 bg-slate-50/50 p-4 rounded-xl border border-slate-100">{item.text}</p>
+                      {item.is_shared && (
+                        <span className={`inline-flex px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-lg border ${item.is_blocked ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-indigo-50 text-indigo-600 border-indigo-100'}`}>
+                           {item.is_blocked ? 'Shared Blocked' : 'Shared'}
+                        </span>
+                      )}
+                    </div>
                     <button
                       onClick={() => handleToggleSharing(item.msg_hash, item.is_shareable)}
                       disabled={isUpdatingSharing === item.msg_hash}
@@ -519,7 +548,14 @@ export default function RankingReportPage() {
                         </span>
                       </td>
                       <td className="px-8 py-6 max-w-lg">
-                        <p className="font-bold text-slate-800 text-sm leading-relaxed line-clamp-3">{item.text}</p>
+                        <div className="flex flex-col gap-2">
+                          <p className="font-bold text-slate-800 text-sm leading-relaxed line-clamp-3">{item.text}</p>
+                          {item.is_shared && (
+                            <span className={`self-start px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-lg border ${item.is_blocked ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-indigo-50 text-indigo-600 border-indigo-100'}`}>
+                               {item.is_blocked ? 'Shared Blocked' : 'Shared'}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-8 py-6 text-center">
                         <div className="inline-flex flex-col items-center">

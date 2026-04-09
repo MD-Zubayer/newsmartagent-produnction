@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { HiOutlineShieldCheck, HiOutlineDocumentText, HiOutlineLockClosed, HiOutlineMail, HiOutlineClock, HiOutlineClipboardList, HiOutlineCloudUpload, HiOutlineKey, HiOutlineTrash, HiOutlineExclamationCircle, HiOutlineGlobeAlt } from 'react-icons/hi';
-import { FaFacebook, FaRobot, FaShieldAlt, FaDatabase, FaExchangeAlt, FaUserShield } from 'react-icons/fa';
+import { FaFacebook, FaRobot, FaShieldAlt, FaDatabase, FaExchangeAlt, FaUserShield, FaTiktok } from 'react-icons/fa';
 
 export default function PrivacyPolicy() {
   const sections = [
@@ -10,7 +10,7 @@ export default function PrivacyPolicy() {
       id: "introduction",
       title: "Introduction",
       icon: <HiOutlineDocumentText />,
-      fullText: `Welcome to NewSmartAgent (accessible from newsmartagent.com). Your privacy is extremely important to us. This Privacy Policy document explains how we collect, use, disclose, and safeguard your information when you use our AI automation SaaS platform. By accessing or using our services, you agree to the collection and use of information in accordance with this policy.`
+      fullText: `Welcome to New Smart Agent (NSA) (accessible from newsmartagent.com). Your privacy is extremely important to us. This Privacy Policy document explains how we collect, use, disclose, and safeguard your information when you use our AI automation SaaS platform. By accessing or using our services, you agree to the collection and use of information in accordance with this policy.`
     },
     {
       id: "info-collect",
@@ -25,14 +25,38 @@ Connected Accounts & Integrations (Social Media): To enable AI-powered messaging
 
 Note: We use these tokens solely to manage messages on your behalf via our Django-based backend. We do not access your personal profile data or private posts.
 
-Technical & Usage Data: We automatically collect basic technical information, including IP address, browser type, and access logs. This is used exclusively for security monitoring, preventing unauthorized access, and optimizing platform performance.`
+Technical & Usage Data: We automatically collect basic technical information, including IP address, browser type, and access logs. This is used exclusively for security monitoring, preventing unauthorized access, and optimizing platform performance.
+
+Google Data (via Google APIs): To provide our AI automation services, we request access to certain data from your Google Account via Google APIs. This includes:
+- Google Business Profile Data: business location details, reviews, and ratings to enable automated AI-generated replies.
+- YouTube Data: channel video comments and engagement data to provide management and automation features.
+- Basic Profile: your name and email address to manage your New Smart Agent (NSA) account.`
+    },
+    {
+      id: "google-api-disclosure",
+      title: "2. Google API Services User Data Policy Compliance (Required Disclosure)",
+      icon: <HiOutlineShieldCheck />,
+      fullText: `Google API Services User Data Policy Compliance
+- New Smart Agent (NSA)'s use and transfer of information received from Google APIs to any other app will adhere to the Google API Services User Data Policy, including the Limited Use requirements.
+- We do not use Google user data to develop, replace, or train generalized AI or machine learning models.
+- Your Google data is used strictly to provide the specific automation features you have authorized (e.g., Business Profile replies, YouTube comment automation).
+- We never sell or share your Google data with advertisers or data brokers.`
+    },
+    {
+      id: "google-revoke",
+      title: "3. How to Disconnect Google Access",
+      icon: <HiOutlineKey />,
+      fullText: `You can revoke New Smart Agent (NSA)'s access to your Google data anytime:
+- Visit Google Account > Security > Third-party access > find "New Smart Agent" > Remove access.
+- Once removed, our systems immediately lose access tokens and cannot read or act on your Google data.
+- For a full account/data wipe (including Google data we have processed), email newsmartagentbd@gmail.com; we complete deletions within 30 days.`
     },
     {
       id: "ai-processing",
-      title: "2. AI Data Processing",
+      title: "4. AI Data Processing",
       icon: <FaRobot />,
-      fullText: `2. AI Data Processing
-NewSmartAgent utilizes artificial intelligence to automate customer interactions and manage messaging workflows. To provide these services, our AI systems process data as follows:
+      fullText: `AI Data Processing
+New Smart Agent (NSA) utilizes artificial intelligence to automate customer interactions and manage messaging workflows. To provide these services, our AI systems process data as follows:
 
 Input Processing: Our system processes incoming messages, comments, and user-defined prompts from your connected Facebook pages to generate relevant responses.
 
@@ -44,17 +68,58 @@ Output Generation: The responses generated by the AI are based on the configurat
     },
     {
       id: "third-party",
-      title: "3. Third-Party Integrations",
+      title: "5. Third-Party Integrations",
       icon: <HiOutlineGlobeAlt />,
       fullText: `Our platform may integrate with third-party services to enable automation features. Examples include payment processing services, social media APIs, AI service providers, and cloud infrastructure providers. These third-party services may process limited information necessary to provide their functionality. Each third-party service operates under its own privacy policy.`
     },
     {
+      id: "tiktok-provisions",
+      title: "Specific Provisions for TikTok API Services",
+      icon: <FaTiktok />,
+      fullText: `1. Data Collection and Usage via TikTok API
+Our platform, New Smart Agent (NSA), uses TikTok API Services to provide automation features. When you connect your TikTok account, we may access the following data based on the permissions (scopes) you grant:
+
+Video Comments: To read and automatically reply to comments on your TikTok videos.
+
+Direct Messages: To process and send automated responses to inquiries in your TikTok inbox.
+
+Public Profile Information: To identify and display your connected account within our dashboard.
+
+2. How We Handle Your TikTok Data
+
+Purpose: We only use this data to facilitate the automation services you configure (e.g., AI-driven auto-replies).
+
+No Data Selling: We strictly do not sell, share, or rent your TikTok data to any third-party advertisers or data brokers.
+
+AI Processing: Data is processed through our AI models (via secure API) solely to generate relevant responses for your followers.
+
+3. Data Retention and Deletion
+
+Temporary Storage: We only store TikTok comments or messages temporarily to process the automation.
+
+User Control: You can disconnect your TikTok account from the New Smart Agent dashboard at any time.
+
+Request Deletion: Upon disconnecting your account or requesting account deletion, all TikTok-related access tokens and associated temporary data will be permanently removed from our servers (Oracle VPS) within 30 days.
+
+4. Compliance with TikTok’s Policies
+By using our TikTok automation features, you also agree to be bound by:
+
+- TikTok Terms of Service
+- TikTok Privacy Policy`
+    },
+    {
+      id: "data-sharing",
+      title: "How We Share Your Data",
+      icon: <FaExchangeAlt />,
+      fullText: `We do not sell, rent, or trade your personal or business data with third-party advertisers or data brokers. Your data is only processed through our secure backend and the respective official APIs (Google Cloud, OpenAI/Anthropic) required for the automation tasks you trigger.`
+    },
+    {
       id: "usage",
-      title: "4. How We Use Your Information",
+      title: "6. How We Use Your Information",
       icon: <HiOutlineClipboardList />,
       fullText: `We use the information we collect to power your AI automation and maintain a seamless experience. Specifically, your data is used for:
 
-Service Delivery: To activate and maintain your account, allowing you to access the NewSmartAgent dashboard and features.
+Service Delivery: To activate and maintain your account, allowing you to access the New Smart Agent (NSA) dashboard and features.
 
 AI-Powered Automation: To execute intelligent workflows that respond to Facebook messages or comments on your behalf using our Django-based backend.
 
@@ -68,11 +133,11 @@ Security & Support: To detect and prevent fraudulent activities, troubleshoot te
     },
     {
       id: "cookies",
-      title: "5. Cookies and Tracking",
+      title: "7. Cookies and Tracking",
       icon: <HiOutlineClock />,
       fullText: `We use cookies and similar tracking technologies to ensure our platform functions correctly and to provide a secure environment for your automation tasks.
 
-Essential Cookies: These are necessary for the core functionality of NewSmartAgent. They allow our Django backend to maintain your secure session, so you don't have to log in repeatedly while navigating your dashboard.
+Essential Cookies: These are necessary for the core functionality of New Smart Agent (NSA). They allow our Django backend to maintain your secure session, so you don't have to log in repeatedly while navigating your dashboard.
 
 Security & Performance: We may use technologies (such as through Cloudflare) to protect the site from bot attacks and to optimize the loading speed of your automation tools.
 
@@ -82,7 +147,7 @@ User Control: You can choose to disable cookies through your browser settings. H
     },
     {
       id: "security",
-      title: "6. Data Storage and Security",
+      title: "8. Data Storage and Security",
       icon: <HiOutlineLockClosed />,
       fullText: `The security of your business data and connected accounts is our highest priority. We employ industry-standard security protocols to ensure your information remains protected.
 
@@ -98,19 +163,23 @@ Disclaimer: While we implement rigorous security measures, please be aware that 
     },
     {
       id: "retention",
-      title: "7. Data Retention",
+      title: "9. Data Retention",
       icon: <HiOutlineClock />,
-      fullText: `We retain user information only as long as necessary to provide services, maintain legal compliance, resolve disputes, and enforce our agreements. If you delete your account, we will remove or anonymize your personal data unless retention is required by law.`
+      fullText: `We retain user information only as long as necessary to provide services, maintain legal compliance, resolve disputes, and enforce our agreements.
+
+You can disconnect New Smart Agent (NSA) from your Google account at any time via your Google Security Settings. If you wish to permanently delete your account and all associated data from our database, please email us at newsmartagentbd@gmail.com. We will process your request within 30 days.
+
+Contact for deletions: newsmartagentbd@gmail.com | Address: Sadarpur, Faridpur.`
     },
     {
       id: "rights",
-      title: "8. User Rights",
+      title: "10. User Rights",
       icon: <FaUserShield />,
       fullText: `Depending on your jurisdiction, you may have the right to: access your personal data, correct inaccurate information, request deletion of your data, or withdraw consent for data processing. To make such requests, please contact us.`
     },
     {
       id: "children",
-      title: "9. Children's Privacy",
+      title: "11. Children's Privacy",
       icon: <HiOutlineExclamationCircle />,
       fullText: `Our services are not intended for individuals under the age of 13. We do not knowingly collect personal information from children. If we become aware that a child has provided personal information, we will remove such data promptly.`
     },
@@ -118,31 +187,31 @@ Disclaimer: While we implement rigorous security measures, please be aware that 
       id: "facebook-collect",
       title: "Facebook Data Collection",
       icon: <FaFacebook />,
-      fullText: `When a user connects their Facebook Page to NewSmartAgent, we may access certain data via the Facebook Graph API with the permissions granted by the user. The information we may collect includes: Facebook Page ID, page name and basic page details, page access token, messages sent to the page through Facebook Messenger, comments on Facebook posts, sender ID, public profile information available through Meta permissions, and message timestamps and conversation metadata. We only access information required to operate automation features.`
+      fullText: `When a user connects their Facebook Page to New Smart Agent (NSA), we may access certain data via the Facebook Graph API with the permissions granted by the user. The information we may collect includes: Facebook Page ID, page name and basic page details, page access token, messages sent to the page through Facebook Messenger, comments on Facebook posts, sender ID, public profile information available through Meta permissions, and message timestamps and conversation metadata. We only access information required to operate automation features.`
     },
     {
-       id: "messenger",
-       title: "Messenger Automation Data",
-       icon: <FaExchangeAlt />,
-       fullText: `When Messenger automation is enabled, our system may process: incoming messages, conversation IDs, message timestamps, sender identifiers, and automation response data. This data is used to generate automated replies and manage messaging workflows.`
+      id: "messenger",
+      title: "Messenger Automation Data",
+      icon: <FaExchangeAlt />,
+      fullText: `When Messenger automation is enabled, our system may process: incoming messages, conversation IDs, message timestamps, sender identifiers, and automation response data. This data is used to generate automated replies and manage messaging workflows.`
     },
     {
-       id: "token-handling",
-       title: "Page Access Token Handling",
-       icon: <HiOutlineKey />,
-       fullText: `To enable automation features, NewSmartAgent stores Facebook Page access tokens. These tokens are used only to: send automated messages, reply to comments, execute automation workflows, and access messaging features through Meta APIs. Security measures include secure storage, restricted system access, and encrypted communication. Users may disconnect their Facebook Page at any time to revoke access.`
+      id: "token-handling",
+      title: "Page Access Token Handling",
+      icon: <HiOutlineKey />,
+      fullText: `To enable automation features, New Smart Agent (NSA) stores Facebook Page access tokens. These tokens are used only to: send automated messages, reply to comments, execute automation workflows, and access messaging features through Meta APIs. Security measures include secure storage, restricted system access, and encrypted communication. Users may disconnect their Facebook Page at any time to revoke access.`
     },
     {
-       id: "fb-deletion",
-       title: "Facebook Data Deletion",
-       icon: <HiOutlineTrash />,
-       fullText: `Users can request deletion of their data collected through Facebook integration. Option 1: Remove NewSmartAgent from your Facebook account  Settings & privacy > Business integrations . Option 2: Request deletion by contacting newsmartagentbd@gmail.com. Please include your Facebook Page ID and the email associated with your account. Once verified, we will delete the data within a reasonable timeframe.`
+      id: "fb-deletion",
+      title: "Facebook Data Deletion",
+      icon: <HiOutlineTrash />,
+      fullText: `Users can request deletion of their data collected through Facebook integration. Option 1: Remove New Smart Agent (NSA) from your Facebook account  Settings & privacy > Business integrations . Option 2: Request deletion by contacting newsmartagentbd@gmail.com. Please include your Facebook Page ID and the email associated with your account. Once verified, we will delete the data within a reasonable timeframe.`
     }
   ];
 
   return (
     <div className="min-h-screen bg-[#fafafa] font-sans text-slate-600 selection:bg-indigo-100 selection:text-indigo-600">
-      
+
       {/* Dynamic Background Decorations */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-100/30 rounded-full blur-[120px] animate-pulse"></div>
@@ -150,14 +219,14 @@ Disclaimer: While we implement rigorous security measures, please be aware that 
       </div>
 
       <div className="max-w-[1100px] mx-auto px-6 py-20 relative z-10">
-        
+
         {/* Header Section */}
         <header className="text-left mb-20 md:mb-32 space-y-8 border-l-4 border-indigo-600 pl-8 md:pl-12">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-white border border-slate-100 rounded-full shadow-sm text-[10px] font-black text-indigo-600 uppercase tracking-[0.3em]">
             <HiOutlineShieldCheck className="text-lg animate-pulse" /> Compliance & Transparency
           </div>
           <h1 className="text-5xl md:text-8xl font-black text-slate-900 tracking-tighter italic leading-none">
-            Privacy <br className="hidden md:block"/> <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600">Governance</span>
+            Privacy <br className="hidden md:block" /> <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600">Governance</span>
           </h1>
           <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-8 text-xs font-black text-slate-400 uppercase tracking-widest">
             <p>Version 2.4.0</p>
@@ -192,27 +261,27 @@ Disclaimer: While we implement rigorous security measures, please be aware that 
           <div className="relative overflow-hidden bg-slate-950 p-2 rounded-[3rem] md:rounded-[4rem] group/footer">
             <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 opacity-50 group-hover/footer:opacity-100 transition-opacity duration-1000"></div>
             <div className="relative bg-slate-950 rounded-[2.8rem] md:rounded-[3.8rem] p-12 md:p-24 border border-white/5 flex flex-col md:flex-row items-center justify-between gap-12 overflow-hidden">
-               <div className="space-y-6 text-center md:text-left">
-                  <h3 className="text-3xl md:text-5xl font-black text-white italic tracking-tighter leading-none">Questions? <br className="hidden md:block"/> Get in touch.</h3>
-                  <div className="flex flex-col md:flex-row items-center gap-6 text-slate-400 font-black text-[10px] md:text-xs uppercase tracking-[0.3em]">
-                     <div className="flex items-center gap-3">
-                        <HiOutlineMail className="text-indigo-400 text-xl" />
-                        newsmartagentbd@gmail.com
-                     </div>
-                     <div className="hidden md:block w-2 h-2 bg-slate-800 rounded-full"></div>
-                     <div className="flex items-center gap-3">
-                        <HiOutlineShieldCheck className="text-indigo-400 text-xl" />
-                        GDPR Compliant
-                     </div>
+              <div className="space-y-6 text-center md:text-left">
+                <h3 className="text-3xl md:text-5xl font-black text-white italic tracking-tighter leading-none">Questions? <br className="hidden md:block" /> Get in touch.</h3>
+                <div className="flex flex-col md:flex-row items-center gap-6 text-slate-400 font-black text-[10px] md:text-xs uppercase tracking-[0.3em]">
+                  <div className="flex items-center gap-3">
+                    <HiOutlineMail className="text-indigo-400 text-xl" />
+                    newsmartagentbd@gmail.com
                   </div>
-               </div>
-               <div className="w-20 h-20 md:w-32 md:h-32 bg-white rounded-full flex items-center justify-center text-slate-950 hover:bg-indigo-600 hover:text-white transition-all duration-700 cursor-pointer group-hover/footer:scale-110 shadow-2xl shadow-white/5">
-                  <FaShieldAlt className="text-3xl md:text-5xl" />
-               </div>
+                  <div className="hidden md:block w-2 h-2 bg-slate-800 rounded-full"></div>
+                  <div className="flex items-center gap-3">
+                    <HiOutlineShieldCheck className="text-indigo-400 text-xl" />
+                    GDPR Compliant
+                  </div>
+                </div>
+              </div>
+              <div className="w-20 h-20 md:w-32 md:h-32 bg-white rounded-full flex items-center justify-center text-slate-950 hover:bg-indigo-600 hover:text-white transition-all duration-700 cursor-pointer group-hover/footer:scale-110 shadow-2xl shadow-white/5">
+                <FaShieldAlt className="text-3xl md:text-5xl" />
+              </div>
             </div>
           </div>
           <p className="text-[10px] font-bold text-slate-300 text-center mt-12 uppercase tracking-[0.6em]">
-            © 2026 NewSmartAgent Intelligence • Built for the future of SaaS.
+            © 2026 New Smart Agent (NSA) • Built for the future of SaaS.
           </p>
         </footer>
 

@@ -11,6 +11,7 @@ from aiAgent.memory_handler import (
     get_keywords_by_category, 
     check_keyword_match
 )
+from aiAgent.models import WebsiteVisitor
 from webhooks.constants import TARGET_KEYWORDS
 from aiAgent.data_processor import processor_spreadsheet_data
 import json
@@ -26,7 +27,7 @@ import redis
 import signal
 import logging
 import uuid
-from django.db.models import F
+from django.db.models import F, Sum
 from webhooks.utils import fetch_facebook_post_text, get_message_cache, set_message_cache
 from chat.utils import get_smart_post_context
 from aiAgent.cache.hybrid_similarity import get_cached_reply, set_cached_reply
@@ -39,25 +40,27 @@ from webhooks.comment import deliver_public_comment_reply
 logger = logging.getLogger('aiAgent')
 
 def get_order_instructions(user):
-    order_instruction = ""
+    """
+    Fetch any order-specific instructions to enrich RAG/context.
+    Fallback: a polite default line.
+    """
     try:
-        settings, created = AgentSettings.objects.get_or_create(user=user)
-        if settings.is_order_enable:
-            try:
-                order_form = OrderForm.objects.get(user=user)
-                link = f'https://newsmartagent.com/orders/{order_form.form_id}'
-                order_instruction = f"If user wants to buy/order, strictly give this link: {link}."
-                return order_instruction
-            except OrderForm.DoesNotExist:
-                order_instruction = "If they want to buy, say order form is not ready yet."
-                return order_instruction
-        else:
-            order_instruction = "Online ordering is currently closed. Ask them to contact support for manual orders."
-            return order_instruction
+        order_instruction = ""
+        # Prefer latest OrderForm note if available
+        oform = OrderForm.objects.filter(user=user).order_by('-id').first()
+        if oform and getattr(oform, 'order_instructions', None):
+            order_instruction = oform.order_instructions
+
+        # Fallback to AgentSettings.order_instruction if present
+        if not order_instruction:
+            settings_obj = AgentSettings.objects.filter(user=user).order_by('-id').first()
+            if settings_obj and getattr(settings_obj, 'order_instruction', None):
+                order_instruction = settings_obj.order_instruction
+
+        return order_instruction or "Handle orders politely."
     except Exception as e:
-        logger.error(f"Settings Error: {e}")
-        order_instruction = "Handle orders politely."
-        return order_instruction
+        logger.error(f"Settings Error while fetching order instructions: {e}")
+        return "Handle orders politely."
 
 def perform_rag_search(agent_config, text, post_context_text, order_instruction, existing_vector=None):
     sheet_context = ""
@@ -196,7 +199,7 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
             logger.info(">>> Embedding skipped due to keyword + message length.")
     except Exception as e:
         logger.error(f"RAG Search Error: {e}", exc_info=True)
-        extra_instruction = f" Answer politely. If data missing, ask to wait. {order_instruction}"
+        extra_instruction = f' Answer politely. If data missing, politely ask clarifying questions instead of handoff. {order_instruction}'
     return sheet_context, extra_instruction, query_vector
 
 def check_token_availability(user_profile, ai_model_name):
@@ -277,7 +280,7 @@ def deduct_user_tokens(user_profile, total_tokens, ai_model_name):
                     logger.info(f"Sub {sub.id} exhausted. Still need to deduct {remaining_to_deduct}")
 
             # Final sync of global balance
-            user_profile.sync_word_balance()
+            user_profile.sync_balances()
 
             # Trigger auto-renew if balance is low
             try:
@@ -291,6 +294,78 @@ def deduct_user_tokens(user_profile, total_tokens, ai_model_name):
             
         except Exception as e:
             logger.error(f"Token Deduction Error: {e}")
+
+
+def check_schedule_quota(user_profile, required=1):
+    """
+    Checks whether user has at least `required` schedule slots available.
+    """
+    from users.models import Subscription
+    from django.utils import timezone
+    from django.db.models import Sum
+    total = Subscription.objects.filter(
+        profile=user_profile,
+        is_active=True,
+        end_date__gt=timezone.now(),
+        remaining_schedule_messages__gt=0
+    ).aggregate(total=Sum('remaining_schedule_messages'))['total']
+    return (total or 0) >= required
+
+
+def deduct_schedule_quota(user_profile, required=1):
+    """
+    Deduct schedule message quota similar to token deduction logic.
+    Returns the subscription used for deduction (first one).
+    Raises ValueError if insufficient quota.
+    """
+    if required <= 0:
+        return None
+
+    from users.models import Subscription
+    from django.utils import timezone
+
+    remaining = required
+    used_sub = None
+
+    subs = Subscription.objects.filter(
+        profile=user_profile,
+        is_active=True,
+        end_date__gt=timezone.now(),
+        remaining_schedule_messages__gt=0
+    ).order_by('end_date')
+
+    for sub in subs:
+        if remaining <= 0:
+            break
+        if sub.remaining_schedule_messages > remaining:
+            sub.remaining_schedule_messages -= remaining
+            sub.save(update_fields=['remaining_schedule_messages'])
+            used_sub = used_sub or sub
+            remaining = 0
+        else:
+            remaining -= sub.remaining_schedule_messages
+            sub.remaining_schedule_messages = 0
+            sub.is_active = False
+            sub.save(update_fields=['remaining_schedule_messages', 'is_active'])
+            used_sub = used_sub or sub
+
+    user_profile.sync_balances()
+
+    if remaining > 0:
+        raise ValueError("No schedule quota left. Please upgrade your plan.")
+
+    return used_sub
+
+
+def restore_schedule_quota(user_profile, subscription, count=1):
+    """
+    Refund schedule quota to the provided subscription (if any) and resync balances.
+    """
+    if subscription and count > 0:
+        subscription.remaining_schedule_messages += count
+        subscription.is_active = True
+        subscription.save(update_fields=['remaining_schedule_messages', 'is_active'])
+    user_profile.sync_balances()
 
 def build_ai_context(agent_config, sender_id, text, extra_instruction=None, sheet_context=None, platform='messenger'):
     from aiAgent.utils import get_memory_context
@@ -324,6 +399,24 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
             memory_context = f"\nUser Database Memory [Very Important]:\n{mem_data}"
             logger.info(f"🧠 Injecting Memory Context for {sender_id}. Score: {c_score} | DB Triggers: {matched_intents or matched_targets}")
 
+    # 3.5 Visitor Tracking Context
+    visitor_context = ""
+    try:
+        visitor = WebsiteVisitor.objects.filter(visitor_uuid=sender_id).first()
+        if visitor:
+            v_info = []
+            if visitor.location: v_info.append(f"Location: {visitor.location}")
+            v_info.append(f"Total Visits: {visitor.view_count}")
+            if visitor.captured_email: v_info.append(f"Email: {visitor.captured_email}")
+            if visitor.captured_phone: v_info.append(f"Phone: {visitor.captured_phone}")
+            
+            if v_info:
+                visitor_context = "\n[VISITOR TRACKING DATA]:\n" + " | ".join(v_info)
+                visitor_context += "\nDirective: Use this data for a personalized greeting if this is a returning visitor or if location/contact info is relevant. Be natural."
+                logger.info(f"📊 Injecting Visitor Context for {sender_id}")
+    except Exception as e:
+        logger.error(f"Error fetching visitor context: {e}")
+
     # 4. Fetch Contact specific settings
     from aiAgent.models import Contact
     custom_role = agent_config.system_prompt
@@ -349,6 +442,7 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
 
     if sheet_context: system_prompt_parts.append(sheet_context)
     if memory_context: system_prompt_parts.append(memory_context)
+    if visitor_context: system_prompt_parts.append(visitor_context)
 
     system_instruction = "\n\n".join(system_prompt_parts)
 
@@ -486,7 +580,14 @@ def get_ai_response(agent_config, system_instruction, history, current_message):
 
 def deliver_whatsapp_reply(data, reply):
     """Deliver final reply for WhatsApp via n8n webhook"""
-    webhook_url = "https://n8n.newsmartagent.com/webhook/whatsapp-delivery"
+    import os
+    webhook_url = os.getenv("N8N_WHATSAPP_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/whatsapp-delivery")
+    buttons = [
+        {"id": "human_help" if not data.get('human_mode') else "resolve_human",
+         "title": "🙋 Human Help" if not data.get('human_mode') else "✅ Resolve Human Mode"},
+        {"id": "toggle_ai",
+         "title": "🔊 On AI Reply" if data.get('stop_ai') else "🔇 Stop AI Reply"},
+    ]
     final_target = data.get('delivery_jid') or data.get('sender_id', '')
     payload = {
         "to": str(final_target),
@@ -497,23 +598,62 @@ def deliver_whatsapp_reply(data, reply):
         "reply": str(reply),
         "type": "whatsapp",
         "message_id": str(data.get('message_id', '')),
-        "sessionId": str(data.get('sessionId', ''))
+        "sessionId": str(data.get('sessionId', '')),
+        "buttons": buttons  # only option labels, no URLs
     }
     try:
-        logger.info(f"🚀 [Logic] Routing WhatsApp reply to n8n delivery. Payload: {payload}")
-        response = requests.post(webhook_url, json=payload, timeout=15)
-        logger.info(f"📥 [Logic] n8n Delivery response: Status {response.status_code}, Body: {response.text}")
+        logger.info(f'[Logic] Routing WhatsApp reply via n8n | to={final_target} | url={webhook_url}')
+        response = requests.post(
+            webhook_url,
+            json=payload,
+            timeout=15
+        )
         if response.status_code != 200:
-            logger.error(f"❌ [Logic] n8n WhatsApp delivery error: {response.status_code} - {response.text}")
+            logger.error(f'[Logic] n8n WhatsApp delivery error: {response.status_code} - {response.text}')
             return False
+        logger.info(f'[Logic] n8n WhatsApp delivery ok: {response.status_code}')
         return True
     except Exception as e:
         logger.error(f"❌ [Logic] n8n WhatsApp delivery critical failure: {e}")
         return False
 
+
+def deliver_instagram_reply(data, reply, page_id, access_token):
+    """Deliver final reply for Instagram via n8n webhook (Separate Workflow)"""
+    import os
+    webhook_url = os.getenv("N8N_INSTAGRAM_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/instagram-delivery")
+    payload = {
+        "sender_id": str(data.get('sender_id', '')),
+        "reply": str(reply),
+        "message": str(reply),
+        "text": str(reply),
+        "page_id": str(page_id),
+        "page_access_token": str(access_token),
+        "type": "instagram",
+        "message_id": str(data.get('message_id', '')),
+    }
+
+    try:
+        logger.info(f'[Logic] Routing Instagram reply via n8n | page_id={page_id} | url={webhook_url}')
+        response = requests.post(
+            webhook_url,
+            json=payload,
+            timeout=15
+        )
+        if response.status_code != 200:
+            logger.error(f'[Logic] n8n Instagram delivery error: {response.status_code} - {response.text}')
+            return False
+        logger.info(f'[Logic] n8n Instagram delivery ok: {response.status_code}')
+        return True
+    except Exception as e:
+        logger.error(f"❌ [Logic] n8n Instagram delivery critical failure: {e}")
+        return False
+
+
 def deliver_facebook_reply(data, reply, page_id, access_token):
     """Deliver final reply for Facebook (Messenger / Comment) via n8n webhook"""
-    webhook_url = "https://n8n.newsmartagent.com/webhook/fb-comment-message-delivery"
+    import os
+    webhook_url = os.getenv("N8N_FACEBOOK_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/fb-comment-message-delivery")
     request_type = str(data.get('type', 'messenger'))
     payload = {
         "sender_id": str(data.get('sender_id', '')),
@@ -526,19 +666,237 @@ def deliver_facebook_reply(data, reply, page_id, access_token):
     }
 
     try:
-        logger.info(f"Sending Facebook payload to n8n: {payload}")
+        logger.info(f'[Logic] Routing Facebook reply via n8n | page_id={page_id} | url={webhook_url}')
         response = requests.post(
             webhook_url,
             json=payload,
             timeout=15
         )
         if response.status_code != 200:
-            logger.error(f"n8n Facebook delivery error: {response.status_code} - {response.text}")
+            logger.error(f'[Logic] n8n Facebook delivery error: {response.status_code} - {response.text}')
             return False
+        logger.info(f'[Logic] n8n Facebook delivery ok: {response.status_code}')
         return True
     except Exception as e:
         logger.error(f"n8n Facebook delivery critical failure: {e}")
         return False
+
+def deliver_telegram_reply(data, reply, token):
+    """Deliver final reply for Telegram via n8n webhook (Separate Workflow)"""
+    import os
+    webhook_url = os.getenv("N8N_TELEGRAM_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/telegram-delivery")
+    chat_id = data.get('chat_id') or data.get('sender_id')
+    
+    if not chat_id:
+        logger.error("❌ [Logic] Missing chat_id for Telegram reply")
+        return False
+    
+    if not token:
+        logger.error("❌ [Logic] Missing bot token for Telegram reply")
+        return False
+
+    payload = {
+        "chat_id": str(chat_id),
+        "sender_id": str(data.get('sender_id', '')),
+        "reply": str(reply),
+        "access_token": str(token),  # Consistent with other delivery functions
+        "platform": "telegram",
+        "message_id": str(data.get('message_id', ''))
+    }
+
+    try:
+        logger.info(f'[Logic] Routing Telegram reply via n8n | chat={chat_id} | url={webhook_url}')
+        response = requests.post(
+            webhook_url,
+            json=payload,
+            timeout=15
+        )
+        if response.status_code != 200:
+            logger.error(f'[Logic] n8n Telegram delivery error: {response.status_code} - {response.text}')
+            return False
+        logger.info(f'[Logic] n8n Telegram delivery ok: {response.status_code}')
+        return True
+    except Exception as e:
+        logger.error(f'[Logic] n8n Telegram delivery critical failure: {e}')
+        return False
+
+def get_button_payload(contact):
+    """Generate button text and payload based on current contact state"""
+    buttons = []
+    
+    # Button 1: Human Help / Resolve Human Mode
+    if contact.is_human_needed:
+        buttons.append({"text": "✅ Resolve Human Mode", "action": "RESOLVE_HUMAN"})
+    else:
+        buttons.append({"text": "🙋 Human Help", "action": "HUMAN_HELP"})
+        
+    # Button 2: Stop AI / On AI
+    if contact.is_auto_reply_enabled:
+        buttons.append({"text": "🔇 Stop AI Reply", "action": "STOP_AI_REPLY"})
+    else:
+        buttons.append({"text": "🔊 On AI Reply", "action": "ON_AI_REPLY"})
+        
+    return buttons
+
+def send_telegram_buttons(chat_id, token, contact, reply_text="\u200e"):
+    """Send inline keyboard buttons after Telegram reply"""
+    if not token or not chat_id:
+        return False
+        
+    import os
+    # We can reuse the telegram delivery webhook, but send buttons
+    webhook_url = os.getenv("N8N_TELEGRAM_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/telegram-delivery")
+    
+    buttons = get_button_payload(contact)
+    inline_keyboard = [
+        [
+            {"text": b["text"], "callback_data": b["action"]} for b in buttons
+        ]
+    ]
+    
+    payload = {
+        "chat_id": str(chat_id),
+        "access_token": str(token),
+        "platform": "telegram",
+        "reply": reply_text, # Minimal text as Telegram requires text with buttons
+        "reply_markup": {"inline_keyboard": inline_keyboard}
+    }
+    
+    try:
+        logger.info(f'[Logic] Sending Telegram buttons to {chat_id}')
+        requests.post(webhook_url, json=payload, timeout=10)
+        return True
+    except Exception as e:
+        logger.error(f"Telegram button delivery error: {e}")
+        return False
+
+def send_messenger_buttons(sender_id, page_id, access_token, contact, reply_text="\u200e"):
+    """Send quick_reply buttons after Messenger reply"""
+    if not access_token or not sender_id:
+        return False
+        
+    import os
+    webhook_url = os.getenv("N8N_FACEBOOK_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/fb-comment-message-delivery")
+    
+    buttons = get_button_payload(contact)
+    short_titles = {
+        "HUMAN_HELP": "🙋 Human",
+        "RESOLVE_HUMAN": "✅ Resolve",
+        "STOP_AI_REPLY": "🔇 Stop AI",
+        "ON_AI_REPLY": "🔊 On AI"
+    }
+    quick_replies = []
+    for b in buttons:
+        title = short_titles.get(b["action"], b["text"])[:20]  # keep it short to avoid oversized bubbles
+        quick_replies.append({
+            "content_type": "text",
+            "title": title,
+            "payload": b["action"]
+        })
+    
+    payload = {
+        "sender_id": str(sender_id),
+        "page_id": str(page_id),
+        "page_access_token": str(access_token),
+        "type": "messenger",
+        "reply": str(reply_text),
+        "quick_replies": quick_replies
+    }
+    
+    try:
+        logger.info(f'[Logic] Sending Messenger buttons to {sender_id}')
+        requests.post(webhook_url, json=payload, timeout=10)
+        return True
+    except Exception as e:
+        logger.error(f"Messenger button delivery error: {e}")
+        return False
+
+def send_instagram_buttons(sender_id, page_id, access_token, contact, reply_text="\u200e"):
+    """Send quick_reply buttons after Instagram reply"""
+    if not access_token or not sender_id:
+        return False
+        
+    import os
+    webhook_url = os.getenv("N8N_INSTAGRAM_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/instagram-delivery")
+    
+    buttons = get_button_payload(contact)
+    quick_replies = [
+        {
+            "content_type": "text",
+            "title": b["text"][:20], # Instagram limit
+            "payload": b["action"]
+        } for b in buttons
+    ]
+    
+    payload = {
+        "sender_id": str(sender_id),
+        "page_id": str(page_id),
+        "page_access_token": str(access_token),
+        "type": "instagram",
+        "reply": reply_text,
+        "quick_replies": quick_replies
+    }
+    
+    try:
+        logger.info(f'[Logic] Sending Instagram buttons to {sender_id}')
+        requests.post(webhook_url, json=payload, timeout=10)
+        return True
+    except Exception as e:
+        logger.error(f"Instagram button delivery error: {e}")
+        return False
+
+def send_whatsapp_buttons(data, contact, reply_text="\u200e"):
+    """Send button message via n8n for WhatsApp"""
+    import os
+    webhook_url = os.getenv("N8N_WHATSAPP_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/whatsapp-delivery")
+    
+    final_target = data.get('delivery_jid') or data.get('sender_id', '')
+    if not final_target:
+        return False
+        
+    buttons_data = get_button_payload(contact)
+    
+    # ── Text Menu Fallback (no URLs) ──
+    # Meta/LID sometimes blocks interactive buttons; we send a plain numbered menu without links.
+    # Keep text compact so bubbles don't look big
+    menu_text = f"{reply_text}\n\n\n"
+    menu_text += "Choose: "
+    
+    labels = []
+    for i, b in enumerate(buttons_data, 1):
+        label = b['text']
+        # remove emojis for WhatsApp compact view
+        label = ''.join(ch for ch in label if ch.isalnum() or ch.isspace())
+        label = label.strip()
+        if len(label) > 18:
+            label = label[:17] + "…"
+        labels.append(f"{i}) {label}")
+    menu_text += " ".join(labels)
+    
+
+    payload = {
+        "to": str(final_target),
+        "number": str(final_target),
+        "delivery_jid": str(data.get('delivery_jid', '')),
+        "phone": str(data.get('sender_id', '')),
+        "sender_id": str(data.get('sender_id', '')),
+        "message": menu_text,
+        "reply": menu_text,
+        "text": menu_text,
+        "type": "whatsapp",
+        "message_id": str(data.get('message_id', '')),
+        "sessionId": str(data.get('sessionId', '')),
+        "is_button_message": False
+    }
+    
+    try:
+        logger.info(f'[Logic] Sending WhatsApp buttons to {final_target}')
+        requests.post(webhook_url, json=payload, timeout=10)
+        return True
+    except Exception as e:
+        logger.error(f"WhatsApp button delivery error: {e}")
+        return False
+
 
 def deliver_dashboard_reply(user_id, reply_text, message_id):
     """Deliver final reply to the dashboard via WebSocket and update the log"""

@@ -6,6 +6,7 @@ from .models import Conversation, Message
 
 
 def get_or_create_conversation(agentAi, contact_id, platform='messenger'):
+    platform = (platform or 'messenger').lower()
     return Conversation.objects.get_or_create(
         agentAi=agentAi,
         contact_id=str(contact_id),
@@ -15,7 +16,7 @@ def get_or_create_conversation(agentAi, contact_id, platform='messenger'):
 
 
 def save_message(agentAi, contact_id, text, role, tokens=0, platform='messenger'):
-
+    platform = (platform or 'messenger').lower()
     convo = get_or_create_conversation(agentAi, contact_id, platform=platform)
 
     return Message.objects.create(

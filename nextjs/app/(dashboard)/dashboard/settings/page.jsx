@@ -30,6 +30,25 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [offers, setOffers] = useState([]);
 
+  // Security States
+  const [securityData, setSecurityData] = useState({
+    recovery_email: "",
+    recovery_whatsapp: "",
+    recovery_codes_count: 0,
+    recovery_codes_available: [],
+    trusted_devices: []
+  });
+  const [countryCode, setCountryCode] = useState("880");
+  const [loginHistory, setLoginHistory] = useState([]);
+  const [showCodes, setShowCodes] = useState(false);
+
+  // Custom Confirm Modal State
+  const [confirmModal, setConfirmModal] = useState({ open: false, title: "", message: "", icon: null, confirmLabel: "Confirm", confirmColor: "rose", onConfirm: null });
+  const showConfirm = ({ title, message, icon, confirmLabel, confirmColor = "rose", onConfirm }) => {
+    setConfirmModal({ open: true, title, message, icon, confirmLabel, confirmColor, onConfirm });
+  };
+  const closeConfirm = () => setConfirmModal(prev => ({ ...prev, open: false, onConfirm: null }));
+
   // Per-Contact Settings State
   const [agents, setAgents] = useState([]);
   const [selectedAgent, setSelectedAgent] = useState("");
@@ -46,6 +65,10 @@ export default function SettingsPage() {
     if (activeTab === "contacts" || activeTab === "automation") {
       fetchAgents();
       fetchOffers();
+    }
+    if (activeTab === "security") {
+      fetchSecurityData();
+      fetchLoginHistory();
     }
   }, [activeTab]);
 
@@ -202,6 +225,127 @@ export default function SettingsPage() {
     }
   };
 
+  const fetchSecurityData = async () => {
+    try {
+      const res = await api.get("/security/settings/");
+      const data = res.data;
+      
+      // Parse country code from recovery_whatsapp
+      if (data.recovery_whatsapp) {
+        let whatsapp = data.recovery_whatsapp.replace(/^\+/, '');
+        if (whatsapp.startsWith("880")) {
+          setCountryCode("880");
+          data.recovery_whatsapp = whatsapp.substring(3);
+        } else if (whatsapp.startsWith("91")) {
+          setCountryCode("91");
+          data.recovery_whatsapp = whatsapp.substring(2);
+        } else if (whatsapp.startsWith("1")) {
+          setCountryCode("1");
+          data.recovery_whatsapp = whatsapp.substring(1);
+        } else if (whatsapp.startsWith("44")) {
+          setCountryCode("44");
+          data.recovery_whatsapp = whatsapp.substring(2);
+        } else if (whatsapp.startsWith("971")) {
+          setCountryCode("971");
+          data.recovery_whatsapp = whatsapp.substring(3);
+        } else if (whatsapp.startsWith("966")) {
+          setCountryCode("966");
+          data.recovery_whatsapp = whatsapp.substring(3);
+        }
+      }
+      
+      setSecurityData(data);
+    } catch (err) {
+      console.error("Failed to fetch security data");
+    }
+  };
+
+  const fetchLoginHistory = async () => {
+    try {
+      const res = await api.get("/security/login-history/");
+      setLoginHistory(res.data || []);
+    } catch (err) {
+      console.error("Failed to fetch login history");
+    }
+  };
+
+  const handleUpdateRecovery = async () => {
+    setIsSaving(true);
+    try {
+      // Clean number (remove any leading zeros the user might add)
+      const cleanNumber = securityData.recovery_whatsapp.replace(/^0+/, '');
+      const fullNumber = countryCode + cleanNumber;
+      
+      await api.post("/security/settings/", {
+        action: "update_recovery",
+        recovery_email: securityData.recovery_email,
+        recovery_whatsapp: fullNumber
+      });
+      toast.success("Recovery options updated!");
+    } catch (err) {
+      toast.error("Failed to update recovery options.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleGenerateCodes = async () => {
+    showConfirm({
+      title: "Generate New Codes?",
+      message: "This will permanently delete your previous recovery codes and generate 10 new ones. Make sure to save them in a safe place.",
+      icon: "🔑",
+      confirmLabel: "Yes, Generate",
+      confirmColor: "amber",
+      onConfirm: async () => {
+        closeConfirm();
+        setIsSaving(true);
+        try {
+          const res = await api.post("/security/settings/", { action: "generate_codes" });
+          setSecurityData(prev => ({
+            ...prev,
+            recovery_codes_available: res.data.codes,
+            recovery_codes_count: res.data.codes.length
+          }));
+          setShowCodes(true);
+          toast.success("New recovery codes generated!");
+        } catch (err) {
+          toast.error("Failed to generate codes.");
+        } finally {
+          setIsSaving(false);
+        }
+      }
+    });
+  };
+
+  const handleRemoveDevice = async (deviceId) => {
+    showConfirm({
+      title: "Disconnect Device?",
+      message: "This will immediately log out this device. They will need to complete 2-Step Verification to log in again.",
+      icon: "🔒",
+      confirmLabel: "Disconnect",
+      confirmColor: "rose",
+      onConfirm: async () => {
+        closeConfirm();
+        setIsSaving(true);
+        try {
+          await api.post("/security/settings/", {
+            action: "remove_device",
+            device_id: deviceId
+          });
+          setSecurityData(prev => ({
+            ...prev,
+            trusted_devices: prev.trusted_devices.filter(d => d.id !== deviceId)
+          }));
+          toast.success("Device disconnected successfully!");
+        } catch (err) {
+          toast.error("Failed to disconnect device.");
+        } finally {
+          setIsSaving(false);
+        }
+      }
+    });
+  };
+
   const SettingRow = ({ icon: Icon, title, desc, active, onClick, color }) => (
     <div className="flex items-center justify-between gap-4 p-4 sm:p-5 bg-slate-50 rounded-xl border border-slate-200 hover:bg-white transition-all">
       <div className="flex items-center gap-3 min-w-0">
@@ -231,8 +375,50 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-6xl mx-auto py-6 px-4 sm:px-6 animate-in fade-in slide-in-from-bottom-6 duration-500">
-      
-      {/* Header */}
+
+      {/* ── Custom Confirm Modal ── */}
+      {confirmModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+            onClick={closeConfirm}
+          />
+          {/* Dialog */}
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in zoom-in-95 fade-in duration-200">
+            {/* Icon */}
+            <div className="text-4xl text-center mb-4">{confirmModal.icon}</div>
+            {/* Title */}
+            <h3 className="text-lg font-black text-slate-900 text-center mb-2">
+              {confirmModal.title}
+            </h3>
+            {/* Message */}
+            <p className="text-sm text-slate-500 font-medium text-center mb-6 leading-relaxed">
+              {confirmModal.message}
+            </p>
+            {/* Actions */}
+            <div className="flex gap-3">
+              <button
+                onClick={closeConfirm}
+                className="flex-1 px-4 py-2.5 text-sm font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmModal.onConfirm}
+                className={`flex-1 px-4 py-2.5 text-sm font-black text-white rounded-xl transition-all shadow-lg ${
+                  confirmModal.confirmColor === 'rose'
+                    ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200'
+                    : 'bg-amber-500 hover:bg-amber-600 shadow-amber-200'
+                }`}
+              >
+                {confirmModal.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-slate-900 rounded-xl text-white shadow-sm">
@@ -653,18 +839,196 @@ export default function SettingsPage() {
           )}
 
           {activeTab === "security" && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500 pb-10">
+              {/* 2FA Toggle */}
               <section>
-                <h3 className="text-sm font-black uppercase tracking-widest text-gray-400 mb-6 ml-2">Account Protection</h3>
+                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Account Protection</h3>
                 <div className="space-y-4">
                   <SettingRow 
                     icon={FaShieldAlt} 
                     title="Two-Factor Authentication" 
-                    desc="Require a verification code sent to your email during login."
+                    desc="Require a verification code sent to your email or WhatsApp during login."
                     active={twoFactorEnabled}
                     onClick={handleToggle2FA}
                     color="text-amber-500"
                   />
+                </div>
+              </section>
+
+              {/* Recovery Options */}
+              <section className="pt-6 border-t border-slate-100">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Recovery Options</h3>
+                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Recovery Email</label>
+                      <input 
+                        type="email"
+                        value={securityData.recovery_email || ""}
+                        onChange={(e) => setSecurityData({...securityData, recovery_email: e.target.value})}
+                        placeholder="Backup email address"
+                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500/10"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">WhatsApp for Security</label>
+                      <div className="flex bg-white border border-slate-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/10 transition-all shadow-sm">
+                        <select 
+                          value={countryCode}
+                          onChange={(e) => setCountryCode(e.target.value)}
+                          className="bg-slate-50 px-3 py-3 border-r border-slate-200 text-xs font-black text-slate-600 outline-none cursor-pointer hover:bg-slate-100 transition-colors"
+                        >
+                          <option value="880">BD +880</option>
+                          <option value="91">IN +91</option>
+                          <option value="1">US +1</option>
+                          <option value="44">UK +44</option>
+                          <option value="971">UAE +971</option>
+                          <option value="966">KSA +966</option>
+                        </select>
+                        <input 
+                          type="text"
+                          value={securityData.recovery_whatsapp || ""}
+                          onChange={(e) => setSecurityData({...securityData, recovery_whatsapp: e.target.value.replace(/\D/g, '')})}
+                          placeholder="17XXXXXXXX"
+                          className="flex-1 px-4 py-3 text-sm font-bold text-slate-700 outline-none placeholder:text-slate-300"
+                        />
+                      </div>
+                      <p className="text-[9px] text-slate-400 ml-2 italic">Select country code and enter number without 0.</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={handleUpdateRecovery}
+                    disabled={isSaving}
+                    className="w-full md:w-auto px-8 py-3 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-black transition-all shadow-lg shadow-slate-200"
+                  >
+                    {isSaving ? "Saving..." : "Update Recovery Info"}
+                  </button>
+                </div>
+              </section>
+
+              {/* Connected Devices Section */}
+              <section className="pt-6 border-t border-slate-100">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Connected Devices</h3>
+                <p className="text-[10px] text-slate-400 mb-4">Disconnecting a device will immediately log it out.</p>
+                <div className="space-y-3">
+                  {securityData.trusted_devices && securityData.trusted_devices.length > 0 ? (
+                    securityData.trusted_devices.map((device) => (
+                      <div key={device.id} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:shadow-sm transition-all">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="p-2.5 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600">
+                            <FaGlobe className="text-sm" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-bold text-slate-800 text-sm truncate">{device.device_name}</h4>
+                              {device.is_trusted && (
+                                <span className="px-1.5 py-0.5 text-[9px] font-black bg-emerald-100 text-emerald-700 rounded-md uppercase tracking-wide">Trusted</span>
+                              )}
+                              {device.is_expired && (
+                                <span className="px-1.5 py-0.5 text-[9px] font-black bg-slate-100 text-slate-500 rounded-md uppercase tracking-wide">Expired</span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-medium">
+                              Added {new Date(device.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => handleRemoveDevice(device.id)}
+                          className="flex-shrink-0 px-3 py-1.5 text-[10px] font-black text-rose-600 uppercase border border-rose-100 rounded-lg hover:bg-rose-50 transition-colors"
+                        >
+                          Disconnect
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-10 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                      <p className="text-slate-400 text-sm font-medium italic">No active sessions found.</p>
+                      <p className="text-[10px] text-slate-400 mt-1">All your logged-in devices will appear here.</p>
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {/* Recovery Codes */}
+              <section className="pt-6 border-t border-slate-100">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">Backup Recovery Codes</h3>
+                  <button 
+                    onClick={handleGenerateCodes}
+                    className="text-[10px] font-black text-indigo-600 uppercase hover:underline"
+                  >
+                    Generate New Codes
+                  </button>
+                </div>
+                
+                <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100">
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className="p-2 bg-white rounded-lg border border-indigo-100 text-indigo-600">
+                      <FaShieldAlt />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-800">You have {securityData.recovery_codes_count} unused codes</p>
+                      <p className="text-xs text-slate-500 font-medium">Use these if you lose access to your email and phone.</p>
+                    </div>
+                  </div>
+
+                  {securityData.recovery_codes_available.length > 0 && (
+                    <div className="mt-4">
+                       <button 
+                        onClick={() => setShowCodes(!showCodes)}
+                        className="text-xs font-bold text-slate-600 bg-white border border-slate-200 px-4 py-2 rounded-lg hover:bg-slate-50 mb-4"
+                      >
+                        {showCodes ? "Hide Codes" : "Show Available Codes"}
+                      </button>
+
+                      {showCodes && (
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 animate-in fade-in zoom-in-95">
+                          {securityData.recovery_codes_available.map((code, i) => (
+                            <div key={i} className="bg-white border border-indigo-100 p-3 rounded-xl text-center font-mono font-bold text-indigo-600 text-sm shadow-sm select-all">
+                              {code}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {/* Login History */}
+              <section className="pt-6 border-t border-slate-100">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Recent Login Activity</h3>
+                <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-sm">
+                  <table className="w-full text-left bg-white text-sm">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200">
+                        <th className="px-6 py-4 font-bold text-slate-500 uppercase tracking-widest text-[10px]">Device / Browser</th>
+                        <th className="px-6 py-4 font-bold text-slate-500 uppercase tracking-widest text-[10px]">IP Address</th>
+                        <th className="px-6 py-4 font-bold text-slate-500 uppercase tracking-widest text-[10px]">Time</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {loginHistory.length > 0 ? loginHistory.map((login, idx) => (
+                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-6 py-4 font-bold text-slate-800">
+                            <div className="flex items-center gap-3">
+                              <FaGlobe className="text-slate-300" />
+                              {login.device_name || "Unknown Browser"}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 font-mono text-xs text-slate-500">{login.ip_address}</td>
+                          <td className="px-6 py-4 text-slate-400 font-medium">
+                            {new Date(login.created_at).toLocaleString()}
+                          </td>
+                        </tr>
+                      )) : (
+                        <tr>
+                          <td colSpan="3" className="px-6 py-10 text-center text-slate-400 italic font-medium">No recent activity logged.</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </section>
             </div>

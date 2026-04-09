@@ -1,9 +1,13 @@
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from aiAgent.views import AgentAIViewSet, TokenUsageAnalyticsView, dashboard_chat_view, RankingAPIView, UserAvailableModelsView, AgentMetricsAPIView, DeleteRankingDataAPIView, UpdateCacheScopeAPIView, RequestSpecialAgentAPIView, ClearGlobalCacheAPIView, ToggleSharingAPIView
-from aiAgent.contact_views import ContactListView, ToggleAutoReplyView, ContactMessageHistoryView, ContactDetailView
-from aiAgent.widget_views import WidgetConfigView, WidgetChatView, WidgetIconUploadView
+from aiAgent.views import AgentAIViewSet, TokenUsageAnalyticsView, dashboard_chat_view, RankingAPIView, UserAvailableModelsView, AgentMetricsAPIView, DeleteRankingDataAPIView, UpdateCacheScopeAPIView, RequestSpecialAgentAPIView, ClearGlobalCacheAPIView, ToggleSharingAPIView, VisitorSubscribeView, VisitorTrackView, ConnectTelegramBotView
+from aiAgent.contact_views import (
+    ContactListView, ToggleAutoReplyView, ContactMessageHistoryView, ContactDetailView,
+    UnifiedReplyView, ResolveHumanHandoffView, HumanHelpView, WhatsAppButtonClickView,
+    ContactSummaryView, ScheduledMessageView
+)
+from aiAgent.widget_views import WidgetConfigView, WidgetChatView, WidgetIconUploadView, WidgetStatusView, WidgetControlView
 from chat.views import facebook_data_deletion_callback
 router = DefaultRouter()
 router.register(r'agents', AgentAIViewSet, basename='agent-ai')
@@ -23,17 +27,28 @@ urlpatterns = [
     path("facebook/data-deletion/", facebook_data_deletion_callback, name="facebook_data_deletion_callback"),
     path('available-models/', UserAvailableModelsView.as_view(), name='user-available-models'),
     path('contacts/<str:agent_id>/', ContactListView.as_view(), name='contact-list'),
+    path('contacts/summary/', ContactSummaryView.as_view(), name='contact-summary'),
     path('contacts/detail/<int:contact_id>/', ContactDetailView.as_view(), name='contact-detail'),
     path('contacts/toggle-reply/<int:contact_id>/', ToggleAutoReplyView.as_view(), name='toggle-auto-reply'),
+    path('contacts/resolve-handoff/<int:contact_id>/', ResolveHumanHandoffView.as_view(), name='resolve-human-handoff'),
+    path('contacts/human-help/<int:contact_id>/', HumanHelpView.as_view(), name='human-help'),
+    path('contacts/whatsapp-click/', WhatsAppButtonClickView.as_view(), name='whatsapp-button-click'),
     path('contacts/<int:contact_id>/messages/', ContactMessageHistoryView.as_view(), name='contact-messages'),
+    path('contacts/unified/reply/', UnifiedReplyView.as_view(), name='unified-reply'),
+    path('schedule/', ScheduledMessageView.as_view(), name='scheduled-message'),
     
     # Web Widget Public API
     path('widget/config/<str:widget_key>/', WidgetConfigView.as_view(), name='widget-config'),
     path('widget/chat/<str:widget_key>/', WidgetChatView.as_view(), name='widget-chat'),
+    path('widget/status/<str:widget_key>/', WidgetStatusView.as_view(), name='widget-status'),
+    path('widget/control/<str:widget_key>/', WidgetControlView.as_view(), name='widget-control'),
     # Widget Icon Upload (authenticated)
     path('widget/upload-icon/<int:agent_id>/', WidgetIconUploadView.as_view(), name='widget-icon-upload'),
     
+    # Visitor Tracking (Public - No Auth Required)
+    path('visitor/track/', VisitorTrackView.as_view(), name='visitor-track'),
+    path('visitor/subscribe/', VisitorSubscribeView.as_view(), name='visitor-subscribe'),
 
-
+    # Telegram Connection Endpoint
+    path('telegram/connect-bot/', ConnectTelegramBotView.as_view(), name='connect-telegram-bot'),
 ]
-

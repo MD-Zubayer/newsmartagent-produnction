@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { HiOutlineShieldCheck, HiOutlineDocumentText, HiOutlineLockClosed, HiOutlineMail, HiOutlineCheckCircle, HiOutlineExclamation, HiOutlineCash, HiOutlineScale, HiOutlineLogout, HiOutlineClipboardList, HiOutlineGlobeAlt } from 'react-icons/hi';
-import { FaFacebook, FaRobot, FaShieldAlt, FaBalanceScale, FaUserCheck, FaBan, FaCreditCard } from 'react-icons/fa';
+import { FaFacebook, FaRobot, FaShieldAlt, FaBalanceScale, FaUserCheck, FaBan, FaCreditCard, FaTiktok } from 'react-icons/fa';
 
 export default function TermsOfService() {
   const sections = [
@@ -10,13 +10,13 @@ export default function TermsOfService() {
       id: "intro",
       title: "1. Introduction & Acceptance",
       icon: <HiOutlineDocumentText />,
-      fullText: `By accessing or using NewSmartAgent (https://newsmartagent.com), you agree to be bound by these Terms of Service. Our platform provides AI-powered automation, Messenger integration, and workflow management services. If you do not agree to these terms, you may not access or use the service.`
+      fullText: `By accessing or using New Smart Agent (NSA) at https://newsmartagent.com, you agree to be bound by these Terms of Service. Our platform provides AI-powered automation, Messenger integration, and workflow management services. If you do not agree to these terms, you may not access or use the service.`
     },
     {
       id: "eligibility",
       title: "2. Eligibility",
       icon: <FaUserCheck />,
-      fullText: `You must be at least 13 years of age to use NewSmartAgent, in compliance with Meta’s safety policies. By creating an account, you represent and warrant that you have the legal capacity to enter into a binding agreement and that your use of the service does not violate any applicable law.`
+      fullText: `You must be at least 13 years of age to use New Smart Agent (NSA), in compliance with Meta’s safety policies. By creating an account, you represent and warrant that you have the legal capacity to enter into a binding agreement and that your use of the service does not violate any applicable law.`
     },
     {
       id: "registration",
@@ -25,11 +25,23 @@ export default function TermsOfService() {
       fullText: `To access our features, you must register for an account. You agree to provide accurate and complete information during registration. You are solely responsible for maintaining the confidentiality of your account credentials (password and login). Any activity that occurs under your account is your responsibility. You must notify us immediately of any unauthorized use.`
     },
     {
+      id: "api-authorization",
+      title: "4. User Accounts & API Authorization",
+      icon: <HiOutlineClipboardList />,
+      fullText: `To use our AI automation features, you must authorize New Smart Agent (NSA) to access your Google Business Profile and/or YouTube account via Google OAuth. You are responsible for maintaining the security of your account and any actions taken under your credentials. New Smart Agent (NSA) is not liable for any unauthorized access resulting from user negligence.`
+    },
+    {
+      id: "api-usage",
+      title: "5. API Usage & User Responsibility",
+      icon: <HiOutlineShieldCheck />,
+      fullText: `By using New Smart Agent (NSA), you agree to comply with all applicable Google Terms of Service and YouTube Terms of Service. You are solely responsible for any content posted through your authorized Google accounts. NSA is not responsible for any actions taken by Google (such as account suspension) due to your misuse of automated features.`
+    },
+    {
       id: "description",
-      title: "4. Service Description",
+      title: "6. Service Description",
       icon: <FaRobot />,
-      fullText: `4. Service Description
-NewSmartAgent is an AI-driven SaaS platform designed to enhance business efficiency. Our services include:
+      fullText: `Service Description
+New Smart Agent (NSA) is an AI-driven SaaS platform designed to enhance business efficiency. Our services include:
 
 Automated Engagement: Automating responses to messages and comments on connected Facebook Pages via official APIs.
 
@@ -41,23 +53,64 @@ We provide the platform on an "as-is" and "as-available" basis. We reserve the r
     },
     {
       id: "acceptable-use",
-      title: "5. Acceptable Use",
+      title: "7. Permitted Use & Restrictions",
       icon: <FaBan />,
-      fullText: `You agree to use the platform responsibly. You are strictly prohibited from:
-• Using automation to send spam, phishing, or harassing messages.
-• Automating illegal content or violating any intellectual property rights.
-• Attempting to reverse-engineer our backend or bypass security measures.
-• Violating Meta’s Developer Policies or Community Standards while using our integrations.`
+      fullText: `You agree not to use New Smart Agent (NSA) for any illegal activities, including but not limited to:
+• Generating or posting spam, offensive, or misleading reviews/comments.
+• Violating Google’s Service Policies or any third-party rights.
+• Using the platform to distribute malware or engage in any form of automated abuse.
+Users are prohibited from using New Smart Agent (NSA) to generate spam, misleading reviews, or artificial engagement that violates Google’s Service Policies.
+
+You must not use NSA to generate or distribute spam, misleading reviews, or artificial engagement. Any attempt to automate bulk activities that violate third-party API policies will result in immediate termination of your account.`
+    },
+    {
+      id: "tiktok-terms",
+      title: "8. Specific Terms for TikTok API Integration",
+      icon: <FaTiktok />,
+      fullText: `1. TikTok API Services Participation
+By using the TikTok automation features provided by New Smart Agent (NSA), you acknowledge and agree that:
+
+Our platform uses TikTok API Services to automate video comments and direct messages.
+
+You are also bound by the TikTok Terms of Service and TikTok Community Guidelines.
+
+2. User Responsibility & Content
+
+Prohibited Content: You are strictly prohibited from using our automation tools to post spam, hate speech, or any content that violates TikTok’s policies.
+
+Account Security: You are responsible for the security of your TikTok account while it is connected to our platform.
+
+Consent: You must have the necessary rights and permissions for any content you automate or respond to via our dashboard.
+
+3. Limitations and Compliance
+
+API Limits: New Smart Agent is subject to TikTok’s API rate limits. We are not responsible for delays or failures in automation caused by TikTok’s platform restrictions or account-level bans.
+
+No Unauthorized Use: Our services shall not be used for any unauthorized harvesting of TikTok user data or creating fake engagement (e.g., botting followers).
+
+4. Account Disconnection
+
+Users can revoke New Smart Agent’s access to their TikTok account at any time through our dashboard or via their TikTok Security Settings.
+
+Upon disconnection, our system will immediately cease all automated interactions on your behalf.`
+    },
+    {
+      id: "ai-disclaimer",
+      title: "9. AI-Generated Content Disclaimer",
+      icon: <FaRobot />,
+      fullText: `New Smart Agent (NSA) provides AI-generated responses for customer engagement. While we strive for accuracy, users are encouraged to review automated replies. New Smart Agent (NSA) is not responsible for any inaccuracies, misunderstandings, or reputational damage caused by AI-generated content.`
     },
     {
       id: "third-party",
-      title: "6. Third-Party Services",
+      title: "10. Third-Party Services",
       icon: <HiOutlineGlobeAlt />,
-      fullText: `Our platform integrates with third-party services, including Meta (Facebook Graph API), AI providers (OpenAI/Grok), and payment processors. Your use of these integrations is subject to the respective third-party’s terms and policies. We are not responsible for changes, downtime, or data handling practices of these external providers.`
+      fullText: `Our platform integrates with third-party services, including Meta (Facebook Graph API), AI providers (OpenAI/Grok), and payment processors. Your use of these integrations is subject to the respective third-party’s terms and policies. We are not responsible for changes, downtime, or data handling practices of these external providers.
+
+By using New Smart Agent (NSA), you agree to be bound by the YouTube Terms of Service and Google Business Profile Terms.`
     },
     {
       id: "payment",
-      title: "7. Payment & Manual Transactions",
+      title: "11. Payment & Manual Transactions",
       icon: <FaCreditCard />,
       fullText: `Manual Payments: Currently, we accept payments via local mobile financial services (bKash, Nagod) and Bank Transfers. Activation of service occurs only after manual verification of the Transaction ID (TrxID) and sender details.
 Subscription Model: Our services are offered as fixed-validity packs (e.g., 7 days, 30 days) with specific usage limits. Once validity expires or the limit is reached, automation will pause.
@@ -65,37 +118,35 @@ Refunds: All manual payments are final. No refunds will be issued once the subsc
     },
     {
       id: "privacy",
-      title: "8. Data Privacy",
+      title: "12. Data Privacy",
       icon: <FaShieldAlt />,
-      fullText: `Your use of NewSmartAgent is also governed by our Privacy Policy. By using the service, you consent to the collection and processing of data (including Facebook tokens and message metadata) as described in that policy to enable automation features.`
-    },
-    {
-      id: "disclaimers",
-      title: "9. Disclaimers & Liability",
-      icon: <FaBalanceScale />,
-      fullText: `"As-Is" Basis: We do not guarantee that the AI will always provide 100% accurate responses or that message delivery will be uninterrupted.
-Liability: In no event shall NewSmartAgent or its founders be liable for any indirect, incidental, or consequential damages (including loss of business profits) arising from your use of the platform.`
+      fullText: `Your use of New Smart Agent (NSA) is also governed by our Privacy Policy. By using the service, you consent to the collection and processing of data (including Facebook tokens and message metadata) as described in that policy to enable automation features.`
     },
     {
       id: "termination",
-      title: "10. Termination",
+      title: "13. Termination of Service",
       icon: <HiOutlineLogout />,
-      fullText: `By You: You may stop using the service and delete your account at any time.
-By Us: We reserve the right to suspend or terminate your access if you violate these terms or engage in abusive behavior.
-Effect: Upon termination, your stored Facebook tokens will be revoked, and access to your automation workflows will end.`
+      fullText: `We reserve the right to suspend or terminate your access to New Smart Agent (NSA) if you violate these terms or if your actions pose a risk to our platform or other users. You may also terminate your account at any time by disconnecting your Google services and contacting our support.`
+    },
+    {
+      id: "liability",
+      title: "14. Limitation of Liability",
+      icon: <FaBalanceScale />,
+      fullText: `New Smart Agent (NSA) and its developers shall not be liable for any indirect, incidental, or consequential damages arising out of your use of the service, including data loss or business interruption.`
     },
     {
        id: "governing-law",
-       title: "11. Governing Law",
+       title: "15. Governing Law",
        icon: <HiOutlineScale />,
        fullText: `These Terms are governed by and construed in accordance with the laws of Bangladesh. Any disputes arising from these terms shall be resolved in the courts of Bangladesh.`
     },
     {
        id: "contact",
-       title: "12. Contact Support",
+       title: "16. Contact Support",
        icon: <HiOutlineMail />,
        fullText: `For any questions regarding these Terms, please contact us at:
 Email: newsmartagentbd@gmail.com
+Address: Sadarpur, Faridpur, Bangladesh.
 Official Website: https://newsmartagent.com`
     }
   ];
@@ -122,7 +173,7 @@ Official Website: https://newsmartagent.com`
           <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-8 text-xs font-black text-slate-400 uppercase tracking-widest">
             <p>Protocol V.3</p>
             <div className="hidden md:block w-1.5 h-1.5 bg-slate-200 rounded-full"></div>
-            <p>Last Updated: March 2026</p>
+            <p>Last Updated: March 27, 2026</p>
             <div className="hidden md:block w-1.5 h-1.5 bg-slate-200 rounded-full"></div>
             <p>Legal Center</p>
           </div>
@@ -157,7 +208,7 @@ Official Website: https://newsmartagent.com`
                   <div className="flex flex-col md:flex-row items-center gap-6 text-slate-400 font-black text-[10px] md:text-xs uppercase tracking-[0.3em]">
                      <div className="flex items-center gap-3">
                         <HiOutlineMail className="text-purple-400 text-xl" />
-                        support@newsmartagent.com
+                        newsmartagentbd@gmail.com
                      </div>
                      <div className="hidden md:block w-2 h-2 bg-slate-800 rounded-full"></div>
                      <div className="flex items-center gap-3 text-purple-400">
@@ -171,8 +222,11 @@ Official Website: https://newsmartagent.com`
                </div>
             </div>
           </div>
-          <p className="text-[10px] font-bold text-slate-300 text-center mt-12 uppercase tracking-[0.6em]">
-            Terms of Service • © 2026 NewSmartAgent. All rights reserved.
+          <p className="text-[10px] font-bold text-slate-300 text-center mt-8 uppercase tracking-[0.6em]">
+            Terms of Service • © 2026 New Smart Agent (NSA). All rights reserved.
+          </p>
+          <p className="text-xs text-slate-400 text-center mt-2">
+            Contact: newsmartagentbd@gmail.com • Address: Sadarpur, Faridpur, Bangladesh
           </p>
         </footer>
 

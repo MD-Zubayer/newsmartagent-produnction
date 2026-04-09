@@ -39,22 +39,21 @@ export default function AgentDashboard() {
         }
     };
 
-    const currentBalance = parseFloat(stats?.commission_balance) || 0;
-    const monthlyAvgData = [
-        currentBalance * 0.2, 
-        currentBalance * 0.45, 
-        currentBalance * 0.75, 
-        currentBalance, 
-        currentBalance * 1.3
-    ];
+    const monthlyAvgData = (stats?.monthly_history && stats.monthly_history.length > 0
+        ? stats.monthly_history
+        : []).map(Number);
 
     const totalCumulativeData = monthlyAvgData.reduce((acc, curr, i) => 
-        [...acc, curr + (acc[i - 1] || 0)], []);
+        [...acc, (Number(curr) || 0) + (acc[i - 1] || 0)], []);
+
+    const monthLabels = stats?.monthly_labels && stats.monthly_labels.length === monthlyAvgData.length
+        ? stats.monthly_labels
+        : monthlyAvgData.map((_, i) => `Month ${i + 1}`);
 
     const barData = {
-        labels: ['Month 1', 'Month 2', 'Month 3', 'Month 4', 'Month 5'],
+        labels: monthLabels,
         datasets: [{
-            label: 'Avg Monthly Income (৳)',
+            label: 'Monthly Commission (৳)',
             data: monthlyAvgData,
             backgroundColor: 'rgba(99, 102, 241, 0.8)',
             borderRadius: 8,
@@ -62,7 +61,7 @@ export default function AgentDashboard() {
     };
 
     const lineData = {
-        labels: ['Month 1', 'Month 2', 'Month 3', 'Month 4', 'Month 5'],
+        labels: monthLabels,
         datasets: [{
             fill: true,
             label: 'Cumulative Growth (৳)',

@@ -6,7 +6,7 @@ export default async function sitemap() {
   // ১. আপনার ব্যাকএন্ড থেকে ব্লগ পোস্টগুলো নিয়ে আসার চেষ্টা করুন
   let blogPosts = [];
   try {
-    const response = await fetch(`${baseUrl}/api/blog/`, { cache: 'no-store' });
+    const response = await fetch(`${baseUrl}/api/blog/`);
     const data = await response.json();
     blogPosts = Array.isArray(data) ? data : [];
   } catch (error) {

@@ -51,7 +51,7 @@ async function processQueue(sessionId) {
             return;
         }
 
-        const { jid, message, resolve, reject } = queueData.messages.shift();
+        const { jid, message, buttons, listMessage, resolve, reject } = queueData.messages.shift();
         try {
             // "Fake Typing" behavior: send presence update first
             await session.sock.sendPresenceUpdate('composing', jid);
@@ -61,7 +61,28 @@ async function processQueue(sessionId) {
             logger.info(`⏳ [Baileys] Typing for ${randomDelay}ms before sending to ${jid}`);
             await delay(randomDelay);
 
-            const sent = await session.sock.sendMessage(jid, { text: message });
+            let msgObj = { text: message };
+
+            if (listMessage) {
+                // Baileys-এ লিস্ট মেসেজ পাঠানোর সঠিক পদ্ধতি (To avoid .match() crash)
+                msgObj = {
+                    text: listMessage.description || message || "Please select an option",
+                    footer: listMessage.footerText || "",
+                    title: listMessage.title || "",
+                    buttonText: listMessage.buttonText || "Select",
+                    sections: listMessage.sections,
+                    viewOnce: true
+                };
+            } else if (buttons && buttons.length > 0) {
+                msgObj = {
+                    text: message,
+                    buttons: buttons,
+                    headerType: 1,
+                    viewOnce: true
+                };
+            }
+
+            const sent = await session.sock.sendMessage(jid, msgObj);
             logger.info(`✅ [Baileys] Sent successfully to ${jid}`);
             resolve({ success: true, messageId: sent?.key?.id });
         } catch (err) {
@@ -115,7 +136,7 @@ async function initSession(sessionId, phoneNumber = null) {
         if (existing.state === 'open') return existing;
         if (existing.sock) {
             existing.sock.ev.removeAllListeners();
-            existing.sock.logout().catch(() => {});
+            existing.sock.logout().catch(() => { });
         }
     }
 
@@ -174,7 +195,7 @@ async function initSession(sessionId, phoneNumber = null) {
                 sessionData.phone = null;
                 const statusCode = lastDisconnect?.error ? new Boom(lastDisconnect.error)?.output?.statusCode : 0;
                 logger.info(`[Session: ${sessionId}] Closed (${statusCode})`);
-                
+
                 if (statusCode !== DisconnectReason.loggedOut) {
                     setTimeout(() => initSession(sessionId), 5000);
                 } else {
@@ -272,10 +293,10 @@ async function cleanupSession(sessionId, { removeFolder = true } = {}) {
     const cleanup = (async () => {
         const existing = sessions.get(sessionId);
         if (existing?.sock) {
-            try { await existing.sock.logout(); } catch (err) {}
+            try { await existing.sock.logout(); } catch (err) { }
         }
         if (removeFolder) {
-            try { fs.rmSync(sessionFolder, { recursive: true, force: true }); } catch (err) {}
+            try { fs.rmSync(sessionFolder, { recursive: true, force: true }); } catch (err) { }
         }
         sessions.delete(sessionId);
         messageQueues.delete(sessionId);
@@ -303,11 +324,11 @@ app.post('/init/:sessionId', async (req, res) => {
 app.get('/status/:sessionId', (req, res) => {
     const session = sessions.get(req.params.sessionId);
     if (!session) return res.status(404).json({ error: 'Session not found' });
-    res.json({ 
-        state: session.state, 
-        phone: session.phone, 
+    res.json({
+        state: session.state,
+        phone: session.phone,
         qr: session.qr,
-        pairingCode: session.pairingCode 
+        pairingCode: session.pairingCode
     });
 });
 
@@ -318,7 +339,7 @@ app.get('/qr/:sessionId', (req, res) => {
 });
 
 app.post('/send-message', async (req, res) => {
-    const { sessionId, to, message } = req.body;
+    const { sessionId, to, message, text, buttons, interactiveButtons, listMessage } = req.body;
     const secret = req.headers['x-api-secret'];
     if (secret !== API_SECRET) return res.status(401).send('Unauthorized');
 
@@ -334,9 +355,13 @@ app.post('/send-message', async (req, res) => {
     const jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
     const queueData = messageQueues.get(sessionId);
 
+    // Final merge of aliases
+    const finalMessage = message || text || "";
+    const finalButtons = buttons || interactiveButtons || [];
+
     // Return promise after queuing
     const sendPromise = new Promise((resolve, reject) => {
-        queueData.messages.push({ jid, message, resolve, reject });
+        queueData.messages.push({ jid, message: finalMessage, buttons: finalButtons, listMessage, resolve, reject });
     });
 
     processQueue(sessionId).catch(err => logger.error(`Queue error: ${err.message}`));
@@ -346,7 +371,7 @@ app.post('/send-message', async (req, res) => {
     // but here we wait for the result to keep the API response consistent for now.
     // However, if the queue gets long, this might timeout.
     // Let's return the message as "Queued" if the queue is not empty.
-    
+
     if (queueData.messages.length > 1) {
         res.json({ success: true, status: 'queued', queueLength: queueData.messages.length });
     } else {
@@ -356,6 +381,23 @@ app.post('/send-message', async (req, res) => {
         } catch (err) {
             res.status(500).json({ error: err.message });
         }
+    }
+});
+
+app.get('/profile/:sessionId/:jid', async (req, res) => {
+    const { sessionId, jid } = req.params;
+    const session = sessions.get(sessionId);
+    if (!session || session.state !== 'open') {
+        return res.status(503).json({ error: 'WhatsApp session not connected' });
+    }
+
+    try {
+        const fullJid = jid.includes('@') ? jid : `${jid}@s.whatsapp.net`;
+        const url = await session.sock.profilePictureUrl(fullJid, 'image');
+        res.json({ success: true, profilePictureUrl: url });
+    } catch (err) {
+        // If no profile pic, Baileys often throws 404/401
+        res.status(404).json({ success: false, error: err.message });
     }
 });
 
@@ -373,7 +415,7 @@ async function restoreSessions() {
     for (const sessionId of folders) {
         if (fs.statSync(path.join(AUTH_BASE_FOLDER, sessionId)).isDirectory()) {
             logger.info(`Restoring: ${sessionId}`);
-            initSession(sessionId).catch(() => {});
+            initSession(sessionId).catch(() => { });
         }
     }
 }

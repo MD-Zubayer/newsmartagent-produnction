@@ -22,12 +22,16 @@ from rest_framework_simplejwt.serializers import TokenVerifySerializer
 from django.utils import timezone
 from django.utils.timezone import now
 from datasheet.models import Spreadsheet
-from users.models import CustomerOrder, OrderForm, EmailVerificationToken, NSATransfer, WithdrawMethod, CashoutRequest
+from users.models import CustomerOrder, OrderForm, EmailVerificationToken, NSATransfer, WithdrawMethod, CashoutRequest, LoginSession, LoginHistory, TrustedDevice, RecoveryCode
 from users.serializers import CustomerOrderSerializer
 from man_agent.utils import distribute_agent_commission
 from django.db import transaction
 from rest_framework.exceptions import ValidationError
 from django.db.models import Q
+from users.services.email_service import (
+    send_reset_email, send_verification_email, send_2fa_otp_email,
+    send_security_alert_email, send_push_approval_email, send_whatsapp_alert
+)
 import random
 from django.core.mail import send_mail
 
@@ -248,75 +252,163 @@ class UserViewSet(viewsets.ModelViewSet):
 
         
 class LoginView(APIView):
-    """email + password login and JWT token generate
-    """
-
-
+    """Email + password login with Trust Device, Push Approval, and JWT generation"""
     permission_classes = [AllowAny]
+
+    def _get_client_ip(self, request):
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            return x_forwarded_for.split(',')[0].strip()
+        return request.META.get('REMOTE_ADDR')
+
+    def _get_device_name(self, request):
+        user_agent = request.META.get('HTTP_USER_AGENT', '')
+        # Simple extraction instead of installing packages
+        if 'Mobi' in user_agent:
+            return f"Mobile Browser ({user_agent[:30]}...)"
+        elif 'Windows' in user_agent:
+            return "Windows PC"
+        elif 'Mac' in user_agent:
+            return "Mac System"
+        elif 'Linux' in user_agent:
+            return "Linux PC"
+        return "Unknown Device"
 
     def post(self, request):
         email = request.data.get("email")
         password = request.data.get("password")
-        otp_code = request.data.get("otp_code")
+        auth_method = request.data.get("auth_method", "email_otp") # Options: email_otp, mobile_approval
 
         user = authenticate(request, email=email, password=password)
         if user is None:
             return Response({"error": "Invalid email or password"}, status=status.HTTP_401_UNAUTHORIZED)
-
         if not user.is_verified:
             return Response({"error": "Email is not verified. Please check your inbox."}, status=status.HTTP_403_FORBIDDEN)
 
-        # Email OTP-based 2FA (Profile flag)
+        ip_address = self._get_client_ip(request)
+        device_name = self._get_device_name(request)
         profile = user.profile
-        if getattr(profile, "two_factor_enabled", False):
-            otp = str(random.randint(100000, 999999))
-            profile.otp_code = otp
-            profile.otp_created_at = timezone.now()
-            profile.save(update_fields=["otp_code", "otp_created_at"])
 
-            try:
-                send_2fa_otp_email(user.email, otp)
-            except Exception as e:
-                # ইমেইল না গেলেও কোড সেভ থাকে; ইউজার চাইলে নতুন কোড চেয়ে নিতে পারবে
-                print(f"2FA email send failed: {e}")
+        # 1. Trust Device Bypass check
+        trust_cookie = request.COOKIES.get('trusted_device')
+        is_trusted = False
+        if trust_cookie:
+            trusted_obj = TrustedDevice.objects.filter(user=user, device_token=trust_cookie).first()
+            if trusted_obj and trusted_obj.is_valid():
+                is_trusted = True
 
-            return Response({
-                "two_factor_required": True,
-                "message": "একটি ৬-সংখ্যার কোড ইমেইলে পাঠানো হয়েছে। আবার কোড চাইলে পুনরায় লগইন রিকোয়েস্ট করুন।"
-            }, status=status.HTTP_200_OK)
+        # 2. Security Alert: Check if this is a new device or IP (very basic check based on last 5 logins)
+        recent_logins = LoginHistory.objects.filter(user=user).order_by('-created_at')[:5]
+        is_new_device = True
+        for login in recent_logins:
+            if login.ip_address == ip_address or login.device_name == device_name:
+                is_new_device = False
+                break
+        
+        # Check for trust_device from request data as well
+        req_trust_device = request.data.get("trust_device", False)
+        if str(req_trust_device).lower() == 'true':
+            # This is only for the initial check, actual trust logic is in 2FA verify
+            pass
 
-        # JWT Token generation
+        # If no history AND no trust, consider it new device (or if it strictly doesn't match recent)
+        if is_new_device and not is_trusted:
+            time_str = timezone.now().strftime("%Y-%m-%d %H:%M:%S UTC")
+            # Send Security Alert to all channels
+            send_security_alert_email(user.email, device_name, ip_address, time_str)
+            if profile.recovery_email:
+                send_security_alert_email(profile.recovery_email, device_name, ip_address, time_str)
+            if profile.recovery_whatsapp:
+                wa_msg = f"⚠️ *New Login Alert*\nDevice: {device_name}\nIP: {ip_address}\nTime: {time_str}\nIf this wasn't you, reset your password!"
+                # send_whatsapp_alert(profile.recovery_whatsapp, wa_msg)
+
+        # Log History
+        LoginHistory.objects.create(user=user, ip_address=ip_address, device_name=device_name)
+
+        # 3. Handle 2FA (if enabled and NOT trusted device)
+        if profile.two_factor_enabled and not is_trusted:
+            if auth_method == 'mobile_approval':
+                trust_device = request.data.get("trust_device", False)
+                if str(trust_device).lower() == 'true':
+                    trust_device = True
+                else:
+                    trust_device = False
+
+                session = LoginSession.objects.create(
+                    user=user, 
+                    ip_address=ip_address, 
+                    device_name=device_name,
+                    trust_device=trust_device,
+                    expires_at=timezone.now() + timedelta(minutes=5)
+                )
+                
+                frontend_url = getattr(settings, "FRONTEND_URL", "https://newsmartagent.com")
+                approve_link = f"{frontend_url}/auth/approval?token={session.session_token}&action=approve"
+                reject_link = f"{frontend_url}/auth/approval?token={session.session_token}&action=reject"
+                
+                # Send Push Approval Links to all channels
+                send_push_approval_email(user.email, approve_link, reject_link, device_name)
+                if profile.recovery_email:
+                    send_push_approval_email(profile.recovery_email, approve_link, reject_link, device_name)
+                if profile.recovery_whatsapp:
+                    wa_msg = f"🔑 *Login Approval Request*\nDevice: {device_name}\nIP: {ip_address}\n\n✅ YES: {approve_link}\n\n❌ NO: {reject_link}"
+                    # send_whatsapp_alert(profile.recovery_whatsapp, wa_msg)
+
+                return Response({
+                    "two_factor_required": True,
+                    "auth_method": "mobile_approval",
+                    "session_token": session.session_token,
+                    "message": "Push notification sent. Please check your email and WhatsApp to approve."
+                }, status=status.HTTP_200_OK)
+            
+            else:
+                # Default: Email OTP
+                otp = str(random.randint(100000, 999999))
+                profile.otp_code = otp
+                profile.otp_created_at = timezone.now()
+                profile.save(update_fields=["otp_code", "otp_created_at"])
+
+                try:
+                    send_2fa_otp_email(user.email, otp)
+                    if profile.recovery_email:
+                        send_2fa_otp_email(profile.recovery_email, otp)
+                    if profile.recovery_whatsapp:
+                        # send_whatsapp_alert(profile.recovery_whatsapp, f"🔐 Your NSA Login OTP is: *{otp}*. Expires in 5 mins.")
+                        pass
+                except Exception as e:
+                    print(f"2FA email/wa send failed: {e}")
+
+                return Response({
+                    "two_factor_required": True,
+                    "auth_method": "email_otp",
+                    "available_methods": ["email_otp", "mobile_approval", "recovery_code"],
+                    "message": "A 6-digit code has been sent to your primary/recovery channels."
+                }, status=status.HTTP_200_OK)
+
+        # 4. Generate JWT Base Login
         refresh = RefreshToken.for_user(user)
         access_token = str(refresh.access_token)
         refresh_token = str(refresh)
 
         response = Response({
-            "user": {
-                "id": user.id,
-                "email": user.email
-            },
+            "user": {"id": user.id, "email": user.email},
             "message": "Login successful"
-            }, status=status.HTTP_200_OK
-        )
+        }, status=status.HTTP_200_OK)
 
-        # Httponly cookie set
-        response.set_cookie(
-            key='access_token',
-            value=access_token,
-            httponly=True,
-            samesite="Lax", # its in dev, production 'strict' , None
-            secure=settings.DEBUG is False, # HTTPS True, dev False
-            path='/',
-        )
-        response.set_cookie(
-            key="refresh_token", 
-            value=refresh_token,
-            httponly=True,
-            samesite="Lax",
-            secure=settings.DEBUG is False,
-            path='/',
-        )
+        response.set_cookie(key='access_token', value=access_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/')
+        response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/')
 
+        # ALWAYS create a session record so the device can be remotely revoked
+        import uuid as _uuid
+        _device_token = str(_uuid.uuid4())
+        TrustedDevice.objects.create(
+            user=user,
+            device_token=_device_token,
+            device_name=device_name or "Unknown Device",
+            is_trusted=False,
+            expires_at=timezone.now() + timedelta(days=30)
+        )
+        response.set_cookie(key='trusted_device', value=_device_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/', max_age=30*24*60*60)
         return response
     
 
@@ -1007,16 +1099,18 @@ class FinancialSummaryView(APIView):
 
 
 class Verify2FALoginView(APIView):
-    """ইমেইল OTP দিয়ে লগইন সম্পন্ন করা।"""
+    """Multi-Level 2FA Verification (OTP or Recovery Code) + Trust Device Setting"""
     permission_classes = [AllowAny]
 
     def post(self, request):
         email = request.data.get("email")
         password = request.data.get("password")
-        otp_code = request.data.get("otp_code")
+        auth_method = request.data.get("auth_method", "email_otp") # email_otp or recovery_code
+        code = request.data.get("code") or request.data.get("otp_code")
+        trust_device = request.data.get("trust_device", False)
 
-        if not email or not password or not otp_code:
-            return Response({"error": "email, password আর otp_code লাগবে"}, status=status.HTTP_400_BAD_REQUEST)
+        if not email or not password or not code:
+            return Response({"error": "email, password, and code are required"}, status=status.HTTP_400_BAD_REQUEST)
 
         user = authenticate(request, email=email, password=password)
         if user is None:
@@ -1024,15 +1118,21 @@ class Verify2FALoginView(APIView):
 
         profile = user.profile
         if not getattr(profile, "two_factor_enabled", False):
-            return Response({"error": "2FA চালু নেই"}, status=status.HTTP_400_BAD_REQUEST)
-        if not profile.otp_code or str(profile.otp_code) != str(otp_code):
-            return Response({'error': 'কোড ভুল'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "2FA is not enabled"}, status=status.HTTP_400_BAD_REQUEST)
 
-        if not profile.otp_created_at or timezone.now() > profile.otp_created_at + timedelta(minutes=5):
-            return Response({'error': 'কোডের মেয়াদ শেষ'}, status=status.HTTP_400_BAD_REQUEST)
-
-        profile.otp_code = ""
-        profile.save(update_fields=["otp_code"])
+        if auth_method == 'recovery_code':
+            recovery_obj = RecoveryCode.objects.filter(user=user, code=code, is_used=False).first()
+            if not recovery_obj:
+                return Response({'error': 'Invalid or already used Recovery Code'}, status=status.HTTP_400_BAD_REQUEST)
+            recovery_obj.is_used = True
+            recovery_obj.save(update_fields=["is_used"])
+        else:
+            if not profile.otp_code or str(profile.otp_code) != str(code):
+                return Response({'error': 'Incorrect OTP'}, status=status.HTTP_400_BAD_REQUEST)
+            if not profile.otp_created_at or timezone.now() > profile.otp_created_at + timedelta(minutes=5):
+                return Response({'error': 'OTP Expired'}, status=status.HTTP_400_BAD_REQUEST)
+            profile.otp_code = ""
+            profile.save(update_fields=["otp_code"])
 
         refresh = RefreshToken.for_user(user)
         access_token = str(refresh.access_token)
@@ -1043,22 +1143,22 @@ class Verify2FALoginView(APIView):
             "message": "Login successful"
         }, status=status.HTTP_200_OK)
 
-        response.set_cookie(
-            key='access_token',
-            value=access_token,
-            httponly=True,
-            samesite="Lax",
-            secure=settings.DEBUG is False,
-            path='/',
+        response.set_cookie(key='access_token', value=access_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/')
+        response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/')
+        
+        # ALWAYS create a session record (is_trusted=True only if user checked the box)
+        import uuid as _uuid
+        _device_token = str(_uuid.uuid4())
+        _device_name = request.META.get('HTTP_USER_AGENT', 'Unknown Device')[:250]
+        TrustedDevice.objects.create(
+            user=user,
+            device_token=_device_token,
+            device_name=_device_name,
+            is_trusted=str(trust_device).lower() == 'true',
+            expires_at=timezone.now() + timedelta(days=30)
         )
-        response.set_cookie(
-            key="refresh_token",
-            value=refresh_token,
-            httponly=True,
-            samesite="Lax",
-            secure=settings.DEBUG is False,
-            path='/',
-        )
+        response.set_cookie(key='trusted_device', value=_device_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/', max_age=30*24*60*60)
+
         return response
 
 
@@ -1088,3 +1188,206 @@ class Toggle2FAView(APIView):
             "message": msg,
             "two_factor_enabled": profile.two_factor_enabled
         }, status=status.HTTP_200_OK)
+
+
+class LoginSessionStatusView(APIView):
+    """Browser polls this to check if push approval is granted via mobile"""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        session_token = request.query_params.get("session_token")
+        if not session_token:
+            return Response({"error": "Session token required"}, status=400)
+            
+        session = LoginSession.objects.filter(session_token=session_token).first()
+        if not session:
+            return Response({"error": "Invalid session"}, status=404)
+        
+        if session.status == 'approved':
+            # Generate JWT
+            refresh = RefreshToken.for_user(session.user)
+            access_token = str(refresh.access_token)
+            refresh_token = str(refresh)
+            
+            response = Response({
+                "user": {"id": session.user.id, "email": session.user.email},
+                "message": "Login successful via Push Approval",
+                "status": "approved"
+            }, status=status.HTTP_200_OK)
+            response.set_cookie(key='access_token', value=access_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/')
+            response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/')
+            
+            # Session/Trust Device Setup (Always create for remote logout)
+            import uuid
+            device_token = str(uuid.uuid4())
+            TrustedDevice.objects.create(
+                user=session.user,
+                device_token=device_token,
+                device_name=session.device_name or "Unknown Device",
+                is_trusted=getattr(session, 'trust_device', False),
+                expires_at=timezone.now() + timedelta(days=30)
+            )
+            response.set_cookie(key='trusted_device', value=device_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/', max_age=30*24*60*60)
+            
+            return response
+            
+        elif session.status == 'rejected':
+            return Response({"status": "rejected", "error": "Login request was rejected"}, status=403)
+        
+        elif timezone.now() > session.expires_at:
+            session.status = 'expired'
+            session.save()
+            return Response({"status": "expired", "error": "Login request expired"}, status=408)
+            
+        return Response({"status": "pending"})
+
+    def post(self, request):
+        session_token = request.data.get("session_token")
+        trust_device = request.data.get("trust_device", False)
+        
+        if not session_token:
+            return Response({"error": "Session token required"}, status=400)
+            
+        session = LoginSession.objects.filter(session_token=session_token).first()
+        if not session:
+            return Response({"error": "Invalid session"}, status=404)
+        
+        if str(trust_device).lower() == 'true':
+            session.trust_device = True
+        else:
+            session.trust_device = False
+            
+        session.save(update_fields=['trust_device'])
+        return Response({"message": "Trust preference updated"})
+
+
+class ApproveLoginSessionView(APIView):
+    """Mobile user clicks Yes/No from email or WhatsApp which hits this endpoint"""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        session_token = request.query_params.get("token")
+        action = request.query_params.get("action") # approve or reject
+        
+        if not session_token or action not in ['approve', 'reject']:
+            return Response({"error": "Invalid request"}, status=400)
+            
+        session = LoginSession.objects.filter(session_token=session_token).first()
+        if not session:
+            return Response({"error": "Link invalid or already used"}, status=400)
+            
+        if timezone.now() > session.expires_at or session.status != 'pending':
+            return Response({"error": "This request has expired or already been handled."}, status=400)
+            
+        if action == 'approve':
+            session.status = 'approved'
+            session.save(update_fields=['status'])
+            
+            # For Mobile Users: Generate JWT and set cookies so they are logged in immediately on this device
+            refresh = RefreshToken.for_user(session.user)
+            access_token = str(refresh.access_token)
+            refresh_token = str(refresh)
+            
+            response = Response({
+                "message": "Successfully Approved! Redirecting you to the dashboard...",
+                "status": "approved"
+            }, status=status.HTTP_200_OK)
+            
+            # Standard Cookie Setup (Matches LoginSessionStatusView)
+            response.set_cookie(key='access_token', value=access_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/')
+            response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/')
+            
+            # Session/Trust Device Setup (Always create for remote logout)
+            import uuid
+            device_token = str(uuid.uuid4())
+            TrustedDevice.objects.create(
+                user=session.user,
+                device_token=device_token,
+                device_name=session.device_name or "Mobile Approval Device",
+                is_trusted=getattr(session, 'trust_device', False),
+                expires_at=timezone.now() + timedelta(days=30)
+            )
+            response.set_cookie(key='trusted_device', value=device_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/', max_age=30*24*60*60)
+            
+            return response
+        else:
+            session.status = 'rejected'
+            session.save(update_fields=['status'])
+            return Response({"message": "Request Blocked. We recommend resetting your password.", "status": "rejected"})
+
+class SecuritySettingsView(APIView):
+    """Fetch or generate recovery codes and update WhatsApp/Email Recovery fields"""
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = request.user.profile
+        codes = RecoveryCode.objects.filter(user=request.user, is_used=False).values_list('code', flat=True)
+        
+        # Fetch trusted devices
+        from users.models import TrustedDevice
+        devices = TrustedDevice.objects.filter(user=request.user).order_by('-created_at')
+        device_list = [{
+            "id": d.id,
+            "device_name": d.device_name or "Unknown Device",
+            "is_trusted": d.is_trusted,
+            "created_at": d.created_at,
+            "is_expired": not d.is_valid()
+        } for d in devices]
+
+        return Response({
+            "recovery_email": profile.recovery_email,
+            "recovery_whatsapp": profile.recovery_whatsapp,
+            "recovery_codes_count": codes.count(),
+            "recovery_codes_available": list(codes) if codes.count() > 0 else [],
+            "trusted_devices": device_list
+        })
+
+    def post(self, request):
+        action = request.data.get("action")
+        profile = request.user.profile
+
+        if action == "generate_codes":
+            import random, string
+            RecoveryCode.objects.filter(user=request.user).delete()
+            new_codes = []
+            for _ in range(10):
+                code = ''.join(random.choices(string.digits, k=8))
+                RecoveryCode.objects.create(user=request.user, code=code)
+                new_codes.append(code)
+            return Response({"message": "Codes generated", "codes": new_codes})
+        
+        elif action == "update_recovery":
+            email = request.data.get("recovery_email")
+            wa = request.data.get("recovery_whatsapp")
+            profile.recovery_email = email
+            profile.recovery_whatsapp = wa
+            profile.save(update_fields=["recovery_email", "recovery_whatsapp"])
+            return Response({"message": "Recovery options updated successfully"})
+            
+        elif action == "remove_device":
+            device_id = request.data.get("device_id")
+            from users.models import TrustedDevice
+            try:
+                device = TrustedDevice.objects.get(id=device_id, user=request.user)
+                device.delete()
+                return Response({"message": "Device disconnected successfully"})
+            except TrustedDevice.DoesNotExist:
+                return Response({"error": "Device not found"}, status=404)
+
+        return Response({"error": "Invalid action"}, status=400)
+
+class LoginHistoryView(APIView):
+    """View recent login history for Security Dashboard"""
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        history = LoginHistory.objects.filter(user=request.user).order_by('-created_at')[:20]
+        data = [{
+            "id": h.id,
+            "ip_address": h.ip_address,
+            "device_name": h.device_name,
+            "created_at": h.created_at
+        } for h in history]
+        return Response(data)

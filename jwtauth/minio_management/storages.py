@@ -51,3 +51,11 @@ class BlogStorage(BaseMinioStorage):
 class ProfileStorage(BaseMinioStorage):
     bucket_name = os.environ.get('MINIO_PROFILE_BUCKET_NAME', 'newsmartagent-profile')
     querystring_auth = True
+
+class ContactProfileStorage(BaseMinioStorage):
+    """
+    Contact avatars are shown inside the dashboard list; long-lived, non-expiring
+    URLs are more convenient there. Keep them public (no signed querystring).
+    """
+    bucket_name = os.environ.get('MINIO_PROFILE_BUCKET_NAME', 'newsmartagent-profile')
+    querystring_auth = False

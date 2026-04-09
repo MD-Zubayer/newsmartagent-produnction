@@ -56,6 +56,26 @@ class AgentAIViewSet(viewsets.ModelViewSet):
         """
         return AgentAI.objects.filter(user=self.request.user).exclude(page_id__startswith='dashboard_').order_by('-created_at')
 
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        if not serializer.is_valid():
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"AgentAI Update Validation Error: {serializer.errors}")
+            print(f"AgentAI Update Validation Error: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+        self.perform_update(serializer)
+
+        if getattr(instance, '_prefetched_objects_cache', None):
+            # If 'prefetch_related' has been applied to a queryset, we need to
+            # forcibly invalidate the prefetch cache on the instance.
+            instance._prefetched_objects_cache = {}
+
+        return Response(serializer.data)
+
 
 class UserAvailableModelsView(APIView):
     permission_classes = [IsAuthenticated]
@@ -121,7 +141,13 @@ class TokenUsageAnalyticsView(APIView):
         #<!---------------- 2. Model and Platform Distribution (Pie/Donut Charts) ---------------!>
 
         model_dist = user_logs.values('model_name').annotate(count=Count('id'))
-        platform_dist = user_logs.values('platform').annotate(count=Count("id"))
+        platform_dist = user_logs.values('platform').annotate(
+            count=Count('id'),
+            input_tokens=Sum('input_tokens'),
+            output_tokens=Sum('output_tokens'),
+            total_tokens=Sum('total_tokens')
+        )
+
 
         # <!------------- 3. Summary Stats ----------------!>
 
@@ -156,7 +182,7 @@ class TokenUsageAnalyticsView(APIView):
 
         #<!------------------- 4. Recent Logs (Table) ---------------!>
 
-        recent_logs = user_logs.order_by("-created_at")[:20]
+        recent_logs = user_logs.order_by("-created_at")[:100]
         serializer = TokenUsageAnalyticsSerializer(recent_logs, many=True)
 
         return Response({
@@ -262,39 +288,120 @@ class RankingAPIView(APIView):
             if not agent:
                 return Response({"error": "Agent not found"}, status=status.HTTP_404_NOT_FOUND)
 
-            # ২. র‍্যাঙ্কিং ডাটা আনা (db=4 থেকে)
-            top_messages_raw = get_top_message(agent_id, top_n=50) # Increased to 50 for more visibility
+            # ২. শেয়ারড এজেন্টদের ডাটা আনা
+            shared_agents = agent.get_settings.shared_cache_agents.all()
+
+            def _get_redis_id(a):
+                if a.platform == 'web_widget' and a.widget_key:
+                    return f"widget_{a.widget_key}"
+                return a.page_id
+
+            # ৩. র‍্যাঙ্কিং ডাটা আনা (db=4 থেকে) - নিজের এবং শেয়ারড সব এজেন্টের
+            all_raw_messages = {} # msg_hash -> {'frequency': 0, 'is_shared': False, 'origin_agent_id': str}
             
-            # ৩. এক্সক্লুশন সেট আনা (শেয়ারিং কন্ট্রোল)
+            # ক. নিজের ডাটা
+            my_redis_id = _get_redis_id(agent)
+            for msg_hash, frequency in get_top_message(my_redis_id, top_n=50):
+                all_raw_messages[msg_hash] = {
+                    'frequency': int(frequency),
+                    'is_shared': False,
+                    'origin_agent_id': my_redis_id
+                }
+                
+            # খ. শেয়ারড এজেন্টদের ডাটা
+            for s_agent in shared_agents:
+                s_redis_id = _get_redis_id(s_agent)
+                # শেয়ারড এজেন্টের ক্ষেত্রে আমরা একটু কম টপ মেসেজ নিচ্ছি যাতে ওভারলোড না হয়
+                for msg_hash, frequency in get_top_message(s_redis_id, top_n=30):
+                    if msg_hash in all_raw_messages:
+                        all_raw_messages[msg_hash]['frequency'] += int(frequency)
+                    else:
+                        all_raw_messages[msg_hash] = {
+                            'frequency': int(frequency),
+                            'is_shared': True,
+                            'origin_agent_id': s_redis_id
+                        }
+
+            # ৪. এক্সক্লুশন সেট আনা (শেয়ারিং কন্ট্রোল)
             r_db4 = get_redis_client(db=4)
-            exclusion_key = f"agent:{agent_id}:sharing_exclusion_set"
-            excluded_hashes = r_db4.smembers(exclusion_key)
-            excluded_hashes = {h.decode() if isinstance(h, bytes) else h for h in excluded_hashes}
+            
+            # নিজের এক্সক্লুশন সেট
+            my_exclusion_key = f"agent:{agent_id}:sharing_exclusion_set"
+            my_excluded_hashes = r_db4.smembers(my_exclusion_key)
+            my_excluded_hashes = {h.decode() if isinstance(h, bytes) else h for h in my_excluded_hashes}
+            
+            # শেয়ারড এজেন্টদের এক্সক্লুশন সেট প্রি-ফেচ করা
+            shared_exclusions = {} # redis_id -> set of hashes
+            for s_agent in shared_agents:
+                s_id = _get_redis_id(s_agent)
+                ex_key = f"agent:{s_id}:sharing_exclusion_set"
+                hashes = r_db4.smembers(ex_key)
+                shared_exclusions[s_id] = {h.decode() if isinstance(h, bytes) else h for h in hashes}
 
             ranking_list = []
-            r_db6 = get_redis_client(db=6)
 
-            for msg_hash, frequency in top_messages_raw:
+            # Frequency অনুযায়ী সর্ট করা
+            sorted_hashes = sorted(all_raw_messages.items(), key=lambda x: x[1]['frequency'], reverse=True)
+
+            for msg_hash, meta in sorted_hashes:
+                frequency = meta['frequency']
+                is_shared = meta['is_shared']
                 text = "Unknown Message"
                 current_scope = 'agent_specific'
                 total_token_savings = 0
+                is_shareable = True # Default
                 
-                # DB 2 (Agent Specific) চেক করা
-                cache_key = f"agent:{agent_id}:reply:{msg_hash}"
+                # ৫. শেয়ারিং স্ট্যাটাস চেক (is_blocked)
+                origin_redis_id = meta.get('origin_agent_id', my_redis_id)
+                is_blocked = False
+                
+                if is_shared:
+                    # যদি শেয়ারড হয়, তবে অরিজিনাল এজেন্টের সেটিং চেক করো
+                    if origin_redis_id in shared_exclusions:
+                        if msg_hash in shared_exclusions[origin_redis_id]:
+                            is_blocked = True
+                            is_shareable = False
+                else:
+                    # নিজের মেসেজ হলে নিজের সেটিং চেক করো
+                    if msg_hash in my_excluded_hashes:
+                        is_shareable = False
+                
+                # Cache checking logic
+                cache_key = f"agent:{origin_redis_id}:reply:{msg_hash}"
                 raw_data = redis_conn.get(cache_key)
-                source = 'agent'
+                source = 'shared_agent' if is_shared else 'agent'
+                
+                # যদি অরিজিন এজেন্টের ক্যাশে না থাকে, তবে অন্য সব শেয়ারড এজেন্টদের ক্যাশে খুঁজো
+                if not raw_data:
+                    # ১. নিজেরটা চেক করো (যদি origin কোনো শেয়ারড এজেন্ট হয়)
+                    if origin_redis_id != my_redis_id:
+                        my_cache_key = f"agent:{my_redis_id}:reply:{msg_hash}"
+                        raw_data = redis_conn.get(my_cache_key)
+                        if raw_data: source = 'agent'
+
+                    # ২. সব শেয়ারড এজেন্টদের ক্যাশে খুঁজো (এটি সব সময় করা হবে যেন Unknown Message না আসে)
+                    if not raw_data:
+                        for s_agent in shared_agents:
+                            s_redis_id = _get_redis_id(s_agent)
+                            if s_redis_id == origin_redis_id: continue
+                            s_cache_key = f"agent:{s_redis_id}:reply:{msg_hash}"
+                            raw_data = redis_conn.get(s_cache_key)
+                            if raw_data:
+                                source = 'shared_agent'
+                                break
                 
                 # যদি DB 2-তে না থাকে তবে DB 6 (Global Cache) চেক করা
                 if not raw_data:
                     global_key = f"global:reply:{msg_hash}"
-                    raw_data = r_db6.get(global_key)
+                    raw_data = r_grouped.get(global_key)
                     source = 'global'
                 
                 # যদি Global-এও না থাকে তবে DB 6 (Sender Specific) চেক করা
                 if not raw_data:
-                    sender_pattern = f"agent:{agent_id}:sender:*:reply:{msg_hash}"
-                    for s_key in r_db6.scan_iter(match=sender_pattern, count=1):
-                        raw_data = r_db6.get(s_key)
+                    # নিজের sender pattern
+                    sender_pattern = f"agent:{my_redis_id}:sender:*:reply:{msg_hash}"
+                    for s_key in r_grouped.scan_iter(match=sender_pattern, count=1):
+                        raw_data = r_grouped.get(s_key)
                         if raw_data:
                             source = 'sender_specific'
                             break
@@ -304,7 +411,7 @@ class RankingAPIView(APIView):
                         data = json.loads(raw_data)
                         text = data.get('original_text', data.get('original_normalized', 'Unknown Message'))
                         
-                        if source == 'agent':
+                        if source == 'agent' or source == 'shared_agent':
                             current_scope = data.get('cache_scope', 'agent_specific')
                         elif source == 'global':
                             current_scope = 'global'
@@ -314,14 +421,15 @@ class RankingAPIView(APIView):
                         input_tokens = data.get('input_tokens', 0)
                         output_tokens = data.get('output_tokens', 0)
                         
-                        # ১ টোকেন সাশ্রয় = (input_tokens + output_tokens) * frequency - (input_tokens + output_tokens)
-                        # কারণ প্রথমবার জেনারেট করতে টোকেন লেগেছে, পরের বারগুলো সেভ হয়েছে।
+                        # Token Savings Calculation Refinement:
+                        # If a message is from a shared or global source, it means 1 AI call was shared.
+                        # Global savings = (Total Aggregated Frequency - 1) * cost_per_query
                         total_token_savings = (int(input_tokens) + int(output_tokens)) * (int(frequency) - 1)
                         if total_token_savings < 0: total_token_savings = 0
                     except:
                         pass
 
-                is_shareable = msg_hash not in excluded_hashes
+                is_shareable = msg_hash not in my_excluded_hashes
 
                 ranking_list.append({
                     'text': text,
@@ -330,6 +438,8 @@ class RankingAPIView(APIView):
                     'msg_hash': msg_hash,
                     'current_scope': current_scope,
                     'is_shareable': is_shareable,
+                    'is_shared': is_shared,
+                    'is_blocked': is_blocked,
                 })
 
             return Response({
@@ -571,3 +681,181 @@ class RequestSpecialAgentAPIView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class VisitorTrackView(APIView):
+    """
+    Public, no-auth. Called from VisitorTracker.jsx on every page load.
+    Creates or updates a WebsiteVisitor record (IP, device, view count).
+    Returns the visitor_uuid so the browser can store it.
+    """
+    permission_classes = []
+
+    def post(self, request):
+        try:
+            from aiAgent.models import WebsiteVisitor
+            import uuid as uuid_module
+
+            # Get visitor uuid from request body or cookie
+            visitor_uuid = request.data.get('visitor_uuid') or request.COOKIES.get('VISITOR_ID')
+
+            # Extract IP
+            x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+            ip = x_forwarded_for.split(',')[0].strip() if x_forwarded_for else request.META.get('REMOTE_ADDR', '')
+
+            user_agent = request.META.get('HTTP_USER_AGENT', '')[:512]
+            device_type = 'Mobile' if 'Mobile' in user_agent else 'Desktop'
+
+            if visitor_uuid:
+                visitor = WebsiteVisitor.objects.filter(visitor_uuid=visitor_uuid).first()
+                if visitor:
+                    visitor.view_count += 1
+                    visitor.ip_address = ip
+                    visitor.user_agent = user_agent
+                    if request.user.is_authenticated and not visitor.user:
+                        visitor.user = request.user
+                    visitor.save(update_fields=['view_count', 'last_visited', 'ip_address', 'user_agent', 'user'])
+                    return Response({'visitor_uuid': str(visitor.visitor_uuid), 'status': 'updated'})
+
+            # New visitor
+            new_uuid = uuid_module.uuid4()
+            visitor = WebsiteVisitor.objects.create(
+                visitor_uuid=new_uuid,
+                ip_address=ip,
+                user_agent=user_agent,
+                device_type=device_type,
+                user=request.user if request.user.is_authenticated else None
+            )
+            return Response({'visitor_uuid': str(new_uuid), 'status': 'created'})
+
+        except Exception as e:
+            return Response({'error': str(e)}, status=500)
+
+
+class VisitorSubscribeView(APIView):
+    """
+    Public endpoint — no auth required.
+    Receives visitor_uuid + email/phone from the browser subscribe popup
+    and saves them to the WebsiteVisitor record.
+    """
+    permission_classes = []  # Public endpoint
+
+    def post(self, request):
+        visitor_uuid = request.data.get('visitor_uuid') or request.COOKIES.get('VISITOR_ID')
+        email = request.data.get('email', '').strip()
+        phone = request.data.get('phone', '').strip()
+
+        if not visitor_uuid:
+            return Response({"error": "Visitor ID missing"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not email and not phone:
+            return Response({"error": "Email or phone is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            from aiAgent.models import WebsiteVisitor
+            visitor = WebsiteVisitor.objects.filter(visitor_uuid=visitor_uuid).first()
+
+            if not visitor:
+                # Create visitor if somehow not tracked yet
+                visitor = WebsiteVisitor.objects.create(visitor_uuid=visitor_uuid)
+
+            if email:
+                visitor.captured_email = email
+            if phone:
+                visitor.captured_phone = phone
+
+            # Link to user if they are logged in
+            if request.user.is_authenticated:
+                visitor.user = request.user
+
+            visitor.save()
+
+            return Response({"status": "subscribed", "message": "Thank you for subscribing!"}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+import requests
+import logging
+from django.conf import settings
+
+class ConnectTelegramBotView(APIView):
+    """
+    Verifies a Telegram Bot Token and sets up the webhook for Option 2 (Custom Bot).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        token = request.data.get('token', '').strip()
+        agent_id = request.data.get('agent_id') # Optional: ID of existing agent to update
+
+        if not token:
+            return Response({"error": "Telegram Bot Token is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 1. Verify Token with Telegram
+        verify_url = f"https://api.telegram.org/bot{token}/getMe"
+        try:
+            response = requests.get(verify_url, timeout=10)
+            data = response.json()
+            if not data.get('ok'):
+                return Response({"error": "Invalid Telegram Token", "details": data.get('description')}, status=status.HTTP_400_BAD_REQUEST)
+            bot_username = data['result']['username']
+            bot_name = data['result']['first_name']
+        except Exception as e:
+            return Response({"error": "Failed to verify token with Telegram API", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # 2. Set Webhook
+        # Use environment variable if available, otherwise fallback to reasonable default
+        webhook_url = getattr(settings, 'TELEGRAM_WEBHOOK_URL', f"https://{request.get_host()}/api/webhooks/telegram/")
+        set_webhook_url = f"https://api.telegram.org/bot{token}/setWebhook?url={webhook_url}"
+        
+        try:
+            wh_response = requests.post(set_webhook_url, timeout=10)
+            wh_data = wh_response.json()
+            if not wh_data.get('ok'):
+                return Response({"error": "Failed to set Telegram Webhook", "details": wh_data.get('description')}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as e:
+            return Response({"error": "Failed to connect to Telegram API for webhook setup", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # 3. Save to Database
+        from aiAgent.models import TelegramBot, AgentAI
+        try:
+            if agent_id:
+                agent = AgentAI.objects.filter(id=agent_id, user=request.user).first()
+                if not agent:
+                    return Response({"error": "Agent not found or unauthorized."}, status=status.HTTP_404_NOT_FOUND)
+                agent.platform = 'telegram'
+                agent.page_id = bot_username
+                agent.access_token = token
+                agent.name = f"{bot_name} (Telegram)"
+                agent.save()
+            else:
+                agent = AgentAI.objects.create(
+                    user=request.user,
+                    name=f"{bot_name} (Telegram)",
+                    platform='telegram',
+                    page_id=bot_username,
+                    access_token=token,
+                    system_prompt="You are a helpful Telegram AI assistant."
+                )
+
+            # Update or Create TelegramBot record
+            TelegramBot.objects.update_or_create(
+                agent=agent,
+                defaults={
+                    'bot_token': token,
+                    'bot_username': bot_username,
+                    'bot_name': bot_name,
+                    'is_active': True
+                }
+            )
+
+            return Response({
+                "status": "success",
+                "message": f"Successfully connected Telegram Bot: @{bot_username}",
+                "agent_id": agent.id,
+                "bot_username": bot_username
+            }, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": "Failed to save Telegram agent to database", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -82,6 +82,12 @@ def calculate_context_score(text):
         score += 3
         matches.append(f"Intent: {intents[0]} (+3)")
 
+    # 3.5 Target Check (High-priority)
+    targets = check_keyword_match(text, 'target')
+    if targets:
+        score += 4
+        matches.append(f"Target: {targets[0]} (+4)")
+
     # 4. Urgency/Sentiment Check (from DB - Optimized)
     urgency = check_keyword_match(text, 'urgency')
     if urgency:
@@ -128,6 +134,9 @@ def handle_smart_memory_update(agent_config, sender, current_text):
     
     internal = memory.data['_internal']
     score = calculate_context_score(current_text)
+
+    # Fast lane: if any 'target' keyword matched, force a memory extraction
+    target_hits = check_keyword_match(current_text, 'target')
     
     internal['accumulated_score'] += score
     internal['unskipped_count'] += 1
@@ -139,7 +148,10 @@ def handle_smart_memory_update(agent_config, sender, current_text):
     should_call = False
     reason = ""
 
-    if internal['accumulated_score'] >= 10:
+    if target_hits:
+        should_call = True
+        reason = f"Target keyword: {target_hits[0]}"
+    elif internal['accumulated_score'] >= 10:
         should_call = True
         reason = f"High Context Density ({internal['accumulated_score']})"
     elif internal['unskipped_count'] >= 20:

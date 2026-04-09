@@ -20,6 +20,14 @@ class Conversation(models.Model):
     last_message_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    def save(self, *args, **kwargs):
+        if self.platform:
+            self.platform = self.platform.lower()
+        if self.contact_id:
+            self.contact_id = self.contact_id.lower()
+        super().save(*args, **kwargs)
+
+
 
     class Meta:
         unique_together = ['agentAi', 'contact_id', 'platform']
@@ -42,8 +50,14 @@ class Message(models.Model):
     platform = models.CharField(max_length=20, choices=Conversation.PLATFORM_CHOICES, default='messenger')
 
     tokens_used = models.IntegerField(default=0)
+    is_read = models.BooleanField(default=False)
 
     sent_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        if self.platform:
+            self.platform = self.platform.lower()
+        super().save(*args, **kwargs)
 
     class Meta:
         ordering = ['sent_at']

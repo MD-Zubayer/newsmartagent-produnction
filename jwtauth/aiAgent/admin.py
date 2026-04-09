@@ -1,14 +1,14 @@
 # aiAgent/admin.py
 from django.contrib import admin
 from unfold.admin import ModelAdmin
-from .models import AgentAI,MissingRequirement, Contact, WidgetSettings
+from .models import AgentAI,MissingRequirement, Contact, WidgetSettings, ScheduledMessage
 from django.utils.html import format_html
 from .models import UserMemory, AgentAI
 import json
 from django.db.models import Sum, Count, Avg
 from django.utils.html import format_html
 from .models import TokenUsageLog
-from .models import AIProviderModel, SmartKeyword, SmartTranslationMap
+from .models import AIProviderModel, SmartKeyword, SmartTranslationMap, TelegramBot, TelegramBotMapping, PromptTokenReport
 from django import forms
 from django.urls import path, reverse
 from django.shortcuts import render, redirect, get_object_or_404
@@ -18,6 +18,7 @@ import json
 import re
 from .cache.hybrid_similarity import clear_agent_cache, clear_global_cache, clear_agent_ranking, delete_specific_cache_entry, delete_by_message_text
 from .cache.ranking import get_top_message
+from django import forms
 
 class KeywordUploadForm(forms.Form):
     category = forms.ChoiceField(choices=SmartKeyword.CATEGORY_CHOICES)
@@ -86,11 +87,25 @@ class WidgetSettingsInline(admin.StackedInline):
 
 @admin.register(AgentAI)
 class AgentAIAdmin(ModelAdmin):
-    list_display = [ 'id', 'name', 'cache_tools', 'user', 'platform', 'number', 'page_id', 'is_active', 'ai_agent_type', 'is_special_agent', 'created_at']
+    list_display = [ 'id', 'name', 'cache_tools', 'user', 'platform', 'number', 'page_id', 'is_active', 'ai_agent_type', 'prompt_tokens', 'created_at']
     list_filter = ['platform', 'special_agent_status', 'is_active', 'is_special_agent', 'user', 'ai_agent_type',]
     search_fields = ['name', 'page_id', 'number', 'user__username']
     inlines = [AgentAISettingsInline, WidgetSettingsInline]
-    readonly_fields = ['cache_view_link', 'created_at']
+    readonly_fields = ['cache_view_link', 'created_at', 'prompt_tokens']
+    fieldsets = (
+        (None, {
+            'fields': ('user', 'name', 'platform', 'page_id', 'number', 'system_prompt', 'greeting_message', 'ai_agent_type', 'is_active', 'is_special_agent', 'special_agent_status', 'schedule_max_batch', 'schedule_delay_ms')
+        }),
+        ("Tokens & Models", {
+            'fields': ('ai_model', 'selected_model', 'prompt_tokens', 'token_expires_at')
+        }),
+        ("Webhook & Keys", {
+            'fields': ('webhook_secret', 'access_token')
+        }),
+        ("Meta", {
+            'fields': ('cache_view_link', 'created_at')
+        }),
+    )
 
     def cache_view_link(self, obj):
         from django.utils.html import format_html
@@ -104,6 +119,30 @@ class AgentAIAdmin(ModelAdmin):
     created_short.short_description = "Created"
 
     actions = ['clear_cache_action', 'clear_ranking_action', 'clear_global_cache_action']
+
+    change_list_template = "admin/aiAgent/agentai_changelist.html"
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        
+        # Calculate Grand Total Prompt Tokens globally for entire platform
+        total_platform = AgentAI.objects.aggregate(total=Sum('prompt_tokens'))['total'] or 0
+        extra_context['global_prompt_tokens_total'] = total_platform
+
+        if request.method == "POST" and "apply_schedule_defaults" in request.POST:
+            max_batch = request.POST.get("global_max_batch")
+            delay_ms = request.POST.get("global_delay_ms")
+            updated = 0
+            qs = self.get_queryset(request)
+            for agent in qs:
+                if max_batch:
+                    agent.schedule_max_batch = int(max_batch)
+                if delay_ms is not None and delay_ms != "":
+                    agent.schedule_delay_ms = int(delay_ms)
+                agent.save(update_fields=["schedule_max_batch", "schedule_delay_ms"])
+                updated += 1
+            self.message_user(request, f"Updated scheduling defaults for {updated} agents.")
+        return super().changelist_view(request, extra_context=extra_context)
 
     def clear_cache_action(self, request, queryset):
         total_cleared = 0
@@ -124,6 +163,8 @@ class AgentAIAdmin(ModelAdmin):
         count = clear_global_cache()
         self.message_user(request, f"✅ Successfully cleared {count} global cache entries.")
     clear_global_cache_action.short_description = "🌐 Clear GLOBAL Cache (Universal)"
+
+    actions = ['clear_cache_action', 'clear_ranking_action', 'clear_global_cache_action']
 
     @display(description="🧠 Intelligence Cache", label=True)
     def cache_tools(self, obj):
@@ -188,6 +229,70 @@ class AgentAIAdmin(ModelAdmin):
 
 
 
+
+@admin.register(PromptTokenReport)
+class PromptTokenReportAdmin(ModelAdmin):
+    list_display = ('id', 'name', 'user', 'platform', 'prompt_tokens', 'is_active', 'created_at')
+    list_filter = ('platform', 'is_active')
+    search_fields = ('name', 'user__username', 'user__email')
+    
+    change_list_template = "admin/aiAgent/prompttokenreport_changelist.html"
+    
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        
+        # Analytics calculations
+        from django.db.models import Sum, Count
+        from datasheet.models import Spreadsheet
+        from embedding.models import Document
+        
+        total_global = PromptTokenReport.objects.aggregate(total=Sum('prompt_tokens'))['total'] or 0
+        total_sheet = Spreadsheet.objects.aggregate(total=Sum('tokens_count'))['total'] or 0
+        total_doc = Document.objects.aggregate(total=Sum('tokens_count'))['total'] or 0
+        
+        user_breakdown = PromptTokenReport.objects.values('user__id', 'user__email', 'user__name').annotate(
+            total_tokens=Sum('prompt_tokens'),
+            agent_count=Count('id')
+        ).order_by('-total_tokens')[:50]
+        
+        user_ids = [u['user__id'] for u in user_breakdown]
+        sheet_breakdown = Spreadsheet.objects.filter(user__id__in=user_ids).values('user__id').annotate(sheet_tokens=Sum('tokens_count'))
+        doc_breakdown = Document.objects.filter(user__id__in=user_ids).values('user__id').annotate(doc_tokens=Sum('tokens_count'))
+
+        sheet_dict = {d['user__id']: d['sheet_tokens'] for d in sheet_breakdown}
+        doc_dict = {d['user__id']: d['doc_tokens'] for d in doc_breakdown}
+
+        user_list = []
+        for u in user_breakdown:
+            uid = u['user__id']
+            st = sheet_dict.get(uid) or 0
+            dt = doc_dict.get(uid) or 0
+            user_list.append({
+                'user__email': u['user__email'],
+                'user__name': u['user__name'],
+                'agent_count': u['agent_count'],
+                'total_prompt_tokens': u['total_tokens'],
+                'sheet_tokens': st,
+                'doc_tokens': dt,
+                'grand_total': u['total_tokens'] + st + dt
+            })
+        
+        extra_context['total_platform_tokens'] = total_global
+        extra_context['total_sheet_tokens'] = total_sheet
+        extra_context['total_doc_tokens'] = total_doc
+        extra_context['grand_platform_total'] = total_global + total_sheet + total_doc
+        extra_context['user_breakdown'] = user_list
+        
+        return super().changelist_view(request, extra_context=extra_context)
+
+    def has_add_permission(self, request):
+        return False
+    
+    def has_change_permission(self, request, obj=None):
+        return False
+        
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 @admin.register(MissingRequirement)
 class MissingRequirementAdmin(ModelAdmin):
@@ -622,3 +727,173 @@ class WidgetSettingsAdmin(ModelAdmin):
     list_display = ['agent', 'primary_color', 'widget_position', 'is_enabled', 'updated_at']
     list_filter = ['is_enabled', 'widget_position']
     search_fields = ['agent__name', 'header_title']
+
+
+@admin.register(TelegramBot)
+class TelegramBotAdmin(ModelAdmin):
+    list_display = ['agent', 'bot_username', 'bot_name', 'is_active', 'updated_at']
+    list_filter = ['is_active', 'updated_at']
+    search_fields = ['bot_username', 'bot_name', 'agent__name', 'bot_token']
+    readonly_fields = ['created_at', 'updated_at']
+    actions = ['reset_webhook_to_n8n']
+
+    def reset_webhook_to_n8n(self, request, queryset):
+        """
+        Admin action: reset webhook for selected bots to TELEGRAM_WEBHOOK_URL (n8n ingress).
+        """
+        import requests
+        import os
+
+        base_url = os.getenv("TELEGRAM_WEBHOOK_URL") or "https://newsmartagent.com/api/webhooks/telegram/"
+        success, fail = 0, 0
+        for bot in queryset:
+            token = bot.bot_token
+            username = bot.bot_username
+            if not token or not username:
+                fail += 1
+                continue
+            if "bot_username=" not in base_url:
+                sep = "&" if "?" in base_url else "?"
+                webhook_url = f"{base_url}{sep}bot_username={username}"
+            else:
+                webhook_url = base_url
+            try:
+                resp = requests.post(
+                    f"https://api.telegram.org/bot{token}/setWebhook",
+                    json={"url": webhook_url},
+                    timeout=10
+                )
+                if resp.status_code == 200:
+                    success += 1
+                else:
+                    fail += 1
+            except Exception:
+                fail += 1
+        self.message_user(request, f"Webhook reset success: {success}, failed: {fail}")
+    reset_webhook_to_n8n.short_description = "Reset webhook to n8n ingress"
+
+@admin.register(TelegramBotMapping)
+class TelegramBotMappingAdmin(ModelAdmin):
+    list_display = ['agent', 'chat_id', 'is_active', 'created_at']
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['chat_id', 'agent__name', 'user__email']
+    readonly_fields = ['created_at']
+
+
+# ─── Website Visitor Tracking Admin ──────────────────────────────────────────
+from .models import WebsiteVisitor
+from django.core.mail import send_mail, EmailMessage
+from django.conf import settings as django_settings
+
+
+class BulkEmailForm(forms.Form):
+    subject = forms.CharField(max_length=255, label="Subject")
+    message = forms.CharField(widget=forms.Textarea(attrs={"rows": 8}), label="Message Body")
+
+
+@admin.register(WebsiteVisitor)
+class WebsiteVisitorAdmin(ModelAdmin):
+    list_display = [
+        'visitor_uuid_short', 'ip_address', 'device_type', 
+        'captured_email', 'captured_phone', 'user', 
+        'view_count', 'first_visited', 'last_visited'
+    ]
+    list_filter = ['device_type', 'first_visited', 'last_visited']
+    search_fields = ['ip_address', 'captured_email', 'captured_phone', 'user__email']
+    readonly_fields = ['visitor_uuid', 'first_visited', 'last_visited', 'view_count', 'ip_address', 'user_agent', 'device_type']
+    ordering = ['-last_visited']
+    list_per_page = 30
+    date_hierarchy = 'first_visited'
+
+    actions = ['send_bulk_email_action', 'export_emails_action']
+
+    def visitor_uuid_short(self, obj):
+        return str(obj.visitor_uuid)[:8] + "..."
+    visitor_uuid_short.short_description = "Visitor ID"
+
+    def has_add_permission(self, request):
+        return False  # Visitors are auto-created, not manually
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                'send-bulk-email/',
+                self.admin_site.admin_view(self.send_bulk_email_view),
+                name='aiAgent_websitevisitor_send_bulk_email'
+            ),
+        ]
+        return custom_urls + urls
+
+    def send_bulk_email_action(self, request, queryset):
+        """Opens a form to send a bulk email to selected visitors who have emails."""
+        emails = list(queryset.filter(captured_email__isnull=False).exclude(captured_email="").values_list('captured_email', flat=True).distinct())
+        if not emails:
+            self.message_user(request, "⚠️ No email addresses found in selected visitors.", level='warning')
+            return
+        # Store emails in session for the form
+        request.session['bulk_email_recipients'] = emails
+        from django.http import HttpResponseRedirect
+        return HttpResponseRedirect(reverse('admin:aiAgent_websitevisitor_send_bulk_email'))
+    send_bulk_email_action.short_description = "📧 Send Bulk Email to Selected Visitors"
+
+    def send_bulk_email_view(self, request):
+        recipients = request.session.get('bulk_email_recipients', [])
+        
+        if request.method == 'POST':
+            form = BulkEmailForm(request.POST)
+            if form.is_valid():
+                subject = form.cleaned_data['subject']
+                message = form.cleaned_data['message']
+                sent_count = 0
+                failed = []
+                
+                for email in recipients:
+                    try:
+                        send_mail(
+                            subject=subject,
+                            message=message,
+                            from_email=django_settings.DEFAULT_FROM_EMAIL,
+                            recipient_list=[email],
+                            fail_silently=False,
+                        )
+                        sent_count += 1
+                    except Exception as e:
+                        failed.append(f"{email} ({e})")
+
+                if sent_count:
+                    messages.success(request, f"✅ Email sent to {sent_count} recipients successfully.")
+                if failed:
+                    messages.error(request, f"❌ Failed to send to: {', '.join(failed)}")
+                
+                del request.session['bulk_email_recipients']
+                return redirect('admin:aiAgent_websitevisitor_changelist')
+        else:
+            form = BulkEmailForm()
+
+        context = {
+            **self.admin_site.each_context(request),
+            'form': form,
+            'recipients': recipients,
+            'recipient_count': len(recipients),
+            'opts': WebsiteVisitor._meta,
+            'title': f"Send Bulk Email to {len(recipients)} Visitors",
+        }
+        return render(request, 'admin/aiAgent/websitevisitor/send_bulk_email.html', context)
+
+    def export_emails_action(self, request, queryset):
+        """Shows a message listing all email addresses of selected visitors."""
+        emails = list(queryset.filter(captured_email__isnull=False).exclude(captured_email="").values_list('captured_email', flat=True).distinct())
+        if emails:
+            self.message_user(request, f"📋 {len(emails)} emails: {', '.join(emails)}")
+        else:
+            self.message_user(request, "No emails found in selection.", level='warning')
+    export_emails_action.short_description = "📋 Show Email List of Selected"
+
+
+@admin.register(ScheduledMessage)
+class ScheduledMessageAdmin(ModelAdmin):
+    list_display = ('id', 'agent', 'status', 'run_at', 'audience_count', 'consumed_subscription', 'consumed_quota', 'created_at')
+    list_filter = ('status', 'run_at', 'agent')
+    search_fields = ('agent__name', 'agent__user__email')
+    readonly_fields = ('created_at', 'updated_at')

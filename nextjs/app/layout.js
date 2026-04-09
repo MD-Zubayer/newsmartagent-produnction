@@ -4,6 +4,7 @@ import Navbar from "./(main)/components/Navbar";
 import Footer from "./(main)/components/Footer";
 import { Toaster } from "react-hot-toast";
 import MessengerButton from "./(main)/components/MessengerButton";
+import VisitorTracker from "../components/VisitorTracker";
 // import Footer from "../components/Footer";
 
 
@@ -149,6 +150,7 @@ export default function RootLayout({ children }) {
         />
 
         {children}
+        <VisitorTracker />
   
         <script
           dangerouslySetInnerHTML={{

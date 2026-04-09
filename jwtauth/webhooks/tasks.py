@@ -2,6 +2,7 @@
 
 from celery import shared_task
 import re, json, time, uuid, logging, hashlib, redis, requests
+from datetime import timedelta
 from aiAgent.models import AgentAI
 from django.db.models import Q
 from chat.services import save_message
@@ -20,7 +21,7 @@ from chat.utils import get_smart_post_context
 from aiAgent.business_logic.logic_handler import (
     is_duplicate_or_outdated, acquire_user_lock, get_order_instructions,
     perform_rag_search, build_ai_context, get_ai_response,
-    log_token_usage, deduct_user_tokens, deliver_whatsapp_reply, deliver_facebook_reply, handle_public_comment_logic,
+    log_token_usage, deduct_user_tokens, deliver_whatsapp_reply, deliver_instagram_reply, deliver_facebook_reply, deliver_telegram_reply, handle_public_comment_logic,
     check_token_availability, deliver_dashboard_reply
 )
 from webhooks.utils import fetch_messenger_profile
@@ -34,7 +35,9 @@ from aiAgent.business_logic import logic_handler
 from celery.signals import after_setup_logger, after_setup_task_logger
 import logging.config
 from django.conf import settings
+from django.utils import timezone
 from aiAgent.cache.client import get_redis_client
+from . import youtube_tasks
 
 @after_setup_logger.connect
 @after_setup_task_logger.connect
@@ -45,7 +48,57 @@ logger = logging.getLogger(__name__)
 
 r = get_redis_client(db=0)
 
-def send_cache_update_ws(user_id, agent_id):
+
+def refresh_fb_page_token(fb_page):
+    """Refresh long-lived user token and derive new page token when close to expiry."""
+    if not fb_page or not fb_page.user_access_token:
+        return None
+
+    fb_app_id = getattr(settings, 'FB_APP_ID', None)
+    fb_app_secret = getattr(settings, 'FB_APP_SECRET', None)
+    if not fb_app_id or not fb_app_secret:
+        logger.warning("FB app credentials missing; skip token refresh")
+        return None
+
+    try:
+        # Refresh long-lived user token
+        exchange_url = (
+            "https://graph.facebook.com/v17.0/oauth/access_token?"
+            f"grant_type=fb_exchange_token&client_id={fb_app_id}&client_secret={fb_app_secret}"
+            f"&fb_exchange_token={fb_page.user_access_token}"
+        )
+        resp = requests.get(exchange_url, timeout=10).json()
+        new_user_token = resp.get("access_token")
+        expires_in = resp.get("expires_in")
+
+        if new_user_token:
+            fb_page.user_access_token = new_user_token
+            fb_page.token_expires_at = timezone.now() + timedelta(seconds=expires_in) if expires_in else None
+        else:
+            logger.warning(f"FB user token refresh failed: {resp}")
+            return None
+
+        # Derive fresh page token using refreshed user token
+        page_url = (
+            f"https://graph.facebook.com/v17.0/{fb_page.page_id}?"
+            f"fields=access_token&access_token={fb_page.user_access_token}"
+        )
+        page_resp = requests.get(page_url, timeout=10).json()
+        new_page_token = page_resp.get("access_token")
+
+        if new_page_token:
+            fb_page.access_token = new_page_token
+            fb_page.save(update_fields=["access_token", "user_access_token", "token_expires_at", "updated_at"])
+            AgentAI.objects.filter(page_id=fb_page.page_id).update(access_token=new_page_token)
+            logger.info(f"FB page token refreshed for page {fb_page.page_id}")
+            return new_page_token
+        else:
+            logger.warning(f"FB page token refresh failed: {page_resp}")
+    except Exception as e:
+        logger.error(f"FB token refresh error: {e}")
+    return None
+
+def send_cache_update_ws(user_id, agent_id, sender_id=None, contact_id=None):
     try:
         from channels.layers import get_channel_layer
         from asgiref.sync import async_to_sync
@@ -56,15 +109,16 @@ def send_cache_update_ws(user_id, agent_id):
                 "type": "send_notification",
                 "content": {
                     "action": "CACHE_UPDATE",
-                    "agent_id": agent_id,
+                    "agent_id": agent_id, # Should be the string identifier (page_id)
+                    "sender_id": sender_id,
+                    "contact_id": contact_id,
                 }
             }
         )
     except Exception as e:
         logger.error(f"WebSocket broadcast error: {e}")
 
-def send_human_handoff_ws(user_id, contact):
-    """Send a real-time WebSocket notification when AI requests human intervention."""
+def send_human_handoff_ws(user_id, agent_id, sender_id, contact_id, contact_name):
     try:
         from channels.layers import get_channel_layer
         from asgiref.sync import async_to_sync
@@ -75,17 +129,222 @@ def send_human_handoff_ws(user_id, contact):
                 "type": "send_notification",
                 "content": {
                     "action": "HUMAN_HANDOFF",
-                    "contact_id": contact.id,
-                    "contact_name": contact.name or contact.push_name or contact.identifier,
-                    "sender_id": contact.identifier,
-                    "platform": contact.platform,
-                    "message": f"🚨 {contact.name or contact.identifier} needs human assistance!",
+                    "agent_id": agent_id, # Should be the string identifier (page_id)
+                    "sender_id": sender_id,
+                    "contact_id": contact_id,
+                    "contact_name": contact_name
                 }
             }
         )
-        logger.info(f"🚨 Human handoff WS sent for contact {contact.id}")
+        logger.info(f"🔊 Human handoff WebSocket notification sent for user_{user_id}")
     except Exception as e:
         logger.error(f"Human handoff WebSocket error: {e}")
+
+@shared_task(bind=True, queue='chat_queue', max_retries=3)
+def sync_contact_profile_picture(self, contact_id, platform, sender_id, page_id, token, data=None):
+    from aiAgent.models import Contact
+    from django.core.files.base import ContentFile
+    import os, requests, hashlib, time
+    from django.core.cache import cache
+    
+    cache_key = f"profile_sync_{contact_id}"
+    if cache.get(cache_key):
+        return  # Prevent continuous syncing
+    
+    try:
+        contact = Contact.objects.get(id=contact_id)
+        image_url = None
+        
+        if platform in ['messenger', 'facebook_comment', 'instagram'] and token:
+            api_url = f"https://graph.facebook.com/v20.0/{sender_id}?fields=profile_pic,picture.type(large)&redirect=false&access_token={token}"
+            resp = requests.get(api_url, timeout=10)
+            if resp.status_code == 200:
+                resp_json = resp.json()
+                # Check for silhouette using the 'picture' edge which supports redirect=false
+                if 'picture' in resp_json and 'data' in resp_json['picture']:
+                    pic_data = resp_json['picture']['data']
+                    if not pic_data.get('is_silhouette'):
+                        image_url = pic_data.get('url')
+                    else:
+                        logger.info(f"⏭️ Skipping silhouette/default icon for {sender_id}")
+                elif 'profile_pic' in resp_json:
+                    # Fallback if picture edge fails
+                    url = resp_json['profile_pic']
+                    if 'silhouette' not in url and 'default_user' not in url.lower():
+                        image_url = url
+            else:
+                logger.error(f"Graph API profile fetch failed for {sender_id}: {resp.text}")
+                    
+        elif platform == 'telegram' and token:
+            api_url = f"https://api.telegram.org/bot{token}/getUserProfilePhotos?user_id={sender_id}&limit=1"
+            resp = requests.get(api_url, timeout=10)
+            if resp.status_code == 200:
+                data_json = resp.json()
+                photos = data_json.get('result', {}).get('photos', [])
+                if photos and len(photos) > 0:
+                    file_id = photos[0][-1]['file_id']
+                    file_resp = requests.get(f"https://api.telegram.org/bot{token}/getFile?file_id={file_id}", timeout=10).json()
+                    file_path = file_resp.get('result', {}).get('file_path')
+                    if file_path:
+                        image_url = f"https://api.telegram.org/file/bot{token}/{file_path}"
+                        
+        elif platform == 'whatsapp' and data:
+            # Check native payload for Baileys profile pic
+            image_url = data.get('profilePicUrl') or data.get('profile_picture')
+            
+            # Baileys service fallback if URL missing natively
+            if not image_url:
+                try:
+                    from openwa.models import WhatsAppInstance
+                    wa_instance = WhatsAppInstance.objects.filter(user=contact.agent.user).first()
+                    # Baileys sessionId pattern is user_{id}
+                    baileys_session_id = f"user_{contact.agent.user.id}"
+                    
+                    if wa_instance and wa_instance.baileys_api_url:
+                        base_url = wa_instance.baileys_api_url.rstrip('/')
+                        # NEW Baileys Profile Endpoint: GET /profile/:sessionId/:jid
+                        api_url = f"{base_url}/profile/{baileys_session_id}/{sender_id}"
+                        
+                        resp = requests.get(api_url, timeout=10)
+                        if resp.status_code == 200:
+                            resp_json = resp.json()
+                            if resp_json.get('success') and resp_json.get('profilePictureUrl'):
+                                url = resp_json.get('profilePictureUrl')
+                                if url and 'default' not in url.lower():
+                                    image_url = url
+                except Exception as wa_err:
+                    logger.error(f"WhatsApp Baileys profile fetch error: {wa_err}")
+                    
+        elif platform == 'youtube' and data:
+            url = data.get('author_profile_image')
+            if url and 'default_avatar' not in url.lower():
+                image_url = url
+            
+        if not image_url:
+            # Only throttle failures briefly so Telegram avatars can be retried soon
+            cache_timeout = 300 if platform == 'telegram' else 86400
+            cache.set(cache_key, "1", timeout=cache_timeout)
+            return
+            
+        img_resp = requests.get(image_url, timeout=15)
+        if img_resp.status_code == 200:
+            content = img_resp.content
+            img_hash = hashlib.md5(content).hexdigest()
+            
+            if contact.profile_picture_hash != img_hash:
+                # Delete old file from MinIO securely
+                if contact.profile_picture:
+                    try:
+                        contact.profile_picture.delete(save=False)
+                    except Exception as minio_err:
+                        logger.error(f"MinIO delete error: {minio_err}")
+                
+                # Save new file
+                ext = "jpg"
+                filename = f"profile_{contact.id}_{int(time.time())}.{ext}"
+                contact.profile_picture.save(filename, ContentFile(content), save=False)
+                contact.profile_picture_hash = img_hash
+                contact.save(update_fields=['profile_picture', 'profile_picture_hash'])
+                logger.info(f"✅ Downloaded & saved new profile picture for contact {contact_id}")
+            else:
+                logger.info(f"⏭️ Profile picture for {contact_id} unchanged (Hash match)")
+            
+            # Cache success for 24h
+            cache.set(cache_key, "1", timeout=86400)
+            
+    except Exception as e:
+        logger.error(f"Profile picture sync failed for contact {contact_id}: {e}")
+
+def _send_platform_buttons_alone(request_type, data, sender_id, page_id, effective_access_token, contact_obj):
+    """Helper to send ONLY the buttons when the AI reply itself is skipped."""
+    if not contact_obj:
+        return
+    try:
+        if request_type == 'whatsapp':
+            from aiAgent.business_logic.logic_handler import send_whatsapp_buttons
+            send_whatsapp_buttons(data, contact_obj)
+        elif request_type == 'instagram':
+            from aiAgent.business_logic.logic_handler import send_instagram_buttons
+            send_instagram_buttons(sender_id, page_id, effective_access_token, contact_obj)
+        elif request_type == 'telegram':
+            from aiAgent.business_logic.logic_handler import send_telegram_buttons
+            chat_id = data.get('chat_id') or sender_id
+            send_telegram_buttons(chat_id, effective_access_token, contact_obj)
+        elif request_type in ['messenger', 'facebook_comment']:
+            from aiAgent.business_logic.logic_handler import send_messenger_buttons
+            send_messenger_buttons(sender_id, page_id, effective_access_token, contact_obj)
+    except Exception as e:
+        logger.error(f"Failed to send standalone buttons: {e}")
+
+def _deliver_reply_with_buttons(request_type, data, clean_reply, sender_id, page_id, effective_access_token, agent_config):
+    from aiAgent.models import Contact
+    contact_obj = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
+    
+    if request_type == 'whatsapp':
+        if contact_obj:
+            try:
+                from aiAgent.business_logic.logic_handler import send_whatsapp_buttons
+                delivered = send_whatsapp_buttons(data, contact_obj, reply_text=clean_reply)
+                if delivered: return True
+            except Exception as e:
+                logger.warning(f"Combined buttons failed: {e}")
+        delivered = deliver_whatsapp_reply(data, clean_reply)
+        if delivered and contact_obj:
+            from aiAgent.business_logic.logic_handler import send_whatsapp_buttons
+            send_whatsapp_buttons(data, contact_obj)
+        return delivered
+
+    elif request_type == 'instagram':
+        if contact_obj:
+            try:
+                from aiAgent.business_logic.logic_handler import send_instagram_buttons
+                delivered = send_instagram_buttons(sender_id, page_id, effective_access_token, contact_obj, reply_text=clean_reply)
+                if delivered: return True
+            except Exception as e:
+                logger.warning(f"Combined buttons failed: {e}")
+        delivered = deliver_instagram_reply(data, clean_reply, page_id, effective_access_token)
+        if delivered and contact_obj:
+            from aiAgent.business_logic.logic_handler import send_instagram_buttons
+            send_instagram_buttons(sender_id, page_id, effective_access_token, contact_obj)
+        return delivered
+
+    elif request_type == 'telegram':
+        if contact_obj:
+            try:
+                from aiAgent.business_logic.logic_handler import send_telegram_buttons
+                delivered = send_telegram_buttons(data.get('chat_id') or sender_id, effective_access_token, contact_obj, reply_text=clean_reply)
+                if delivered: return True
+            except Exception as e:
+                logger.warning(f"Combined buttons failed: {e}")
+        delivered = deliver_telegram_reply(data, clean_reply, effective_access_token)
+        if delivered and contact_obj:
+            from aiAgent.business_logic.logic_handler import send_telegram_buttons
+            send_telegram_buttons(data.get('chat_id') or sender_id, effective_access_token, contact_obj)
+        return delivered
+
+    elif request_type == 'youtube':
+        from .youtube_tasks import deliver_youtube_final
+        # For YouTube, we don't have interactive buttons yet, so just deliver the reply.
+        delivered = deliver_youtube_final(data, clean_reply, agent_config)
+        return delivered
+
+    elif request_type == 'gbp':
+        from .gbp_tasks import deliver_gbp_final
+        delivered = deliver_gbp_final(data, clean_reply, agent_config)
+        return delivered
+
+    elif request_type == 'web_widget':
+        # Web widget replies are handled by the dashboard delivery mechanism,
+        # so no direct delivery here.
+        return deliver_dashboard_reply(agent_config.user.id, clean_reply, data.get('message_id'))
+
+    else: # This covers messenger and facebook_comment
+        # Skip combined delivery for Facebook as the n8n workflow silently drops the text when quick_replies are present
+        delivered = deliver_facebook_reply(data, clean_reply, page_id, effective_access_token)
+        if delivered and contact_obj:
+            from aiAgent.business_logic.logic_handler import send_messenger_buttons
+            send_messenger_buttons(sender_id, page_id, effective_access_token, contact_obj)
+        return delivered
 
 def deliver_dashboard_reply(user_id, reply, msg_id):
     try:
@@ -122,10 +381,11 @@ def deliver_dashboard_reply(user_id, reply, msg_id):
 @shared_task(
              bind=True,
              queue='chat_queue',
+             rate_limit='100/m',
              expires=180,
-             autoretry_for=(requests.exceptions.RequestException,),
+             autoretry_for=(requests.exceptions.RequestException, Exception),
              retry_backoff=True,
-             max_retries=5,
+             max_retries=3,
              retry_jitter=True,
              time_limit=140,
              soft_time_limit=130
@@ -134,24 +394,40 @@ def process_ai_reply_task(self, data):
 
     start_time = time.time()
 
+    # 1. Platform Detection (Early)
+    request_type = (data.get('platform') or data.get('type') or 'messenger').lower()
+    logger.info(f"🔍 [Task] Raw data received (Platform: {request_type}): {data}")
+    
     # Extract sender_id: from (WhatsApp JID), phone (WA), or sender_id (FB)
-    logger.info(f"🔍 [Task] Raw data received: {data}")
-    sender_id = data.get('sender_id') or data.get('from') or data.get('phone')
-    if sender_id and isinstance(sender_id, str) and '@' in sender_id:
-        if '@lid' in sender_id:
-            # Preserve LID
-            pass
-        else:
-            sender_id = sender_id.split('@')[0]
+    sender_id = str(data.get('sender_id') or data.get('from') or data.get('phone')).strip()
+    
+    # 2. Identifier Normalization (Safety)
+    if request_type == 'whatsapp' and sender_id and isinstance(sender_id, str):
+        # Enforce domain for phone-number IDs to prevent Messenger collision
+        if '@' not in sender_id and sender_id.isdigit() and len(sender_id) > 7:
+            sender_id = f"{sender_id}@s.whatsapp.net"
+            logger.info(f"⚡ [Task] Appended domain to WA sender: {sender_id}")
+
     data['sender_id'] = sender_id  # Ensure it's available for delivery functions
-    logger.info(f"🔍 [Task] Extracted sender_id: {sender_id}")
+    logger.info(f"🔍 [Task] Extracted sender_id: {sender_id} | Platform: {request_type}")
     page_id = data.get('page_id')
-    request_type = data.get('type') or data.get('platform')
-    if not request_type:
-        if data.get('receiver') or data.get('sessionId') or data.get('phone'):
+    # Detect platform refinement (if it was just a default or needs specific check)
+    if request_type == 'messenger':
+        # Check for WhatsApp indicators ( Baileys/EvolutionAPI fields or JIDs )
+        if (data.get('receiver') or 
+            data.get('sessionId') or 
+            data.get('phone') or 
+            (sender_id and isinstance(sender_id, str) and '@' in sender_id)):
             request_type = 'whatsapp'
+        elif data.get('object') == 'instagram' or data.get('platform') == 'instagram':
+            request_type = 'instagram'
         else:
             request_type = 'messenger'
+    
+    # Standardize names
+    if request_type == 'fbmessenger': request_type = 'messenger'
+    if request_type == 'fb_messenger': request_type = 'messenger'
+    if request_type == 'whatsapp_baileys': request_type = 'whatsapp'
 
     # WhatsApp: normalize page_id to phone/session for lookup
     if request_type == 'whatsapp':
@@ -186,10 +462,12 @@ def process_ai_reply_task(self, data):
             page_id = best_candidate
 
     if request_type == 'facebook_comment':
-        text = data.get('comment_text')
+        text = data.get('comment_text') or data.get('message') or data.get('text')
+    elif request_type == 'youtube':
+        text = data.get('comment_text') or data.get('message') or data.get('text')
     else:
         # messenger or whatsapp
-        text = data.get('message')
+        text = data.get('message') or data.get('text') or data.get('body')
     msg_id = data.get('message_id')
     incoming_ts = data.get('timestamp')
 
@@ -235,10 +513,47 @@ def process_ai_reply_task(self, data):
                     is_active=True,
                     platform='whatsapp'
                 ).order_by('-id').first()
+            elif request_type == 'instagram':
+                agent_config = AgentAI.objects.filter(
+                    is_active=True,
+                    page_id__in=lookup_ids,
+                    platform='instagram'
+                ).order_by('-id').first()
+            elif request_type == 'telegram':
+                # Handle both custom bots and shared bot
+                if page_id.startswith('shared_agent_'):
+                    try:
+                        agent_id = int(page_id.replace('shared_agent_', ''))
+                        agent_config = AgentAI.objects.get(
+                            id=agent_id,
+                            is_active=True,
+                            platform='telegram'
+                        )
+                    except (ValueError, AgentAI.DoesNotExist):
+                        agent_config = None
+                else:
+                    agent_config = AgentAI.objects.filter(
+                        is_active=True,
+                        page_id__in=lookup_ids,
+                        platform='telegram'
+                    ).order_by('-id').first()
+            elif request_type == 'youtube':
+                agent_config = AgentAI.objects.filter(
+                    is_active=True,
+                    page_id__in=lookup_ids,
+                    platform='youtube'
+                ).order_by('-id').first()
+            elif request_type == 'gbp':
+                agent_config = AgentAI.objects.filter(
+                    is_active=True,
+                    page_id__in=lookup_ids,
+                    platform='gbp'
+                ).order_by('-id').first()
             else:
                 agent_config = AgentAI.objects.filter(
                     is_active=True,
-                    page_id__in=lookup_ids
+                    page_id__in=lookup_ids,
+                    platform='messenger'
                 ).order_by('-id').first()
 
         # Fallback for WhatsApp: Try lookup by user_id if we have it in sessionId
@@ -268,7 +583,37 @@ def process_ai_reply_task(self, data):
 
         from users.models import FacebookPage
         fb_page = FacebookPage.objects.filter(page_id=page_id, is_active=True).first() if page_id else None
+
+        # Refresh token if close to expiry (<=5 days)
+        if fb_page and fb_page.token_expires_at:
+            remaining = fb_page.token_expires_at - timezone.now()
+            if remaining <= timedelta(days=5):
+                refreshed = refresh_fb_page_token(fb_page)
+                if refreshed:
+                    logger.info(f"FB token auto-refreshed for page {page_id}")
+
         effective_access_token = fb_page.access_token if fb_page else agent_config.access_token
+        
+        # 🔗 Telegram Token Lookup (Separate Model)
+        if request_type == 'telegram':
+            from aiAgent.models import TelegramBot
+            # If shared bot, use shared token
+            if page_id.startswith('shared_agent_'):
+                shared_bot_token = getattr(settings, 'TELEGRAM_SHARED_BOT_TOKEN', None)
+                if shared_bot_token:
+                    effective_access_token = shared_bot_token
+                    logger.info(f"Using shared bot token for agent {page_id}")
+                else:
+                    logger.error(f"No shared bot token configured for {page_id}")
+                    effective_access_token = None
+            else:
+                # Custom bot - try to get from TelegramBot model
+                tbot = TelegramBot.objects.filter(agent=agent_config, is_active=True).first()
+                if tbot and tbot.bot_token:
+                    effective_access_token = tbot.bot_token
+                    logger.info(f"Using token from TelegramBot model for {page_id}")
+                else:
+                    logger.info(f"Falling back to AgentAI.access_token for {page_id}")
 
         # ── WhatsApp Message Logging (Incoming) ──
         wa_msg_obj = None
@@ -297,24 +642,89 @@ def process_ai_reply_task(self, data):
         if not contact_name and request_type == 'messenger' and effective_access_token:
             contact_name = fetch_messenger_profile(sender_id, effective_access_token)
 
-        Contact.objects.update_or_create(
-            agent=agent_config,
-            identifier=sender_id,
-            platform=request_type if request_type in ['whatsapp', 'messenger', 'web_widget'] else 'messenger',
-            defaults={
-                'name': contact_name if contact_name else None,
-                'push_name': incoming_push_name if incoming_push_name else None
-            }
-        )
+        # If Telegram and name is missing, pull from Telegram getChat
+        if not contact_name and request_type == 'telegram' and effective_access_token:
+            try:
+                tg_resp = requests.get(
+                    f"https://api.telegram.org/bot{effective_access_token}/getChat",
+                    params={'chat_id': sender_id},
+                    timeout=8
+                ).json()
+                if tg_resp.get('ok'):
+                    chat_data = tg_resp.get('result', {})
+                    full_name = " ".join(filter(None, [chat_data.get('first_name'), chat_data.get('last_name')])).strip()
+                    contact_name = full_name or chat_data.get('username')
+            except Exception as tg_err:
+                logger.error(f"Telegram getChat name fetch failed: {tg_err}")
 
+        # --- ROBUST CONTACT SYNC & STATE MIGRATION ---
+        p_type = request_type if request_type in ['whatsapp', 'messenger', 'web_widget', 'facebook_comment', 'instagram', 'telegram', 'youtube'] else 'messenger'
+        
+        # 1. Primary Lookup: Full ID + Agent
+        contact_obj = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
+        
+        # 2. Fallback Migration: If full ID not found, check for stripped ID (WhatsApp legacy)
+        if not contact_obj and request_type == 'whatsapp' and '@' in str(sender_id):
+            stripped_id = str(sender_id).split('@')[0]
+            contact_obj = Contact.objects.filter(agent=agent_config, identifier=stripped_id).first()
+            if contact_obj:
+                logger.info(f"🔄 [Task] Migrating state for legacy contact: {stripped_id} -> {sender_id}")
+                
+                # Update identifier and migrate related models that use it as a string key
+                old_id = contact_obj.identifier
+                contact_obj.identifier = sender_id
+                contact_obj.platform = 'whatsapp'
+                
+                try:
+                    from chat.models import Conversation
+                    from aiAgent.models import UserMemory
+                    Conversation.objects.filter(agentAi=agent_config, contact_id=old_id, platform='whatsapp').update(contact_id=sender_id)
+                    UserMemory.objects.filter(ai_agent=agent_config, sender_id=old_id).update(sender_id=sender_id)
+                    logger.info(f"✅ [Task] Cascaded ID update complete for {sender_id}")
+                except Exception as mig_err:
+                    logger.error(f"❌ [Task] Related record migration failed: {mig_err}")
+        
+        # 3. Update or Create (Preserving existing flags if contact_obj exists)
+        if contact_obj:
+            contact_obj.name = contact_name or contact_obj.name
+            contact_obj.push_name = incoming_push_name or contact_obj.push_name
+            contact_obj.platform = p_type
+            contact_obj.save()
+            logger.info(f"✅ [Task] Contact sync: Updated {sender_id}")
+        else:
+            contact_obj = Contact.objects.create(
+                agent=agent_config,
+                identifier=sender_id,
+                platform=p_type,
+                name=contact_name,
+                push_name=incoming_push_name
+            )
+            logger.info(f"✅ [Task] Contact sync: Created NEW {sender_id}")
+
+        # ── Profile Picture Sync Trigger ──
+        sync_contact_profile_picture.apply_async(args=[
+            contact_obj.id, p_type, sender_id.lower(), page_id, effective_access_token, data
+        ])
+
+        # ── Message Logging & Dashboard Sync (Always) ──
+        # Save early so even if AI doesn't reply (Human Mode), message is in history & dashboard
+        save_message(agent_config, sender_id.lower(), text, 'user', platform=agent_config.platform)
+        send_cache_update_ws(agent_config.user.id, page_id, sender_id=sender_id, contact_id=contact_obj.id)
+        handle_smart_memory_update(agent_config, sender_id, text)
+        
         # ── Auto-Reply Enable/Disable Check ──
         contact = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
-        if contact and not contact.is_auto_reply_enabled:
-            logger.info(f"🚫 Auto-reply is DISABLED for contact {sender_id} (Agent: {agent_config.id}). Skipping AI response.")
+        if contact and (not contact.is_auto_reply_enabled or contact.is_human_needed):
+            reason = "DISABLED" if not contact.is_auto_reply_enabled else "HUMAN_HANDOFF_ACTIVE"
+            logger.info(f"🚫 Auto-reply is {reason} for contact {sender_id} (Agent: {agent_config.id}). Skipping AI response.")
+            
+            # Send buttons so user can easily restore AI
+            _send_platform_buttons_alone(request_type, data, sender_id, page_id, effective_access_token, contact)
+            
             if msg_id:
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)
                 r.delete(f'processing_msg:{msg_id}')
-            if request_type == 'web_widget': return "Auto-reply is currently disabled by the agent."
+            if request_type == 'web_widget': return f"Auto-reply is currently {reason.lower()}."
             return
     except Exception as e:
         logger.error(f'Error: Agent not found for page_id {page_id} - {e}')
@@ -368,12 +778,19 @@ def process_ai_reply_task(self, data):
         if not cached_res:
             shared_agents = agent_config.get_settings.shared_cache_agents.all()
             for shared_agent in shared_agents:
-                shared_page_id = shared_agent.page_id
-                potential_res = get_cached_reply(shared_page_id, msg_text=text)
+                # Correct identifier logic for shared agents (Web Widget support)
+                shared_redis_id = f"widget_{shared_agent.widget_key}" if shared_agent.platform == 'web_widget' and shared_agent.widget_key else shared_agent.page_id
+                
+                potential_res = get_cached_reply(shared_redis_id, msg_text=text, track_hit=False)
                 if potential_res:
                     msg_hash = potential_res.get('msg_hash')
+                    if not msg_hash:
+                        # Fallback for old cache entries
+                        normalized = normalize_for_cache(text)
+                        msg_hash = hashlib.md5(normalized.encode()).hexdigest()
+
                     # এক্সক্লুশন চেক (Redis Set)
-                    exclusion_key = f"agent:{shared_page_id}:sharing_exclusion_set"
+                    exclusion_key = f"agent:{shared_redis_id}:sharing_exclusion_set"
                     r_db4 = get_redis_client(db=4)
                     if not r_db4.sismember(exclusion_key, msg_hash):
                         cached_res = potential_res
@@ -393,12 +810,17 @@ def process_ai_reply_task(self, data):
             if not cached_res:
                 shared_agents = agent_config.get_settings.shared_cache_agents.all()
                 for shared_agent in shared_agents:
-                    shared_page_id = shared_agent.page_id
-                    potential_res = fuzzy_match(shared_page_id, text, threshold=80)
+                    shared_redis_id = f"widget_{shared_agent.widget_key}" if shared_agent.platform == 'web_widget' and shared_agent.widget_key else shared_agent.page_id
+                    
+                    potential_res = fuzzy_match(shared_redis_id, text, threshold=80, track_hit=False)
                     if potential_res:
                         msg_hash = potential_res.get('msg_hash')
+                        if not msg_hash:
+                            stored_text = potential_res.get('original_normalized') or text
+                            msg_hash = hashlib.md5(stored_text.encode()).hexdigest()
+
                         # এক্সক্লুশন চেক
-                        exclusion_key = f"agent:{shared_page_id}:sharing_exclusion_set"
+                        exclusion_key = f"agent:{shared_redis_id}:sharing_exclusion_set"
                         r_db4 = get_redis_client(db=4)
                         if not r_db4.sismember(exclusion_key, msg_hash):
                             cached_res = potential_res
@@ -480,11 +902,9 @@ def process_ai_reply_task(self, data):
 
             incr_counter(page_id, "cache_hit")
             logger.info(f"⚡ CACHE HIT [{cache_hit_scope}] → '{text[:30]}'")
-            send_cache_update_ws(agent_config.user.id, page_id)
+            send_cache_update_ws(agent_config.user.id, page_id, sender_id=sender_id, contact_id=contact_obj.id if 'contact_obj' in locals() else None)
 
-            save_message(agent_config, sender_id, text, 'user', platform=agent_config.platform)
             save_message(agent_config, sender_id, reply, 'assistant', tokens=0, platform=agent_config.platform)
-            handle_smart_memory_update(agent_config, sender_id, text)
 
             clean_reply = reply.strip()
             # Force platform-based routing: if agent is WhatsApp, send via WhatsApp delivery
@@ -502,10 +922,8 @@ def process_ai_reply_task(self, data):
                 return clean_reply
             elif request_type == 'dashboard':
                 delivered = deliver_dashboard_reply(agent_config.user.id, clean_reply, msg_id)
-            elif request_type == 'whatsapp':
-                delivered = deliver_whatsapp_reply(data, clean_reply)
             else:
-                delivered = deliver_facebook_reply(data, clean_reply, page_id, effective_access_token)
+                delivered = _deliver_reply_with_buttons(request_type, data, clean_reply, sender_id, page_id, effective_access_token, agent_config)
 
             if delivered and msg_id:
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)
@@ -539,13 +957,15 @@ def process_ai_reply_task(self, data):
 
             # ---- Cache Classification Instruction (JSON suffix) ----
             classify_instruction = (
-                '\n\nReturn ONLY a valid JSON object: {"reply": "...", "cache_type": "...", "human_handoff": false}. '
-                'Set "human_handoff" to true ONLY if: (1) the user explicitly asks to speak with a human/agent, OR (2) you cannot answer the question at all. Otherwise always false. '
+                '\n\nReturn ONLY a valid JSON object: {"reply": "...", "cache_type": "...", "human_handoff": "..."}. '
                 'Use "no_cache" for context-dependent words (it/this/that/ঐটা/সেটা) or very specific conversation flow.'
                 'Use "sender_specific" for user-only info (my,amar,etc any language, name/order/status/আমি/আমার/ব্যক্তিগত তথ্য). '
                 'Use "agent_specific" for information extracted from [KNOWLEDGE BASE DATA], business details like products/prices, or IF ASKED ABOUT YOUR IDENTITY (who you are, what you do). '
                 'Use "global" ONLY for general world facts, universal greetings (Salam/Hi), or general knowledge. NEVER use "global" for identity, personal info, or specific business details.'
-                'STRICT: No markdown blocks, no preamble, and ensure JSON syntax is perfect.'
+                '\nCRITICAL: If you cannot answer a question based on provided data, DO NOT trigger human handoff. Instead, politely ask clarifying questions to the user.'
+                '\nHowever, ONLY if the user EXPLICITLY and CLEARLY asks to talk to a human, admin, representative, or support team via text, you MUST set "human_handoff": true.'
+                '\nWARNING: Do NOT trigger human_handoff just because the message contains the word "agent", "support", or the name of a bot (e.g., "newsmartagent?"). It must be an explicit intent to speak to a live person.'
+                '\nSTRICT: No markdown blocks, no preamble, and ensure JSON syntax is perfect.'
             )
             system_instruction = system_instruction + classify_instruction
 
@@ -557,6 +977,8 @@ def process_ai_reply_task(self, data):
             cache_type = 'agent_specific'  # ডিফাল্ট
             parsed_reply = raw_ai_reply    # ডিফাল্ট: raw reply
             json_parse_success = False
+            is_handoff = False
+            is_json_handoff_override = False
 
             json_match = re.search(r'\{.*\}', raw_ai_reply, re.DOTALL)
             if json_match:
@@ -567,30 +989,56 @@ def process_ai_reply_task(self, data):
                         parsed_reply = extracted_reply
                         cache_type = parsed.get('cache_type', 'agent_specific').strip().lower()
                         json_parse_success = True
+                        
+                        # --- Human Handoff Check ---
+                        if parsed.get('human_handoff') is True or str(parsed.get('human_handoff')).lower() == 'true':
+                            is_handoff = True
+                            is_json_handoff_override = True
+                        
                         logger.info(f"📋 AI cache_type classified as: '{cache_type}' for '{text[:30]}'")
-
-                        # 🚨 Human Handoff Check
-                        if parsed.get('human_handoff') is True:
-                            # Override the reply with a friendly handoff message
-                            parsed_reply = "অনুগ্রহ করে একটু অপেক্ষা করুন। আমাদের একজন human agent শীঘ্রই আপনার সাথে যোগাযোগ করবেন। 🙏"
-                            cache_type = 'no_cache'  # এই message cache করা যাবে না
-                            try:
-                                from aiAgent.models import Contact
-                                contact = Contact.objects.filter(
-                                    agent=agent_config, identifier=sender_id
-                                ).first()
-                                if contact:
-                                    contact.is_human_needed = True
-                                    contact.save(update_fields=['is_human_needed'])
-                                    send_human_handoff_ws(agent_config.user.id, contact)
-                                    logger.info(f"🚨 Human handoff triggered for {sender_id}")
-                            except Exception as he:
-                                logger.error(f"Human handoff processing error: {he}")
-
                     else:
                         logger.warning(f"⚠️ JSON parsed but reply field is empty. Using raw.")
                 except (json.JSONDecodeError, AttributeError) as e:
                     logger.warning(f"⚠️ JSON parse failed from AI reply, using raw. Error: {e}")
+
+
+            if is_handoff:
+                # Override reply with friendly handoff message if it was a JSON-detected handoff
+                if is_json_handoff_override:
+                    parsed_reply = "অনুগ্রহ করে একটু অপেক্ষা করুন। আমাদের একজন human agent শীঘ্রই আপনার সাথে যোগাযোগ করবেন। 🙏"
+                
+                cache_type = 'no_cache'  # এই message কখনো cache হবে না
+                try:
+                    platform_for_lookup = request_type if request_type in ['whatsapp', 'messenger', 'web_widget', 'facebook_comment', 'instagram'] else 'messenger'
+                    
+                    # Update is_human_needed (Robust lookup using only Agent + ID)
+                    updated = Contact.objects.filter(
+                        agent=agent_config,
+                        identifier=sender_id
+                    ).update(is_human_needed=True)
+                    
+                    logger.info(f"🔄 [Task] Handoff update for {sender_id}: {'Success' if updated else f'FAILED (Contact {sender_id} not found)'}")
+
+                    if not updated:
+                        updated_fallback = Contact.objects.filter(agent=agent_config, identifier=sender_id).update(is_human_needed=True)
+                        logger.info(f"🔄 Handoff fallback update for {sender_id}: {'Success' if updated_fallback else 'Failed completely'}")
+
+                    # Get contact for WS payload (platform specific)
+                    contact_obj = Contact.objects.filter(
+                        agent=agent_config, 
+                        identifier=sender_id,
+                        platform=platform_for_lookup
+                    ).first() or Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
+
+                    if contact_obj:
+                        contact_name = contact_obj.name or contact_obj.push_name or sender_id
+                        send_human_handoff_ws(agent_config.user.id, page_id, sender_id, contact_obj.id, contact_name)
+                        send_cache_update_ws(agent_config.user.id, page_id, sender_id=sender_id, contact_id=contact_obj.id) # Force sync
+                        logger.info(f"🚨 Human Handoff WS sent for {sender_id} (Platform: {platform_for_lookup})")
+                    else:
+                        logger.warning(f"⚠️ Could not find Contact object to send WS for {sender_id}")
+                except Exception as handoff_err:
+                    logger.error(f"Error handling human handoff: {handoff_err}", exc_info=True)
 
             # 🛡️ Safety Guard: Broken/Truncated JSON Detection
             # যদি json_match না পাওয়া যায় AND raw reply দেখতে JSON-এর মতো হয়
@@ -630,7 +1078,7 @@ def process_ai_reply_task(self, data):
                         input_tokens=ai_data.get('input_tokens', 0),
                         output_tokens=ai_data.get('output_tokens', 0),
                     )
-                    send_cache_update_ws(agent_config.user.id, page_id)
+                    send_cache_update_ws(agent_config.user.id, page_id, sender_id=sender_id, contact_id=contact_obj.id if contact_obj else None)
                 elif cache_type == 'sender_specific':
                     set_sender_cached_reply(
                         page_id, sender_id, text, reply, model=effective_model,
@@ -645,7 +1093,7 @@ def process_ai_reply_task(self, data):
                         output_tokens=ai_data.get('output_tokens', 0),
                         is_special=agent_config.is_special_agent
                     )
-                    send_cache_update_ws(agent_config.user.id, page_id)
+                    send_cache_update_ws(agent_config.user.id, page_id, sender_id=sender_id, contact_id=contact_obj.id if contact_obj else None)
                 else:
                     # no_cache বা অজানা type → save করা হবে না
                     logger.info(f"🚫 Cache SKIPPED (no_cache) for: '{text[:30]}'")
@@ -666,9 +1114,7 @@ def process_ai_reply_task(self, data):
                     save_vector_embedding(page_id, text, msg_hash_for_vector, query_vector)
                     logger.info(f"✅ Saved vector embedding for '{text[:30]}'")
 
-                save_message(agent_config, sender_id, text, 'user', platform=agent_config.platform)
                 save_message(agent_config, sender_id, reply, 'assistant', tokens=total_tokens, platform=agent_config.platform)
-                handle_smart_memory_update(agent_config, sender_id, text)
 
                 # ── Update WhatsApp Log (AI Call) ──
                 if wa_msg_obj:
@@ -687,10 +1133,8 @@ def process_ai_reply_task(self, data):
                 return clean_reply
             elif request_type == 'dashboard':
                 delivered = deliver_dashboard_reply(agent_config.user.id, clean_reply, msg_id)
-            elif request_type == 'whatsapp':
-                delivered = deliver_whatsapp_reply(data, clean_reply)
             else:
-                delivered = deliver_facebook_reply(data, clean_reply, page_id, effective_access_token)
+                delivered = _deliver_reply_with_buttons(request_type, data, clean_reply, sender_id, page_id, effective_access_token, agent_config)
 
             if delivered and msg_id:
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)

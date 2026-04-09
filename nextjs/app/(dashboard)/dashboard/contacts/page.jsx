@@ -10,19 +10,25 @@ import {
   FunnelIcon,
   CpuChipIcon,
   XMarkIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  EllipsisVerticalIcon,
+  PaperAirplaneIcon
 } from "@heroicons/react/24/outline";
 import api from "@/lib/api";
 import { toast } from 'react-hot-toast';
+import { useAuth } from "@/context/AuthContext";
+import { useNotifications } from "@/hooks/useNotifications";
 
 export default function Contacts() {
   const [agents, setAgents] = useState([]);
   const [selectedAgent, setSelectedAgent] = useState("");
   const [contacts, setContacts] = useState([]);
+  const [summary, setSummary] = useState({ messages: 0, youtube: 0 });
+  const [unreadSummary, setUnreadSummary] = useState({ messages: 0, comments: 0 });
+  const [activeTab, setActiveTab] = useState("messages"); // messages | comments
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // History Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [historyContact, setHistoryContact] = useState(null);
   const [historyMessages, setHistoryMessages] = useState([]);
@@ -30,11 +36,44 @@ export default function Contacts() {
   const [historyPage, setHistoryPage] = useState(1);
   const [hasMoreHistory, setHasMoreHistory] = useState(true);
   
+  const [replyText, setReplyText] = useState("");
+  const [sendingReply, setSendingReply] = useState(false);
+
+  // Contact Settings Modal State
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [settingsForm, setSettingsForm] = useState({
+    custom_prompt: "",
+    custom_instructions: "",
+    is_auto_reply_enabled: true
+  });
+  const [savingSettings, setSavingSettings] = useState(false);
+  
+  const { user } = useAuth();
+  const { notifications } = useNotifications(user);
+
+  const messagesEndRefDesktop = useRef(null);
+  const messagesEndRefMobile = useRef(null);
   const observer = useRef();
+
+  // Agent lists (একই এজেন্ট মেসেজ + কমেন্ট দুটোই হ্যান্ডল করতে পারে, তাই আলাদা ফিল্টার দরকার নেই)
+  const messageAgents = agents;
+  const commentAgents = agents;
+
+  const scrollToBottom = () => {
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        messagesEndRefDesktop.current?.scrollIntoView({ behavior: "auto" });
+        messagesEndRefMobile.current?.scrollIntoView({ behavior: "auto" });
+      }, 100);
+    });
+  };
+
   const lastMessageElementRef = useCallback(node => {
     if (historyLoading) return;
     if (observer.current) observer.current.disconnect();
     observer.current = new IntersectionObserver(entries => {
+      // Load more when top-most message becomes visible (if oldest-first)
+      // Actually, if we use oldest-first, we need to load "more" at the TOP.
       if (entries[0].isIntersecting && hasMoreHistory) {
         setHistoryPage(prevPageNumber => prevPageNumber + 1);
       }
@@ -48,9 +87,10 @@ export default function Contacts() {
 
   useEffect(() => {
     if (selectedAgent) {
-      fetchContacts(selectedAgent);
+      fetchContacts(selectedAgent, activeTab === "comments");
+      fetchSummary();
     }
-  }, [selectedAgent]);
+  }, [selectedAgent, activeTab]);
 
   useEffect(() => {
     if (historyContact && historyPage > 1) {
@@ -58,14 +98,40 @@ export default function Contacts() {
     }
   }, [historyPage]);
 
+  useEffect(() => {
+    if (historyMessages.length > 0 && historyPage === 1) {
+      scrollToBottom();
+    }
+  }, [historyMessages]);
+
+  // Real-time Sync Logic
+  useEffect(() => {
+    if (!notifications.length) return;
+    const lastNotif = notifications[0];
+
+    if (lastNotif.action === "CACHE_UPDATE" || lastNotif.action === "HUMAN_HANDOFF") {
+      // Refresh only the relevant contact instead of full list
+      if (selectedAgent === "all" || lastNotif.agent_id === selectedAgent) {
+        if (lastNotif.contact_id) {
+          fetchSingleContact(lastNotif.contact_id);
+        } else {
+          fetchContacts(selectedAgent, activeTab === "comments");
+        }
+      }
+      
+      // Refresh active chat history if match
+      if (historyContact && lastNotif.sender_id === historyContact.identifier) {
+        fetchHistory(historyContact.id, 1);
+      }
+    }
+  }, [notifications]);
+
   const fetchAgents = async () => {
     try {
       const res = await api.get("/AgentAI/agents/");
       const agentList = Array.isArray(res?.data) ? res.data : [];
       setAgents(agentList);
-      if (agentList.length > 0) {
-        setSelectedAgent(agentList[0].page_id);
-      }
+      setSelectedAgent("all");
     } catch (err) {
       console.error("Failed to load agents:", err);
       toast.error("Failed to load agents.");
@@ -74,12 +140,15 @@ export default function Contacts() {
     }
   };
 
-  const fetchContacts = async (agentId) => {
+  const fetchContacts = async (agentId, commentsOnly = false) => {
     setLoading(true);
     try {
-      const res = await api.get(`/AgentAI/contacts/${agentId}/`);
+      const query = commentsOnly ? "?comments_only=true" : "";
+      const res = await api.get(`/AgentAI/contacts/${agentId}/${query}`);
       const list = Array.isArray(res?.data?.contacts) ? res.data.contacts : [];
       setContacts(list);
+      const unreadSum = list.reduce((acc, c) => acc + (c.unread_count || 0), 0);
+      setUnreadSummary(prev => commentsOnly ? { ...prev, comments: unreadSum } : { ...prev, messages: unreadSum });
     } catch (err) {
       console.error("Failed to load contacts:", err);
       toast.error("Failed to load contacts.");
@@ -88,7 +157,8 @@ export default function Contacts() {
     }
   };
 
-  const toggleAutoReply = async (contactId) => {
+  const toggleAutoReply = async (contactId, e) => {
+    e.stopPropagation(); // Don't open chat
     try {
       const res = await api.post(`/AgentAI/contacts/toggle-reply/${contactId}/`);
       if (res.data.success) {
@@ -103,12 +173,37 @@ export default function Contacts() {
     }
   };
 
+  const resolveHandoff = async (contactId, e) => {
+    if (e) e.stopPropagation();
+    try {
+      const res = await api.post(`/AgentAI/contacts/resolve-handoff/${contactId}/`);
+      if (res.data.success) {
+        setContacts(prev => prev.map(c => 
+          c.id === contactId ? { ...c, is_human_needed: false } : c
+        ));
+        if (historyContact?.id === contactId) {
+          setHistoryContact(prev => ({ ...prev, is_human_needed: false }));
+        }
+        toast.success("Human handoff resolved.");
+      }
+    } catch (err) {
+      console.error("Failed to resolve handoff:", err);
+      toast.error("Failed to resolve handoff.");
+    }
+  };
+
   const openHistory = (contact) => {
     setHistoryContact(contact);
     setHistoryMessages([]);
     setHistoryPage(1);
     setHasMoreHistory(true);
     setIsModalOpen(true);
+    
+    // Optimistically clear unread count since the API marks them as read automatically
+    setContacts(prev => prev.map(c => 
+      c.id === contact.id ? { ...c, unread_count: 0 } : c
+    ));
+    
     fetchHistory(contact.id, 1);
   };
 
@@ -117,10 +212,12 @@ export default function Contacts() {
     try {
       const res = await api.get(`/AgentAI/contacts/${contactId}/messages/?page=${page}`);
       const newMessages = Array.isArray(res?.data?.results) ? res.data.results : [];
+      
       setHistoryMessages(prev => {
+        // Since we want oldest first for display, we merge differently
+        // newMessages are typically sent_at desc from API (newest first)
         const merged = page === 1 ? newMessages : [...prev, ...newMessages];
-
-        // Deduplicate by message id (fallback to sent_at+role+content signature)
+        
         const seen = new Set();
         const unique = [];
         for (const m of merged) {
@@ -130,9 +227,9 @@ export default function Contacts() {
           unique.push(m);
         }
 
-        // Show newest messages first; older messages load as you scroll
+        // Return sorted oldest to newest for WA style
         return unique.sort(
-          (a, b) => new Date(b?.sent_at || 0) - new Date(a?.sent_at || 0)
+          (a, b) => new Date(a?.sent_at || 0) - new Date(b?.sent_at || 0)
         );
       });
       setHasMoreHistory(!!res.data.next);
@@ -144,217 +241,590 @@ export default function Contacts() {
     }
   };
 
+  const handleSendReply = async () => {
+    if (!replyText.trim() || !historyContact) return;
+    
+    setSendingReply(true);
+    try {
+      const res = await api.post("/AgentAI/contacts/unified/reply/", {
+        contact_id: historyContact.id,
+        message: replyText
+      });
+      
+      if (res.data.success) {
+        toast.success("Message sent");
+        setReplyText("");
+        // Optimistic update or just refresh
+        fetchHistory(historyContact.id, 1);
+      }
+    } catch (err) {
+      console.error("Failed to send reply:", err);
+      toast.error(err.response?.data?.error || "Failed to send reply.");
+    } finally {
+      setSendingReply(false);
+    }
+  };
+
+  const openSettings = (contact) => {
+    setSettingsForm({
+      custom_prompt: contact.custom_prompt || "",
+      custom_instructions: contact.custom_instructions || "",
+      is_auto_reply_enabled: contact.is_auto_reply_enabled
+    });
+    setIsSettingsModalOpen(true);
+  };
+
+  const handleSaveSettings = async () => {
+    setSavingSettings(true);
+    try {
+      const res = await api.patch(`/AgentAI/contacts/detail/${historyContact.id}/`, settingsForm);
+      // Update contact list
+      setContacts(prev => prev.map(c => c.id === historyContact.id ? { ...c, ...res.data } : c));
+      // Update active history contact
+      setHistoryContact(prev => ({ ...prev, ...res.data }));
+      toast.success("Settings saved successfully!");
+      setIsSettingsModalOpen(false);
+    } catch (err) {
+      console.error("Failed to save settings:", err);
+      toast.error("Failed to save contact settings.");
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   const filteredContacts = contacts.filter(c => 
     (c.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
      c.identifier?.includes(searchQuery))
   );
 
+  const formatLastSeen = (timestamp) => {
+    if (!timestamp) return "";
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now - date;
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    
+    if (days === 0) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (days === 1) return "Yesterday";
+    if (days < 7) return date.toLocaleDateString([], { weekday: 'short' });
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  };
+
   return (
-    <div className="relative min-h-screen w-full bg-white overflow-hidden pb-20 font-sans">
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#4f46e508_1px,transparent_1px),linear-gradient(to_bottom,#4f46e508_1px,transparent_1px)] bg-[size:40px_40px]"></div>
+    <div className="relative w-full h-[calc(100vh-100px)] bg-[#f0f2f5] font-sans flex flex-col overflow-hidden rounded-xl border border-gray-200">
+      {/* WhatsApp-Style Header */}
+      <div className="bg-[#00a884] h-24 absolute top-0 left-0 right-0 z-0 pointer-events-none"></div>
 
-      <div className="relative z-10 max-w-7xl mx-auto px-6 pt-12">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 text-[10px] font-black uppercase tracking-widest mb-4">
-              <UsersIcon className="h-4 w-4" /> CRM & Control
+      <div className="relative z-10 w-full h-full p-0 sm:p-2 md:p-4 flex flex-col overflow-hidden">
+        <div className="bg-white shadow-xl sm:rounded-lg flex-1 flex flex-col overflow-hidden border border-gray-200">
+          {/* Dashboard Left Sidebar Header */}
+          <div className="flex flex-col md:flex-row flex-1 overflow-hidden pointer-events-auto">
+            <div className="w-full md:w-96 border-r border-gray-200 flex flex-col bg-white">
+              <div className="p-4 bg-[#f0f2f5] flex items-center justify-between">
+                <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold">
+                  {selectedAgent === 'all' ? 'U' : agents.find(a => a.page_id === selectedAgent)?.name?.charAt(0) || 'A'}
+                </div>
+                <div className="flex items-center gap-4 text-gray-500">
+                  <CpuChipIcon className="h-6 w-6 cursor-pointer" />
+                  <UsersIcon className="h-6 w-6 cursor-pointer" />
+                  <EllipsisVerticalIcon className="h-6 w-6 cursor-pointer" />
+                </div>
+              </div>
+
+              {/* Filters */}
+              <div className="p-3 bg-white space-y-3">
+                <div className="relative">
+                  <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input 
+                    type="text" 
+                    placeholder="Search or start new chat"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-12 pr-4 py-2 bg-[#f0f2f5] rounded-xl text-sm focus:outline-none"
+                  />
+                </div>
+                
+                <select 
+                  value={selectedAgent} 
+                  onChange={(e) => setSelectedAgent(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-bold text-gray-600 outline-none"
+                >
+                  {activeTab === "messages" ? (
+                    <>
+                      <option value="all">All Messages</option>
+                      {messageAgents.map(agent => (
+                        <option key={agent.id} value={agent.page_id}>
+                          {agent.name}
+                        </option>
+                      ))}
+                    </>
+                  ) : (
+                    <>
+                      <option value="all">All Comments</option>
+                      {commentAgents.map(agent => (
+                        <option key={agent.id} value={agent.page_id}>
+                          {agent.name}
+                        </option>
+                      ))}
+                    </>
+                  )}
+                </select>
+
+                <div className="grid grid-cols-2 gap-2 text-xs font-bold">
+                  <button
+                    onClick={() => {
+                      setActiveTab("messages");
+                    }}
+                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl border transition ${
+                      activeTab === "messages" ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-700 border-gray-200"
+                    }`}
+                  >
+                    <ChatBubbleLeftRightIcon className="h-4 w-4" />
+                    Messages
+                    <span className="ml-1 bg-white/20 text-[10px] px-1.5 py-0.5 rounded-full">
+                      {unreadSummary.messages || 0}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveTab("comments");
+                    }}
+                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-xl border transition ${
+                      activeTab === "comments" ? "bg-amber-500 text-white border-amber-500" : "bg-white text-gray-700 border-gray-200"
+                    }`}
+                  >
+                    <ChatBubbleLeftRightIcon className="h-4 w-4" />
+                    Comments
+                    <span className="ml-1 bg-white/20 text-[10px] px-1.5 py-0.5 rounded-full">
+                      {unreadSummary.comments || 0}
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Contact List */}
+              <div className="flex-1 overflow-y-auto scrollbar-hide">
+                {loading ? (
+                  <div className="p-4 space-y-4">
+                    {[1,2,3,4,5].map(i => (
+                      <div key={i} className="flex gap-4 animate-pulse">
+                        <div className="w-12 h-12 bg-gray-200 rounded-full"></div>
+                        <div className="flex-1 space-y-2 py-1">
+                          <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                          <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : filteredContacts.length > 0 ? (
+                  <div className="divide-y divide-gray-100">
+                    {filteredContacts.map(contact => (
+                      <div 
+                        key={contact.id} 
+                        onClick={() => openHistory(contact)}
+                        className={`flex gap-4 p-4 cursor-pointer transition-colors ${
+                          historyContact?.id === contact.id ? 'bg-[#f0f2f5]' : 'hover:bg-gray-50'
+                        }`}
+                      >
+                        {contact.profile_picture ? (
+                          <img 
+                            src={contact.profile_picture} 
+                            alt={contact.name || contact.identifier} 
+                            className="w-12 h-12 rounded-full object-cover shadow-sm bg-white"
+                            onError={(e) => {
+                              // Fallback on error
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <div className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center text-white font-black text-lg ${
+                          contact.platform === 'whatsapp' ? 'bg-[#25d366]' :
+                          contact.platform === 'youtube' ? 'bg-red-500' :
+                          contact.platform === 'facebook_comment' ? 'bg-[#1877f2]' :
+                          contact.platform === 'telegram' ? 'bg-sky-500' :
+                          contact.platform === 'instagram' ? 'bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400' :
+                          'bg-[#0084ff]'
+                        }`} style={{ display: contact.profile_picture ? 'none' : 'flex' }}>
+                          {(contact.name?.charAt(0) || contact.identifier.charAt(0))?.toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0 border-b border-gray-100 pb-2">
+                          <div className="flex justify-between items-baseline mb-1">
+                            <h3 className="font-bold text-gray-900 truncate flex items-center gap-2">
+                              {contact.name || contact.identifier}
+                              {contact.is_comment && (
+                                <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 text-[10px] font-black px-1.5 py-0.5 rounded-md border border-amber-200">
+                                  <ChatBubbleLeftRightIcon className="h-3 w-3" />
+                                  Comment
+                                </span>
+                              )}
+                              {contact.is_human_needed && (
+                                <span className="bg-rose-100 text-rose-600 text-[9px] font-black px-1.5 py-0.5 rounded-md animate-pulse border border-rose-200">
+                                  🚨 HUMAN HELP
+                                </span>
+                              )}
+                            </h3>
+                            <span className="text-[10px] text-gray-400 whitespace-nowrap ml-2">
+                              {formatLastSeen(contact.last_message_time || contact.updated_at)}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center group mt-1">
+                            <p className={`text-sm truncate pr-2 ${contact.unread_count > 0 ? 'text-gray-900 font-bold' : 'text-gray-500'}`}>
+                              {contact.last_message || 'No messages yet'}
+                            </p>
+                            <div className="flex items-center gap-2">
+                              {contact.unread_count > 0 && (
+                                <span className="bg-[#25d366] text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
+                                  {contact.unread_count}
+                                </span>
+                              )}
+                              <button 
+                                onClick={(e) => toggleAutoReply(contact.id, e)}
+                                className={`flex-shrink-0 w-3 h-3 rounded-full ${
+                                  (contact.is_auto_reply_enabled && !contact.is_human_needed) ? 'bg-[#25d366]' : 'bg-rose-500'
+                                } shadow-sm border border-white`}
+                                title={(contact.is_auto_reply_enabled && !contact.is_human_needed) ? "AI Responding" : "AI Blocked"}
+                              />
+                            </div>
+                          </div>
+                          <span className="text-[9px] font-black uppercase text-gray-300 tracking-widest mt-1 inline-block">
+                            {contact.agent_name || contact.platform}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-8 text-center text-gray-400">
+                    <UsersIcon className="h-12 w-12 mx-auto mb-2 opacity-20" />
+                    <p className="text-sm font-bold">No contacts found</p>
+                  </div>
+                )}
+              </div>
             </div>
-            <h1 className="text-3xl md:text-5xl font-black text-gray-900 tracking-tighter">
-              Contact <span className="text-indigo-600">Sync</span>
-            </h1>
-          </div>
 
-          <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
-            <div className="relative flex-1 md:min-w-[250px]">
-              <FunnelIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-              <select 
-                value={selectedAgent} 
-                onChange={(e) => setSelectedAgent(e.target.value)}
-                className="w-full pl-12 pr-4 py-4 bg-white border border-gray-100 rounded-2xl font-bold text-gray-700 outline-none shadow-sm focus:ring-2 focus:ring-indigo-500/20"
-              >
-                {agents.map(agent => (
-                  <option key={agent.id} value={agent.page_id}>
-                    {agent.name} ({agent.platform})
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Right Chat Area (WhatsApp Layout) */}
+            <div className="flex-1 hidden md:flex flex-col bg-[#efeae2] relative overflow-hidden">
+              {!isModalOpen ? (
+                <div className="flex-1 flex flex-col items-center justify-center p-12 text-center">
+                  <div className="w-64 h-64 relative mb-8">
+                     <div className="absolute inset-0 bg-white/20 blur-3xl rounded-full"></div>
+                     <ChatBubbleLeftRightIcon className="w-full h-full text-[#adb5bd] opacity-40" />
+                  </div>
+                  <h2 className="text-3xl font-light text-[#41525d] mb-4">Select a chat to start</h2>
+                  <p className="text-sm text-[#8696a0] max-w-sm">
+                    Connect with your customers across platform. Select a contact to view history and reply.
+                  </p>
+                  <div className="mt-auto pt-10 text-xs text-[#8696a0] flex items-center gap-2">
+                     <CpuChipIcon className="h-4 w-4" /> End-to-end AI responses enabled
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Chat Header */}
+                  <div className="p-3 bg-[#f0f2f5] border-b border-gray-200 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      {historyContact?.profile_picture ? (
+                        <img 
+                          src={historyContact.profile_picture} 
+                          alt={historyContact.name || historyContact.identifier} 
+                          className="w-10 h-10 rounded-full object-cover shadow-sm bg-white"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'flex';
+                          }}
+                        />
+                      ) : null}
+                      <div className={`w-10 h-10 rounded-full items-center justify-center text-white font-bold ${
+                        historyContact?.platform === 'whatsapp' ? 'bg-[#25d366]' : 'bg-[#0084ff]'
+                      }`} style={{ display: historyContact?.profile_picture ? 'none' : 'flex' }}>
+                        {(historyContact?.name?.charAt(0) || historyContact?.identifier?.charAt(0))?.toUpperCase()}
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-gray-900 leading-tight flex items-center gap-2">
+                          {historyContact?.name || historyContact?.push_name || historyContact?.identifier}
+                          {historyContact?.is_human_needed && (
+                            <span className="bg-rose-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full shadow-lg animate-bounce">
+                              HUMAN NEEDED
+                            </span>
+                          )}
+                        </h3>
+                        <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest flex items-center gap-2">
+                          {historyContact?.is_auto_reply_enabled ? 'AI Auto-Reply Active' : 'Manual Mode Only'}
+                          {historyContact?.is_human_needed && (
+                             <button 
+                               onClick={(e) => resolveHandoff(historyContact.id, e)}
+                               className="text-indigo-600 hover:text-indigo-800 underline decoration-dotted transition-colors"
+                             >
+                               Mark Resolved
+                             </button>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-6 text-gray-500">
+                      <MagnifyingGlassIcon className="h-5 w-5 cursor-pointer" />
+                      <EllipsisVerticalIcon 
+                        className="h-5 w-5 cursor-pointer hover:text-gray-900 transition-colors" 
+                        onClick={() => openSettings(historyContact)} 
+                      />
+                      <button onClick={() => setIsModalOpen(false)}>
+                        <XMarkIcon className="h-6 w-6 text-gray-400 hover:text-rose-500" />
+                      </button>
+                    </div>
+                  </div>
 
-            <div className="relative flex-1 md:min-w-[300px]">
-              <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-              <input 
-                type="text" 
-                placeholder="Search by name or number..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-4 bg-white border border-gray-100 rounded-2xl font-bold text-gray-700 outline-none shadow-sm focus:ring-2 focus:ring-indigo-500/20"
-              />
+                  {/* Messages Area (Oldest first display, loads more at top) */}
+                  <div className="flex-1 overflow-y-auto p-6 space-y-2 bg-[url('https://w0.peakpx.com/wallpaper/580/650/wallpaper-whatsapp-background.jpg')] bg-repeat bg-[size:400px]">
+                    {hasMoreHistory && (
+                      <div ref={lastMessageElementRef} className="flex justify-center p-4">
+                        {historyLoading ? <ArrowPathIcon className="h-5 w-5 text-[#00a884] animate-spin" /> : <span className="text-xs text-indigo-500 cursor-pointer font-bold">Load earlier messages</span>}
+                      </div>
+                    )}
+                    
+                    {historyMessages.map((msg, index) => (
+                      <div 
+                        key={msg.id || index}
+                        className={`flex flex-col ${msg.role === 'assistant' ? 'items-start' : 'items-end'}`}
+                      >
+                        <div className={`max-w-[80%] px-3 py-1.5 rounded-lg text-sm shadow-sm relative ${
+                          msg.role === 'assistant' 
+                          ? 'bg-white text-gray-800 rounded-tl-none border border-gray-100' 
+                          : 'bg-[#dcf8c6] text-gray-800 rounded-tr-none'
+                        }`}>
+                          <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                          <div className="flex items-center justify-end gap-1 mt-1 -mr-1">
+                            <span className="text-[9px] text-gray-400">
+                               {msg.sent_at ? new Date(msg.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}
+                            </span>
+                            {msg.role === 'assistant' && (
+                               <CheckCircleIcon className="h-3 w-3 text-[#53bdeb]" />
+                            )}
+                          </div>
+                          {msg.role === 'assistant' && msg.tokens_used > 0 && (
+                            <div className="absolute -bottom-4 left-0 text-[8px] font-black text-gray-400 uppercase tracking-tighter opacity-0 hover:opacity-100 transition-opacity">
+                               {msg.tokens_used} tokens
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    <div ref={messagesEndRefDesktop} />
+                  </div>
+
+                  {/* Reply Section */}
+                  <div className="p-3 bg-[#f0f2f5] flex items-end gap-3">
+                    <div className="p-2 text-gray-500 hover:text-gray-700 cursor-pointer">
+                       <CpuChipIcon className="h-7 w-7" />
+                    </div>
+                    <div className="flex-1 bg-white rounded-xl flex items-end p-2 border border-gray-100 shadow-sm focus-within:ring-1 focus-within:ring-[#00a884]/20 transition-all">
+                      <textarea
+                        placeholder="Type a message"
+                        value={replyText}
+                        onChange={(e) => setReplyText(e.target.value)}
+                        rows={1}
+                        className="flex-1 bg-transparent border-none focus:ring-0 text-sm py-1.5 px-2 resize-none max-h-32"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSendReply();
+                          }
+                        }}
+                      />
+                    </div>
+                    <button
+                      onClick={handleSendReply}
+                      disabled={sendingReply || !replyText.trim()}
+                      className={`p-3 rounded-full transition-all flex items-center justify-center ${
+                        replyText.trim() && !sendingReply
+                        ? 'bg-[#00a884] text-white shadow-md'
+                        : 'bg-gray-300 text-gray-400 cursor-not-allowed'
+                      }`}
+                    >
+                      {sendingReply ? (
+                        <ArrowPathIcon className="h-6 w-6 animate-spin" />
+                      ) : (
+                        <PaperAirplaneIcon className="h-6 w-6 rotate-0" />
+                      )}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Contacts Grid */}
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {[1, 2, 3, 4, 5, 6].map(i => (
-              <div key={i} className="h-40 bg-white border border-slate-200 rounded-[2rem] animate-pulse"></div>
-            ))}
-          </div>
-        ) : filteredContacts.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {filteredContacts.map(contact => (
-              <div key={contact.id} className={`group bg-white/80 backdrop-blur-md p-6 rounded-[2.5rem] shadow-sm border ${contact.is_human_needed ? 'border-rose-500 ring-4 ring-rose-500/10' : 'border-gray-100'} hover:border-indigo-200 transition-all hover:shadow-xl flex flex-col relative`}>
-                {contact.is_human_needed && (
-                  <div className="absolute -top-3 -right-3 w-10 h-10 bg-rose-600 rounded-full flex items-center justify-center text-white shadow-xl animate-bounce border-4 border-white z-10">
-                     <span className="text-lg">🆘</span>
+      {/* Mobile Experience (Simplified overlay for chat) */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[200] md:hidden flex flex-col bg-[#efeae2]">
+           <div className="p-3 bg-[#00a884] text-white flex items-center gap-4">
+              <button onClick={() => setIsModalOpen(false)}>
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+              <div className="flex-1 flex items-center gap-3">
+                 <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-bold">
+                    {historyContact?.name?.charAt(0)}
+                 </div>
+                 <h3 className="font-bold truncate">{historyContact?.name || historyContact?.identifier}</h3>
+              </div>
+              <EllipsisVerticalIcon 
+                className="h-6 w-6 cursor-pointer" 
+                onClick={() => openSettings(historyContact)} 
+              />
+           </div>
+           
+           <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-[url('https://w0.peakpx.com/wallpaper/580/650/wallpaper-whatsapp-background.jpg')] bg-repeat bg-[size:300px]">
+              {historyMessages.map((msg, index) => (
+                <div key={msg.id || index} className={`flex flex-col ${msg.role === 'assistant' ? 'items-start' : 'items-end'}`}>
+                   <div className={`max-w-[85%] px-3 py-1.5 rounded-lg text-sm shadow-sm ${
+                      msg.role === 'assistant' ? 'bg-white' : 'bg-[#dcf8c6]'
+                   }`}>
+                      {msg.content}
+                   </div>
+                </div>
+              ))}
+              <div ref={messagesEndRefMobile} />
+           </div>
+
+           <div className="p-3 bg-[#f0f2f5] flex items-center gap-3">
+              <input 
+                type="text" 
+                placeholder="Message"
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                className="flex-1 bg-white rounded-full px-4 py-2 text-sm focus:outline-none"
+              />
+              <button onClick={handleSendReply} className="p-2 bg-[#00a884] text-white rounded-full">
+                 <PaperAirplaneIcon className="h-6 w-6" />
+              </button>
+           </div>
+        </div>
+      )}
+
+      {/* Contact Settings Modal */}
+      {isSettingsModalOpen && (
+        <div className="fixed inset-0 z-[300] bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+              <h2 className="font-bold text-gray-900">User Settings</h2>
+              <button 
+                onClick={() => setIsSettingsModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <XMarkIcon className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-6 overflow-y-auto">
+              {/* Auto Reply Toggle */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900">Auto Reply (AI Block)</h3>
+                    <p className="text-xs text-gray-500">Allow AI to automatically reply to this user.</p>
                   </div>
-                )}
-                <div className="flex justify-between items-start mb-4">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-transform duration-500 group-hover:rotate-12 ${
-                    contact.platform === 'whatsapp' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'
-                  }`}>
-                    <ChatBubbleLeftRightIcon className="h-6 w-6" />
-                  </div>
-                  
-                  <button 
-                    onClick={() => toggleAutoReply(contact.id)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-tighter transition-all ${
-                      contact.is_auto_reply_enabled 
-                      ? 'bg-emerald-500 text-white shadow-emerald-100 shadow-lg hover:bg-emerald-600' 
-                      : 'bg-rose-500 text-white shadow-rose-100 shadow-lg hover:bg-rose-600'
+                  <button
+                    onClick={() => setSettingsForm(prev => ({ ...prev, is_auto_reply_enabled: !prev.is_auto_reply_enabled }))}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                       settingsForm.is_auto_reply_enabled ? 'bg-[#00a884]' : 'bg-gray-200'
                     }`}
                   >
-                    {contact.is_auto_reply_enabled ? (
-                      <><CheckCircleIcon className="h-4 w-4" /> AI Enabled</>
-                    ) : (
-                      <><NoSymbolIcon className="h-4 w-4" /> AI Blocked</>
-                    )}
+                    <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                       settingsForm.is_auto_reply_enabled ? 'translate-x-5' : 'translate-x-0'
+                    }`} />
                   </button>
                 </div>
-
-                <div className="flex-1">
-                  <h3 className={`text-xl font-black mb-1 truncate flex items-center gap-2 ${contact.is_human_needed ? 'text-rose-600' : 'text-gray-900'}`}>
-                    {contact.name || contact.push_name || contact.identifier}
-                    {contact.is_human_needed && (
-                       <span className="bg-rose-100 text-rose-600 text-[10px] px-2 py-0.5 rounded-full border border-rose-200 uppercase font-black tracking-tighter">
-                          Human Help Needed
-                       </span>
-                    )}
-                  </h3>
-                  {contact.push_name && contact.name && contact.name !== contact.push_name && (
-                    <p className="text-xs font-bold text-indigo-400 mb-1">@{contact.push_name}</p>
-                  )}
-                  <p className="text-sm font-mono text-gray-400 mb-4">{contact.identifier}</p>
-                </div>
-
-                <div className="mt-4 pt-4 border-t border-gray-50 flex flex-col gap-4">
-                  <button 
-                    onClick={() => openHistory(contact)}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-50 text-indigo-600 rounded-2xl text-xs font-black uppercase tracking-tighter hover:bg-indigo-100 transition-colors"
-                  >
-                    <ChatBubbleLeftRightIcon className="h-4 w-4" /> View Chat History
-                  </button>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 bg-gray-50 px-2 py-1 rounded-lg">
-                      {contact.platform}
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      <div className={`w-2 h-2 rounded-full ${contact.is_auto_reply_enabled ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>
-                      <span className="text-[9px] font-black uppercase text-gray-400">
-                        {contact.is_auto_reply_enabled ? 'Responding' : 'Ignored'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center py-20 bg-gray-50/50 rounded-[3rem] border border-dashed border-gray-200">
-            <UsersIcon className="h-16 w-16 text-gray-300 mb-4" />
-            <h3 className="text-xl font-black text-gray-400">No contacts found</h3>
-            <p className="text-sm text-gray-400">Contacts will appear here after they message your agent.</p>
-          </div>
-        )}
-
-        {/* History Modal */}
-        {isModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 backdrop-blur-xl bg-white/40">
-            <div className="relative w-full max-w-2xl bg-white rounded-[3rem] shadow-2xl border border-gray-100 flex flex-col max-h-[90vh] overflow-hidden">
-              {/* Modal Header */}
-              <div className="p-8 border-b border-gray-50 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-100">
-                    <ChatBubbleLeftRightIcon className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-black text-gray-900 leading-tight">
-                      {historyContact?.name || historyContact?.push_name || historyContact?.identifier}
-                    </h3>
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Message history</p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setIsModalOpen(false)}
-                  className="p-3 bg-gray-50 text-gray-400 rounded-2xl hover:text-rose-500 hover:bg-rose-50 transition-all"
-                >
-                  <XMarkIcon className="h-6 w-6" />
-                </button>
               </div>
 
-              {/* Messages Area */}
-              <div className="flex-1 overflow-y-auto p-8 space-y-6 scrollbar-hide">
-                {historyMessages.length === 0 && !historyLoading ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-gray-300 gap-4">
-                    <ChatBubbleLeftRightIcon className="h-12 w-12 opacity-20" />
-                    <p className="font-bold text-center">No messages found in this conversation</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex flex-col space-y-6">
-                      {historyMessages.map((msg, index) => (
-                        <div 
-                          key={msg.id || index} 
-                          ref={index === historyMessages.length - 1 ? lastMessageElementRef : null}
-                          className={`flex flex-col ${msg.role === 'assistant' ? 'items-start' : 'items-end'}`}
-                        >
-                          <div className={`max-w-[85%] px-6 py-4 rounded-[2rem] text-sm font-bold shadow-sm ${
-                            msg.role === 'assistant' 
-                            ? 'bg-gray-50 text-gray-700 rounded-bl-none border border-gray-100/50' 
-                            : 'bg-indigo-600 text-white rounded-br-none shadow-indigo-100 shadow-xl'
-                          }`}>
-                            {msg.content}
-                          </div>
-                          <span className="mt-2 px-2 text-[9px] font-black uppercase text-gray-300 tracking-tighter">
-                            {msg.sent_at 
-                              ? new Date(msg.sent_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) 
-                              : 'Just now'} 
-                            {msg.role === 'assistant' && msg.tokens_used > 0 && ` • ${msg.tokens_used} tokens`}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                    {historyLoading && (
-                      <div className="flex justify-center p-4">
-                        <ArrowPathIcon className="h-6 w-6 text-indigo-400 animate-spin" />
-                      </div>
-                    )}
-                  </>
-                )}
+              {/* Custom Prompt */}
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-gray-900 flex justify-between">
+                  User Specific System Prompt
+                  <span className="text-xs font-normal text-gray-400">(Optional)</span>
+                </label>
+                <textarea
+                  value={settingsForm.custom_prompt}
+                  onChange={e => setSettingsForm(prev => ({ ...prev, custom_prompt: e.target.value }))}
+                  placeholder="e.g. You are talking to a VIP customer. Be extremely polite."
+                  className="w-full h-24 p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#00a884]/20 focus:border-[#00a884] outline-none resize-none transition-all"
+                />
               </div>
-              
-              {/* Modal Footer */}
-              <div className="p-8 border-t border-gray-50 bg-gray-50/50 flex justify-center">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">
-                  Total {historyMessages.length} messages loaded
-                </p>
+
+              {/* Custom Instructions */}
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-gray-900 flex justify-between">
+                  User Specific Additional Instructions
+                  <span className="text-xs font-normal text-gray-400">(Optional)</span>
+                </label>
+                <textarea
+                  value={settingsForm.custom_instructions}
+                  onChange={e => setSettingsForm(prev => ({ ...prev, custom_instructions: e.target.value }))}
+                  placeholder="e.g. Only speak in Spanish with this user."
+                  className="w-full h-24 p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#00a884]/20 focus:border-[#00a884] outline-none resize-none transition-all"
+                />
               </div>
             </div>
+
+            <div className="p-4 border-t border-gray-100 flex justify-end gap-3 bg-gray-50">
+              <button
+                onClick={() => setIsSettingsModalOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+                disabled={savingSettings}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveSettings}
+                disabled={savingSettings}
+                className="px-6 py-2 text-sm font-medium text-white bg-[#00a884] hover:bg-[#009273] rounded-lg transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2"
+              >
+                {savingSettings && <ArrowPathIcon className="w-4 h-4 animate-spin" />}
+                Save Changes
+              </button>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
+  const fetchSingleContact = async (contactId) => {
+    try {
+      const res = await api.get(`/AgentAI/contacts/detail/${contactId}/`);
+      const contact = res.data;
+      let updatedList = [];
+      setContacts(prev => {
+        if (activeTab === "comments" && contact.platform !== "youtube") return prev;
+        if (activeTab === "messages" && contact.platform === "youtube") return prev;
+        const idx = prev.findIndex(c => c.id === contact.id);
+        if (idx >= 0) {
+          const copy = [...prev];
+          copy[idx] = contact;
+          updatedList = copy;
+          return copy;
+        }
+        const merged = [contact, ...prev].slice(0, 100);
+        updatedList = merged;
+        return merged;
+      });
+      if (updatedList.length) {
+        const unreadSum = updatedList.reduce((acc, c) => acc + (c.unread_count || 0), 0);
+        setUnreadSummary(prev => activeTab === "comments" ? { ...prev, comments: unreadSum } : { ...prev, messages: unreadSum });
+      }
+    } catch (err) {
+      console.error("Single contact fetch failed", err);
+    }
+  };
+
+  const fetchSummary = async () => {
+    try {
+      const res = await api.get("/AgentAI/contacts/summary/");
+      setSummary(res.data || { messages: 0, youtube: 0 });
+    } catch (err) {
+      console.error("Summary load failed", err);
+    }
+  };
+
+  // Unread counter derived from current list (per tab)
+  // const unreadCount = contacts.reduce((acc, c) => acc + (c.unread_count || 0), 0);

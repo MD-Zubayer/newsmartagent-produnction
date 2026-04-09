@@ -11,7 +11,9 @@ from users.views import (
     ResetPasswordView, OfferViewSet, SubscriptionViewSet, 
     CookieTokenRefreshView, CookieTokenVerifyView, OrderSubmitView, NSABalanceTransferView, SendPaymentOTPView, SendTransferOTPView,
     WithdrawMethodViewSet, CashoutRequestViewSet, FinancialSummaryView,
-    Verify2FALoginView, Toggle2FAView
+    Verify2FALoginView, Toggle2FAView,
+    LoginSessionStatusView, ApproveLoginSessionView,
+    SecuritySettingsView, LoginHistoryView
 )
 from payments.views import PaymentViewSet
 from webhooks import views as webhook_views
@@ -21,6 +23,7 @@ from man_agent.views import ManAgentConfigViewSet
 from man_agent.views import AgentDashboardStatsView
 from users import oauth_views
 from blog import views as blog_views
+from community.views import CommunityReportViewSet
 
 
 router = DefaultRouter()
@@ -34,6 +37,8 @@ router.register(r'blog/posts', blog_views.BlogPostViewSet, basename='blog-posts'
 router.register(r'blog/categories', blog_views.CategoryViewSet, basename='blog-categories')
 router.register(r'withdraw-methods', WithdrawMethodViewSet, basename='withdraw-methods')
 router.register(r'cashout-requests', CashoutRequestViewSet, basename='cashout-requests')
+router.register(r'agents', ai_views.AgentAIViewSet, basename='agent-ai')
+router.register(r'community', CommunityReportViewSet, basename='community')
 
 
 urlpatterns = [
@@ -52,6 +57,10 @@ urlpatterns = [
     path('api/token/refresh/', CookieTokenRefreshView.as_view(), name='token_refresh'),
     path('api/auth/2fa/verify/', Verify2FALoginView.as_view(), name='verify-2fa-login'),
     path('api/auth/2fa/toggle/', Toggle2FAView.as_view(), name='toggle-2fa'),
+    path('api/auth/session-status/', LoginSessionStatusView.as_view(), name='session-status'),
+    path('api/auth/approve-login/', ApproveLoginSessionView.as_view(), name='approve-login'),
+    path('api/security/settings/', SecuritySettingsView.as_view(), name='security-settings'),
+    path('api/security/login-history/', LoginHistoryView.as_view(), name='login-history'),
     path('api/forgot-password/', ForgotPasswordView.as_view(), name='forgot_password'),
     path("api/reset-password/", ResetPasswordView.as_view(), name="reset-password"),
     path('api/transfer/', NSABalanceTransferView.as_view(), name='tarnsfer'),
@@ -60,6 +69,22 @@ urlpatterns = [
     path('api/facebook/login/', oauth_views.facebook_login, name='facebook_login'),
     path('api/facebook/callback/', oauth_views.facebook_callback, name='facebook_callback'),
     path('api/facebook/pages/', oauth_views.get_connected_pages, name='facebook_pages'),
+    # YouTube Integration Endpoints
+    path('api/youtube/login/', oauth_views.youtube_login, name='youtube_login'),
+    path('api/youtube/callback/', oauth_views.youtube_callback, name='youtube_callback'),
+    path('api/youtube/confirm/', oauth_views.confirm_youtube_connection, name='youtube_confirm'),
+    path('api/youtube/session-channels/', oauth_views.get_youtube_session_channels, name='youtube_session_channels'),
+    path('api/youtube/channels/', oauth_views.get_connected_youtube_channels, name='youtube_channels'),
+
+    # GBP Integration Endpoints
+    path('api/gbp/confirm/', oauth_views.confirm_gbp_connection, name='gbp_confirm'),
+    path('api/gbp/session-locations/', oauth_views.get_gbp_session_locations, name='gbp_id_session_locations'),
+    path('api/gbp/accounts/', oauth_views.get_connected_gbp_accounts, name='gbp_accounts'),
+    # TikTok Integration Endpoints
+    path('api/tiktok/login/', oauth_views.tiktok_login, name='tiktok_login'),
+    path('api/tiktok/callback/', oauth_views.tiktok_callback, name='tiktok_callback'),
+    path('api/tiktok/accounts/', oauth_views.get_connected_tiktok_accounts, name='tiktok_accounts'),
+
     path('api/facebook/data-deletion/', oauth_views.facebook_data_deletion, name='facebook_data_deletion'),
 
     # CKEditor

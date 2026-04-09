@@ -111,6 +111,7 @@ INSTALLED_APPS = [
     'ckeditor_uploader',
     'storages',
     'minio_management',
+    'community',
 ]
 
 CKEDITOR_UPLOAD_PATH = "uploads/"
@@ -137,11 +138,11 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     # "users.middleware.TokenMiddleware",
-
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-        # Add the account middleware:
+    # Add the account middleware:
     "allauth.account.middleware.AccountMiddleware",
-
+    # Visitor Tracking - records anonymous site visitors
+    'aiAgent.middleware.VisitorTrackingMiddleware',
 ]
 
 ROOT_URLCONF = 'jwtauth.urls'
@@ -196,7 +197,7 @@ CELERY_TASK_TIME_LIMIT = 110
 DATABASES = {
     'default': dj_database_url.config(
         default=os.environ.get('DATABASE_URL'),
-        conn_max_age=600
+        conn_max_age=60
     )
 }
 
@@ -222,6 +223,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # settings.py
 SOCIAL_AUTH_FACEBOOK_SECRET = os.environ.get('SOCIAL_AUTH_FACEBOOK_SECRET')
+TELEGRAM_SHARED_BOT_TOKEN = os.environ.get('TELEGRAM_SHARED_BOT_TOKEN', '')
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
@@ -316,14 +318,20 @@ SIMPLE_JWT = {
 }
 JWT_AUTH_SECURE = False
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
+    f"https://{MAIN_DOMAIN}",
+    f"https://api.{MAIN_DOMAIN}",
+    f"https://{N8N_DOMAIN}",
+    f"https://monitor.{MAIN_DOMAIN}",
+    f"https://dev.{MAIN_DOMAIN}",
+    f"https://dev-api.{MAIN_DOMAIN}",
+    f"https://dev-n8n.{MAIN_DOMAIN}",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:3001",
     "http://127.0.0.1:3001",
-    f"https://{MAIN_DOMAIN}",
 ]
 
 CSRF_COOKIE_DOMAIN = f'.{MAIN_DOMAIN}'
@@ -378,6 +386,15 @@ GROK_API_KEY = os.environ.get('GROK_API_KEY')
 FB_APP_ID = os.environ.get('FB_APP_ID')
 FB_APP_SECRET = os.environ.get('FB_APP_SECRET')
 FB_REDIRECT_URI = os.environ.get('FB_REDIRECT_URI')
+
+YOUTUBE_CLIENT_ID = os.environ.get('YOUTUBE_CLIENT_ID')
+YOUTUBE_CLIENT_SECRET = os.environ.get('YOUTUBE_CLIENT_SECRET')
+YOUTUBE_REDIRECT_URI = os.environ.get('YOUTUBE_REDIRECT_URI')
+N8N_YOUTUBE_WEBHOOK_URL = os.environ.get('N8N_YOUTUBE_WEBHOOK_URL')
+
+TIKTOK_CLIENT_KEY = os.environ.get('TIKTOK_CLIENT_KEY')
+TIKTOK_CLIENT_SECRET = os.environ.get('TIKTOK_CLIENT_SECRET')
+TIKTOK_REDIRECT_URI = os.environ.get('TIKTOK_REDIRECT_URI')
 
 
 

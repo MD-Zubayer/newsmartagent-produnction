@@ -5,8 +5,10 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from man_agent.models import ManAgentConfig, ReferralRelation
 from man_agent.serializer import ManAgentConfigSerializer, ReferredUserSerializer
-from users.models import Subscription
-from django.db.models import Max, Q
+from users.models import Subscription, Payment
+from django.db.models import Max, Q, Sum
+from django.db.models.functions import TruncMonth, Coalesce
+from decimal import Decimal
 # Create your views here.
 
 
@@ -51,11 +53,27 @@ class AgentDashboardStatsView(APIView):
         total_unique_subs_count = latest_subs.count() # কতজন ইউজার অন্তত একবার সাবস্ক্রিপশন নিয়েছে
         inactive_subs_count = total_unique_subs_count - active_subs_count
 
-        # ৪. ৫ মাসের কমিশন ফোরকাস্ট লজিক
-        current_comm = float(profile.commission_balance)
-        # যদি ব্যালেন্স খুব কম হয় বা ০ হয়, তবে একটি বেসলাইন (যেমন ৫০০) ধরা হয়েছে
-        base_val = current_comm if current_comm > 500 else 500
-        forecast = [round((base_val / 4) * (1.15 ** i), 2) for i in range(1, 6)]
+        # ৪. মাসভিত্তিক কমিশন ইতিহাস (সকল মাস)
+        payments = Payment.objects.filter(
+            profile__user_id__in=referred_user_ids,
+            status='paid',
+        ).annotate(
+            pay_time=Coalesce('paid_at', 'created_at')
+        ).annotate(
+            month=TruncMonth('pay_time')
+        ).values('month').annotate(total=Sum('amount')).order_by('month')
+
+        monthly_labels = []
+        monthly_history = []
+        for p in payments:
+            monthly_labels.append(p['month'].strftime("%b %Y"))
+            # এজেন্ট কমিশন (পেইড অংকের ২০%) মাসভিত্তিক
+            monthly_history.append(round(Decimal(p['total']) * Decimal('0.20'), 2))
+
+        # যদি কোনো ইতিহাস না থাকে, অন্তত বর্তমান কমিশন ব্যালেন্স দেখানো হবে
+        if not monthly_history and profile.commission_balance:
+            monthly_history = [round(Decimal(profile.commission_balance), 2)]
+            monthly_labels = ['Current Balance']
 
         data = {
             'total_referrals': referrals.count(),
@@ -68,7 +86,8 @@ class AgentDashboardStatsView(APIView):
             'total_subscriptions': total_unique_subs_count,
             'active_subscriptions': active_subs_count,
             'inactive_subscriptions': inactive_subs_count,
-            'monthly_forecast': forecast,
+            'monthly_history': monthly_history,
+            'monthly_labels': monthly_labels,
             
             # রেফারেল লিস্ট (Serializer এখন শুধু লেটেস্ট স্ট্যাটাস দেখাবে)
             'recent_users': ReferredUserSerializer(

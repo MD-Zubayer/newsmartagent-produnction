@@ -4,26 +4,207 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import axiosInstance from "@/lib/api";
 import {
-  FaFacebook, FaWhatsapp, FaInstagram, FaTelegram,
+  FaFacebook, FaWhatsapp, FaInstagram, FaTelegram, FaYoutube, FaTiktok,
   FaArrowLeft, FaLink, FaCopy, FaCode, FaRobot, FaShieldAlt, FaExternalLinkAlt,
   FaCheckCircle, FaExclamationCircle
 } from "react-icons/fa";
 import { HiOutlineSparkles } from "react-icons/hi2";
 import WhatsAppConnector from "./WhatsAppConnector";
+import TelegramConnector from "./TelegramConnector";
 
 export default function IntegrationManager() {
   const [selectedPlatform, setSelectedPlatform] = useState(null);
   const [connectedPages, setConnectedPages] = useState([]);
   const [isLoadingPages, setIsLoadingPages] = useState(false);
+  
+  // YouTube Selection State
+  const [stagedYoutubeChannels, setStagedYoutubeChannels] = useState([]);
+  const [youtubeSessionId, setYoutubeSessionId] = useState(null);
+  const [isConfirmingChannel, setIsConfirmingChannel] = useState(false);
+
+  // GBP Selection State
+  const [stagedGbpLocations, setStagedGbpLocations] = useState([]);
+  const [gbpSessionId, setGbpSessionId] = useState(null);
+  const [isConfirmingGbp, setIsConfirmingGbp] = useState(false);
 
   useEffect(() => {
-    if (selectedPlatform?.id === 'facebook') {
+    // Listen for OAuth Success Messages
+    const handleMessage = (event) => {
+      // Security: Check origin if needed, but here we check status and platform
+      if (event.data?.status === "select_channel") {
+        if (event.data?.platform === "youtube") {
+          setStagedYoutubeChannels(event.data.channels || []);
+          setYoutubeSessionId(event.data.sessionId);
+          import("react-hot-toast").then(({ toast }) => toast.success("Select a channel to connect"));
+        } else if (event.data?.platform === "gbp") {
+          setStagedGbpLocations(event.data.channels || []);
+          setGbpSessionId(event.data.sessionId);
+          import("react-hot-toast").then(({ toast }) => toast.success("Select a location to connect"));
+        }
+      } else if (event.data?.status === "success" && event.data?.platform === "tiktok") {
+        import("react-hot-toast").then(({ toast }) => toast.success(`TikTok account ${event.data.account.display_name} connected!`));
+        // Refresh TikTok accounts if we are on the tiktok platform view
+        axiosInstance.get("/tiktok/accounts/").then(res => setConnectedPages(res.data.accounts || []));
+      } else if (event.data?.status === "error") {
+        import("react-hot-toast").then(({ toast }) => toast.error(event.data.message || "Authentication failed."));
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
+
+  const confirmGbpConnection = async (locationId) => {
+    setIsConfirmingGbp(true);
+    try {
+      const res = await axiosInstance.post("/gbp/confirm/", {
+        sessionId: gbpSessionId,
+        channelId: locationId // Reuse channelId field for backend consistency
+      });
+      import("react-hot-toast").then(({ toast }) => toast.success(res.data.message));
+      
+      const refreshRes = await axiosInstance.get("/gbp/accounts/");
+      setConnectedPages(refreshRes.data.accounts || []);
+      
+      setStagedGbpLocations([]);
+      setGbpSessionId(null);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } catch (err) {
+      console.error("Error confirming GBP connection", err);
+      const errorMsg = err.response?.data?.error || "Failed to connect location";
+      import("react-hot-toast").then(({ toast }) => toast.error(errorMsg));
+    } finally {
+      setIsConfirmingGbp(false);
+    }
+  };
+
+  const confirmYoutubeConnection = async (channelId) => {
+    setIsConfirmingChannel(true);
+    try {
+      const res = await axiosInstance.post("/youtube/confirm/", {
+        sessionId: youtubeSessionId,
+        channelId: channelId
+      });
+      import("react-hot-toast").then(({ toast }) => toast.success(res.data.message));
+      
+      // Refresh connected channels
+      const refreshRes = await axiosInstance.get("/youtube/channels/");
+      setConnectedPages(refreshRes.data.channels || []);
+      
+      // Clear selection state
+      setStagedYoutubeChannels([]);
+      setYoutubeSessionId(null);
+      
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } catch (err) {
+      console.error("Error confirming YouTube connection", err);
+      const errorMsg = err.response?.data?.error || "Failed to connect channel";
+      import("react-hot-toast").then(({ toast }) => toast.error(errorMsg));
+    } finally {
+      setIsConfirmingChannel(false);
+    }
+  };
+
+  const fetchGbpSessionLocations = async (sessionId) => {
+    try {
+      const res = await axiosInstance.get(`/gbp/session-locations/?sessionId=${sessionId}`);
+      if (res.data.status === "success") {
+        setStagedGbpLocations(res.data.channels || []);
+        setGbpSessionId(res.data.sessionId);
+        import("react-hot-toast").then(({ toast }) => toast.success("Locations recovered from session"));
+      }
+    } catch (err) {
+      console.error("Error fetching GBP session locations", err);
+    }
+  };
+
+  const fetchSessionChannels = async (sessionId) => {
+    try {
+      console.log("ConnectForm: Fetching session channels for", sessionId);
+      const res = await axiosInstance.get(`/youtube/session-channels/?sessionId=${sessionId}`);
+      if (res.data.status === "success") {
+        setStagedYoutubeChannels(res.data.channels || []);
+        setYoutubeSessionId(res.data.sessionId);
+        import("react-hot-toast").then(({ toast }) => toast.success("Channels recovered from session"));
+      }
+    } catch (err) {
+      console.error("Error fetching session channels", err);
+    }
+  };
+
+  useEffect(() => {
+    // Fail-safe: Check URL for sessionId on mount and URL change
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get("sessionId");
+    const type = params.get("success");
+    if (sessionId) {
+      if (type === "gbp_auth" && !gbpSessionId) {
+        fetchGbpSessionLocations(sessionId);
+      } else if (type === "youtube_auth" && !youtubeSessionId) {  // Fixed: was "yt_auth"
+        fetchSessionChannels(sessionId);
+      }
+    }
+
+    // Auto-select platform if returning from OAuth redirect
+    if (sessionId && type === "youtube_auth") {
+      setSelectedPlatform({
+        id: "youtube",
+        name: "YouTube",
+        icon: <FaYoutube />,
+        color: "from-red-600 via-rose-600 to-red-700",
+        iconBg: "bg-red-600",
+        devLink: "https://console.cloud.google.com/",
+        btnText: "Google Console",
+        description: "Automate your YouTube Channel comments and engagement with AI."
+      });
+    } else if (sessionId && type === "gbp_auth") {
+      setSelectedPlatform({
+        id: "gbp",
+        name: "Google Business",
+        icon: <FaShieldAlt />,
+        color: "from-blue-500 via-indigo-500 to-blue-600",
+        iconBg: "bg-blue-500",
+        devLink: "https://business.google.com/",
+        btnText: "Business Profile",
+        description: "Manage and automate your Google Business Profile reviews and queries."
+      });
+    }
+  }, [youtubeSessionId, gbpSessionId]);
+
+
+  useEffect(() => {
+    if (selectedPlatform?.id === 'facebook' || selectedPlatform?.id === 'instagram') {
       setIsLoadingPages(true);
       axiosInstance.get("/facebook/pages/")
         .then(res => {
           setConnectedPages(res.data.pages || []);
         })
         .catch(err => console.error("Error fetching Facebook pages", err))
+        .finally(() => setIsLoadingPages(false));
+    } else if (selectedPlatform?.id === 'youtube') {
+      setIsLoadingPages(true);
+      axiosInstance.get("/youtube/channels/")
+        .then(res => {
+          setConnectedPages(res.data.channels || []);
+        })
+        .catch(err => console.error("Error fetching YouTube channels", err))
+        .finally(() => setIsLoadingPages(false));
+    } else if (selectedPlatform?.id === 'gbp') {
+      setIsLoadingPages(true);
+      axiosInstance.get("/gbp/accounts/")
+        .then(res => {
+          setConnectedPages(res.data.accounts || []);
+        })
+        .catch(err => console.error("Error fetching GBP accounts", err))
+        .finally(() => setIsLoadingPages(false));
+    } else if (selectedPlatform?.id === 'tiktok') {
+      setIsLoadingPages(true);
+      axiosInstance.get("/tiktok/accounts/")
+        .then(res => {
+          setConnectedPages(res.data.accounts || []);
+        })
+        .catch(err => console.error("Error fetching TikTok accounts", err))
         .finally(() => setIsLoadingPages(false));
     }
   }, [selectedPlatform]);
@@ -89,6 +270,36 @@ export default function IntegrationManager() {
       devLink: "/dashboard/connect/widget-customize",
       btnText: "Customize Widget",
       description: "Embed a high-performance AI chat widget on any website in seconds."
+    },
+    youtube: {
+      id: "youtube",
+      name: "YouTube",
+      icon: <FaYoutube />,
+      color: "from-red-600 via-rose-600 to-red-700",
+      iconBg: "bg-red-600",
+      devLink: "https://console.cloud.google.com/",
+      btnText: "Google Console",
+      description: "Automate your YouTube Channel comments and engagement with AI."
+    },
+    gbp: {
+      id: "gbp",
+      name: "Google Business",
+      icon: <FaShieldAlt />,
+      color: "from-blue-500 via-indigo-500 to-blue-600",
+      iconBg: "bg-blue-500",
+      devLink: "https://business.google.com/",
+      btnText: "Business Profile",
+      description: "Manage and automate your Google Business Profile reviews and queries."
+    },
+    tiktok: {
+      id: "tiktok",
+      name: "TikTok",
+      icon: <FaTiktok />,
+      color: "from-slate-900 via-slate-800 to-black",
+      iconBg: "bg-black",
+      devLink: "https://developers.tiktok.com/",
+      btnText: "TikTok Developers",
+      description: "Automate your TikTok engagement and manage your profile interactions."
     }
   };
 
@@ -279,10 +490,10 @@ export default function IntegrationManager() {
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 lg:gap-12 text-center lg:text-left">
                   <div className="space-y-2">
                     <h3 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter italic uppercase">
-                      Active Nodes
+                      Connected Pages
                     </h3>
-                    <p className="text-[10px] md:text-xs text-indigo-600 font-black uppercase tracking-[0.3em] md:tracking-[0.4em] opacity-70 flex items-center gap-2 justify-center lg:justify-start">
-                      <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full shadow-[0_0_10px_rgba(79,70,229,0.5)]"></span> Real-time Management
+                    <p className="text-[10px] md:text-xs text-blue-600 font-black uppercase tracking-[0.3em] md:tracking-[0.4em] opacity-70 flex items-center gap-2 justify-center lg:justify-start">
+                      <span className="w-1.5 h-1.5 bg-blue-600 rounded-full shadow-[0_0_10px_rgba(37,99,235,0.5)]"></span> Facebook Page Management
                     </p>
                   </div>
 
@@ -300,36 +511,41 @@ export default function IntegrationManager() {
                 </div>
 
                 <div className="bg-slate-50/50 rounded-[2.5rem] md:rounded-[4rem] p-6 md:p-16 border border-slate-100 relative overflow-hidden group/list">
-                  {/* Glass Card Effect */}
                   <div className="absolute inset-0 bg-white/20 backdrop-blur-3xl pointer-events-none"></div>
 
                   {isLoadingPages ? (
                     <div className="flex flex-col items-center justify-center py-20 md:py-28 gap-6 md:gap-8 relative z-10">
                       <div className="relative">
-                        <div className="w-16 h-16 md:w-20 md:h-20 border-2 border-slate-200 border-t-indigo-600 rounded-full animate-spin"></div>
+                        <div className="w-16 h-16 md:w-20 md:h-20 border-2 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
                         <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-8 h-8 md:w-10 md:h-10 bg-indigo-50 rounded-[1.2rem] md:rounded-2xl animate-pulse"></div>
+                          <div className="w-8 h-8 md:w-10 md:h-10 bg-blue-50 rounded-[1.2rem] md:rounded-2xl animate-pulse"></div>
                         </div>
                       </div>
-                      <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-[0.4em] md:tracking-[0.5em] animate-pulse">Fetching Assets...</p>
+                      <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-[0.4em] md:tracking-[0.5em] animate-pulse">Fetching Pages...</p>
                     </div>
                   ) : connectedPages.length > 0 ? (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 relative z-10 w-full overflow-hidden">
                       {connectedPages.map(page => (
-                        <div key={page.id} className="flex items-center justify-between bg-white p-5 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] shadow-[0_16px_32px_-12px_rgba(0,0,0,0.03)] border border-slate-50 hover:border-indigo-100 hover:shadow-[0_32px_64px_-16px_rgba(79,70,229,0.12)] transition-all duration-700 group/page hover:-translate-y-1 min-w-0">
+                        <div key={page.id} className="flex items-center justify-between bg-white p-5 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] shadow-[0_16px_32px_-12px_rgba(0,0,0,0.03)] border border-slate-50 hover:border-blue-100 hover:shadow-[0_32px_64px_-16px_rgba(24,119,242,0.12)] transition-all duration-700 group/page hover:-translate-y-1 min-w-0">
                           <div className="flex items-center gap-3 md:gap-6 min-w-0">
-                            <div className="w-12 h-12 md:w-16 md:h-16 shrink-0 bg-gradient-to-br from-indigo-50 to-white rounded-[1.2rem] md:rounded-[1.5rem] flex items-center justify-center text-[#1877F2] shadow-inner group-hover/page:scale-110 transition-transform duration-700">
+                            <div className="w-12 h-12 md:w-16 md:h-16 shrink-0 bg-gradient-to-br from-blue-50 to-white rounded-[1.2rem] md:rounded-[1.5rem] flex items-center justify-center text-[#1877F2] shadow-inner group-hover/page:scale-110 transition-transform duration-700">
                               <FaFacebook className="text-2xl md:text-3xl" />
                             </div>
                             <div className="space-y-1 min-w-0">
-                              <p className="font-black text-base md:text-xl text-slate-900 tracking-tight italic truncate">{page.name}</p>
+                              <p className="font-black text-base md:text-xl text-slate-900 tracking-tight italic truncate text-left">{page.name}</p>
+                              {page.instagram_username && (
+                                <div className="flex items-center gap-2 text-pink-600 text-[10px] md:text-xs font-bold">
+                                  <FaInstagram className="shrink-0" />
+                                  <span className="truncate">@{page.instagram_username} linked</span>
+                                </div>
+                              )}
                               <div className="flex items-center gap-1.5 px-2 md:px-3 py-1 bg-emerald-50 rounded-full border border-emerald-100 w-fit">
                                 <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
-                                <span className="text-[8px] md:text-[9px] font-black text-emerald-600 uppercase tracking-widest truncate">Optimal</span>
+                                <span className="text-[8px] md:text-[9px] font-black text-emerald-600 uppercase tracking-widest truncate">Active</span>
                               </div>
                             </div>
                           </div>
-                          <div className="w-8 h-8 md:w-10 md:h-10 shrink-0 bg-slate-50 rounded-[0.8rem] md:rounded-2xl flex items-center justify-center group-hover/page:bg-indigo-600 group-hover/page:text-white transition-all duration-500 ml-2">
+                          <div className="w-8 h-8 md:w-10 md:h-10 shrink-0 bg-slate-50 rounded-[0.8rem] md:rounded-2xl flex items-center justify-center group-hover/page:bg-blue-600 group-hover/page:text-white transition-all duration-500 ml-2">
                             <span className="transform transition-transform group-hover/page:translate-x-0.5 text-base md:text-xl">→</span>
                           </div>
                         </div>
@@ -337,18 +553,430 @@ export default function IntegrationManager() {
                     </div>
                   ) : (
                     <div className="text-center py-20 md:py-28 px-6 md:px-12 space-y-8 md:space-y-10 relative z-10">
-                      <div className="w-24 h-24 md:w-32 md:h-32 bg-white rounded-[2rem] md:rounded-[2.5rem] shadow-lg md:shadow-xl flex items-center justify-center mx-auto text-slate-100 border border-slate-50 hover:scale-110 transition-transform duration-700">
-                        <FaFacebook size={48} className="md:w-16 md:h-16 opacity-10" />
+                      <div className="w-24 h-24 md:w-32 md:h-32 bg-white rounded-[2rem] md:rounded-[2.5rem] shadow-lg md:shadow-xl flex items-center justify-center mx-auto border border-slate-50 hover:scale-110 transition-transform duration-700">
+                        <FaFacebook size={48} className="md:w-16 md:h-16 opacity-10 text-blue-500" />
                       </div>
                       <div className="space-y-3 md:space-y-4">
-                        <h4 className="text-2xl md:text-3xl font-black text-slate-900 uppercase tracking-tighter italic">Network Idle</h4>
+                        <h4 className="text-2xl md:text-3xl font-black text-slate-900 uppercase tracking-tighter italic">No Pages Connected</h4>
                         <p className="text-base md:text-lg text-slate-400 font-medium max-w-[280px] md:max-w-sm mx-auto opacity-70 leading-relaxed">
-                          Your business ecosystem is ready for expansion. Connect your first Facebook asset to activate AI agents.
+                          Click &quot;Connect to Facebook&quot; and grant page access to activate your AI agents.
                         </p>
                       </div>
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Platform Specific: Instagram */}
+            {selectedPlatform.id === "instagram" && (
+              <div className="pt-16 md:pt-24 border-t border-slate-100 space-y-12 md:space-y-16 animate-in slide-in-from-bottom-8 duration-1000">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 lg:gap-12 text-center lg:text-left">
+                  <div className="space-y-2">
+                    <h3 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter italic uppercase">
+                      Instagram Accounts
+                    </h3>
+                    <p className="text-[10px] md:text-xs text-pink-600 font-black uppercase tracking-[0.3em] md:tracking-[0.4em] opacity-70 flex items-center gap-2 justify-center lg:justify-start">
+                      <span className="w-1.5 h-1.5 bg-pink-600 rounded-full shadow-[0_0_10px_rgba(219,39,119,0.5)]"></span> Instagram Business Integration
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://newsmartagent.com/api";
+                      window.location.href = `${apiUrl}/facebook/login/`;
+                    }}
+                    className="group relative flex items-center justify-center gap-4 md:gap-5 bg-gradient-to-r from-pink-600 via-rose-600 to-purple-700 text-white px-6 md:px-10 py-4 md:py-6 rounded-[1.5rem] md:rounded-[2rem] text-[10px] md:text-[11px] font-black uppercase tracking-[0.15em] md:tracking-[0.2em] hover:opacity-90 transition-all shadow-[0_20px_40px_-10px_rgba(219,39,119,0.3)] active:scale-95 overflow-hidden w-full lg:w-auto"
+                  >
+                    <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity"></div>
+                    <FaInstagram className="text-xl md:text-2xl group-hover:rotate-12 transition-transform duration-500" />
+                    Connect via Facebook
+                  </button>
+                </div>
+
+                <div className="bg-slate-50/50 rounded-[2.5rem] md:rounded-[4rem] p-6 md:p-16 border border-slate-100 relative overflow-hidden group/list">
+                  <div className="absolute inset-0 bg-white/20 backdrop-blur-3xl pointer-events-none"></div>
+
+                  {isLoadingPages ? (
+                    <div className="flex flex-col items-center justify-center py-20 md:py-28 gap-6 md:gap-8 relative z-10">
+                      <div className="relative">
+                        <div className="w-16 h-16 md:w-20 md:h-20 border-2 border-slate-200 border-t-pink-600 rounded-full animate-spin"></div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-8 h-8 md:w-10 md:h-10 bg-pink-50 rounded-[1.2rem] md:rounded-2xl animate-pulse"></div>
+                        </div>
+                      </div>
+                      <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-[0.4em] md:tracking-[0.5em] animate-pulse">Fetching Instagram Accounts...</p>
+                    </div>
+                  ) : connectedPages.filter(p => p.instagram_username).length > 0 ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 relative z-10 w-full overflow-hidden">
+                      {connectedPages.filter(p => p.instagram_username).map(page => (
+                        <div key={page.id} className="flex items-center justify-between bg-white p-5 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] shadow-[0_16px_32px_-12px_rgba(0,0,0,0.03)] border border-slate-50 hover:border-pink-100 hover:shadow-[0_32px_64px_-16px_rgba(219,39,119,0.12)] transition-all duration-700 group/page hover:-translate-y-1 min-w-0">
+                          <div className="flex items-center gap-3 md:gap-6 min-w-0">
+                            <div className="w-12 h-12 md:w-16 md:h-16 shrink-0 bg-gradient-to-br from-pink-50 to-purple-50 rounded-[1.2rem] md:rounded-[1.5rem] flex items-center justify-center text-pink-600 shadow-inner group-hover/page:scale-110 transition-transform duration-700">
+                              <FaInstagram className="text-2xl md:text-3xl" />
+                            </div>
+                            <div className="space-y-1 min-w-0">
+                              <p className="font-black text-base md:text-xl text-slate-900 tracking-tight italic truncate text-left">@{page.instagram_username}</p>
+                              <div className="flex items-center gap-2 text-blue-500 text-[10px] md:text-xs font-bold">
+                                <FaFacebook className="shrink-0" />
+                                <span className="truncate">{page.name}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 px-2 md:px-3 py-1 bg-emerald-50 rounded-full border border-emerald-100 w-fit">
+                                <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
+                                <span className="text-[8px] md:text-[9px] font-black text-emerald-600 uppercase tracking-widest truncate">Active</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="w-8 h-8 md:w-10 md:h-10 shrink-0 bg-slate-50 rounded-[0.8rem] md:rounded-2xl flex items-center justify-center group-hover/page:bg-pink-600 group-hover/page:text-white transition-all duration-500 ml-2">
+                            <span className="transform transition-transform group-hover/page:translate-x-0.5 text-base md:text-xl">→</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-20 md:py-28 px-6 md:px-12 space-y-8 md:space-y-10 relative z-10">
+                      <div className="w-24 h-24 md:w-32 md:h-32 bg-white rounded-[2rem] md:rounded-[2.5rem] shadow-lg md:shadow-xl flex items-center justify-center mx-auto border border-slate-50 hover:scale-110 transition-transform duration-700">
+                        <FaInstagram size={48} className="md:w-16 md:h-16 opacity-10 text-pink-500" />
+                      </div>
+                      <div className="space-y-3 md:space-y-4">
+                        <h4 className="text-2xl md:text-3xl font-black text-slate-900 uppercase tracking-tighter italic">No Instagram Connected</h4>
+                        <p className="text-base md:text-lg text-slate-400 font-medium max-w-[280px] md:max-w-sm mx-auto opacity-70 leading-relaxed">
+                          Link your Instagram Business Account to a Facebook Page, then connect via the button above.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Platform Specific: YouTube */}
+            {/* Platform Specific: YouTube */}
+            {selectedPlatform.id === "youtube" && (
+              <div className="pt-16 md:pt-24 border-t border-slate-100 space-y-12 md:space-y-16 animate-in slide-in-from-bottom-8 duration-1000">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 lg:gap-12 text-center lg:text-left">
+                  <div className="space-y-2">
+                    <h3 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter italic uppercase">
+                      YouTube Channels
+                    </h3>
+                    <p className="text-[10px] md:text-xs text-red-600 font-black uppercase tracking-[0.3em] md:tracking-[0.4em] opacity-70 flex items-center gap-2 justify-center lg:justify-start">
+                      <span className="w-1.5 h-1.5 bg-red-600 rounded-full shadow-[0_0_10px_rgba(220,38,38,0.5)]"></span> YouTube Video Automation
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://newsmartagent.com/api";
+                      // Full-page redirect (more reliable than popup for OAuth)
+                      window.location.href = `${apiUrl}/youtube/login/`;
+                    }}
+                    className="group relative flex items-center justify-center gap-4 md:gap-5 bg-[#FF0000] text-white px-6 md:px-10 py-4 md:py-6 rounded-[1.5rem] md:rounded-[2rem] text-[10px] md:text-[11px] font-black uppercase tracking-[0.15em] md:tracking-[0.2em] hover:bg-[#cc0000] transition-all shadow-[0_20px_40px_-10px_rgba(255,0,0,0.3)] active:scale-95 overflow-hidden w-full lg:w-auto"
+                  >
+                    <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity"></div>
+                    <FaYoutube className="text-xl md:text-2xl group-hover:rotate-12 transition-transform duration-500" />
+                    Connect to YouTube
+                  </button>
+                </div>
+
+                <div className="bg-slate-50/50 rounded-[2.5rem] md:rounded-[4rem] p-6 md:p-16 border border-slate-100 relative overflow-hidden group/list">
+                  <div className="absolute inset-0 bg-white/20 backdrop-blur-3xl pointer-events-none"></div>
+
+                  {/* Channel Selection UI */}
+                  {stagedYoutubeChannels.length > 0 && (
+                    <div className="relative z-20 mb-12 p-8 bg-white/80 backdrop-blur-3xl rounded-[2.5rem] border-2 border-red-100 shadow-2xl animate-in slide-in-from-top-10 duration-700">
+                      <div className="flex items-center justify-between mb-8">
+                        <div>
+                          <h4 className="text-xl md:text-2xl font-black text-slate-900 italic uppercase">Select Your Channel</h4>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Available channels in your account</p>
+                        </div>
+                        <button 
+                          onClick={() => setStagedYoutubeChannels([])}
+                          className="text-slate-400 hover:text-red-600 text-[10px] font-black uppercase tracking-widest"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {stagedYoutubeChannels.map(channel => (
+                          <div key={channel.id} className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl hover:border-red-200 transition-all group/item">
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-red-100">
+                                <img src={channel.thumbnail} alt={channel.name} className="w-full h-full object-cover" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-black text-slate-900 truncate">{channel.name}</p>
+                                <p className="text-[9px] text-red-500 font-bold uppercase">{channel.handle}</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => confirmYoutubeConnection(channel.id)}
+                              disabled={isConfirmingChannel}
+                              className="px-6 py-2 bg-red-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-red-700 disabled:opacity-50 transition-all shadow-lg"
+                            >
+                              {isConfirmingChannel ? "Linking..." : "Link"}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {isLoadingPages ? (
+                    <div className="flex flex-col items-center justify-center py-20 md:py-28 gap-6 md:gap-8 relative z-10">
+                      <div className="relative">
+                        <div className="w-16 h-16 md:w-20 md:h-20 border-2 border-slate-200 border-t-red-600 rounded-full animate-spin"></div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-8 h-8 md:w-10 md:h-10 bg-red-50 rounded-[1.2rem] md:rounded-2xl animate-pulse"></div>
+                        </div>
+                      </div>
+                      <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-[0.4em] md:tracking-[0.5em] animate-pulse">Fetching Channels...</p>
+                    </div>
+                  ) : connectedPages.length > 0 ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 relative z-10 w-full overflow-hidden">
+                      {connectedPages.map(channel => (
+                        <div key={channel.id} className="flex items-center justify-between bg-white p-5 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] shadow-[0_16px_32px_-12px_rgba(0,0,0,0.03)] border border-slate-50 hover:border-red-100 hover:shadow-[0_32px_64px_-16px_rgba(255,0,0,0.12)] transition-all duration-700 group/page hover:-translate-y-1 min-w-0">
+                          <div className="flex items-center gap-3 md:gap-6 min-w-0">
+                            <div className="w-12 h-12 md:w-16 md:h-16 shrink-0 bg-gradient-to-br from-red-50 to-white rounded-[1.2rem] md:rounded-[1.5rem] flex items-center justify-center text-[#FF0000] shadow-inner group-hover/page:scale-110 transition-transform duration-700">
+                                <FaYoutube className="text-2xl md:text-3xl" />
+                            </div>
+                            <div className="space-y-1 min-w-0">
+                              <p className="font-black text-base md:text-xl text-slate-900 tracking-tighter italic truncate text-left">{channel.name}</p>
+                              <p className="text-[9px] text-red-500 font-bold uppercase truncate">{channel.handle || `ID: ${channel.id}`}</p>
+                              <div className="flex items-center gap-1.5 px-2 md:px-3 py-1 bg-emerald-50 rounded-full border border-emerald-100 w-fit">
+                                <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
+                                <span className="text-[8px] md:text-[9px] font-black text-emerald-600 uppercase tracking-widest truncate">Synced</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-20 md:py-28 px-6 md:px-12 space-y-8 md:space-y-10 relative z-10">
+                      <div className="w-24 h-24 md:w-32 md:h-32 bg-white rounded-[2rem] md:rounded-[2.5rem] shadow-lg md:shadow-xl flex items-center justify-center mx-auto border border-slate-50 hover:scale-110 transition-transform duration-700">
+                        <FaYoutube size={48} className="md:w-16 md:h-16 opacity-10 text-red-500" />
+                      </div>
+                      <div className="space-y-3 md:space-y-4">
+                        <h4 className="text-2xl md:text-3xl font-black text-slate-900 uppercase tracking-tighter italic">No Channels Connected</h4>
+                        <p className="text-base md:text-lg text-slate-400 font-medium max-w-[280px] md:max-w-sm mx-auto opacity-70 leading-relaxed">
+                          Click &quot;Connect to YouTube&quot; and select your channel to initialize AI automation.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Platform Specific: Google Business Profile (GBP) */}
+            {selectedPlatform.id === "gbp" && (
+              <div className="pt-16 md:pt-24 border-t border-slate-100 space-y-12 md:space-y-16 animate-in slide-in-from-bottom-8 duration-1000">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 lg:gap-12 text-center lg:text-left">
+                  <div className="space-y-2">
+                    <h3 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter italic uppercase">
+                      Business Profiles
+                    </h3>
+                    <p className="text-[10px] md:text-xs text-blue-600 font-black uppercase tracking-[0.3em] md:tracking-[0.4em] opacity-70 flex items-center gap-2 justify-center lg:justify-start">
+                      <span className="w-1.5 h-1.5 bg-blue-600 rounded-full shadow-[0_0_10px_rgba(37,99,235,0.5)]"></span> GBP Integration
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://newsmartagent.com/api";
+                      // Full-page redirect (more reliable than popup for OAuth)
+                      window.location.href = `${apiUrl}/youtube/login/?type=gbp`;
+                    }}
+                    className="group relative flex items-center justify-center gap-4 md:gap-5 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white px-6 md:px-10 py-4 md:py-6 rounded-[1.5rem] md:rounded-[2rem] text-[10px] md:text-[11px] font-black uppercase tracking-[0.15em] md:tracking-[0.2em] hover:opacity-90 transition-all shadow-[0_20px_40px_-10px_rgba(37,99,235,0.3)] active:scale-95 overflow-hidden w-full lg:w-auto"
+                  >
+                    <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity"></div>
+                    <FaShieldAlt className="text-xl md:text-2xl group-hover:rotate-12 transition-transform duration-500" />
+                    Connect Google Business
+                  </button>
+                </div>
+
+                <div className="bg-slate-50/50 rounded-[2.5rem] md:rounded-[4rem] p-6 md:p-16 border border-slate-100 relative overflow-hidden group/list">
+                  <div className="absolute inset-0 bg-white/20 backdrop-blur-3xl pointer-events-none"></div>
+
+                  {/* Location Selection UI */}
+                  {stagedGbpLocations.length > 0 && (
+                    <div className="relative z-20 mb-12 p-8 bg-white/80 backdrop-blur-3xl rounded-[2.5rem] border-2 border-blue-100 shadow-2xl animate-in slide-in-from-top-10 duration-700">
+                      <div className="flex items-center justify-between mb-8">
+                        <div>
+                          <h4 className="text-xl md:text-2xl font-black text-slate-900 italic uppercase">Select Your Location</h4>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Available locations in your account</p>
+                        </div>
+                        <button 
+                          onClick={() => setStagedGbpLocations([])}
+                          className="text-slate-400 hover:text-blue-600 text-[10px] font-black uppercase tracking-widest"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {stagedGbpLocations.map(loc => (
+                          <div key={loc.id} className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl hover:border-blue-200 transition-all group/item">
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 border-2 border-blue-100">
+                                <FaShieldAlt />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-black text-slate-900 truncate">{loc.name}</p>
+                                <p className="text-[9px] text-blue-500 font-bold uppercase">{loc.handle}</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => confirmGbpConnection(loc.id)}
+                              disabled={isConfirmingGbp}
+                              className="px-6 py-2 bg-blue-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50 transition-all shadow-lg"
+                            >
+                              {isConfirmingGbp ? "Connecting..." : "Link"}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {isLoadingPages ? (
+                    <div className="flex flex-col items-center justify-center py-20 md:py-28 gap-6 md:gap-8 relative z-10">
+                      <div className="relative">
+                        <div className="w-16 h-16 md:w-20 md:h-20 border-2 border-slate-200 border-t-blue-600 rounded-full animate-spin"></div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-8 h-8 md:w-10 md:h-10 bg-blue-50 rounded-[1.2rem] md:rounded-2xl animate-pulse"></div>
+                        </div>
+                      </div>
+                      <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-[0.4em] md:tracking-[0.5em] animate-pulse">Fetching Locations...</p>
+                    </div>
+                  ) : connectedPages.length > 0 ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 relative z-10 w-full overflow-hidden">
+                      {connectedPages.map(acc => (
+                        <div key={acc.location_id} className="flex items-center justify-between bg-white p-5 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] shadow-[0_16px_32px_-12px_rgba(0,0,0,0.03)] border border-slate-50 hover:border-blue-100 hover:shadow-[0_32px_64px_-16px_rgba(37,99,235,0.12)] transition-all duration-700 group/page hover:-translate-y-1 min-w-0">
+                          <div className="flex items-center gap-3 md:gap-6 min-w-0">
+                            <div className="w-12 h-12 md:w-16 md:h-16 shrink-0 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-[1.2rem] md:rounded-[1.5rem] flex items-center justify-center text-blue-600 shadow-inner group-hover/page:scale-110 transition-transform duration-700">
+                                <FaShieldAlt className="text-2xl md:text-3xl" />
+                            </div>
+                            <div className="space-y-1 min-w-0">
+                              <p className="font-black text-base md:text-xl text-slate-900 tracking-tight italic truncate text-left">{acc.location_name}</p>
+                              <p className="text-[9px] text-slate-400 font-bold uppercase truncate">{acc.account_name}</p>
+                              <div className="flex items-center gap-1.5 px-2 md:px-3 py-1 bg-emerald-50 rounded-full border border-emerald-100 w-fit">
+                                <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
+                                <span className="text-[8px] md:text-[9px] font-black text-emerald-600 uppercase tracking-widest truncate">Connected</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-20 md:py-28 px-6 md:px-12 space-y-8 md:space-y-10 relative z-10">
+                      <div className="w-24 h-24 md:w-32 md:h-32 bg-white rounded-[2rem] md:rounded-[2.5rem] shadow-lg md:shadow-xl flex items-center justify-center mx-auto border border-slate-50 hover:scale-110 transition-transform duration-700">
+                        <FaShieldAlt size={48} className="md:w-16 md:h-16 opacity-10 text-blue-500" />
+                      </div>
+                      <div className="space-y-3 md:space-y-4">
+                        <h4 className="text-2xl md:text-3xl font-black text-slate-900 uppercase tracking-tighter italic">No Locations Connected</h4>
+                        <p className="text-base md:text-lg text-slate-400 font-medium max-w-[280px] md:max-w-sm mx-auto opacity-70 leading-relaxed">
+                          Click &quot;Connect Google Business&quot; to authorize our AI to manage your business reviews.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {/* Platform Specific: TikTok */}
+            {selectedPlatform.id === "tiktok" && (
+              <div className="pt-16 md:pt-24 border-t border-slate-100 space-y-12 md:space-y-16 animate-in slide-in-from-bottom-8 duration-1000">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 lg:gap-12 text-center lg:text-left">
+                  <div className="space-y-2">
+                    <h3 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter italic uppercase">
+                      TikTok Profiles
+                    </h3>
+                    <p className="text-[10px] md:text-xs text-black font-black uppercase tracking-[0.3em] md:tracking-[0.4em] opacity-70 flex items-center gap-2 justify-center lg:justify-start">
+                      <span className="w-1.5 h-1.5 bg-black rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)]"></span> TikTok Login Kit v2
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://newsmartagent.com/api";
+                      const width = 600, height = 700;
+                      const left = (window.innerWidth - width) / 2;
+                      const top = (window.innerHeight - height) / 2;
+                      window.open(
+                        `${apiUrl}/tiktok/login/`,
+                        "TikTok Login",
+                        `width=${width},height=${height},top=${top},left=${left}`
+                      );
+                    }}
+                    className="group relative flex items-center justify-center gap-4 md:gap-5 bg-black text-white px-6 md:px-10 py-4 md:py-6 rounded-[1.5rem] md:rounded-[2rem] text-[10px] md:text-[11px] font-black uppercase tracking-[0.15em] md:tracking-[0.2em] hover:bg-slate-900 transition-all shadow-[0_20px_40px_-10px_rgba(0,0,0,0.3)] active:scale-95 overflow-hidden w-full lg:w-auto"
+                  >
+                    <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity"></div>
+                    <FaTiktok className="text-xl md:text-2xl group-hover:rotate-12 transition-transform duration-500" />
+                    Connect TikTok
+                  </button>
+                </div>
+
+                <div className="bg-slate-50/50 rounded-[2.5rem] md:rounded-[4rem] p-6 md:p-16 border border-slate-100 relative overflow-hidden group/list">
+                  <div className="absolute inset-0 bg-white/20 backdrop-blur-3xl pointer-events-none"></div>
+
+                  {isLoadingPages ? (
+                    <div className="flex flex-col items-center justify-center py-20 md:py-28 gap-6 md:gap-8 relative z-10">
+                      <div className="relative">
+                        <div className="w-16 h-16 md:w-20 md:h-20 border-2 border-slate-200 border-t-black rounded-full animate-spin"></div>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-8 h-8 md:w-10 md:h-10 bg-slate-50 rounded-[1.2rem] md:rounded-2xl animate-pulse"></div>
+                        </div>
+                      </div>
+                      <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-[0.4em] md:tracking-[0.5em] animate-pulse">Fetching Profiles...</p>
+                    </div>
+                  ) : connectedPages.length > 0 ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8 relative z-10 w-full overflow-hidden">
+                      {connectedPages.map(acc => (
+                        <div key={acc.id} className="flex items-center justify-between bg-white p-5 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] shadow-[0_16px_32px_-12px_rgba(0,0,0,0.03)] border border-slate-50 hover:border-slate-200 hover:shadow-[0_32px_64px_-16px_rgba(0,0,0,0.12)] transition-all duration-700 group/page hover:-translate-y-1 min-w-0">
+                          <div className="flex items-center gap-3 md:gap-6 min-w-0">
+                            <div className="w-12 h-12 md:w-16 md:h-16 shrink-0 bg-gradient-to-br from-slate-50 to-indigo-50 rounded-[1.2rem] md:rounded-[1.5rem] flex items-center justify-center text-black shadow-inner group-hover/page:scale-110 transition-transform duration-700">
+                                {acc.avatar ? (
+                                  <img src={acc.avatar} alt={acc.name} className="w-full h-full object-cover rounded-[1.2rem] md:rounded-[1.5rem]" />
+                                ) : (
+                                  <FaTiktok className="text-2xl md:text-3xl" />
+                                )}
+                            </div>
+                            <div className="space-y-1 min-w-0">
+                              <p className="font-black text-base md:text-xl text-slate-900 tracking-tight italic truncate text-left">{acc.name || 'TikTok User'}</p>
+                              <p className="text-[9px] text-slate-400 font-bold uppercase truncate">ID: {acc.id}</p>
+                              <div className="flex items-center gap-1.5 px-2 md:px-3 py-1 bg-emerald-50 rounded-full border border-emerald-100 w-fit">
+                                <div className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></div>
+                                <span className="text-[8px] md:text-[9px] font-black text-emerald-600 uppercase tracking-widest truncate">Synced</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-20 md:py-28 px-6 md:px-12 space-y-8 md:space-y-10 relative z-10">
+                      <div className="w-24 h-24 md:w-32 md:h-32 bg-white rounded-[2rem] md:rounded-[2.5rem] shadow-lg md:shadow-xl flex items-center justify-center mx-auto border border-slate-50 hover:scale-110 transition-transform duration-700">
+                        <FaTiktok size={48} className="md:w-16 md:h-16 opacity-10 text-black" />
+                      </div>
+                      <div className="space-y-3 md:space-y-4">
+                        <h4 className="text-2xl md:text-3xl font-black text-slate-900 uppercase tracking-tighter italic">No TikTok Connected</h4>
+                        <p className="text-base md:text-lg text-slate-400 font-medium max-w-[280px] md:max-w-sm mx-auto opacity-70 leading-relaxed">
+                          Click &quot;Connect TikTok&quot; to authorize our AI to manage your TikTok engagement.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Platform Specific: Telegram */}
+            {selectedPlatform.id === "telegram" && (
+              <div className="pt-16 md:pt-24 border-t border-slate-100 animate-in slide-in-from-bottom-8 duration-1000">
+                <TelegramConnector />
               </div>
             )}
 

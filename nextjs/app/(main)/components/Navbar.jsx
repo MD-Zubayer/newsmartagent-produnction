@@ -5,17 +5,20 @@ import { useState, useEffect, useRef } from 'react';
 import { FaBars, FaTimes, FaChevronRight } from 'react-icons/fa';
 import Image from 'next/image';
 import { ChevronDown, Package, Wrench } from 'lucide-react';
+import { useLanguage } from '@/context/LanguageContext';
 
-const toolsItems = [
-  {
-    name: 'অর্ডার ট্র্যাকিং',
-    path: '/tools/orders',
-    icon: <Package className="w-4 h-4" />,
-    desc: 'ফোন নম্বর দিয়ে অর্ডার দেখুন'
-  },
-];
+// Navbar copy stays English even when the site language is Bengali
+const navLabels = {
+  home: 'Home', docs: 'Docs', services: 'Services', contact: 'Contact',
+  about: 'About', blog: 'Blog', community: 'Community', signin: 'Sign In', tools: 'Tools'
+};
+const toolsLabels = { name: 'Order Tracking', desc: 'Track orders by phone number' };
 
 export default function Navbar() {
+  const { lang, setLang } = useLanguage();
+  const l = navLabels;
+  const tl = toolsLabels;
+
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -38,36 +41,64 @@ export default function Navbar() {
   }, []);
 
   const navItems = [
-    { name: 'Home', path: '/' },
-    { name: 'Docs', path: '/docs' },
-    { name: 'Services', path: '/services' },
-    { name: 'Contact', path: '/contact' },
-    { name: 'About', path: '/about' },
-    { name: 'Blog', path: '/blog' },
+    { name: l.home, path: '/' },
+    { name: l.docs, path: '/docs' },
+    { name: l.services, path: '/services' },
+    { name: l.contact, path: '/contact' },
+    { name: l.about, path: '/about' },
+    { name: l.blog, path: '/blog' },
+    { name: l.community, path: '/community' },
   ];
+
+  const toolsItems = [
+    {
+      name: tl.name,
+      path: '/tools/orders',
+      icon: <Package className="w-4 h-4" />,
+      desc: tl.desc,
+    },
+  ];
+
+  // Language toggle button (reusable)
+  const LangToggle = () => (
+    <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+      <button
+        onClick={() => setLang('en')}
+        className={`text-xs font-black px-2.5 py-1 rounded-md transition-all ${lang === 'en' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+      >
+        EN
+      </button>
+      <button
+        onClick={() => setLang('bn')}
+        className={`text-xs font-black px-2.5 py-1 rounded-md transition-all ${lang === 'bn' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+      >
+        বাং
+      </button>
+    </div>
+  );
 
   return (
     <>
       <nav
         className={`fixed top-0 w-full z-[100] transition-all duration-300 ${scrolled
-            ? 'bg-white/90 backdrop-blur-md border-b border-gray-100 py-3 shadow-sm'
-            : 'bg-transparent py-5'
+          ? 'bg-white/90 backdrop-blur-md border-b border-gray-100 py-3 shadow-sm'
+          : 'bg-transparent py-5'
           }`}
       >
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
 
           {/* Brand Logo */}
-          <Link href="/" className="flex items-center group">
-            <div className="relative overflow-hidden rounded-xl">
+          <Link href="/" className="flex items-center gap-2 group">
+            <div className="relative overflow-hidden rounded-xl flex-shrink-0">
               <Image
-                width={65}
-                height={65}
+                width={56}
+                height={56}
                 src="/newsmartagent.png"
                 alt="Logo"
-                className="h-20w-20 object-contain rounded-lg"
+                className="h-14 w-14 object-contain rounded-lg"
               />
             </div>
-            <span className="text-xl font-black tracking-tighter flex items-center">
+            <span className="hidden md:flex items-center text-xl font-black tracking-tighter">
               <span className="text-indigo-600">New</span>
               <span className="text-gray-900 ml-1">Smart</span>
               <span className="text-indigo-600 ml-1">Agent</span>
@@ -79,7 +110,7 @@ export default function Navbar() {
             <div className="flex items-center gap-1">
               {navItems.map((item) => (
                 <Link
-                  key={item.name}
+                  key={item.path}
                   href={item.path}
                   className="px-4 py-2 text-sm font-bold text-gray-600 hover:text-indigo-600 transition-all relative group"
                 >
@@ -95,14 +126,14 @@ export default function Navbar() {
                   className={`flex items-center gap-1.5 px-4 py-2 text-sm font-bold transition-all relative group rounded-lg ${toolsOpen ? 'text-indigo-600 bg-indigo-50' : 'text-gray-600 hover:text-indigo-600'}`}
                 >
                   <Wrench className="w-3.5 h-3.5" />
-                  Tools
+                  {l.tools}
                   <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${toolsOpen ? 'rotate-180' : ''}`} />
                 </button>
 
                 {/* Dropdown Panel */}
                 {toolsOpen && (
                   <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-gray-100 p-2 animate-in fade-in slide-in-from-top-2 duration-200 z-50">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-3 pt-2 pb-1">Tools & Utilities</p>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-3 pt-2 pb-1">Tools &amp; Utilities</p>
                     {toolsItems.map((item) => (
                       <Link
                         key={item.path}
@@ -124,23 +155,27 @@ export default function Navbar() {
               </div>
             </div>
 
-            <div className="flex items-center gap-4 border-l border-gray-100 pl-8">
+            <div className="flex items-center gap-3 border-l border-gray-100 pl-6">
+              <LangToggle />
               <Link
                 href="/login"
                 className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-black hover:bg-indigo-700 transition shadow-lg shadow-indigo-100 active:scale-95"
               >
-                Sign In
+                {l.signin}
               </Link>
             </div>
           </div>
 
           {/* Mobile Menu Button */}
-          <button
-            className="md:hidden p-2 rounded-xl text-gray-900 hover:bg-gray-100 transition-colors"
-            onClick={() => setOpen(true)}
-          >
-            <FaBars size={22} />
-          </button>
+          <div className="md:hidden flex items-center gap-2">
+            <LangToggle />
+            <button
+              className="p-2 rounded-xl text-gray-900 hover:bg-gray-100 transition-colors"
+              onClick={() => setOpen(true)}
+            >
+              <FaBars size={22} />
+            </button>
+          </div>
         </div>
       </nav>
 
@@ -170,7 +205,7 @@ export default function Navbar() {
           <div className="space-y-1 flex-1">
             {navItems.map((item) => (
               <Link
-                key={item.name}
+                key={item.path}
                 href={item.path}
                 onClick={() => setOpen(false)}
                 className="flex items-center justify-between p-4 rounded-2xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition-all"
@@ -182,7 +217,7 @@ export default function Navbar() {
 
             {/* Mobile Tools Section */}
             <div className="pt-2">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-4 py-2">Tools</p>
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-4 py-2">{l.tools}</p>
               {toolsItems.map((item) => (
                 <Link
                   key={item.path}
@@ -208,7 +243,7 @@ export default function Navbar() {
               className="block text-center py-4 rounded-2xl bg-indigo-600 text-white font-black shadow-xl shadow-indigo-100"
               onClick={() => setOpen(false)}
             >
-              Sign In
+              {l.signin}
             </Link>
           </div>
         </div>

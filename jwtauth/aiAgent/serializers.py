@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from aiAgent.models import AgentAI, TokenUsageLog, AIProviderModel, Contact, WidgetSettings
+from aiAgent.models import AgentAI, TokenUsageLog, AIProviderModel, Contact, WidgetSettings, ScheduledMessage
 from chat.models import Message
 import uuid
 
@@ -16,8 +16,12 @@ class WidgetSettingsSerializer(serializers.ModelSerializer):
         fields = [
             'primary_color', 'bubble_icon', 'bubble_icon_url', 'bubble_size', 'bubble_roundness', 'show_bubble_background',
             'whatsapp_number', 'messenger_link',
-            'widget_position', 'header_title', 'header_subtitle', 'placeholder_text', 'is_enabled', 'allowed_domains'
+            'widget_position', 'header_title', 'header_subtitle', 'placeholder_text', 'is_enabled', 'allowed_domains',
+            'enable_human_control', 'enable_ai_control',
+            'menu_ai_icon_size', 'menu_ai_icon_bg_color', 'menu_ai_icon_roundness'
         ]
+
+
 
 
 
@@ -74,7 +78,6 @@ class AgentAIListSerializer(serializers.ModelSerializer):
 
 
 
-
 class AgentAISerializer(serializers.ModelSerializer):
     """
     create & update AgentAI model
@@ -85,7 +88,7 @@ class AgentAISerializer(serializers.ModelSerializer):
     skip_history = serializers.BooleanField(required=False)
     history_skip_keywords = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     shared_cache_agents = serializers.PrimaryKeyRelatedField(queryset=AgentAI.objects.all(), many=True, required=False)
-    widget_settings = WidgetSettingsSerializer(required=False)
+    widget_settings = WidgetSettingsSerializer(required=False, allow_null=True)
 
     class Meta:
         model = AgentAI
@@ -107,6 +110,8 @@ class AgentAISerializer(serializers.ModelSerializer):
             'history_skip_keywords',
             'token_expires_at',
             'is_active',
+            'created_at',
+            'access_token',
             'is_special_agent',
             'special_agent_status',
             'shared_cache_agents',
@@ -141,7 +146,7 @@ class AgentAISerializer(serializers.ModelSerializer):
         skip_history = validated_data.pop('skip_history', False)
         history_skip_keywords = validated_data.pop('history_skip_keywords', '')
         shared_cache_agents = validated_data.pop('shared_cache_agents', [])
-        widget_settings_data = validated_data.pop('widget_settings', {})
+        widget_settings_data = validated_data.pop('widget_settings', {}) or {}
         
         # Generate widget key if platform is web_widget
         if validated_data.get('platform') == 'web_widget':
@@ -153,15 +158,14 @@ class AgentAISerializer(serializers.ModelSerializer):
         agent = AgentAI.objects.create(**validated_data)
         
         from settings.models import AgentAISettings
-        AgentAISettings.objects.update_or_create(
+        agent_settings, created = AgentAISettings.objects.update_or_create(
             agent=agent,
             defaults={
                 'history_limit': history_limit,
                 'temperature': temperature,
                 'max_tokens': max_tokens,
                 'skip_history': skip_history,
-                'history_skip_keywords': history_skip_keywords,
-                'shared_cache_agents': shared_cache_agents
+                'history_skip_keywords': history_skip_keywords
             }
         )
         
@@ -195,14 +199,15 @@ class AgentAISerializer(serializers.ModelSerializer):
         
         if settings_data:
             from settings.models import AgentAISettings
-            AgentAISettings.objects.update_or_create(
+            shared_cache_agents = settings_data.pop('shared_cache_agents', None)
+            agent_settings, created = AgentAISettings.objects.update_or_create(
                 agent=agent,
                 defaults=settings_data
             )
-            if 'shared_cache_agents' in settings_data:
-                agent_settings.shared_cache_agents.set(settings_data['shared_cache_agents'])
+            if shared_cache_agents is not None:
+                agent_settings.shared_cache_agents.set(shared_cache_agents)
         
-        if widget_settings_data:
+        if widget_settings_data is not None:
             from aiAgent.models import WidgetSettings
             # Ensure we update or create the settings for this agent
             WidgetSettings.objects.update_or_create(
@@ -217,22 +222,151 @@ class AgentAISerializer(serializers.ModelSerializer):
 
 
 class TokenUsageAnalyticsSerializer(serializers.ModelSerializer):
+    contact_name = serializers.SerializerMethodField()
+    contact_profile = serializers.SerializerMethodField()
+
     class Meta:
         model = TokenUsageLog
         fields = '__all__'
 
+    def _get_contact(self, obj):
+        if not hasattr(self, '_contacts_cache'):
+            self._contacts_cache = {}
+            
+        cache_key = f"{obj.ai_agent_id}_{obj.platform}_{obj.sender_id}"
+        if cache_key in self._contacts_cache:
+            return self._contacts_cache[cache_key]
+
+        from aiAgent.models import Contact
+        from django.db import models
+        
+        platform_val = obj.platform or ""
+        identifier_val = obj.sender_id or ""
+        identifier_bare = identifier_val.replace('@s.whatsapp.net', '')
+
+        qs = Contact.objects.filter(
+            agent=obj.ai_agent,
+            platform__iexact=platform_val
+        )
+
+        if platform_val.lower() == 'whatsapp':
+            qs = qs.filter(
+                models.Q(identifier__iexact=identifier_val) |
+                models.Q(identifier__iexact=identifier_bare) |
+                models.Q(identifier__iexact=f"{identifier_bare}@s.whatsapp.net")
+            )
+        else:
+            qs = qs.filter(identifier__iexact=identifier_val)
+
+        contact = qs.first()
+        self._contacts_cache[cache_key] = contact
+        return contact
+
+    def get_contact_name(self, obj):
+        contact = self._get_contact(obj)
+        if contact:
+            return contact.name or contact.push_name or contact.identifier
+        return obj.sender_id
+
+    def get_contact_profile(self, obj):
+        contact = self._get_contact(obj)
+        if contact and contact.profile_picture:
+            try:
+                return contact.profile_picture.url
+            except ValueError:
+                return None
+        return None
 
 class ContactSerializer(serializers.ModelSerializer):
+    agent_name = serializers.CharField(source='agent.name', read_only=True)
+    last_message = serializers.SerializerMethodField()
+    last_message_time = serializers.SerializerMethodField()
+    unread_count = serializers.SerializerMethodField()
+    crm_data = serializers.SerializerMethodField()
+    is_comment = serializers.SerializerMethodField()
+
     class Meta:
         model = Contact
         fields = [
-            'id', 'agent', 'identifier', 'name', 'push_name', 
-            'is_auto_reply_enabled', 'platform', 'created_at', 'updated_at',
-            'custom_prompt', 'custom_instructions'
+            'id', 'agent', 'agent_name', 'identifier', 'name', 'push_name', 'profile_picture',
+            'is_auto_reply_enabled', 'is_human_needed', 'platform', 'created_at', 'updated_at',
+            'custom_prompt', 'custom_instructions', 'last_message', 'last_message_time', 'unread_count', 'crm_data',
+            'is_comment'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def _get_conversations(self, obj):
+        from chat.models import Conversation
+        from django.db import models
+        
+        platform_val = obj.platform or ""
+        identifier_val = obj.identifier or ""
+        identifier_bare = identifier_val.replace('@s.whatsapp.net', '')
+
+        conversations = Conversation.objects.filter(
+            agentAi=obj.agent,
+            platform__iexact=platform_val
+        )
+        
+        if platform_val.lower() == 'whatsapp':
+            conversations = conversations.filter(
+                models.Q(contact_id__iexact=identifier_val) |
+                models.Q(contact_id__iexact=identifier_bare) |
+                models.Q(contact_id__iexact=f"{identifier_bare}@s.whatsapp.net")
+            )
+        else:
+            conversations = conversations.filter(contact_id__iexact=identifier_val)
+            
+        return conversations
+
+    def get_last_message(self, obj):
+        conversations = self._get_conversations(obj)
+        from chat.models import Message
+        last_msg = Message.objects.filter(conversation__in=conversations).order_by('-sent_at').first()
+        return last_msg.content if last_msg else None
+
+    def get_last_message_time(self, obj):
+        conversations = self._get_conversations(obj)
+        from chat.models import Message
+        last_msg = Message.objects.filter(conversation__in=conversations).order_by('-sent_at').first()
+        return last_msg.sent_at if last_msg else None
+
+    def get_unread_count(self, obj):
+        conversations = self._get_conversations(obj)
+        from chat.models import Message
+        return Message.objects.filter(conversation__in=conversations, role='user', is_read=False).count()
+
+    def get_crm_data(self, obj):
+        from aiAgent.models import UserMemory
+        memory = UserMemory.objects.filter(ai_agent=obj.agent, sender_id=obj.identifier).first()
+        if memory and isinstance(memory.data, dict):
+            # Pass original structured data to front-end for rendering dynamic key-values
+            raw_data = {k: v for k, v in memory.data.items() if k != "_internal"}
+            return {
+                'lead_stage': memory.data.get('lead_stage', 'new'),
+                'phone': memory.data.get('phone_number', ''),
+                'email': memory.data.get('email', ''),
+                'ai_summary': memory.data.get('memory_summary', ''),
+                'raw_data': raw_data
+            }
+        return {'lead_stage': 'new', 'phone': '', 'email': '', 'ai_summary': '', 'raw_data': {}}
+
+    def get_is_comment(self, obj):
+        return obj.platform in ['youtube', 'facebook_comment']
 
 class MessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = Message
         fields = ['id', 'role', 'content', 'platform', 'sent_at', 'tokens_used']
+
+
+class ScheduledMessageSerializer(serializers.ModelSerializer):
+    agent_name = serializers.CharField(source='agent.name', read_only=True)
+
+    class Meta:
+        model = ScheduledMessage
+        fields = [
+            'id', 'agent', 'agent_name', 'message', 'run_at', 'status',
+            'audience_count', 'filter_payload', 'error_message', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['status', 'audience_count', 'error_message', 'created_at', 'updated_at']

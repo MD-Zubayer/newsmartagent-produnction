@@ -7,7 +7,7 @@ from .models import FacebookPage
 from .models import OrderForm, CustomerOrder, EmailVerificationToken
 
 from users.forms import UserAdminChangeForm, UserAdminCreationForm
-from .models import User, Profile, Payment, Offer, Subscription, Platform, NSATransfer, WithdrawMethod, CashoutRequest
+from .models import User, Profile, Payment, Offer, Subscription, Platform, NSATransfer, WithdrawMethod, CashoutRequest, TikTokAccount, LoginHistory, TrustedDevice, RecoveryCode, LoginSession
 from unfold.admin import ModelAdmin
 # Force Django Admin to use allauth login if enabled
 if settings.DJANGO_ADMIN_FORCE_ALLAUTH:
@@ -63,7 +63,12 @@ class UserAdmin(auth_admin.UserAdmin):
     )
 
     # List display in user list
-    list_display = ["id","email", "name", "phone_number", "division", "is_superuser", "is_staff", "id_type", "created_by", "created_at"]
+    list_display = ["id","email", "name", "phone_number", "division", "is_superuser", "is_staff", "id_type", "total_prompt_tokens", "created_by", "created_at"]
+    
+    from django.db.models import Sum
+    @admin.display(description="Total Prompt Tokens")
+    def total_prompt_tokens(self, obj):
+        return obj.agentsAi.aggregate(t=Sum('prompt_tokens'))['t'] or 0
 
     # Searchable fields
     search_fields = ["email", "name", "phone_number", "division", "district"]
@@ -78,7 +83,7 @@ class UserAdmin(auth_admin.UserAdmin):
 # Profile Admin
 @admin.register(Profile)
 class ProfileAdmin(ModelAdmin):
-    list_display = ('id', 'user', 'id_type','word_balance', 'unique_id', 'commission_balance', 'acount_balance', 'created_at', 'updated_at')
+    list_display = ('id', 'user', 'id_type','word_balance', 'schedule_balance', 'unique_id', 'commission_balance', 'acount_balance', 'created_at', 'updated_at')
     search_fields = ('user__email', 'unique_id')
     list_filter = ('id_type',)
 
@@ -110,7 +115,7 @@ class PlatformInline(admin.TabularInline):
 
 @admin.register(Offer)
 class OfferAdmin(ModelAdmin):
-    list_display = ['name', 'tokens', 'price', 'duration_days', 'is_active', 'platform_count', 'target_audience']
+    list_display = ['name', 'tokens', 'schedule_messages', 'price', 'duration_days', 'is_active', 'platform_count', 'target_audience']
     inlines = [PlatformInline]
 
     @admin.display(description="Count platforms")
@@ -127,8 +132,8 @@ class OfferAdmin(ModelAdmin):
 # Subscription Admin
 @admin.register(Subscription)
 class SubscriptionAdmin(ModelAdmin):
-    list_display = ('profile', 'offer', 'remaining_tokens', 'start_date', 'end_date', 'is_active', 'created_at')
-    list_filter = ('is_active',)
+    list_display = ('profile', 'offer', 'remaining_tokens', 'remaining_schedule_messages', 'start_date', 'end_date', 'is_active', 'created_at')
+    list_filter = ('is_active', 'offer')
     search_fields = ('profile__user__email', 'offer__name')
 
 
@@ -238,6 +243,14 @@ class FacebookPageAdmin(admin.ModelAdmin):
         }),
     )
 
+from .models import YouTubeCommentLog
+@admin.register(YouTubeCommentLog)
+class YouTubeCommentLogAdmin(admin.ModelAdmin):
+    list_display = ('author', 'channel', 'status', 'created_at')
+    list_filter = ('status', 'channel', 'created_at')
+    search_fields = ('author', 'comment_text', 'ai_reply')
+    readonly_fields = ('created_at',)
+
     # টোকেন অনেক বড় হয়, তাই ইনপুট বক্সটি বড় দেখানোর জন্য (ঐচ্ছিক)
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
@@ -258,3 +271,86 @@ class CashoutRequestAdmin(ModelAdmin):
     search_fields = ('profile__unique_id', 'profile__user__email', 'transaction_id')
     list_editable = ('status',)
     readonly_fields = ('requested_at', 'processed_at')
+
+from .models import YouTubeChannel
+@admin.register(YouTubeChannel)
+class YouTubeChannelAdmin(admin.ModelAdmin):
+    list_display = ('channel_title', 'channel_id', 'user', 'is_active', 'created_at')
+    list_filter = ('is_active', 'created_at', 'user')
+    search_fields = ('channel_title', 'channel_id', 'user__email')
+    readonly_fields = ('created_at', 'updated_at')
+    fieldsets = (
+        ('Owner Information', {
+            'fields': ('user',)
+        }),
+        ('Channel Details', {
+            'fields': ('channel_title', 'channel_id', 'access_token', 'refresh_token', 'token_expires_at')
+        }),
+        ('Status', {
+            'fields': ('is_active', 'created_at', 'updated_at')
+        }),
+    )
+
+from .models import GoogleBusinessAccount, GoogleBusinessLocation, GBPReviewLog
+@admin.register(GoogleBusinessAccount)
+class GoogleBusinessAccountAdmin(admin.ModelAdmin):
+    list_display = ('account_name', 'account_id', 'user', 'is_active', 'created_at')
+    list_filter = ('is_active', 'created_at', 'user')
+    search_fields = ('account_name', 'account_id', 'user__email')
+    readonly_fields = ('created_at', 'updated_at')
+
+@admin.register(GoogleBusinessLocation)
+class GoogleBusinessLocationAdmin(admin.ModelAdmin):
+    list_display = ('location_name', 'location_id', 'account', 'is_active', 'last_review_check')
+    list_filter = ('is_active', 'last_review_check')
+    search_fields = ('location_name', 'location_id')
+    readonly_fields = ('created_at', 'updated_at')
+
+@admin.register(GBPReviewLog)
+class GBPReviewLogAdmin(admin.ModelAdmin):
+    list_display = ('reviewer_name', 'location', 'star_rating', 'status', 'created_at')
+    list_filter = ('status', 'star_rating', 'location', 'created_at')
+    search_fields = ('reviewer_name', 'review_text', 'ai_reply')
+    readonly_fields = ('created_at',)
+
+@admin.register(TikTokAccount)
+class TikTokAccountAdmin(admin.ModelAdmin):
+    list_display = ('display_name', 'open_id', 'user', 'is_active', 'created_at')
+    list_filter = ('is_active', 'created_at', 'user')
+    search_fields = ('display_name', 'open_id', 'user__email')
+    readonly_fields = ('created_at', 'updated_at')
+    fieldsets = (
+        ('Owner Information', {
+            'fields': ('user',)
+        }),
+        ('TikTok Details', {
+            'fields': ('display_name', 'open_id', 'union_id', 'avatar_url', 'access_token', 'refresh_token', 'token_expires_at')
+        }),
+        ('Status', {
+            'fields': ('is_active', 'created_at', 'updated_at')
+        }),
+    )
+
+@admin.register(LoginHistory)
+class LoginHistoryAdmin(ModelAdmin):
+    list_display = ('user', 'ip_address', 'device_name', 'location', 'created_at')
+    search_fields = ('user__email', 'ip_address', 'device_name')
+    list_filter = ('created_at',)
+
+@admin.register(TrustedDevice)
+class TrustedDeviceAdmin(ModelAdmin):
+    list_display = ('user', 'device_name', 'expires_at', 'created_at')
+    search_fields = ('user__email', 'device_name', 'device_token')
+    list_filter = ('expires_at', 'created_at')
+
+@admin.register(RecoveryCode)
+class RecoveryCodeAdmin(ModelAdmin):
+    list_display = ('user', 'code', 'is_used', 'created_at')
+    search_fields = ('user__email', 'code')
+    list_filter = ('is_used', 'created_at')
+
+@admin.register(LoginSession)
+class LoginSessionAdmin(ModelAdmin):
+    list_display = ('user', 'status', 'ip_address', 'device_name', 'expires_at', 'created_at')
+    search_fields = ('user__email', 'session_token', 'ip_address')
+    list_filter = ('status', 'expires_at', 'created_at')

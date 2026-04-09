@@ -45,8 +45,15 @@ export default function WidgetCustomizePage() {
     whatsapp_number: "",
     messenger_link: "",
     is_enabled: true,
-    allowed_domains: ""
+    allowed_domains: "",
+    enable_human_control: true,
+    enable_ai_control: true,
+    menu_ai_icon_size: 44,
+    menu_ai_icon_bg_color: "",
+    menu_ai_icon_roundness: 50
   });
+
+
 
   const set = (key, val) => setSettings(prev => ({ ...prev, [key]: val }));
 
@@ -370,6 +377,53 @@ export default function WidgetCustomizePage() {
                   ))}
                 </div>
               </div>
+
+              {/* Menu AI Icon Customization */}
+              <div className="space-y-4 pt-4 border-t border-slate-100">
+                <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-tight">FAB Menu AI Icon Customization</h4>
+                
+                {/* Menu Icon Background */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Background Color (Leave empty for transparent)</label>
+                  <div className="flex gap-3 items-center">
+                    <input type="color" value={settings.menu_ai_icon_bg_color || "#ffffff"}
+                      onChange={e => set('menu_ai_icon_bg_color', e.target.value)}
+                      className="w-12 h-12 rounded-xl cursor-pointer border-none bg-transparent" />
+                    <input type="text" value={settings.menu_ai_icon_bg_color || ""}
+                      placeholder="Transparent"
+                      onChange={e => set('menu_ai_icon_bg_color', e.target.value)}
+                      className="flex-1 p-3 bg-slate-50 rounded-xl font-mono text-sm outline-none border border-slate-100 uppercase" />
+                    {settings.menu_ai_icon_bg_color && (
+                      <button onClick={() => set('menu_ai_icon_bg_color', "")} className="text-xs text-red-500 font-bold px-2 py-1 hover:bg-red-50 rounded">Clear</button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Menu Icon Size */}
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <FaExpand /> Icon Box Size in FAB — <span className="text-indigo-600">{settings.menu_ai_icon_size || 44}px</span>
+                  </label>
+                  <input type="range" min={24} max={120} step={2} value={settings.menu_ai_icon_size || 44}
+                    onChange={e => set('menu_ai_icon_size', Number(e.target.value))}
+                    className="w-full accent-indigo-600" />
+                </div>
+
+                {/* Menu Icon Roundness */}
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <HiOutlineSparkles className="text-indigo-600" /> Roundness in FAB — <span className="text-indigo-600">{settings.menu_ai_icon_roundness ?? 50}%</span>
+                  </label>
+                  <input type="range" min={0} max={100} step={2} value={settings.menu_ai_icon_roundness ?? 50}
+                    onChange={e => set('menu_ai_icon_roundness', Number(e.target.value))}
+                    className="w-full accent-indigo-600" />
+                  <div className="flex justify-between text-[8px] font-black text-slate-300 uppercase tracking-widest">
+                    <span>Square</span>
+                    <span>Rounded</span>
+                    <span>Circle</span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Content */}
@@ -446,6 +500,27 @@ export default function WidgetCustomizePage() {
                 <input type="text" value={settings.messenger_link || ""} onChange={e => set('messenger_link', e.target.value)}
                   className="w-full p-3 bg-slate-50 rounded-xl font-medium text-sm outline-none border border-slate-100" />
               </div>
+
+              <div className="h-px bg-slate-100 my-4"></div>
+
+              {/* Chat Controls */}
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight flex items-center gap-2 mb-4">
+                <FaCommentDots className="text-indigo-600" /> Chat Controls (Dynamic)
+              </h3>
+              {[
+                { label: "Enable Human Help/Resolve Button", key: "enable_human_control" },
+                { label: "Enable AI Off/On Button", key: "enable_ai_control" },
+              ].map(f => (
+                <div key={f.key} className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100 mb-2">
+                  <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight">{f.label}</p>
+                  <button 
+                    onClick={() => set(f.key, !settings[f.key])}
+                    className={`w-10 h-5 rounded-full transition-all relative ${settings[f.key] ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                  >
+                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${settings[f.key] ? 'right-0.5' : 'left-0.5'}`} />
+                  </button>
+                </div>
+              ))}
             </div>
 
           </div>
@@ -513,6 +588,20 @@ export default function WidgetCustomizePage() {
                           </div>
                           <div style={{ backgroundColor: settings.primary_color }} className="w-6 h-6 rounded-lg flex-shrink-0" />
                         </div>
+                        {(settings.enable_human_control || settings.enable_ai_control) && (
+                          <div className="flex gap-1.5 mt-1 pt-1">
+                            {settings.enable_human_control && (
+                              <div className="flex-1 bg-slate-50 border border-slate-100 rounded-md py-1 px-1 flex justify-center items-center gap-1 shadow-sm">
+                                <span className="text-[7px] font-bold text-slate-500">Human Help</span>
+                              </div>
+                            )}
+                            {settings.enable_ai_control && (
+                              <div className="flex-1 bg-slate-50 border border-slate-100 rounded-md py-1 px-1 flex justify-center items-center gap-1 shadow-sm">
+                                <span className="text-[7px] font-bold text-slate-500">Off AI</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
 

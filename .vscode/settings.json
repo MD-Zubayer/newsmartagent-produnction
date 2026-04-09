@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^cd /home/md-zubayer/newsmartagent/production/jwtauth && python3 -m py_compile aiAgent/models\\.py$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

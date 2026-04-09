@@ -63,6 +63,10 @@ class GlobalSettings(models.Model):
         blank=True,
         help_text="Select the AI model that will be used globally for the Dashboard Assistant (New Smart Agent)."
     )
+    youtube_check_interval = models.PositiveIntegerField(
+        default=1,
+        help_text="How often to check for new YouTube comments (in minutes)."
+    )
     
     class Meta:
         verbose_name = "Global Setting"
@@ -72,6 +76,29 @@ class GlobalSettings(models.Model):
         # Ensure only one instance exists.
         self.pk = 1
         super().save(*args, **kwargs)
+        
+        # Sync with Celery PeriodicTask if django_celery_beat is installed
+        try:
+            from django_celery_beat.models import PeriodicTask, IntervalSchedule
+            import json
+
+            schedule, created = IntervalSchedule.objects.get_or_create(
+                every=self.youtube_check_interval,
+                period=IntervalSchedule.MINUTES,
+            )
+            
+            PeriodicTask.objects.update_or_create(
+                name='check-youtube-comments',
+                defaults={
+                    'task': 'webhooks.youtube_tasks.check_youtube_comments',
+                    'interval': schedule,
+                    'enabled': True,
+                    'args': json.dumps([]),
+                    'kwargs': json.dumps({}),
+                }
+            )
+        except Exception as e:
+            print(f"Error syncing YouTube check interval: {e}")
 
     @classmethod
     def get_settings(cls):

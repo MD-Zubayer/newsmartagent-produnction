@@ -1,0 +1,38 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div style="max-width: 700px; margin: 0 auto;">
+  <h1 style="margin-bottom: 4px;">📧 Send Bulk Email</h1>
+  <p style="color: #6b7280; margin-bottom: 24px;">
+    Sending to <strong>{{ recipient_count }}</strong> visitor(s) who have provided an email address.
+  </p>
+
+  {% if recipients %}
+  <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; font-size: 13px; color: #0369a1;">
+    <strong>Recipients:</strong><br>
+    {% for email in recipients %}
+      <span style="display: inline-block; background: #e0f2fe; border-radius: 9999px; padding: 2px 10px; margin: 2px 2px 2px 0;">{{ email }}</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <form method="post" style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+    {% csrf_token %}
+    <table class="form-table">
+      {{ form.as_table }}
+    </table>
+
+    <div style="margin-top: 20px; display: flex; gap: 12px;">
+      <button type="submit" style="padding: 10px 24px; background: linear-gradient(135deg, #06b6d4, #3b82f6); color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 14px; cursor: pointer;">
+        🚀 Send Emails Now
+      </button>
+      <a href="{% url 'admin:aiAgent_websitevisitor_changelist' %}" style="padding: 10px 20px; background: #f3f4f6; color: #374151; border-radius: 8px; font-size: 14px; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center;">
+        Cancel
+      </a>
+    </div>
+  </form>
+</div>
+{% endblock %}

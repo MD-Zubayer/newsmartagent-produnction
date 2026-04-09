@@ -23,14 +23,25 @@ def extract_and_update_memory(ai_agent, sender_id, chat_history):
 
     # Optimized prompt for concise extraction and token savings
     extract_prompt = f"""
-    Analyze the chat history and extract significant user details. 
-    
-    CRITICAL Rules:
-    - OMIT any field that would be null, empty string, or empty list. 
-    - Construct a compact JSON object containing ONLY the discovered data.
-    - Fields to look for (if available): name, phone_number, email, location, job, preferences (likes/dislikes), product_interest, order_details, needs_or_cahida, contextual_data (goals/urgency), sentiment, and key_requirements.
-    - Include a "memory_summary" that briefly gists the relationship status.
-    - Return ONLY the JSON object. No preamble.
+    You are the CRM brain. Read the chat history and return ONLY a JSON object of extracted facts.
+
+    STRICT RULES:
+    - Output must be valid JSON object, no prose, no markdown.
+    - Drop any field that is null/empty.
+    - Fields to include when present: name, phone_number, email, location, job, preferences (likes/dislikes), product_interest, order_details, needs_or_cahida, contextual_data (goals/urgency), sentiment, key_requirements.
+    - memory_summary: 1 short sentence of the user's intent/status (e.g., "Wants 2 red shoes, budget 500 BDT").
+
+    LEAD STAGE (MANDATORY):
+    - lead_stage must be ONE of: new, cold, warm, hot, converted, lost.
+    - Use these hints:
+        • new: first contact, no intent yet.
+        • cold: old/idle lead or vague interest, no next step agreed.
+        • warm: clear interest/request or provided contact info, awaiting quote/demo.
+        • hot: strong intent with price/quantity/timeframe, or close to purchase.
+        • converted: deal/order/booking/payment confirmed.
+        • lost: user declined, went elsewhere, or explicitly stopped.
+
+    Return only the JSON object.
 
     Chat History:
     {chat_history}
@@ -131,6 +142,24 @@ def extract_and_update_memory(ai_agent, sender_id, chat_history):
         memory, _ = UserMemory.objects.get_or_create(ai_agent=ai_agent, sender_id=sender_id)
 
         current_info = memory.data or {}
+
+        # --- Lead Stage Safety Net ---
+        allowed_stages = {"new", "cold", "warm", "hot", "converted", "lost"}
+        incoming_stage = reply_json.get("lead_stage")
+
+        if incoming_stage:
+            incoming_stage = incoming_stage.lower()
+            if incoming_stage not in allowed_stages:
+                incoming_stage = "warm"
+            reply_json["lead_stage"] = incoming_stage
+        else:
+            # If the model missed it, derive a sensible default
+            if current_info.get("lead_stage"):
+                reply_json["lead_stage"] = current_info["lead_stage"]
+            else:
+                # If we already got a memory_summary, treat as warm lead
+                reply_json["lead_stage"] = "warm" if reply_json.get("memory_summary") else "new"
+
         current_info.update({k: v for k, v in reply_json.items() if v is not None})
         
         memory.data = current_info

@@ -117,17 +117,24 @@ class Profile(models.Model):
     id_type = models.CharField(max_length=10, choices=ID_TYPE_CHOICES)
     unique_id = models.CharField(max_length=10, unique=True)
     word_balance = models.PositiveBigIntegerField(default=0)
+    schedule_balance = models.PositiveBigIntegerField(default=0, help_text="Remaining schedule recipients across active subscriptions")
     commission_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, blank=True, null=True)
     acount_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     otp_code = models.CharField(max_length=6, blank=True, null=True)
     otp_created_at = models.DateTimeField(blank=True, null=True)
     two_factor_enabled = models.BooleanField(default=False)
+    recovery_email = models.EmailField(blank=True, null=True)
+    recovery_whatsapp = models.CharField(max_length=20, blank=True, null=True, help_text="Enter number with country code")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def sync_word_balance(self):
+        """Deprecated wrapper, use sync_balances instead."""
+        return self.sync_balances()
+    
+    def sync_balances(self):
         """
-        সকল একটিভ সাবস্ক্রিপশনের অবশিষ্ট টোকেন যোগ করে প্রোফাইলের word_balance আপডেট করে।
+        একটিভ সাবস্ক্রিপশনগুলোর টোকেন ও শিডিউল কোটা যোগ করে প্রোফাইলে আপডেট করে।
         """
         from django.apps import apps
         from django.db.models import Sum
@@ -135,20 +142,20 @@ class Profile(models.Model):
         
         Subscription = apps.get_model('users', 'Subscription')
         
-        # একটিভ এবং মেয়াদের মধ্যে থাকা সকল সাবস্ক্রিপশনের টোকেন যোগ করা
         active_subs = Subscription.objects.filter(
             profile=self, 
             is_active=True,
             end_date__gt=timezone.now()
         )
         
-        total_remaining = active_subs.aggregate(total=Sum('remaining_tokens'))['total'] or 0
+        token_total = active_subs.aggregate(total=Sum('remaining_tokens'))['total'] or 0
+        schedule_total = active_subs.aggregate(total=Sum('remaining_schedule_messages'))['total'] or 0
 
-        # প্রোফাইলের word_balance আপডেট
-        self.word_balance = total_remaining
-        self.save(update_fields=['word_balance'])
+        self.word_balance = token_total
+        self.schedule_balance = schedule_total
+        self.save(update_fields=['word_balance', 'schedule_balance'])
         
-        print(f"✅ SYNC: {self.user.email} | Total Active Tokens Summed: {total_remaining} from {active_subs.count()} subs")
+        print(f"✅ SYNC: {self.user.email} | Tokens: {token_total}, Schedules: {schedule_total} from {active_subs.count()} subs")
             
     def __str__(self):
         return f"{self.user.email} | {self.id_type} | {self.unique_id}"
@@ -175,6 +182,7 @@ class Offer(models.Model):
     allowed_platforms = models.ManyToManyField(Platform, related_name='offers')
     allowed_models = models.ManyToManyField('aiAgent.AIProviderModel', related_name='offers', blank=True)
     tokens = models.PositiveIntegerField()
+    schedule_messages = models.PositiveIntegerField(default=0, help_text="এই অফারে মোট কয়জন কন্টাক্টকে শিডিউল মেসেজ পাঠানো যাবে (মোট অডিয়েন্স)")
     shorthand_choices = models.CharField(max_length=10, blank=True, null=True)
     name = models.CharField(blank=True, null=True)
     description = models.TextField(blank=True, null=True)
@@ -250,9 +258,10 @@ class Payment(models.Model):
                         start_date=timezone.now(),
                         end_date=timezone.now() + timedelta(days=offer.duration_days),
                         is_active=True,
-                        remaining_tokens=offer.tokens
+                        remaining_tokens=offer.tokens,
+                        remaining_schedule_messages=getattr(offer, "schedule_messages", 0)
                     )
-                    profile.sync_word_balance()
+                    profile.sync_balances()
                     if not notif_msg:
                         notif_msg = f"Payment Successful! {offer.price} plan activated. {offer.tokens} words added."
 
@@ -290,6 +299,7 @@ class Subscription(models.Model):
     end_date = models.DateTimeField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
     remaining_tokens = models.PositiveBigIntegerField(default=0) # Track tokens separately per subscription
+    remaining_schedule_messages = models.PositiveBigIntegerField(default=0, help_text="এই সাবস্ক্রিপশনে বাকি থাকা শিডিউল অডিয়েন্স সংখ্যা")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
@@ -370,12 +380,22 @@ class FacebookPage(models.Model):
     page_id = models.CharField(max_length=255, unique=True)
     page_name = models.CharField(max_length=255)
     access_token = models.CharField(max_length=500)
+    user_access_token = models.CharField(max_length=500, blank=True, null=True)
+    token_expires_at = models.DateTimeField(blank=True, null=True, help_text="Expiry of the user long-lived token, if provided")
+    instagram_business_account_id = models.CharField(max_length=255, blank=True, null=True)
+    instagram_username = models.CharField(max_length=255, blank=True, null=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
         return f"{self.page_name} ({self.page_id}) - {self.user.email}"
+
+    @property
+    def is_token_valid(self):
+        if not self.token_expires_at:
+            return True
+        return self.token_expires_at > timezone.now()
 
 
 class WithdrawMethod(models.Model):
@@ -439,3 +459,143 @@ class CashoutRequest(models.Model):
     def __str__(self):
         return f"{self.profile.unique_id} - {self.balance_type.upper()} - {self.amount} BDT - {self.status}"
 
+
+class YouTubeChannel(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='youtube_channels')
+    channel_id = models.CharField(max_length=255, unique=True)
+    channel_title = models.CharField(max_length=255)
+    custom_url = models.CharField(max_length=255, blank=True, null=True) # e.g. @MkzTips
+    access_token = models.CharField(max_length=500)
+    refresh_token = models.CharField(max_length=500, blank=True, null=True)
+    token_expires_at = models.DateTimeField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    last_comment_check = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.channel_title} ({self.channel_id}) - {self.user.email}"
+
+class YouTubeCommentLog(models.Model):
+    channel = models.ForeignKey(YouTubeChannel, on_delete=models.CASCADE, related_name='logs')
+    video_id = models.CharField(max_length=255)
+    comment_id = models.CharField(max_length=255, unique=True)
+    author = models.CharField(max_length=255)
+    comment_text = models.TextField()
+    ai_reply = models.TextField()
+    status = models.CharField(max_length=50, default='success') # success, failed
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Comment by {self.author} on {self.video_id}"
+
+class GoogleBusinessAccount(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='gbp_accounts')
+    account_name = models.CharField(max_length=255)
+    account_id = models.CharField(max_length=255, unique=True)
+    access_token = models.CharField(max_length=500)
+    refresh_token = models.CharField(max_length=500, blank=True, null=True)
+    token_expires_at = models.DateTimeField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.account_name} ({self.account_id}) - {self.user.email}"
+
+class GoogleBusinessLocation(models.Model):
+    account = models.ForeignKey(GoogleBusinessAccount, on_delete=models.CASCADE, related_name='locations')
+    location_name = models.CharField(max_length=255)
+    location_id = models.CharField(max_length=255, unique=True) # Full resource name: accounts/{account_id}/locations/{location_id}
+    address = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    last_review_check = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.location_name} ({self.location_id})"
+
+class GBPReviewLog(models.Model):
+    location = models.ForeignKey(GoogleBusinessLocation, on_delete=models.CASCADE, related_name='review_logs')
+    review_id = models.CharField(max_length=255, unique=True)
+    reviewer_name = models.CharField(max_length=255)
+    review_text = models.TextField(blank=True, null=True)
+    star_rating = models.IntegerField(default=0)
+    ai_reply = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=20, default='pending') # pending, replied, error
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Review by {self.reviewer_name} on {self.location.location_name}"
+
+class TikTokAccount(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='tiktok_accounts')
+    open_id = models.CharField(max_length=255, unique=True)
+    union_id = models.CharField(max_length=255, blank=True, null=True)
+    display_name = models.CharField(max_length=255, blank=True, null=True)
+    avatar_url = models.URLField(max_length=500, blank=True, null=True)
+    access_token = models.CharField(max_length=500)
+    refresh_token = models.CharField(max_length=500, blank=True, null=True)
+    token_expires_at = models.DateTimeField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.display_name or self.open_id} ({self.user.email})"
+
+class LoginHistory(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='login_histories')
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+    device_name = models.CharField(max_length=255, blank=True, null=True)
+    location = models.CharField(max_length=255, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.email} - {self.ip_address} on {self.created_at}"
+
+class TrustedDevice(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='trusted_devices')
+    device_token = models.CharField(max_length=255, unique=True, db_index=True)
+    device_name = models.CharField(max_length=255, blank=True, null=True)
+    is_trusted = models.BooleanField(default=False)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def is_valid(self):
+        return timezone.now() < self.expires_at
+
+    def __str__(self):
+        return f"{self.user.email} - {self.device_name}"
+
+class RecoveryCode(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='recovery_codes')
+    code = models.CharField(max_length=255) 
+    is_used = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Recovery Code for {self.user.email} (Used: {self.is_used})"
+
+class LoginSession(models.Model):
+    SESSION_STATUS_CHOICES = (
+        ('pending', 'Pending Approval'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('expired', 'Expired'),
+    )
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    session_token = models.UUIDField(default=uuid.uuid4, unique=True, db_index=True)
+    status = models.CharField(max_length=20, choices=SESSION_STATUS_CHOICES, default='pending')
+    ip_address = models.GenericIPAddressField(blank=True, null=True)
+    device_name = models.CharField(max_length=255, blank=True, null=True)
+    trust_device = models.BooleanField(default=False)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def is_valid(self):
+        return self.status == 'pending' and timezone.now() < self.expires_at
+
+    def __str__(self):
+        return f"{self.user.email} Session - {self.status}"

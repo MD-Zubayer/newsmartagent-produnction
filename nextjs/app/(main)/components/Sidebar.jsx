@@ -19,7 +19,8 @@ import {
   UsersIcon,
   KeyIcon,
   ChartBarIcon,
-  DocumentTextIcon
+  DocumentTextIcon,
+  FunnelIcon
 } from "@heroicons/react/24/outline";
 import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
@@ -41,6 +42,7 @@ export default function Sidebar({ viewMode, isDesktopMode }) {
     { name: "Sheet", href: user?.sheet_id ? `/dashboard/sheet/${user.sheet_id}` : "/dashboard/user", icon: TableCellsIcon, roles: ["user"] },
     { name: "Docs", href: "/dashboard/docs", icon: DocumentTextIcon, roles: ["user"] },
     { name: "Offers", href: "/dashboard/offers", icon: TagIcon, roles: ["user"] },
+    { name: "Payments", href: "/dashboard/payment", icon: CreditCardIcon, roles: ["user"] },
     { name: "History", href: "/dashboard/history", icon: ClockIcon, roles: ["user"] },
     
     { name: "Overview", href: "/dashboard/agent", icon: HomeIcon, roles: ["agent"] },
@@ -48,9 +50,9 @@ export default function Sidebar({ viewMode, isDesktopMode }) {
     { name: "OTP Settings", href: "/dashboard/agent/otp", icon: KeyIcon, roles: ["agent"] },
     { name: "Accounts", href: "/dashboard/agent/accounts", icon: ChartBarIcon, roles: ["agent"] },
 
-    { name: "Payment", href: "/dashboard/payment", icon: CreditCardIcon, roles: ["user", "agent"] },
     { name: "Notifications", href: "/dashboard/notifications", icon: BellIcon, roles: ["user", "agent"] },
     { name: "Contacts", href: "/dashboard/contacts", icon: UsersIcon, roles: ["user", "agent"] },
+    { name: "Smart CRM", href: "/dashboard/crm", icon: FunnelIcon, roles: ["user", "agent"] },
     { name: "AI Agent", href: "/dashboard/aiAgent", icon: CpuChipIcon, roles: ["user", "agent"], highlight: true },
   ];
 

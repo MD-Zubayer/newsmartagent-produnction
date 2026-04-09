@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useLanguage } from "@/context/LanguageContext";
 import {
   FaFacebookF, FaTwitter, FaLinkedinIn, FaInstagram,
   FaPhoneAlt, FaEnvelope, FaMapMarkerAlt
@@ -13,6 +14,9 @@ const PaymentBadge = ({ name, color, bg }) => (
 );
 
 function Footer() {
+  const { lang } = useLanguage();
+  const tr = (en, bn) => (lang === "bn" ? bn : en);
+
   const services = [
     "Facebook Automation",
     "Messenger Bot",
@@ -27,6 +31,15 @@ function Footer() {
     { icon: <FaTwitter />, bg: "hover:bg-sky-500", label: "Twitter" },
     { icon: <FaInstagram />, bg: "hover:bg-gradient-to-tr hover:from-pink-600 hover:to-orange-400", label: "Instagram" },
     { icon: <FaLinkedinIn />, bg: "hover:bg-blue-700", label: "LinkedIn" },
+  ];
+
+  const companyLinks = [
+    { label: "About Us", href: "#" },
+    { label: "Contact Us", href: "#" },
+    { label: "Privacy Policy", href: "/privacy-policy" },
+    { label: "Terms of Service", href: "/terms-of-service" },
+    { label: "Blog", href: "#" },
+    { label: "Docs", href: "#" },
   ];
 
   return (
@@ -44,8 +57,8 @@ function Footer() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 pb-20">
           
-          {/* Brand Info */}
-          <div className="lg:col-span-4 space-y-10">
+{/* Brand Info & Socials */}
+          <div className="lg:col-span-4 space-y-12">
             <div className="space-y-6">
               <Link href="/" className="inline-block">
                 <h2 className="text-4xl font-black tracking-tighter">
@@ -53,7 +66,10 @@ function Footer() {
                 </h2>
               </Link>
               <p className="text-gray-400 font-medium text-lg leading-relaxed">
-                বাংলাদেশের ১ নম্বর এআই চালিত সোশ্যাল মিডিয়া অটোমেশন প্লাটফর্ম। আপনার ব্যবসাকে দিন এক নতুন গতি।
+                {tr(
+                  "Bangladesh's #1 AI-powered social media automation platform. Give your business a new pace.",
+                  "বাংলাদেশের ১ নম্বর এআই চালিত সোশ্যাল মিডিয়া অটোমেশন প্লাটফর্ম। আপনার ব্যবসাকে দিন এক নতুন গতি।"
+                )}
               </p>
             </div>
             
@@ -72,7 +88,6 @@ function Footer() {
               </div>
             </div>
           </div>
-
           {/* Links Grid */}
           <div className="lg:col-span-5 grid grid-cols-2 gap-10">
             <div className="space-y-8">
@@ -91,10 +106,10 @@ function Footer() {
             <div className="space-y-8">
               <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400">Company</h3>
               <ul className="space-y-4">
-                {["About Us", "Contact Us", "Privacy Policy", "Terms of Use", "Blog", "Docs"].map((link) => (
-                  <li key={link}>
-                    <Link href="#" className="text-gray-400 hover:text-white font-bold transition-colors">
-                      {link}
+                {companyLinks.map(({ label, href }) => (
+                  <li key={label}>
+                    <Link href={href} className="text-gray-400 hover:text-white font-bold transition-colors">
+                      {label}
                     </Link>
                   </li>
                 ))}

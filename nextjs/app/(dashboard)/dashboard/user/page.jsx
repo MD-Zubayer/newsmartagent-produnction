@@ -175,6 +175,10 @@ export default function UserDashboard() {
   const { analytics, user, subscriptions } = data;
   const { summary, charts, recent_logs } = analytics;
   const currentSub = subscriptions?.find(sub => sub.is_active) || subscriptions?.[subscriptions.length - 1];
+  const activeSubs = subscriptions?.filter(s => s.is_active) || [];
+  const totalScheduleSlots = activeSubs.reduce((acc, s) => acc + (s.offer?.schedule_messages || 0), 0);
+  const remainingSchedules = user?.profile?.schedule_balance || 0;
+  const usedSchedules = Math.max(totalScheduleSlots - remainingSchedules, 0);
 
   return (
     <div className="p-3 md:p-10 bg-[#f8fafc] min-h-screen font-sans overflow-x-hidden">
@@ -244,12 +248,13 @@ export default function UserDashboard() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 md:gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 md:gap-6">
           <StatCard title="Total Tokens" value={summary.total_tokens.toLocaleString()} icon={<Zap />} color="blue" subValue={`In: ${summary.input_tokens.toLocaleString()} | Out: ${summary.output_tokens.toLocaleString()}`} />
           <StatCard title="Total Requests" value={summary.total_messages} icon={<MessageSquare />} color="purple" />
           <StatCard title="Memory Costs" value={summary.memory_extraction_tokens?.toLocaleString() || '0'} icon={<Activity />} color="orange" subValue="Background Sync" />
           <StatCard title="Avg Latency" value={`${summary.avg_response_ms || 0}ms`} icon={<Activity />} color="orange" />
           <StatCard title="Total Failed" value={summary.failed_count} icon={<Info />} color="red" />
+          <StatCard title="Schedule Contacts" value={(remainingSchedules || 0).toLocaleString()} icon={<Calendar />} color="green" subValue={`Used: ${usedSchedules.toLocaleString()} / ${totalScheduleSlots.toLocaleString() || '0'}`} />
         </div>
 
         {/* Chart & Engine Usage */}
@@ -283,7 +288,10 @@ export default function UserDashboard() {
 
         {/* Platform Analytics */}
         <div className="bg-white py-8 px-5 rounded-[2.5rem] shadow-xl border border-gray-100">
-          <PlatformTokenChart recentLogs={recent_logs} />
+           <h3 className="text-lg md:text-xl font-black text-gray-800 mb-8 flex items-center gap-2 italic uppercase px-4">
+              <BarChart3 size={24} className="text-cyan-500" /> Platform Wise Analytics
+            </h3>
+          <PlatformTokenChart data={charts.platform_distribution} />
         </div>
 
         {/* --- Detailed Subscription Breakdown (Moved & Redesigned) --- */}
@@ -299,9 +307,11 @@ export default function UserDashboard() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
-            {subscriptions?.filter(s => s.is_active).map((sub) => {
+            {activeSubs.map((sub) => {
               const percent = Math.round((sub.remaining_tokens / sub.offer.tokens) * 100);
               const isLow = percent < 15;
+              const schedTotal = sub.offer?.schedule_messages || 0;
+              const schedRemaining = sub.remaining_schedule_messages ?? 0;
 
               return (
                 <div key={sub.id} className="relative bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 hover:shadow-2xl transition-all group overflow-hidden">
@@ -323,6 +333,11 @@ export default function UserDashboard() {
                                 {model.model_name}
                               </span>
                             ))}
+                          </div>
+                          <div className="flex gap-2 text-[10px] text-gray-500 mt-2 flex-wrap">
+                            <span className="px-2 py-1 bg-gray-100 rounded-full">Duration: {sub.offer.duration_days}d</span>
+                            <span className="px-2 py-1 bg-gray-100 rounded-full">Price: {sub.offer.price} BDT</span>
+                            <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-full">Schedules: {schedRemaining}/{schedTotal}</span>
                           </div>
                         </div>
                       </div>
@@ -397,28 +412,68 @@ export default function UserDashboard() {
                 const { date, time } = formatDateTime(log.created_at);
                 const platformSlug = (log.platform || "").toLowerCase();
                 const isMessenger = platformSlug.includes("messenger");
+
                 const platformLabel = platformSlug ? platformSlug.replace(/_/g, " ") : "Unknown Platform";
+                
+                // --- Platform Branding Colors ---
+                const getPlatformColor = (slug) => {
+                  if (!slug) return "bg-gray-600";
+                  if (slug.includes("messenger")) return "bg-blue-600";
+                  if (slug.includes("whatsapp")) return "bg-emerald-600";
+                  if (slug.includes("instagram")) return "bg-rose-500";
+                  if (slug.includes("telegram")) return "bg-sky-500";
+                  if (slug.includes("youtube")) return "bg-red-600";
+                  if (slug.includes("tiktok")) return "bg-zinc-900";
+                  if (slug.includes("widget")) return "bg-indigo-600";
+                  if (slug.includes("facebook_comment")) return "bg-blue-800";
+                  return "bg-pink-600";
+                };
+
+                const platformColorClass = getPlatformColor(platformSlug);
                 const requestLabel = log.request_type ? log.request_type.replace(/_/g, " ") : "Unknown Operation";
                 const statusLabel = log.success === false ? "Failed" : "Success";
                 const statusColorClass = log.success === false
                   ? "bg-rose-500 text-white shadow-rose-500/20"
                   : "bg-emerald-500 text-white shadow-emerald-500/20";
-                const avatarLabel = platformSlug ? platformSlug[0].toUpperCase() : "#";
+                let displayName = log.contact_name || log.sender_id || "Unknown";
+                if (displayName.startsWith('@')) {
+                  displayName = displayName.substring(1);
+                }
+                const avatarLabel = Array.from(displayName)[0].toUpperCase();
 
                 return (
                   <div key={log.id} className="group relative bg-white border border-slate-100 rounded-[1.5rem] md:rounded-[2.5rem] p-4 md:p-6 hover:shadow-2xl transition-all overflow-hidden hover:-translate-y-1">
-                    <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${isMessenger ? 'bg-blue-500' : 'bg-pink-500'}`} />
+                    <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${platformColorClass}`} />
 
                     {/* Mobile View: Vertical Stack */}
                     <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 md:gap-8 min-w-0">
 
                       {/* Source Device/Account */}
                       <div className="flex items-center gap-4 flex-1 min-w-0">
-                        <div className={`w-12 h-12 md:w-16 md:h-16 shrink-0 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-xl ${isMessenger ? 'bg-blue-600' : 'bg-pink-600'} group-hover:scale-110 transition-transform duration-500`}>
-                          {avatarLabel}
+                        <div className={`relative w-12 h-12 md:w-16 md:h-16 shrink-0 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-xl ${platformColorClass} group-hover:scale-110 transition-transform duration-500 overflow-hidden`}>
+                          {log.contact_profile ? (
+                             <>
+                               <img 
+                                 src={log.contact_profile} 
+                                 alt={displayName} 
+                                 className="w-full h-full object-cover" 
+                                 onError={(e) => {
+                                   e.currentTarget.style.display = 'none';
+                                   if (e.currentTarget.nextElementSibling) {
+                                     e.currentTarget.nextElementSibling.style.display = 'flex';
+                                   }
+                                 }} 
+                               />
+                               <span className="hidden w-full h-full items-center justify-center font-black text-xl text-white">
+                                 {avatarLabel}
+                               </span>
+                             </>
+                          ) : (
+                             avatarLabel
+                          )}
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm md:text-base font-black text-slate-800 leading-tight truncate">ID: {log.sender_id?.slice(-8) || "—"}</p>
+                          <p className="text-sm md:text-base font-black text-slate-800 leading-tight truncate">{displayName}</p>
                           <div className="flex items-center gap-2 mt-1">
                             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isMessenger ? 'bg-blue-400' : 'bg-pink-400'}`}></span>
                             <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest truncate">{platformLabel}</p>
@@ -471,7 +526,8 @@ function StatCard({ title, value, icon, color, subValue }) {
     blue: "text-blue-600 bg-blue-50",
     purple: "text-purple-600 bg-purple-50",
     orange: "text-orange-600 bg-orange-50",
-    red: "text-red-600 bg-red-50"
+    red: "text-red-600 bg-red-50",
+    green: "text-emerald-600 bg-emerald-50"
   };
   return (
     <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 flex flex-col gap-4 group hover:-translate-y-1 transition-all">

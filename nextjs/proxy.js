@@ -11,7 +11,7 @@ export function proxy(request) {
   console.log("Path:", pathname, "AccessToken:", isLoggedIn);
 
   if (pathname.startsWith("/dashboard") && !isLoggedIn) {
-    return NextResponse.redirect(new URL("/signup", request.url));
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   if (pathname === "/signup" && isLoggedIn) {

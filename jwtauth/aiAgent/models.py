@@ -3,6 +3,7 @@ from django.conf import settings
 from django.utils import timezone
 from django.core.cache import cache
 from django_cryptography.fields import encrypt
+from minio_management.storages import ProfileStorage, ContactProfileStorage
 
 
 
@@ -28,7 +29,11 @@ class AgentAI(models.Model):
         ('whatsapp', 'WhatsApp'),
         ('messenger', 'Messenger'),
         ('facebook_comment', 'Facebook Comment'),
-        ('web_widget', 'Web Chat Widget')
+        ('instagram', 'Instagram'),
+        ('web_widget', 'Web Chat Widget'),
+        ('telegram', 'Telegram'),
+        ('youtube', 'YouTube'),
+        ('gbp', 'Google Business Profile')
     ]
     AI_AGENT_CATEGORIES = (
     ('business', 'Business / Commercial'),
@@ -58,6 +63,7 @@ class AgentAI(models.Model):
     widget_key = models.CharField(max_length=100, unique=True, blank=True, null=True, db_index=True)
 
     system_prompt = models.TextField()
+    prompt_tokens = models.IntegerField(default=0, help_text="Total tokens consumed by the system prompt")
     greeting_message = models.TextField(blank=True, null=True)
 
     custom_keywords = models.TextField(
@@ -77,6 +83,8 @@ class AgentAI(models.Model):
 
     is_active = models.BooleanField(default=True)
     is_special_agent = models.BooleanField(default=False, help_text="বিশেষ এজেন্টদের ডাটা দীর্ঘক্ষণ (১ বছর) ক্যাশে থাকবে")
+    schedule_max_batch = models.PositiveIntegerField(default=500, help_text="একটি schedule রান-এ সর্বোচ্চ কতজনকে পাঠানো হবে")
+    schedule_delay_ms = models.PositiveIntegerField(default=0, help_text="প্রতি মেসেজের মাঝে বিলম্ব (মিলিসেকেন্ড)")
 
     SPECIAL_AGENT_STATUS_CHOICES = [
         ('none', 'None'),
@@ -95,6 +103,12 @@ class AgentAI(models.Model):
     
 
     def save(self, *args, **kwargs):
+        # Standardize platform and identifier to lowercase
+        if self.platform:
+            self.platform = self.platform.lower()
+        if self.page_id:
+            self.page_id = self.page_id.lower()
+
         # Sync legacy ai_model field with selected_model if present
         if self.selected_model:
             self.ai_model = self.selected_model.model_id
@@ -102,6 +116,18 @@ class AgentAI(models.Model):
         # Auto-activate is_special_agent when approved
         if self.special_agent_status == 'approved':
             self.is_special_agent = True
+            
+        # Calculate prompt tokens
+        if self.system_prompt:
+            try:
+                import tiktoken
+                encoding = tiktoken.get_encoding('cl100k_base')
+                self.prompt_tokens = len(encoding.encode(self.system_prompt))
+            except Exception:
+                # Fallback approximation (1 token ≈ 4 chars)
+                self.prompt_tokens = len(self.system_prompt) // 4
+        else:
+            self.prompt_tokens = 0
             
         super().save(*args, **kwargs)
 
@@ -130,6 +156,75 @@ class UserMemory(models.Model):
 
     class Meta:
         unique_together = ('ai_agent', 'sender_id')
+
+class TelegramBotMapping(models.Model):
+    """Mapping between Telegram chat IDs and AgentAI for shared bot"""
+    chat_id = models.CharField(max_length=100, unique=True, db_index=True)
+    agent = models.ForeignKey(AgentAI, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_message_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Telegram Bot Mapping"
+        verbose_name_plural = "Telegram Bot Mappings"
+        unique_together = ('chat_id', 'agent')
+
+    def __str__(self):
+        return f"Chat {self.chat_id} -> Agent {self.agent.name}"
+
+class TelegramBot(models.Model):
+    """Dedicated model for Telegram bot settings"""
+    agent = models.OneToOneField(AgentAI, on_delete=models.CASCADE, related_name='telegram_bot_details')
+    bot_token = encrypt(models.TextField(help_text="Bot API Token from BotFather"))
+    bot_username = models.CharField(max_length=100, unique=True, db_index=True)
+    bot_name = models.CharField(max_length=150, blank=True, null=True)
+    
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Telegram Bot"
+        verbose_name_plural = "Telegram Bots"
+
+    def __str__(self):
+        return f"@{self.bot_username} ({self.agent.name})"
+
+import uuid
+from django.conf import settings
+User = settings.AUTH_USER_MODEL
+
+class ApiConfig(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    gemini_api_key = models.CharField(max_length=255, blank=True, null=True)
+    openai_api_key = models.CharField(max_length=255, blank=True, null=True)
+    
+    def __str__(self):
+        return f"{self.user.email} - API Config"
+
+class WebsiteVisitor(models.Model):
+    visitor_uuid = models.UUIDField(unique=True, editable=False, default=uuid.uuid4)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=512, null=True, blank=True)
+    device_type = models.CharField(max_length=50, null=True, blank=True)
+    location = models.CharField(max_length=255, null=True, blank=True)
+    
+    first_visited = models.DateTimeField(auto_now_add=True)
+    last_visited = models.DateTimeField(auto_now=True)
+    view_count = models.IntegerField(default=1)
+    
+    user = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='visitors')
+    captured_email = models.EmailField(null=True, blank=True)
+    captured_phone = models.CharField(max_length=50, null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Website Visitor"
+        verbose_name_plural = "Website Visitors"
+        
+    def __str__(self):
+        return f"Visitor {self.visitor_uuid} (V: {self.view_count})"
 
 class MissingRequirement(models.Model):
     ai_agent = models.ForeignKey(AgentAI, on_delete=models.CASCADE)
@@ -181,6 +276,13 @@ class TokenUsageLog(models.Model):
         ]
         ordering = ['-created_at']
         verbose_name = 'Token Usage Log'
+
+    def save(self, *args, **kwargs):
+        if self.platform:
+            self.platform = self.platform.lower()
+        if self.sender_id:
+            self.sender_id = self.sender_id.lower()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.platform} | {self.total_tokens} tokens | {self.created_at.strftime('%Y-%m-%d %H:%M')}"
@@ -261,15 +363,29 @@ class Contact(models.Model):
     PLATFORM_CHOICES = [
         ('whatsapp', 'WhatsApp'),
         ('messenger', 'Messenger'),
+        ('web_widget', 'Web Chat Widget'),
+        ('facebook_comment', 'Facebook Comment'),
+        ('instagram', 'Instagram'),
+        ('telegram', 'Telegram'),
+        ('youtube', 'YouTube'),
     ]
     agent = models.ForeignKey(AgentAI, on_delete=models.CASCADE, related_name='contacts')
     identifier = models.CharField(max_length=255, db_index=True)  # Phone number or Messenger Sender ID
     name = models.CharField(max_length=255, blank=True, null=True)
     push_name = models.CharField(max_length=255, blank=True, null=True)
+    # Use non-expiring public URLs for dashboard rendering; WhatsApp sync keeps uploading here.
+    profile_picture = models.ImageField(
+        upload_to='contact_profiles/',
+        storage=ContactProfileStorage(),
+        null=True,
+        blank=True,
+    )
+    profile_picture_hash = models.CharField(max_length=64, blank=True, null=True, help_text="MD5 hash to prevent duplicate MinIO uploads")
     is_auto_reply_enabled = models.BooleanField(default=True)
     custom_prompt = models.TextField(blank=True, null=True, help_text="Custom system prompt for this specific contact")
     custom_instructions = models.TextField(blank=True, null=True, help_text="Additional instructions for this contact")
     platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES)
+    is_human_needed = models.BooleanField(default=False, help_text="Set to True if the user needs human assistance.")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -278,8 +394,41 @@ class Contact(models.Model):
         verbose_name = "Contact"
         verbose_name_plural = "Contacts"
 
+    def save(self, *args, **kwargs):
+        if self.platform:
+            self.platform = self.platform.lower()
+        if self.identifier:
+            self.identifier = self.identifier.lower()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.name or self.identifier} ({self.platform}) - Agent: {self.agent.id}"
+
+
+class ScheduledMessage(models.Model):
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("sent", "Sent"),
+        ("failed", "Failed"),
+    ]
+
+    agent = models.ForeignKey(AgentAI, on_delete=models.CASCADE, related_name="scheduled_messages")
+    message = models.TextField()
+    run_at = models.DateTimeField()
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="pending", db_index=True)
+    audience_count = models.IntegerField(default=0)
+    consumed_subscription = models.ForeignKey('users.Subscription', on_delete=models.SET_NULL, null=True, blank=True, related_name='consumed_schedules')
+    consumed_quota = models.PositiveIntegerField(default=1, help_text="How many schedule slots this entry consumed")
+    filter_payload = models.JSONField(default=dict, blank=True)
+    error_message = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-run_at"]
+
+    def __str__(self):
+        return f"{self.agent.name or self.agent.id} @ {self.run_at} ({self.status})"
 
 
 class WidgetSettings(models.Model):
@@ -325,7 +474,26 @@ class WidgetSettings(models.Model):
     whatsapp_number = models.CharField(max_length=20, blank=True, null=True, help_text="WhatsApp number with country code")
     messenger_link = models.CharField(max_length=255, blank=True, null=True, help_text="Facebook Messenger link (e.g. m.me/yourpage)")
     
+    # Chat Controls
+    enable_human_control = models.BooleanField(default=True, help_text="Show Human Help / Resolve button in the widget")
+    enable_ai_control = models.BooleanField(default=True, help_text="Show AI Off/On toggle button in the widget")
+    
+    # FAB Menu Customization
+    menu_ai_icon_size = models.IntegerField(default=44, help_text="AI Icon size in the 3-icon menu")
+    menu_ai_icon_bg_color = models.CharField(max_length=7, blank=True, null=True, help_text="Background color for AI icon in FAB menu (leave blank for transparent)")
+    menu_ai_icon_roundness = models.IntegerField(default=50, help_text="AI Icon corner roundness in percentage (0-100)")
+
     updated_at = models.DateTimeField(auto_now=True)
+
+
+
+
 
     def __str__(self):
         return f"Widget Settings for {self.agent.name}"
+
+class PromptTokenReport(AgentAI):
+    class Meta:
+        proxy = True
+        verbose_name = 'Prompt Token Analytics'
+        verbose_name_plural = 'Prompt Token Analytics'

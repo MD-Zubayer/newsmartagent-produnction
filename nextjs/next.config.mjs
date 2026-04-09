@@ -17,6 +17,19 @@ const withPWA = withPWAInit({
 const nextConfig = {
   output: 'standalone',
   pageExtensions: ['js', 'jsx', 'md', 'mdx'],
+  async headers() {
+    return [
+      {
+        source: '/widget.js',
+        headers: [
+          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+          { key: 'Pragma', value: 'no-cache' },
+          { key: 'Expires', value: '0' },
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+        ],
+      },
+    ];
+  },
 }
 
 const withMDX = createMDX({
