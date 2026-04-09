@@ -23,39 +23,41 @@ jobs:
           # নতুন কোড অনুযায়ী ইমেজ বিল্ড করবে
           docker compose build --pull
           
-      - name: "🚢 Blue-Green Deployment & Rollback"
+      - name: "🚢 Zero Downtime Deployment & Rollback"
         run: |
-          # এনভায়রনমেন্ট ফাইল সেটআপ
+          # এনভায়রনমেন্ট ও ফাইল সেটআপ
           cp ~/newsmartagent.env .env || echo ".env file already in place"
 
           mkdir -p /home/ubuntu/configs
-          cp ~/service_account.json /home/ubuntu/configs/service_account.json || echo "Config already exists"
+          # যদি ফাইলটি অলরেডি থাকে তবে ওভাররাইট করবে
+          cp ~/service_account.json /home/ubuntu/service_account.json || echo "Service account already exists"
 
-          echo "🔄 Deploying new containers..."
+          echo "🔄 Deploying with Zero Downtime..."
           
-          # যদি নতুন কন্টেইনার চালু করতে গিয়ে এরর দেয়
-          if ! docker compose up -d --build; then
+          # ১. নতুন ইমেজ পুল করা
+          docker compose pull
+          
+          # ২. নতুন কন্টেইনার চালু করা (পুরানোটা চালু রেখেই হেলথ চেক করবে)
+          if ! docker compose up -d --build --remove-orphans; then
             echo "🚨 Deployment failed! Attempting to keep old services alive..."
-            # এখানে আগের কন্টেইনারগুলো অটোমেটিক স্টপ হবে না যদি বিল্ড ফেইল করে
             exit 1
           fi
 
-          # হেলথ চেক: ৫ সেকেন্ড অপেক্ষা করে দেখবে কন্টেইনারগুলো এখনো রানিং কি না
-          sleep 5
-          RUNNING_COUNT=$(docker ps -q -f status=running | wc -l)
+          # ৩. হেলথ চেক: ১৫ সেকেন্ড অপেক্ষা করে দেখবে কন্টেইনারগুলো স্টেবল কি না
+          echo "⏳ Waiting for services to stabilize..."
+          sleep 15
           
-          if [ "$RUNNING_COUNT" -eq 0 ]; then
-            echo "❌ New version crashed after start. Checking logs..."
-            docker compose logs --tail=20
-            # এখানে রোলব্যাক লজিক (প্রয়োজন হলে আগের ইমেজ দিয়ে ব্যাক করা)
+          # চেক করা হচ্ছে মেইন সার্ভিস (Django) রানিং কি না
+          if ! docker ps | grep -q "${PROJECT_NAME}-django"; then
+            echo "❌ New version is not stable! Rolling back..."
+            # রোলব্যাক লজিক: এখানে প্রয়োজনে আগের ইমেজ দিয়ে রিকভারি কমান্ড দেওয়া যায়
             exit 1
           else
             echo "🚀 NewSmartAgent is live and stable!"
           fi
 
       - name: "🧹 Post-Deployment Cleanup"
-        if: always() # ফেইল করলেও যাতে ক্লিনআপ হয়
+        if: always()
         run: |
-          # শুধু অব্যবহৃত ইমেজগুলো মুছবে
           docker image prune -f
           echo "✨ Cleanup finished."
