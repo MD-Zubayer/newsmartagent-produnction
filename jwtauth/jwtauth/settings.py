@@ -25,13 +25,41 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-i6it!d42&fu(j0*&)*53ymr5k+7osf^r__i$+@vds)a#7r-&^^'
+SECRET_KEY = os.environ.get('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = ['newsmartagent.com', 'api.newsmartagent.com', 'n8n.newsmartagent.com', 'newsmartagent-django', 'newsmartagent-n8n', 'localhost','127.0.0.1', 'monitor.newsmartagent.com', 'dev.newsmartagent.com', 'dev-api.newsmartagent.com', 'dev.newsmartagent.com', 'dev-n8n.newsmartagent.com', 'backend', 'newsmartagent-baileys']
-CSRF_TRUSTED_ORIGINS = ['https://newsmartagent.com', 'https://api.newsmartagent.com', 'https://n8n.newsmartagent.com', 'http://newsmartagent-django:8000', 'https://monitor.newsmartagent.com', 'https://dev.newsmartagent.com', 'https://dev-api.newsmartagent.com', 'https://dev-n8n.newsmartagent.com']
+MAIN_DOMAIN = os.environ.get('MAIN_DOMAIN', 'newsmartagent.com')
+N8N_DOMAIN = os.environ.get('N8N_DOMAIN', 'n8n.newsmartagent.com')
+PROJECT_NAME = os.environ.get('PROJECT_NAME', 'newsmartagent')
+
+ALLOWED_HOSTS = [
+    MAIN_DOMAIN,
+    f'api.{MAIN_DOMAIN}',
+    N8N_DOMAIN,
+    f'{PROJECT_NAME}-django',
+    f'{PROJECT_NAME}-n8n',
+    'localhost',
+    '127.0.0.1',
+    'backend',
+    f'{PROJECT_NAME}-baileys'
+]
+
+# Allow any additional hosts provided via .env
+extra_hosts = os.environ.get('EXTRA_ALLOWED_HOSTS', '')
+if extra_hosts:
+    ALLOWED_HOSTS.extend(h.strip() for h in extra_hosts.split(',') if h.strip())
+
+CSRF_TRUSTED_ORIGINS = [
+    f'https://{MAIN_DOMAIN}',
+    f'https://api.{MAIN_DOMAIN}',
+    f'https://{N8N_DOMAIN}',
+    f'http://{PROJECT_NAME}-django:8000',
+    'http://localhost:3000',
+    'http://localhost:3001'
+]
+
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 USE_X_FORWARDED_HOST = True
 # Application definition
@@ -147,7 +175,7 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [("newsmartagent-redis", 6379)], # আপনার রেডিস কন্টেইনার নাম
+            "hosts": [(os.environ.get('REDIS_HOST', f'{PROJECT_NAME}-redis'), 6379)],
         },
     },
 }
@@ -293,24 +321,24 @@ JWT_AUTH_SECURE = False
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
-    "https://newsmartagent.com",
-    "https://api.newsmartagent.com",
-    "https://n8n.newsmartagent.com",
-    "https://monitor.newsmartagent.com",
-    "https://dev.newsmartagent.com",
-    "https://dev-api.newsmartagent.com",
-    "https://dev-n8n.newsmartagent.com",
+    f"https://{MAIN_DOMAIN}",
+    f"https://api.{MAIN_DOMAIN}",
+    f"https://{N8N_DOMAIN}",
+    f"https://monitor.{MAIN_DOMAIN}",
+    f"https://dev.{MAIN_DOMAIN}",
+    f"https://dev-api.{MAIN_DOMAIN}",
+    f"https://dev-n8n.{MAIN_DOMAIN}",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:3001",
     "http://127.0.0.1:3001",
 ]
 
-CSRF_COOKIE_DOMAIN = '.newsmartagent.com'
+CSRF_COOKIE_DOMAIN = f'.{MAIN_DOMAIN}'
 SESSION_COOKIE_SECURE = True
 SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SAMESITE = 'Lax'
-SESSION_COOKIE_DOMAIN = '.newsmartagent.com'
+SESSION_COOKIE_DOMAIN = f'.{MAIN_DOMAIN}'
 CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
 # EMAIL_BACKEND = 'django_mailjet.backends.MailjetBackend'
@@ -325,9 +353,9 @@ EMAIL_HOST = "smtp.gmail.com"
 EMAIL_USE_TLS = True
 EMAIL_PORT = 587
 
-EMAIL_HOST_USER = "newsmartagentbd@gmail.com"
-EMAIL_HOST_PASSWORD = "wbzh nmlh ndtt lxja"
-DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', "newsmartagentbd@gmail.com")
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', "")
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
 
 
 
@@ -343,10 +371,10 @@ ACCOUNT_EMAIL_REQUIRED = True
 
 # sslcomerz
 
-SSLCOMMERZ_STORE_ID = "newsm6980a0f911f3f"
-SSLCOMMERZ_STORE_PASSWORD = 'newsm6980a0f911f3f@ssl'
-SSLCOMMERZ_SANDBOX = True
-SITE_URL = "http://localhost:3000"
+SSLCOMMERZ_STORE_ID = os.environ.get('SSLCOMMERZ_STORE_ID', "")
+SSLCOMMERZ_STORE_PASSWORD = os.environ.get('SSLCOMMERZ_STORE_PASSWORD', "")
+SSLCOMMERZ_SANDBOX = os.environ.get('SSLCOMMERZ_SANDBOX', 'True') == 'True'
+SITE_URL = os.environ.get('SITE_URL', f'https://{MAIN_DOMAIN}')
 
 
 
@@ -391,8 +419,8 @@ GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE = os.environ.get(
     '/app/service_account.json'  # BASE_DIR সরিয়ে সরাসরি এই পাথটি দিন
 )
 
-BAILEYS_API_URL = os.getenv('BAILEYS_API_URL', 'http://newsmartagent-baileys:3001')
-BAILEYS_API_SECRET = os.getenv('BAILEYS_API_SECRET', 'nsa-baileys-secret-2024')
+BAILEYS_API_URL = os.getenv('BAILEYS_API_URL', f'http://{PROJECT_NAME}-baileys:3001')
+BAILEYS_API_SECRET = os.getenv('BAILEYS_API_SECRET', '')
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Celery Beat: প্রতি ৫ মিনিটে Drive sync
@@ -536,7 +564,7 @@ UNFOLD = {
                 "separator": True,
                 "items": [
                     {"title": _("AI Agents"), "icon": "psychology", "link": "/admin/aiAgent/aiagent/"},
-                    {"title": _("Workflows (n8n)"), "icon": "account_tree", "link": "https://dev-n8n.newsmartagent.com", "external": True},
+                    {"title": _("Workflows (n8n)"), "icon": "account_tree", "link": f"https://{N8N_DOMAIN}", "external": True},
                 ],
             },
         ],

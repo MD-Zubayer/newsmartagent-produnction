@@ -31,7 +31,8 @@ export default function PublicOrderForm({ params }) {
     if (!form_id) return;
     const fetchShopProfile = async () => {
       try {
-        const res = await fetch(`https://newsmartagent.com/api/orders/public-profile/${form_id}/`);
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "/api";
+        const res = await fetch(`${apiUrl.replace(/\/$/, "")}/orders/public-profile/${form_id}/`);
         if (res.ok) {
           const data = await res.json();
           setShopProfile(data);
@@ -83,7 +84,8 @@ export default function PublicOrderForm({ params }) {
     };
 
     try {
-      const res = await fetch("https://newsmartagent.com/api/orders/", {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "/api";
+      const res = await fetch(`${apiUrl.replace(/\/$/, "")}/orders/`, {
         method: "POST", headers: { "Content-Type": "application/json", "Accept": "application/json" },
         body: JSON.stringify(formData),
       });
@@ -164,7 +166,8 @@ export default function PublicOrderForm({ params }) {
     };
 
     try {
-      const res = await fetch("https://newsmartagent.com/api/orders/", {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "/api";
+      const res = await fetch(`${apiUrl.replace(/\/$/, "")}/orders/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

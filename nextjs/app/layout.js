@@ -46,7 +46,7 @@ export const metadata = {
     "Business Automation",
     "New Smart Agent"
   ],
-  metadataBase: new URL("https://newsmartagent.com"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || "https://newsmartagent.com"),
 
   alternates: {
     canonical: "/",
@@ -56,7 +56,7 @@ export const metadata = {
     title: "New Smart Agent - AI Automation Platform",
     description:
       "Automate Facebook replies, manage customers, and collect orders with AI.",
-    url: "https://newsmartagent.com",
+    url: process.env.NEXT_PUBLIC_BASE_URL || "https://newsmartagent.com",
     siteName: "New Smart Agent",
     locale: "en_US",
     type: "website",
@@ -99,7 +99,7 @@ export default function RootLayout({ children }) {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     name: "New Smart Agent",
-    url: "https://newsmartagent.com",
+    url: process.env.NEXT_PUBLIC_BASE_URL || "https://newsmartagent.com",
     description:
       "AI automation platform for Facebook pages, messenger automation, and smart customer management.",
     applicationCategory: "BusinessApplication",
@@ -116,15 +116,15 @@ export default function RootLayout({ children }) {
         valueAddedTaxIncluded: false
       },
       availability: "https://schema.org/InStock",
-      url: "https://newsmartagent.com/signup"
+      url: `${process.env.NEXT_PUBLIC_BASE_URL || "https://newsmartagent.com"}/signup`
     }
   },
   {
     "@context": "https://schema.org",
     "@type": "Organization",
     "name": "New Smart Agent",
-    "url": "https://newsmartagent.com",
-    "logo": "https://newsmartagent.com/newsmartagent.png",
+    "url": process.env.NEXT_PUBLIC_BASE_URL || "https://newsmartagent.com",
+    "logo": `${process.env.NEXT_PUBLIC_BASE_URL || "https://newsmartagent.com"}/newsmartagent.png`,
     "sameAs": [
       "https://www.facebook.com/share/1G5CKXCgCk/", // আপনার ফেসবুক পেজ লিঙ্ক
       "http://www.youtube.com/@NewSmartAgent"

@@ -1,7 +1,8 @@
-import requests
+from django.conf import settings
+
 def deliver_public_comment_reply(comment_id, reply_text, page_access_token):
     """কমেন্টের নিচেই পাবলিক রিপ্লাই দেওয়ার জন্য n8n-এ পাঠানো"""
-    webhook_url = "https://n8n.newsmartagent.com/webhook/fb-public-comment-delivery"
+    webhook_url = f"https://{settings.N8N_DOMAIN}/webhook/fb-public-comment-delivery"
     
     payload = {
         "comment_id": str(comment_id),

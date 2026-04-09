@@ -27,7 +27,8 @@ export default function PublicOrderTrackPage() {
     setSearched(false);
 
     try {
-      const res = await fetch(`https://newsmartagent.com/api/orders/track/?phone=${encodeURIComponent(phone.trim())}`);
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "/api";
+      const res = await fetch(`${apiUrl.replace(/\/$/, "")}/orders/track/?phone=${encodeURIComponent(phone.trim())}`);
       const data = await res.json();
       if (res.ok) {
         setOrders(Array.isArray(data) ? data : []);

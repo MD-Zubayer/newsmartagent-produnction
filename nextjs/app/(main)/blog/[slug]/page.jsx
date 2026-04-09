@@ -6,8 +6,8 @@ import Link from 'next/link';
 
 import BlogContent from '../components/BlogContent';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://newsmartagent.com/api';
-const DOMAIN = 'https://newsmartagent.com';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
+const DOMAIN = process.env.NEXT_PUBLIC_BASE_URL || 'https://newsmartagent.com';
 
 async function getPost(slug) {
   try {

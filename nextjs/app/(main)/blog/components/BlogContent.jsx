@@ -17,7 +17,7 @@ const getIcon = (name) => {
   }
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://newsmartagent.com/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 export default function BlogContent({ content, shareUrl, shareTitle, socialLinks, postSlug }) {
 

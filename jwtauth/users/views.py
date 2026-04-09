@@ -147,7 +147,7 @@ class UserViewSet(viewsets.ModelViewSet):
             # create verify token
             token_obj = EmailVerificationToken.objects.create(user=user)
             
-            verify_link = f'https://newsmartagent.com/verify-email?token={token_obj.token}'
+            verify_link = f'{settings.SITE_URL}/verify-email?token={token_obj.token}'
             
             try: 
                 send_verification_email(user.email, verify_link)
@@ -475,7 +475,7 @@ class ForgotPasswordView(APIView):
         if isinstance(token, bytes):
             token = token.decode("utf-8")
 
-        reset_link = f"https://newsmartagent.com/reset-password?token={token}"
+        reset_link = f"{settings.SITE_URL}/reset-password?token={token}"
 
         # send email
         send_reset_email(user.email, reset_link)
@@ -620,9 +620,7 @@ def get_order_form_link(user):
         order_form = OrderForm.objects.get(user=user)
 
 
-        frontend_base_url = 'http://localhost:3000/orders'
-
-
+        frontend_base_url = f"{settings.SITE_URL}/orders"
        
         return f'{frontend_base_url}/{order_form.form_id}'
     except OrderForm.DoesNotExist:
@@ -853,7 +851,7 @@ class SendPaymentOTPView(APIView):
         <body>
             <div class="email-container">
                 <div class="header">
-                    <img src="https://newsmartagent.com/newsmartagent.png" width="80" style="margin-bottom: 10px; border-radius: 8px;"><br>
+                    <img src="{settings.SITE_URL}/newsmartagent.png" width="80" style="margin-bottom: 10px; border-radius: 8px;"><br>
                     <h1>New Smart Agent</h1>
                 </div>
                 <div class="content">
