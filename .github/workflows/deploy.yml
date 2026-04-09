@@ -44,7 +44,7 @@ jobs:
           fi
 
           # ৩. হেলথ চেক: ভেরিয়েবল লোড করা এবং ১৫ সেকেন্ড অপেক্ষা করা
-          export $(grep -v '^#' .env | xargs)
+          PROJECT_NAME=$(grep '^PROJECT_NAME=' .env | head -n 1 | cut -d '=' -f2)
           echo "⏳ Waiting for services to stabilize for project: ${PROJECT_NAME}..."
           sleep 15
           
