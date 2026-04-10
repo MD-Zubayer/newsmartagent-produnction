@@ -5,7 +5,7 @@
 .env.prod.example
 .env.dev.example
 .env.*
-
+.codex 
 
 # Docker
 .docker/
