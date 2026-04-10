@@ -57,12 +57,39 @@ jobs:
             echo "🚀 NewSmartAgent is live and stable!"
           fi
 
-      - name: "✅ Health Check (API & Frontend)"
+      - name: "🌡️ Critical Health Verification"
         run: |
-          echo "🌡️ Verifying application responses..."
-          sleep 10
-          curl -f http://localhost/api/health/ || (echo "Backend health failed" && exit 1)
-          curl -f http://localhost/frontend-health || (echo "Frontend health failed" && exit 1)
+          echo "Verifying NSA system integrity..."
+          # কন্টেইনারগুলো স্থির হতে সামান্য সময় দিন
+          sleep 5
+
+          # Backend health JSON টেনে এনে status/DB/Redis চেক
+          HEALTH_JSON=$(curl -s --max-time 10 http://localhost/api/health/)
+          if [ -z "$HEALTH_JSON" ]; then
+            echo "🚨 Backend health endpoint did not respond"; exit 1
+          fi
+
+          read STATUS DB_STATUS REDIS_STATUS <<EOF
+$(python - <<'PY'
+import json,sys
+try:
+    data=json.loads(open(0).read())
+    print(data.get("status",""), data.get("checks",{}).get("database",""), data.get("checks",{}).get("redis",""))
+except Exception as e:
+    print("", "", "")
+PY
+)
+EOF
+
+          if [ "$STATUS" = "ok" ] && [ "$DB_STATUS" = "ok" ] && [ "$REDIS_STATUS" = "ok" ]; then
+            echo "✅ Backend healthy (app, DB, Redis)"
+          else
+            echo "🚨 Backend degraded! status=$STATUS db=$DB_STATUS redis=$REDIS_STATUS"
+            exit 1
+          fi
+
+          # Frontend simple probe
+          curl -f --max-time 10 http://localhost/frontend-health || (echo "🚨 Frontend health failed" && exit 1)
 
       - name: "🧹 Post-Deployment Cleanup"
         if: always()
