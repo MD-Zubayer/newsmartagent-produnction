@@ -24,6 +24,7 @@ from man_agent.views import AgentDashboardStatsView
 from users import oauth_views
 from blog import views as blog_views
 from community.views import CommunityReportViewSet
+from . import health
 
 
 router = DefaultRouter()
@@ -47,6 +48,7 @@ urlpatterns = [
     path('api/send-payment-otp/', SendPaymentOTPView.as_view(), name='send-payment-otp'),
     path('api/send-transfer-otp/', SendTransferOTPView.as_view(), name='send-transfer-otp'),
     path('api/financial-summary/', FinancialSummaryView.as_view(), name='financial-summary'),
+    path('api/health/', health.health_view, name='health'),
     path('api/', include(router.urls)),
     path('api/', include('chat.urls')),
     path('api/', include('payments.urls')),

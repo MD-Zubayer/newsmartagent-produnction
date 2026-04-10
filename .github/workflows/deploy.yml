@@ -57,6 +57,13 @@ jobs:
             echo "🚀 NewSmartAgent is live and stable!"
           fi
 
+      - name: "✅ Health Check (API & Frontend)"
+        run: |
+          echo "🌡️ Verifying application responses..."
+          sleep 10
+          curl -f http://localhost/api/health/ || (echo "Backend health failed" && exit 1)
+          curl -f http://localhost/frontend-health || (echo "Frontend health failed" && exit 1)
+
       - name: "🧹 Post-Deployment Cleanup"
         if: always()
         run: |
