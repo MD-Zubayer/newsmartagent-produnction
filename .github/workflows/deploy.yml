@@ -69,9 +69,9 @@ jobs:
             echo "🚨 Backend health endpoint did not respond"; exit 1
           fi
 
-          STATUS=$(python -c 'import json,sys; d=json.loads(sys.argv[1]); print(d.get("status",""))' "$HEALTH_JSON")
-          DB_STATUS=$(python -c 'import json,sys; d=json.loads(sys.argv[1]); print(d.get("checks",{}).get("database",""))' "$HEALTH_JSON")
-          REDIS_STATUS=$(python -c 'import json,sys; d=json.loads(sys.argv[1]); print(d.get("checks",{}).get("redis",""))' "$HEALTH_JSON")
+          STATUS=$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); print(d.get("status",""))' "$HEALTH_JSON")
+          DB_STATUS=$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); print(d.get("checks",{}).get("database",""))' "$HEALTH_JSON")
+          REDIS_STATUS=$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); print(d.get("checks",{}).get("redis",""))' "$HEALTH_JSON")
 
           if [ "$STATUS" = "ok" ] && [ "$DB_STATUS" = "ok" ] && [ "$REDIS_STATUS" = "ok" ]; then
             echo "✅ Backend healthy (app, DB, Redis)"
