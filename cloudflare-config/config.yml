@@ -1,5 +1,5 @@
 tunnel: a8cb017f-c8c7-4c04-9afe-04960ea64832
-credentials-file: /etc/cloudflared/a8cb017f-c8c7-4c04-9afe-04960ea64832.json
+credentials-file: /etc/cloudflared/credentials.json
 
 ingress:
   - hostname: dev.newsmartagent.com

@@ -284,8 +284,8 @@ services:
       - smart-network
     volumes:
       # Allow per-environment config/credential files via env overrides.
-      - ./cloudflare-config/config.yml:/etc/cloudflared/config.yml:ro
-      - ${HOST_CONFIG_PATH}/${CF_CREDENTIALS_FILE:-cloudflare-config/a8cb017f-c8c7-4c04-9afe-04960ea64832.json}:/etc/cloudflared/${CF_CREDENTIALS_FILENAME:-a8cb017f-c8c7-4c04-9afe-04960ea64832.json}:ro
+      - ${CF_CONFIG_PATH:-./cloudflare-config/config.yml}:/etc/cloudflared/config.yml:ro
+      - ${CF_CREDENTIALS_PATH:-./cloudflare-config/a8cb017f-c8c7-4c04-9afe-04960ea64832.json}:/etc/cloudflared/credentials.json:ro
     command: tunnel --config /etc/cloudflared/config.yml run
     logging: *default-logging
     depends_on:
