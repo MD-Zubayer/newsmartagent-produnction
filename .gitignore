@@ -4,6 +4,7 @@
 .env.*.local
 .env.prod.example
 .env.dev.example
+.env.dev.local
 .env.*
 .codex 
 

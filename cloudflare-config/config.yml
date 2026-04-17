@@ -1,0 +1,18 @@
+tunnel: a8cb017f-c8c7-4c04-9afe-04960ea64832
+credentials-file: /etc/cloudflared/a8cb017f-c8c7-4c04-9afe-04960ea64832.json
+
+ingress:
+  - hostname: dev.newsmartagent.com
+    service: http://nginx:80
+  - hostname: dev-api.newsmartagent.com
+    service: http://nginx:80
+  - hostname: dev-n8n.newsmartagent.com
+    service: http://n8n:5678
+  - hostname: dev-minio.newsmartagent.com
+    service: http://nginx:80
+  - hostname: dev-s3.newsmartagent.com
+    service: http://nginx:80
+  - service: http_status:404
+
+edge-ip-version: auto
+protocol: http2

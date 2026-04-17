@@ -13,6 +13,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
     env_file:
       - .env
+      - ${ENV_FILE_PATH:-.env.dev.local}
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
@@ -73,6 +74,7 @@ services:
     
     env_file:
       - .env
+      - ${ENV_FILE_PATH:-.env.dev.local}
     environment:
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${PROJECT_NAME}-db:5432/${POSTGRES_DB}     
       - GEMINI_API_KEY=${GEMINI_API_KEY}
@@ -114,7 +116,7 @@ services:
       - NEXT_PUBLIC_API_URL=https://${MAIN_DOMAIN}/api
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000 || exit 1"]
+      test: ["CMD-SHELL", "node -e \"const http = require('http'); const req = http.get('http://127.0.0.1:3000/frontend-health', (res) => { if (res.statusCode === 200) process.exit(0); else process.exit(1); }); req.on('error', () => process.exit(1));\""]
       interval: 15s
       timeout: 10s
       retries: 3
@@ -152,11 +154,12 @@ services:
         order: start-first
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "nginx -t && wget --no-verbose --tries=1 --spider http://localhost:80 || exit 1"]
+      test: ["CMD-SHELL", "nginx -t && wget --no-verbose --tries=1 --spider http://127.0.0.1:80 || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 3
     logging: *default-logging
+    hostname: newsmartagent-nginx
     networks:
       - smart-network
 
@@ -170,6 +173,7 @@ services:
       - ${HOST_CONFIG_PATH}/service_account.json:/app/gdrive_key.json:ro
     env_file:
       - .env
+      - ${ENV_FILE_PATH:-.env.dev.local}
     
     environment:
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${PROJECT_NAME}-db:5432/${POSTGRES_DB}
@@ -199,6 +203,7 @@ services:
       - ${HOST_CONFIG_PATH}/service_account.json:/app/gdrive_key.json:ro
     env_file:
       - .env
+      - ${ENV_FILE_PATH:-.env.dev.local}
     environment:
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${PROJECT_NAME}-db:5432/${POSTGRES_DB}
       - REDIS_URL=${REDIS_URL}
@@ -247,6 +252,7 @@ services:
         order: start-first
     restart: always 
     logging: *default-logging
+    hostname: newsmartagent-n8n
     networks:
       - smart-network
   
@@ -282,7 +288,7 @@ services:
       - smart-network
     volumes:
       # Allow per-environment config/credential files via env overrides.
-      - ${HOST_CONFIG_PATH}/${CF_CONFIG_FILE:-cloudflare-config/config.yml}:/etc/cloudflared/config.yml:ro
+      - ./cloudflare-config/config.yml:/etc/cloudflared/config.yml:ro
       - ${HOST_CONFIG_PATH}/${CF_CREDENTIALS_FILE:-cloudflare-config/a8cb017f-c8c7-4c04-9afe-04960ea64832.json}:/etc/cloudflared/${CF_CREDENTIALS_FILENAME:-a8cb017f-c8c7-4c04-9afe-04960ea64832.json}:ro
     command: tunnel --config /etc/cloudflared/config.yml run
     logging: *default-logging

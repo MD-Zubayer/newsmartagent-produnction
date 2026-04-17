@@ -4,23 +4,23 @@ upstream django_backend {
 }
 
 upstream nextjs_frontend {
-    server newsmartagent-nextjs:3000;
+    server frontend:3000;
 }
 
 upstream n8n_backend {
-    server newsmartagent-n8n:5678;
+    server n8n:5678;
 }
 
 upstream flower_backend {
-    server newsmartagent-flower:5555;
+    server flower:5555;
 }
 
 upstream minio_api {
-    server newsmartagent-minio:9000;
+    server minio:9000;
 }
 
 upstream minio_console {
-    server newsmartagent-minio:9001;
+    server minio:9001;
 }
 
 server {
@@ -30,7 +30,7 @@ server {
     gzip on;
     gzip_types text/plain application/xml text/css application/javascript application/json;
     gzip_min_length 1000;
-    server_name dev.newsmartagent.com dev-api.newsmartagent.com;
+    server_name ${MAIN_DOMAIN};
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -154,7 +154,7 @@ server {
 
 server {
     listen 80;
-    server_name dev-n8n.newsmartagent.com;
+    server_name ${N8N_DOMAIN};
 
     location / {
         proxy_pass http://n8n_backend; # এখানে স্ল্যাশ দেওয়ার দরকার নেই
@@ -174,7 +174,7 @@ server {
 
 server {
     listen 80;
-    server_name minio.newsmartagent.com;
+    server_name ${MINIO_CONSOLE_DOMAIN};
 
     location / {
         proxy_pass http://minio_console;
@@ -192,7 +192,7 @@ server {
 
 server {
     listen 80;
-    server_name s3.newsmartagent.com;
+    server_name ${MINIO_API_DOMAIN};
 
     # Allow large uploads
     client_max_body_size 100M;
@@ -205,5 +205,4 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 }
-
 

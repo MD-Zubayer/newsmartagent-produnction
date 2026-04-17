@@ -352,7 +352,7 @@ def deliver_dashboard_reply(user_id, reply, msg_id):
         from asgiref.sync import async_to_sync
         from aiAgent.models import DashboardAILog
         
-        # ১. লগ আপডেট করুন
+        # 1 Log update
         log = DashboardAILog.objects.filter(user_id=user_id, message_id=msg_id).first()
         if log:
             log.answer = reply
