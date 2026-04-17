@@ -74,7 +74,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${PROJECT_NAME}-db:5432/${POSTGRES_DB}     
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}     
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - REDIS_URL=${REDIS_URL}
@@ -173,7 +173,7 @@ services:
       - .env
     
     environment:
-      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${PROJECT_NAME}-db:5432/${POSTGRES_DB}
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - REDIS_URL=${REDIS_URL}
       - GOOGLE_DRIVE_LOG_FOLDER_ID=${GOOGLE_DRIVE_LOG_FOLDER_ID}
       - GOOGLE_DRIVE_LOG_SUBFOLDER=${GOOGLE_DRIVE_LOG_SUBFOLDER}
@@ -201,7 +201,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${PROJECT_NAME}-db:5432/${POSTGRES_DB}
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - REDIS_URL=${REDIS_URL}
       - GOOGLE_DRIVE_LOG_FOLDER_ID=${GOOGLE_DRIVE_LOG_FOLDER_ID}
       - GOOGLE_DRIVE_LOG_SUBFOLDER=${GOOGLE_DRIVE_LOG_SUBFOLDER}
@@ -232,7 +232,7 @@ services:
       GENERIC_TIMEZONE: Asia/Dhaka
       NODE_OPTIONS: --max-old-space-size=2048
       DB_TYPE: postgresdb
-      DB_POSTGRESDB_HOST: ${PROJECT_NAME}-db
+      DB_POSTGRESDB_HOST: db
       DB_POSTGRESDB_PORT: 5432
       DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
       DB_POSTGRESDB_USER: ${POSTGRES_USER}
@@ -300,7 +300,7 @@ services:
       - N8N_WEBHOOK_URL=${N8N_WHATSAPP_WEBHOOK_URL}
       - SYNC_AGENT_URL=http://backend:8000/api/whatsapp/sync-agent/
       - BAILEYS_API_SECRET=${BAILEYS_API_SECRET}
-      - BAILEYS_API_URL=http://${PROJECT_NAME}-baileys:3001
+      - BAILEYS_API_URL=http://baileys:3001
       - LOG_LEVEL=info
     volumes:
       - baileys_auth:/app/auth_info_baileys
