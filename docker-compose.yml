@@ -13,7 +13,6 @@ services:
       - postgres_data:/var/lib/postgresql/data
     env_file:
       - .env
-      - ${ENV_FILE_PATH:-.env.dev.local}
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
@@ -74,7 +73,6 @@ services:
     
     env_file:
       - .env
-      - ${ENV_FILE_PATH:-.env.dev.local}
     environment:
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${PROJECT_NAME}-db:5432/${POSTGRES_DB}     
       - GEMINI_API_KEY=${GEMINI_API_KEY}
@@ -173,7 +171,6 @@ services:
       - ${HOST_CONFIG_PATH}/service_account.json:/app/gdrive_key.json:ro
     env_file:
       - .env
-      - ${ENV_FILE_PATH:-.env.dev.local}
     
     environment:
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${PROJECT_NAME}-db:5432/${POSTGRES_DB}
@@ -203,7 +200,6 @@ services:
       - ${HOST_CONFIG_PATH}/service_account.json:/app/gdrive_key.json:ro
     env_file:
       - .env
-      - ${ENV_FILE_PATH:-.env.dev.local}
     environment:
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${PROJECT_NAME}-db:5432/${POSTGRES_DB}
       - REDIS_URL=${REDIS_URL}
