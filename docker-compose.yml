@@ -284,8 +284,8 @@ services:
       - smart-network
     volumes:
       # Allow per-environment config/credential files via env overrides.
-      - ${CF_CONFIG_PATH}:/etc/cloudflared/config.yml:ro
-      - ${CF_CREDENTIALS_PATH}:/etc/cloudflared/credentials.json:ro
+      - ${CF_CONFIG_PATH:-./cloudflare-config/config.yml}:/etc/cloudflared/config.yml:ro
+      - ${CF_CREDENTIALS_PATH:-./cloudflare-config/credentials.json}:/etc/cloudflared/credentials.json:ro
     command: tunnel --config /etc/cloudflared/config.yml run
     logging: *default-logging
     depends_on:
@@ -336,22 +336,22 @@ services:
 volumes:
   postgres_data:
     external: true
-    name: ${VOLUME_PREFIX}_pg_data
+    name: ${VOLUME_PREFIX:-production}_pg_data
   redis_data:
-    name: ${VOLUME_PREFIX}_redis_data
+    name: ${VOLUME_PREFIX:-production}_redis_data
   static_volume:
-    name: ${VOLUME_PREFIX}-static
+    name: ${VOLUME_PREFIX:-production}-static
   media_volume:
-    name: ${VOLUME_PREFIX}-media
+    name: ${VOLUME_PREFIX:-production}-media
   n8n_data:
-    name: ${VOLUME_PREFIX}_n8n_data
+    name: ${VOLUME_PREFIX:-production}_n8n_data
   baileys_auth:
-    name: ${VOLUME_PREFIX}-baileys-auth
+    name: ${VOLUME_PREFIX:-production}-baileys-auth
   minio_data:
-    name: ${VOLUME_PREFIX}-minio-data
+    name: ${VOLUME_PREFIX:-production}-minio-data
   
 
 networks:
   smart-network:
-    name: ${NETWORK_NAME}
+    name: ${NETWORK_NAME:-smart-network}
     driver: bridge
