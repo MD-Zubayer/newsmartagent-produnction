@@ -1,8 +1,8 @@
 # Stage 1: Build
-FROM node:20-slim AS builder
+FROM node:20 AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm install --legacy-peer-deps
+RUN npm install --legacy-peer-deps && npm install @next/swc-linux-x64-gnu
 COPY . .
 RUN npm run build
 
