@@ -5,8 +5,8 @@ import Link from "next/link";
 import { FaPhoneAlt, FaEnvelope, FaMapMarkerAlt, FaPaperPlane, FaWhatsapp } from "react-icons/fa";
 import { FaArrowRight, FaRocket, FaShieldAlt, FaLightbulb } from "react-icons/fa";
 import { FaRobot, FaShareAlt, FaChartBar } from "react-icons/fa";
-import { FaFacebook, FaYoutube, FaCheckCircle } from "react-icons/fa";
-import React, { useState } from "react";
+import { FaFacebook, FaYoutube, FaCheckCircle, FaInstagram, FaTelegram, FaTiktok, FaCode, FaBug, FaRegCommentDots, FaStar } from "react-icons/fa";
+import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "@/lib/api";
 import { useLanguage } from "@/context/LanguageContext";
@@ -32,6 +32,20 @@ const translations = {
     learnMore: "Learn More",
     noCard: "No Card Required",
     secured: "Secured by SSL",
+    integrationsBadge: "Platform Integrations",
+    integrationsTitle1: "Connect Every",
+    integrationsTitle2: "Customer Channel",
+    integrationsDesc: "New Smart Agent works as an AI automation SaaS software for Facebook, WhatsApp, Instagram, Telegram, YouTube, Google Business and TikTok. One dashboard, faster response, better conversion.",
+    integrationsList: [
+      { title: "Facebook Automation", desc: "Auto-reply to comments and inbox messages with human-like AI conversation flows.", cta: "Connect Facebook" },
+      { title: "WhatsApp Business", desc: "Handle customer support and sales chats from one AI-driven WhatsApp workspace.", cta: "Connect WhatsApp" },
+      { title: "Instagram Automation", desc: "Respond to DM and engagement signals quickly to improve lead quality and response time.", cta: "Connect Instagram" },
+      { title: "Telegram Bot", desc: "Deploy a secure Telegram bot for instant Q&A, support routing, and smart follow-up.", cta: "Connect Telegram" },
+      { title: "YouTube Engagement", desc: "Moderate and reply to video comments automatically to keep your audience active.", cta: "Connect YouTube" },
+      { title: "Google Business Profile", desc: "Automate review responses and local customer queries to strengthen business trust.", cta: "Connect GBP" },
+      { title: "TikTok Automation", desc: "Capture social engagement and streamline profile interactions with AI-powered replies.", cta: "Connect TikTok" },
+      { title: "Website AI Widget", desc: "Embed an AI chat widget on your site to convert visitors into qualified conversations.", cta: "Connect Widget" },
+    ],
     featuresBadge: "Platform Core Features",
     featuresTitle1: "Business Automation with",
     featuresTitle2: "Smart AI",
@@ -80,6 +94,18 @@ const translations = {
     smartVelocityDesc: "Your work will be done in the blink of an eye through automation.",
     ironcladDesc: "Your data and privacy are our highest priority.",
     adaptiveDesc: "Smart tools that adapt to your business over time.",
+    communityBadge: "Community Actions",
+    communityTitle1: "From Home, Open",
+    communityTitle2: "Any Request Instantly",
+    communityDesc: "Send feedback, report bugs, request features, check roadmap, and write reviews directly from the home page.",
+    communityViewAll: "Open Community Hub",
+    communityActions: [
+      { title: "Feedback", desc: "Share your opinion to help improve product quality and usability.", cta: "Give Feedback", href: "/community/feedback" },
+      { title: "Bug Report", desc: "Found an issue? Report it with details so our team can fix it quickly.", cta: "Report Bug", href: "/community/bug-report" },
+      { title: "Feature Request", desc: "Suggest new features that can improve automation, growth, and workflow.", cta: "Suggest Feature", href: "/community/feature-request" },
+      { title: "Roadmap", desc: "Check upcoming features and priorities planned for New Smart Agent.", cta: "View Roadmap", href: "/community/roadmap" },
+      { title: "Write a Review", desc: "Rate your experience and help other businesses choose with confidence.", cta: "Write Review", href: "/community/review" },
+    ],
   },
   bn: {
     badge: "The Most Trusted AI Automation in BD",
@@ -91,6 +117,20 @@ const translations = {
     learnMore: "আরও জানুন",
     noCard: "কার্ড লাগবে না",
     secured: "SSL সুরক্ষিত",
+    integrationsBadge: "প্ল্যাটফর্ম ইন্টিগ্রেশন",
+    integrationsTitle1: "সব কাস্টমার",
+    integrationsTitle2: "চ্যানেল এক জায়গায়",
+    integrationsDesc: "New Smart Agent একটি AI automation SaaS software, যা Facebook, WhatsApp, Instagram, Telegram, YouTube, Google Business ও TikTok এক ড্যাশবোর্ডে যুক্ত করে দ্রুত রিপ্লাই, ভালো সার্ভিস এবং বেশি কনভার্শন নিশ্চিত করে।",
+    integrationsList: [
+      { title: "Facebook Automation", desc: "কমেন্ট ও ইনবক্সে AI দিয়ে দ্রুত, মানবসুলভ অটো-রিপ্লাই দিন।", cta: "Facebook Connect" },
+      { title: "WhatsApp Business", desc: "একটি AI-চালিত ওয়ার্কস্পেস থেকে সাপোর্ট ও সেলস চ্যাট ম্যানেজ করুন।", cta: "WhatsApp Connect" },
+      { title: "Instagram Automation", desc: "DM ও এনগেজমেন্টে দ্রুত সাড়া দিয়ে লিড কোয়ালিটি উন্নত করুন।", cta: "Instagram Connect" },
+      { title: "Telegram Bot", desc: "ইনস্ট্যান্ট Q&A, সাপোর্ট রাউটিং ও ফলো-আপের জন্য বট ডিপ্লয় করুন।", cta: "Telegram Connect" },
+      { title: "YouTube Engagement", desc: "ভিডিও কমেন্ট অটো-ম্যানেজ ও রিপ্লাই দিয়ে অডিয়েন্স একটিভ রাখুন।", cta: "YouTube Connect" },
+      { title: "Google Business Profile", desc: "রিভিউ ও লোকাল কাস্টমার প্রশ্নে অটোমেশন দিয়ে বিশ্বাসযোগ্যতা বাড়ান।", cta: "GBP Connect" },
+      { title: "TikTok Automation", desc: "সামাজিক এনগেজমেন্ট দ্রুত ধরুন এবং AI দিয়ে প্রোফাইল ইন্টারঅ্যাকশন পরিচালনা করুন।", cta: "TikTok Connect" },
+      { title: "Website AI Widget", desc: "ওয়েবসাইটে AI চ্যাট উইজেট যুক্ত করে ভিজিটরকে লিডে কনভার্ট করুন।", cta: "Widget Connect" },
+    ],
     featuresBadge: "Platform Core Features",
     featuresTitle1: "Business Automation with",
     featuresTitle2: "Smart AI",
@@ -139,15 +179,21 @@ const translations = {
     smartVelocityDesc: "অটোমেশনের মাধ্যমে আপনার কাজ হবে চোখের পলকে।",
     ironcladDesc: "আপনার ডাটা এবং প্রাইভেসি আমাদের সর্বোচ্চ অগ্রাধিকার।",
     adaptiveDesc: "স্মার্ট টুলস যা সময়ের সাথে আপনার ব্যবসার সাথে মানিয়ে নেয়।",
+    communityBadge: "কমিউনিটি অ্যাকশন",
+    communityTitle1: "হোম পেজ থেকেই",
+    communityTitle2: "সব রিকোয়েস্ট করুন",
+    communityDesc: "সরাসরি হোম পেজ থেকেই feedback দিন, bug report করুন, feature request দিন, roadmap দেখুন এবং review লিখুন।",
+    communityViewAll: "Community Hub দেখুন",
+    communityActions: [
+      { title: "Feedback", desc: "প্ল্যাটফর্ম উন্নত করতে আপনার মতামত জানান।", cta: "মতামত দিন", href: "/community/feedback" },
+      { title: "Bug Report", desc: "কোনো সমস্যা পেলে বিস্তারিত জানিয়ে দ্রুত সমাধান পেতে রিপোর্ট করুন।", cta: "বাগ রিপোর্ট", href: "/community/bug-report" },
+      { title: "Feature Request", desc: "অটোমেশন ও গ্রোথের জন্য দরকারি নতুন ফিচারের প্রস্তাব দিন।", cta: "ফিচার রিকোয়েস্ট", href: "/community/feature-request" },
+      { title: "Roadmap", desc: "আগামীতে কোন ফিচার আসছে, কী প্রায়োরিটি চলছে তা দেখুন।", cta: "রোডম্যাপ দেখুন", href: "/community/roadmap" },
+      { title: "Write a Review", desc: "আপনার অভিজ্ঞতা রিভিউ দিন, অন্যদের সঠিক সিদ্ধান্ত নিতে সাহায্য করুন।", cta: "রিভিউ লিখুন", href: "/community/review" },
+    ],
   },
 };
 
-const featureIcons = [<FaFacebook key="fb" />, <FaWhatsapp key="wa" />, <FaYoutube key="yt" />];
-const featureStyles = [
-  { gradient: "from-blue-600 to-indigo-600", hoverBg: "group-hover:bg-blue-600", lightBg: "bg-blue-50", textColor: "text-blue-600" },
-  { gradient: "from-green-500 to-teal-600", hoverBg: "group-hover:bg-green-600", lightBg: "bg-green-50", textColor: "text-green-600" },
-  { gradient: "from-red-500 to-rose-600", hoverBg: "group-hover:bg-red-600", lightBg: "bg-red-50", textColor: "text-red-600" },
-];
 const serviceIcons = [<FaRobot key="robot" />, <FaShareAlt key="share" />, <FaChartBar key="chart" />];
 const serviceGradients = [
   { gradient: "from-indigo-600 via-purple-600 to-pink-500", shadow: "shadow-purple-200" },
@@ -160,6 +206,10 @@ const contactColors = [
   { bg: "bg-pink-50", color: "text-pink-600" },
   { bg: "bg-green-50", color: "text-green-600" },
 ];
+const integrationIcons = [FaFacebook, FaWhatsapp, FaInstagram, FaTelegram, FaYoutube, FaShieldAlt, FaTiktok, FaCode];
+const integrationAccents = ["text-blue-600", "text-green-600", "text-pink-600", "text-sky-600", "text-red-600", "text-indigo-600", "text-black", "text-amber-600"];
+const communityActionIcons = [FaRegCommentDots, FaBug, FaLightbulb, FaRocket, FaStar];
+const communityActionColors = ["from-indigo-600 to-violet-600", "from-rose-600 to-orange-500", "from-amber-500 to-yellow-500", "from-purple-600 to-indigo-600", "from-yellow-500 to-orange-500"];
 
 export default function HomePage() {
   const { lang } = useLanguage();
@@ -167,6 +217,15 @@ export default function HomePage() {
 
   const [formData, setFormData] = useState({ name: "", email: "", subjects: "", messages: "" });
   const [status, setStatus] = useState({ loading: false, success: null, error: null });
+  const [activeCommunityCard, setActiveCommunityCard] = useState(0);
+
+  useEffect(() => {
+    if (!t?.communityActions?.length) return;
+    const timer = setInterval(() => {
+      setActiveCommunityCard((prev) => (prev + 1) % t.communityActions.length);
+    }, 2800);
+    return () => clearInterval(timer);
+  }, [t]);
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
@@ -183,44 +242,44 @@ export default function HomePage() {
   };
 
   return (
-    <div className="relative min-h-screen bg-gray-50 overflow-x-hidden text-gray-900">
+    <div className="relative min-h-screen bg-slate-50 overflow-x-hidden text-gray-900 [--h1:clamp(2.4rem,6vw,5rem)] [--h2:clamp(1.9rem,4.5vw,3.2rem)] [--h3:clamp(1.25rem,2.2vw,1.8rem)] [--body:clamp(1rem,1.2vw,1.12rem)] [--muted:clamp(0.95rem,1.1vw,1.02rem)]">
       <Navbar />
 
       {/* Hero Section */}
-      <section className="relative min-h-[90vh] md:min-h-screen w-full flex items-center justify-center overflow-hidden bg-white">
+      <section className="relative min-h-[90vh] md:min-h-screen w-full flex items-center justify-center overflow-hidden bg-gradient-to-b from-white via-slate-50 to-indigo-50/40">
         <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
           <motion.div animate={{ scale: [1, 1.2, 1], rotate: [0, 90, 0], opacity: [0.6, 0.4, 0.6] }} transition={{ duration: 15, repeat: Infinity }} className="absolute top-[-10%] right-[-5%] w-[50%] h-[50%] bg-indigo-100 rounded-full blur-[100px]" />
           <motion.div animate={{ scale: [1, 1.3, 1], x: [0, -30, 0], opacity: [0.5, 0.7, 0.5] }} transition={{ duration: 20, repeat: Infinity }} className="absolute bottom-[-10%] left-[-5%] w-[50%] h-[50%] bg-blue-100 rounded-full blur-[100px]" />
         </div>
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#4f46e505_1px,transparent_1px),linear-gradient(to_bottom,#4f46e505_1px,transparent_1px)] bg-[size:60px_60px]"></div>
 
-        <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="relative z-10 container mx-auto px-6 py-20 flex flex-col items-center">
-          <motion.div variants={fadeInUp} className="inline-flex items-center gap-2 px-5 py-2 mt-8 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 text-xs md:text-sm font-black mb-10 shadow-sm">
+        <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="relative z-10 container mx-auto px-6 py-16 md:py-20 lg:py-24 flex flex-col items-center">
+          <motion.div variants={fadeInUp} className="inline-flex items-center gap-2 px-5 py-2 mt-8 rounded-full bg-white/80 backdrop-blur-md border border-indigo-100 text-indigo-700 text-xs md:text-sm font-black mb-10 shadow-sm">
             <FaRocket className="animate-bounce" />
             <span className="uppercase tracking-widest text-[10px] md:text-xs">{t.badge}</span>
           </motion.div>
 
-          <motion.h1 variants={fadeInUp} className="text-4xl md:text-7xl font-black text-center text-gray-900 mb-8 leading-[1.1] tracking-tighter max-w-5xl">
+          <motion.h1 variants={fadeInUp} className="text-[length:var(--h1)] font-black text-center text-slate-900 mb-8 leading-[1.05] tracking-[-0.03em] max-w-5xl">
             {t.heroTitle1} <span className="text-indigo-600">{t.heroTitle2}</span> <br className="hidden md:block" />
-            <span className="italic text-purple-600">{t.heroTitle3}</span>
+            <span className="italic text-cyan-700">{t.heroTitle3}</span>
           </motion.h1>
 
-          <motion.p variants={fadeInUp} className="text-gray-500 text-lg md:text-xl text-center max-w-3xl mb-12 leading-relaxed font-medium px-4">
+          <motion.p variants={fadeInUp} className="text-gray-600 text-[length:var(--body)] text-center max-w-3xl mb-12 leading-relaxed font-medium px-4">
             <span className="text-indigo-700 font-bold">New Smart Agent</span> {t.heroDesc}
           </motion.p>
 
-          <motion.div variants={fadeInUp} className="flex flex-col sm:flex-row items-center gap-6 mb-20">
-            <Link href="/signup" className="group relative px-10 py-5 rounded-2xl bg-indigo-600 text-white font-black text-lg shadow-xl shadow-indigo-200 hover:bg-indigo-700 active:bg-indigo-800 transition-all flex items-center gap-3 active:scale-95 overflow-hidden">
+          <motion.div variants={fadeInUp} className="flex flex-col sm:flex-row items-center gap-4 md:gap-6 mb-14 md:mb-18 lg:mb-20">
+            <Link href="/signup" className="group relative px-10 py-5 rounded-2xl bg-gradient-to-r from-indigo-600 to-cyan-600 text-white font-black text-lg shadow-xl shadow-indigo-300/40 hover:from-indigo-700 hover:to-cyan-700 active:from-indigo-800 active:to-cyan-800 transition-all flex items-center gap-3 active:scale-95 overflow-hidden">
               <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
               <span className="relative z-10 flex items-center gap-3">{t.getStarted} <FaArrowRight className="group-hover:translate-x-2 transition-transform" /></span>
             </Link>
-            <Link href="/about" className="px-10 py-5 rounded-2xl border border-gray-200 bg-white/80 backdrop-blur-md text-gray-700 font-bold text-lg hover:bg-white hover:border-gray-300 transition-all shadow-sm active:scale-95">
+            <Link href="/about" className="px-10 py-5 rounded-2xl border border-slate-200 bg-white/85 backdrop-blur-md text-slate-700 font-bold text-lg hover:bg-white hover:border-slate-300 transition-all shadow-sm active:scale-95">
               {t.learnMore}
             </Link>
           </motion.div>
 
-          <motion.div variants={fadeInUp} className="w-full max-w-4xl py-10 border-t border-gray-100 flex flex-col items-center gap-8">
-            <div className="flex flex-wrap justify-center items-center gap-8 md:gap-16 opacity-40 grayscale hover:grayscale-0 hover:opacity-100 transition-all duration-700">
+          <motion.div variants={fadeInUp} className="w-full max-w-4xl py-8 md:py-10 border-t border-slate-200/70 flex flex-col items-center gap-6 md:gap-8">
+            <div className="flex flex-wrap justify-center items-center gap-6 md:gap-12 lg:gap-16 opacity-40 grayscale hover:grayscale-0 hover:opacity-100 transition-all duration-700">
               <div className="flex items-center gap-2 text-gray-800 font-black text-xl"><FaFacebook className="text-[#1877F2]" /> <span className="text-sm">Facebook</span></div>
               <div className="flex items-center gap-2 text-gray-800 font-black text-xl"><FaWhatsapp className="text-[#25D366]" /> <span className="text-sm">WhatsApp</span></div>
               <div className="flex items-center gap-2 text-gray-800 font-black text-xl"><FaYoutube className="text-[#FF0000]" /> <span className="text-sm">YouTube</span></div>
@@ -235,63 +294,71 @@ export default function HomePage() {
         <div className="absolute bottom-0 left-0 w-full h-16 bg-gradient-to-t from-gray-50 to-transparent"></div>
       </section>
 
-      {/* Features Section */}
-      <section className="py-24 px-4 md:px-10 bg-white relative">
-        <div className="max-w-7xl mx-auto">
-          <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.8 }} className="max-w-3xl mx-auto text-center mb-16 space-y-4">
-            <h2 className="text-indigo-600 font-black uppercase tracking-[0.2em] text-xs">{t.featuresBadge}</h2>
-            <h3 className="text-3xl md:text-5xl font-black text-gray-900 tracking-tight leading-tight">
-              {t.featuresTitle1} <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">{t.featuresTitle2}</span> {t.featuresTitle3}
+      {/* Integrations Section */}
+      <section className="py-16 md:py-20 lg:py-24 px-4 md:px-8 lg:px-10 bg-slate-950 relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(99,102,241,0.25),transparent_35%),radial-gradient(circle_at_85%_10%,rgba(14,165,233,0.2),transparent_30%),radial-gradient(circle_at_50%_100%,rgba(236,72,153,0.15),transparent_35%)]"></div>
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:42px_42px]"></div>
+
+        <div className="max-w-7xl mx-auto relative z-10">
+          <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.8 }} className="max-w-4xl mx-auto text-center mb-10 md:mb-12 lg:mb-14 space-y-3 md:space-y-4">
+            <h2 className="text-cyan-300 font-black uppercase tracking-[0.2em] text-xs">{t.integrationsBadge}</h2>
+            <h3 className="text-[length:var(--h2)] font-black text-white tracking-[-0.02em] leading-[1.1]">
+              {t.integrationsTitle1} <span className="text-indigo-300">{t.integrationsTitle2}</span>
             </h3>
-            <p className="text-gray-500 font-medium text-lg leading-relaxed">{t.featuresDesc}</p>
+            <p className="text-slate-300 font-medium text-[length:var(--body)] leading-relaxed">{t.integrationsDesc}</p>
           </motion.div>
 
-          <motion.div variants={staggerContainer} initial="hidden" whileInView="visible" viewport={{ once: true }}>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {t.featuresList.map((feature, index) => {
-                const s = featureStyles[index];
-                return (
-                  <motion.div key={index} variants={fadeInUp} whileHover={{ y: -10 }} whileTap={{ y: -6, scale: 0.98 }} className="group relative p-8 rounded-[2.5rem] bg-white border border-gray-100 shadow-xl shadow-gray-200/30 transition-all duration-300 overflow-hidden">
-                    <div className={`feature-overlay absolute inset-0 bg-gradient-to-br ${s.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-500`}></div>
-                    <div className="relative z-10">
-                      <div className={`w-16 h-16 rounded-2xl ${s.lightBg} ${s.textColor} flex items-center justify-center text-3xl mb-8 group-hover:bg-white transition-all duration-500 shadow-sm`}>{featureIcons[index]}</div>
-                      <h3 className="text-2xl font-black text-gray-900 mb-4 group-hover:text-white transition-colors duration-500">{feature.title}</h3>
-                      <p className="text-gray-500 font-medium leading-relaxed mb-8 group-hover:text-white/90 transition-colors duration-500">{feature.desc}</p>
-                      <button className={`flex items-center gap-3 text-sm font-black uppercase tracking-widest ${s.textColor} group-hover:text-white transition-colors duration-500`}>
-                        {t.learnMore} <FaArrowRight className="group-hover:translate-x-2 transition-transform" />
-                      </button>
-                    </div>
-                    <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-gray-50 rounded-full group-hover:bg-white/10 transition-colors"></div>
-                  </motion.div>
-                );
-              })}
-            </div>
+          <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8 md:mb-10">
+            {["AI-first SaaS", "Multi-platform Hub", "Automation Ready", "SEO-friendly Content"].map((pill) => (
+              <div key={pill} className="rounded-2xl border border-white/15 bg-white/5 backdrop-blur-md px-4 py-3 text-center text-[11px] md:text-xs font-black tracking-wider uppercase text-slate-200">
+                {pill}
+              </div>
+            ))}
+          </motion.div>
+
+          <motion.div variants={staggerContainer} initial="hidden" whileInView="visible" viewport={{ once: true }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5 lg:gap-6">
+            {t.integrationsList.map((item, index) => {
+              const Icon = integrationIcons[index];
+              return (
+                <motion.article key={item.title} variants={fadeInUp} whileHover={{ y: -10, scale: 1.01 }} whileTap={{ y: -4, scale: 0.99 }} className="group rounded-3xl border border-white/15 bg-white/10 backdrop-blur-xl p-6 flex flex-col h-full shadow-[0_24px_80px_-24px_rgba(15,23,42,0.85)] transition-all duration-500 hover:border-cyan-300/60 hover:bg-white/15 hover:shadow-[0_32px_90px_-28px_rgba(34,211,238,0.45)] active:scale-[0.985] active:bg-white/20">
+                  <div className={`w-12 h-12 rounded-xl bg-white/90 flex items-center justify-center text-2xl mb-5 ${integrationAccents[index]}`}>
+                    <Icon />
+                  </div>
+                  <h4 className="text-[length:var(--h3)] font-black text-white mb-3 tracking-tight leading-tight">{item.title}</h4>
+                  <p className="text-slate-200/90 font-medium text-[length:var(--muted)] leading-relaxed flex-1">{item.desc}</p>
+                  <Link href="/dashboard/connect" className="mt-6 inline-flex items-center gap-2 text-cyan-300 group-hover:text-white font-black text-xs uppercase tracking-widest transition-colors">
+                    {item.cta} <FaArrowRight className="group-hover:translate-x-1 transition-transform" />
+                  </Link>
+                </motion.article>
+              );
+            })}
           </motion.div>
         </div>
       </section>
 
       {/* Services Section */}
-      <section className="py-24 px-4 md:px-10 bg-[#fbfbfc] relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-100/30 rounded-full blur-[120px]"></div>
+      <section className="py-16 md:py-20 lg:py-24 px-4 md:px-8 lg:px-10 bg-gradient-to-b from-[#f8fafc] via-[#f6f8ff] to-[#fdfdff] relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-100/40 rounded-full blur-[120px]"></div>
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-cyan-100/40 rounded-full blur-[120px]"></div>
         <div className="max-w-7xl mx-auto relative z-10">
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} className="text-center mb-20 space-y-4">
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} className="text-center mb-12 md:mb-16 lg:mb-20 space-y-4 md:space-y-5">
             <span className="px-4 py-1.5 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-black uppercase tracking-[0.2em] border border-indigo-100 shadow-sm">{t.servicesBadge}</span>
-            <h2 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tight">
+            <h2 className="text-[length:var(--h2)] font-black text-gray-900 tracking-[-0.02em] leading-[1.1]">
               {t.servicesTitle1} <span className="text-indigo-600">{t.servicesTitle2}</span>
             </h2>
-            <p className="text-gray-500 max-w-2xl mx-auto font-medium text-lg leading-relaxed px-4">{t.servicesDesc}</p>
+            <p className="text-gray-600 max-w-2xl mx-auto font-medium text-[length:var(--body)] leading-relaxed px-4">{t.servicesDesc}</p>
           </motion.div>
 
-          <motion.div variants={staggerContainer} initial="hidden" whileInView="visible" viewport={{ once: true }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-10 relative">
+          <motion.div variants={staggerContainer} initial="hidden" whileInView="visible" viewport={{ once: true }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-7 lg:gap-9 relative">
             {t.servicesList.map((service, index) => {
               const sg = serviceGradients[index];
               return (
-                <motion.div key={index} variants={fadeInUp} whileHover={{ y: -12 }} whileTap={{ y: -6, scale: 0.98 }} className="relative group h-full rounded-[2.5rem] bg-white/80 backdrop-blur-md border border-white/50 p-8 md:p-10 shadow-xl shadow-gray-200/40 flex flex-col transition-all duration-300">
-                  <div className={`service-overlay absolute inset-0 bg-gradient-to-br ${sg.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-[2.5rem] -z-10`}></div>
+                <motion.div key={index} variants={fadeInUp} whileHover={{ y: -12 }} whileTap={{ y: -6, scale: 0.98 }} className="relative group h-full rounded-[2.5rem] bg-white/90 backdrop-blur-md border border-white/60 p-8 md:p-10 shadow-[0_24px_70px_-28px_rgba(30,41,59,0.35)] flex flex-col transition-all duration-500 hover:border-indigo-200 hover:shadow-[0_30px_80px_-30px_rgba(79,70,229,0.45)] active:scale-[0.985]">
+                  <div className={`service-overlay absolute inset-0 bg-gradient-to-br ${sg.gradient} opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-500 rounded-[2.5rem] -z-10`}></div>
                   <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${sg.gradient} flex items-center justify-center text-white text-3xl mb-8 shadow-lg ${sg.shadow}`}>{serviceIcons[index]}</div>
-                  <h3 className="text-2xl font-black text-gray-900 mb-4 group-hover:text-white transition-colors duration-300">{service.title}</h3>
-                  <p className="text-gray-500 font-medium leading-relaxed mb-8 group-hover:text-indigo-50 transition-colors duration-300 flex-1">{service.desc}</p>
-                  <div className="flex items-center gap-3 text-xs font-black uppercase tracking-[0.2em] text-indigo-600 group-hover:text-white transition-all duration-300">
+                  <h3 className="text-[length:var(--h3)] font-black text-gray-900 mb-4 group-hover:text-white transition-colors duration-300 leading-tight">{service.title}</h3>
+                  <p className="text-gray-600 font-medium text-[length:var(--muted)] leading-relaxed mb-8 group-hover:text-indigo-50 group-active:text-indigo-50 transition-colors duration-300 flex-1">{service.desc}</p>
+                  <div className="flex items-center gap-3 text-xs font-black uppercase tracking-[0.2em] text-indigo-600 group-hover:text-white group-active:text-white transition-all duration-300">
                     <span>{t.learnMore}</span><FaArrowRight className="group-hover:translate-x-2 transition-transform" />
                   </div>
                 </motion.div>
@@ -299,15 +366,15 @@ export default function HomePage() {
             })}
           </motion.div>
 
-          <motion.div initial={{ opacity: 0, y: 50 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="mt-20 p-8 md:p-14 rounded-[3.5rem] bg-indigo-900 text-white flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden shadow-2xl shadow-indigo-200">
+          <motion.div initial={{ opacity: 0, y: 50 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="mt-12 md:mt-16 lg:mt-20 p-6 md:p-10 lg:p-14 rounded-[2rem] md:rounded-[2.75rem] lg:rounded-[3.5rem] bg-gradient-to-r from-slate-900 via-indigo-900 to-cyan-900 text-white flex flex-col md:flex-row items-center justify-between gap-6 md:gap-8 relative overflow-hidden shadow-2xl shadow-indigo-300/30">
             <div className="relative z-10 text-center md:text-left space-y-4">
-              <h4 className="text-2xl md:text-4xl font-black tracking-tight leading-tight">
+              <h4 className="text-[clamp(1.6rem,3vw,2.4rem)] font-black tracking-tight leading-tight">
                 {t.ctaTitle1} <br /><span className="text-indigo-400 italic">{t.ctaTitle2}</span>
               </h4>
-              <p className="text-indigo-200 font-medium max-w-lg text-lg">{t.ctaDesc}</p>
+              <p className="text-indigo-200 font-medium max-w-lg text-[length:var(--body)] leading-relaxed">{t.ctaDesc}</p>
             </div>
             <Link href="/contact" className="relative z-20">
-              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="px-12 py-5 bg-white text-indigo-900 rounded-2xl font-black text-lg shadow-xl hover:bg-indigo-50 transition-all whitespace-nowrap">
+              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="px-12 py-5 bg-white text-slate-900 rounded-2xl font-black text-lg shadow-xl hover:bg-cyan-50 transition-all whitespace-nowrap">
                 {t.ctaBtn}
               </motion.button>
             </Link>
@@ -318,47 +385,47 @@ export default function HomePage() {
       </section>
 
       {/* About Section */}
-      <section className="py-24 px-4 md:px-10 bg-white relative">
+      <section className="py-16 md:py-20 lg:py-24 px-4 md:px-8 lg:px-10 bg-gradient-to-b from-white to-slate-50/70 relative">
         <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 md:gap-12 lg:gap-16 items-center">
             <motion.div initial={{ opacity: 0, x: -50 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} className="grid grid-cols-2 gap-4 md:gap-6 order-2 lg:order-1">
               <div className="space-y-4 md:space-y-6">
-                <div className="bg-gradient-to-br from-indigo-600 to-indigo-700 p-8 rounded-[2rem] shadow-xl text-white">
+                <div className="bg-gradient-to-br from-indigo-600 to-cyan-600 p-8 rounded-[2rem] shadow-xl text-white transition-all duration-500 hover:shadow-[0_22px_50px_-20px_rgba(34,211,238,0.65)] hover:-translate-y-1 active:scale-[0.985]">
                   <FaRocket size={32} className="mb-4" />
                   <h4 className="font-black text-xl tracking-tight uppercase">Smart Velocity</h4>
                   <p className="text-indigo-100 text-[11px] leading-relaxed mt-2 font-bold italic">{t.smartVelocityDesc}</p>
                 </div>
-                <div className="bg-gray-50/80 backdrop-blur-sm p-8 rounded-[2rem] border border-gray-100 flex flex-col items-center text-center group hover:bg-white hover:shadow-xl transition-all duration-300">
+                <div className="bg-white/80 backdrop-blur-md p-8 rounded-[2rem] border border-slate-200 flex flex-col items-center text-center group hover:bg-white hover:shadow-xl hover:border-indigo-200 transition-all duration-500 active:scale-[0.985]">
                   <FaShieldAlt size={32} className="mb-4 text-indigo-600" />
                   <h4 className="font-black text-xl text-gray-800 tracking-tight uppercase">Ironclad Security</h4>
                   <p className="text-gray-400 text-[11px] leading-relaxed mt-2 font-bold">{t.ironcladDesc}</p>
                 </div>
               </div>
               <div className="pt-8 md:pt-12 space-y-4 md:space-y-6">
-                <div className="bg-gray-50/80 backdrop-blur-sm p-8 rounded-[2rem] border border-gray-100 flex flex-col items-center text-center group hover:bg-white hover:shadow-xl transition-all duration-300">
+                <div className="bg-white/80 backdrop-blur-md p-8 rounded-[2rem] border border-slate-200 flex flex-col items-center text-center group hover:bg-white hover:shadow-xl hover:border-cyan-200 transition-all duration-500 active:scale-[0.985]">
                   <FaLightbulb size={32} className="mb-4 text-amber-500" />
                   <h4 className="font-black text-xl text-gray-800 tracking-tight uppercase">Adaptive AI</h4>
                   <p className="text-gray-400 text-[11px] leading-relaxed mt-2 font-bold">{t.adaptiveDesc}</p>
                 </div>
-                <div className="bg-indigo-50 p-8 rounded-[2rem] border border-indigo-100 flex flex-col items-center text-center">
+                <div className="bg-gradient-to-br from-indigo-50 to-cyan-50 p-8 rounded-[2rem] border border-indigo-100 flex flex-col items-center text-center transition-all duration-500 hover:from-indigo-100 hover:to-cyan-100 hover:shadow-lg active:scale-[0.985]">
                   <h3 className="text-4xl font-black text-indigo-600">10X</h3>
                   <p className="text-indigo-900 font-bold text-sm mt-2 uppercase tracking-[0.2em]">Efficiency</p>
                 </div>
               </div>
             </motion.div>
 
-            <motion.div initial={{ opacity: 0, x: 50 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} className="space-y-8 order-1 lg:order-2">
+            <motion.div initial={{ opacity: 0, x: 50 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} className="space-y-6 md:space-y-7 lg:space-y-8 order-1 lg:order-2">
               <div className="space-y-4">
                 <span className="inline-block px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-xs font-black uppercase tracking-widest border border-indigo-100">{t.aboutBadge}</span>
-                <h2 className="text-4xl md:text-5xl font-black text-gray-900 leading-[1.1]">
+                <h2 className="text-[length:var(--h2)] font-black text-gray-900 leading-[1.1] tracking-[-0.02em]">
                   {t.aboutTitle1} <span className="text-indigo-600 italic">{t.aboutTitle2}</span>
                 </h2>
               </div>
               <div className="space-y-6">
-                <p className="text-gray-600 text-lg leading-relaxed font-medium border-l-4 border-indigo-600 pl-6">
+                <p className="text-gray-700 text-[length:var(--body)] leading-relaxed font-medium border-l-4 border-indigo-600 pl-6">
                   <strong className="text-gray-900">New Smart Agent</strong> {t.aboutP1}
                 </p>
-                <p className="text-gray-500 leading-relaxed font-medium">{t.aboutP2}</p>
+                <p className="text-gray-600 text-[length:var(--muted)] leading-relaxed font-medium">{t.aboutP2}</p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {t.aboutFeatures.map((item, idx) => (
@@ -378,53 +445,116 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Community Quick Actions */}
+      <section className="py-16 md:py-20 lg:py-24 px-4 md:px-8 lg:px-10 bg-white relative overflow-hidden">
+        <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-[85%] h-44 bg-violet-100/50 blur-[100px] rounded-full"></div>
+        <div className="max-w-6xl mx-auto relative z-10">
+          <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="text-center mb-10 md:mb-12">
+            <p className="text-indigo-600 font-black uppercase tracking-[0.2em] text-xs mb-3">{t.communityBadge}</p>
+            <h3 className="text-[length:var(--h2)] font-black text-slate-900 tracking-[-0.02em] leading-[1.1]">
+              {t.communityTitle1} <span className="text-indigo-600">{t.communityTitle2}</span>
+            </h3>
+            <p className="text-slate-600 text-[length:var(--body)] font-medium leading-relaxed max-w-3xl mx-auto mt-4">{t.communityDesc}</p>
+          </motion.div>
+
+          <div className="max-w-3xl mx-auto">
+            <AnimatePresence mode="wait">
+              {t.communityActions.map((item, index) => {
+                if (index !== activeCommunityCard) return null;
+                const Icon = communityActionIcons[index];
+                const grad = communityActionColors[index];
+                return (
+                  <motion.div
+                    key={`${item.title}-${index}`}
+                    initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -20, scale: 0.98 }}
+                    transition={{ duration: 0.35 }}
+                    className="group rounded-[2rem] border border-slate-200 bg-white p-7 md:p-8 shadow-[0_18px_60px_-30px_rgba(30,41,59,0.35)] transition-all duration-500 hover:border-indigo-200 hover:shadow-[0_24px_70px_-30px_rgba(79,70,229,0.45)] active:scale-[0.985]"
+                  >
+                    <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${grad} text-white text-2xl flex items-center justify-center mb-5 transition-all duration-500 group-hover:scale-110 group-hover:shadow-[0_16px_34px_-14px_rgba(79,70,229,0.7)] group-active:scale-105`}>
+                      <Icon />
+                    </div>
+                    <h4 className="text-[length:var(--h3)] text-slate-900 font-black mb-3">{item.title}</h4>
+                    <p className="text-slate-600 text-[length:var(--muted)] leading-relaxed font-medium mb-7">{item.desc}</p>
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                      <Link href={item.href} className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-slate-900 to-indigo-900 text-white font-black text-sm hover:from-indigo-700 hover:to-cyan-700 active:from-indigo-800 active:to-cyan-800 transition-all duration-300">
+                        {item.cta} <FaArrowRight />
+                      </Link>
+                      <Link href="/community" className="inline-flex items-center gap-2 text-indigo-600 font-black text-sm">
+                        {t.communityViewAll} <FaArrowRight />
+                      </Link>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+
+            <div className="flex items-center justify-center gap-2 mt-6">
+              {t.communityActions.map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setActiveCommunityCard(i)}
+                  className={`h-2.5 rounded-full transition-all ${activeCommunityCard === i ? "w-7 bg-indigo-600" : "w-2.5 bg-slate-300 hover:bg-slate-400"}`}
+                  aria-label={`Community card ${i + 1}`}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Contact Section */}
-      <section className="py-24 px-6 bg-[#FDFDFF] relative overflow-hidden">
+      <section className="py-16 md:py-20 lg:py-24 px-4 md:px-6 bg-gradient-to-b from-[#FDFDFF] to-[#f6f9ff] relative overflow-hidden">
+        <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[80%] h-40 bg-cyan-100/30 blur-[120px] rounded-full"></div>
         <div className="max-w-7xl mx-auto">
-          <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="text-center mb-16 space-y-4">
+          <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="text-center mb-10 md:mb-14 lg:mb-16 space-y-3 md:space-y-4">
             <h2 className="text-indigo-600 font-black uppercase tracking-widest text-sm italic">{t.contactBadge}</h2>
-            <h3 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tight">
+            <h3 className="text-[length:var(--h2)] font-black text-gray-900 tracking-[-0.02em]">
               {t.contactTitle1} <span className="text-indigo-600">{t.contactTitle2}</span>
             </h3>
           </motion.div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-10 lg:gap-12 items-start">
             <motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} className="lg:col-span-5 space-y-6">
               {t.contactItems.map((card, idx) => (
-                <motion.div key={idx} whileHover={{ x: 10 }} whileTap={{ x: 6, scale: 0.98 }} className="bg-white py-6 px-3 rounded-[2.5rem] shadow-sm border border-gray-100 flex items-start gap-6 group cursor-default active:shadow-md transition-all duration-200">
+                <motion.div key={idx} whileHover={{ x: 10 }} whileTap={{ x: 6, scale: 0.98 }} className="bg-white/90 backdrop-blur-md py-6 px-4 rounded-[2.5rem] shadow-lg shadow-slate-200/40 border border-slate-100 flex items-start gap-6 group cursor-default active:shadow-md transition-all duration-500 hover:border-indigo-200 hover:shadow-[0_24px_60px_-28px_rgba(79,70,229,0.45)] active:scale-[0.985]">
                   <div className={`w-14 h-14 ${contactColors[idx].bg} rounded-2xl flex items-center justify-center ${contactColors[idx].color} text-xl group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300`}>{contactIcons[idx]}</div>
                   <div>
                     <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">{card.title}</p>
-                    <p className="text-xl font-black text-gray-800 tracking-tighter truncate max-w-[200px] md:max-w-none">{card.value}</p>
+                    <p className="text-[clamp(1rem,1.8vw,1.25rem)] font-black text-gray-800 tracking-tight truncate max-w-[200px] md:max-w-none">{card.value}</p>
                   </div>
                 </motion.div>
               ))}
             </motion.div>
 
             <motion.div initial={{ opacity: 0, x: 30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} className="lg:col-span-7">
-              <div className="bg-white p-8 md:p-12 rounded-[3rem] shadow-2xl shadow-gray-200/50 border border-gray-50 relative overflow-hidden group">
+              <div className="bg-white/90 backdrop-blur-xl p-8 md:p-12 rounded-[3rem] shadow-2xl shadow-slate-300/30 border border-slate-100 relative overflow-hidden group">
+                <div className="absolute -top-20 -right-20 w-52 h-52 bg-indigo-100/50 rounded-full blur-3xl"></div>
+                <div className="absolute -bottom-20 -left-20 w-52 h-52 bg-cyan-100/50 rounded-full blur-3xl"></div>
                 <form className="space-y-5 relative z-10" onSubmit={handleSubmit}>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="space-y-2">
                       <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">{t.formName}</label>
-                      <input type="text" name="name" required value={formData.name} onChange={handleChange} placeholder={t.formNamePlaceholder} className="w-full p-4 bg-gray-50/50 border border-gray-100 rounded-2xl outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 transition-all font-medium" />
+                      <input type="text" name="name" required value={formData.name} onChange={handleChange} placeholder={t.formNamePlaceholder} className="w-full p-4 bg-white/70 border border-slate-200 rounded-2xl outline-none focus:bg-white focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10 transition-all font-medium" />
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">{t.formEmail}</label>
-                      <input type="email" name="email" required value={formData.email} onChange={handleChange} placeholder={t.formEmailPlaceholder} className="w-full p-4 bg-gray-50/50 border border-gray-100 rounded-2xl outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 transition-all font-medium" />
+                      <input type="email" name="email" required value={formData.email} onChange={handleChange} placeholder={t.formEmailPlaceholder} className="w-full p-4 bg-white/70 border border-slate-200 rounded-2xl outline-none focus:bg-white focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10 transition-all font-medium" />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">{t.formSubject}</label>
-                    <input type="text" name="subjects" required value={formData.subjects} onChange={handleChange} placeholder={t.formSubjectPlaceholder} className="w-full p-4 bg-gray-50/50 border border-gray-100 rounded-2xl outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 transition-all font-medium" />
+                    <input type="text" name="subjects" required value={formData.subjects} onChange={handleChange} placeholder={t.formSubjectPlaceholder} className="w-full p-4 bg-white/70 border border-slate-200 rounded-2xl outline-none focus:bg-white focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10 transition-all font-medium" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">{t.formMessage}</label>
-                    <textarea name="messages" required value={formData.messages} onChange={handleChange} placeholder={t.formMessagePlaceholder} rows={5} className="w-full p-4 bg-gray-50/50 border border-gray-100 rounded-2xl outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 transition-all font-medium resize-none"></textarea>
+                    <textarea name="messages" required value={formData.messages} onChange={handleChange} placeholder={t.formMessagePlaceholder} rows={5} className="w-full p-4 bg-white/70 border border-slate-200 rounded-2xl outline-none focus:bg-white focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/10 transition-all font-medium resize-none"></textarea>
                   </div>
                   {status.success && <p className="text-emerald-500 font-bold text-sm">{status.success}</p>}
                   {status.error && <p className="text-rose-500 font-bold text-sm">{status.error}</p>}
-                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} disabled={status.loading} className={`w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-lg shadow-xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3 ${status.loading ? 'opacity-70 cursor-not-allowed' : ''}`}>
+                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} disabled={status.loading} className={`w-full py-4 bg-gradient-to-r from-indigo-600 to-cyan-600 text-white rounded-2xl font-black text-lg shadow-xl hover:from-indigo-700 hover:to-cyan-700 transition-all flex items-center justify-center gap-3 ${status.loading ? 'opacity-70 cursor-not-allowed' : ''}`}>
                     <FaPaperPlane className={status.loading ? 'animate-ping' : ''} />
                     {status.loading ? t.formSending : t.formSend}
                   </motion.button>
