@@ -32,7 +32,7 @@
 
 
 
-# r = redis.Redis(host='newsmartagent-redis', port=6379, db=0)
+# r = redis.Redis(host='production-redis', port=6379, db=0)
 
 
 
