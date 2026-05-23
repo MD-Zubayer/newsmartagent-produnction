@@ -5,7 +5,7 @@ import hashlib
 import redis
 import json
 logger = logging.getLogger(__name__)
-r = redis.Redis(host='newsmartagent-redis', port=6379, db=1)
+r = redis.Redis(host='production-redis', port=6379, db=1)
 
 
 
