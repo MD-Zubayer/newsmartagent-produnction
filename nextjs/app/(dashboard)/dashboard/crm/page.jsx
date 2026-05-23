@@ -260,24 +260,44 @@ export default function SmartCRMPage() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-[#f8f9fa] overflow-hidden">
+    <div className="flex flex-col h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-blue-50/30 overflow-hidden">
       {/* Header */}
-      <div className="bg-white px-4 sm:px-6 py-4 border-b border-gray-100 flex flex-wrap gap-3 items-center justify-between shrink-0 shadow-sm z-10">
-        <div>
-          <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-cyan-600 to-blue-600 flex items-center gap-2">
-            <FunnelIcon className="h-6 w-6 text-cyan-600" />
-            Smart Pipeline
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">AI-Powered Lead Management</p>
+      <div className="bg-white/80 backdrop-blur-xl px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-100/80 shrink-0 shadow-sm z-10">
+        {/* Title Row */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-2xl font-black bg-clip-text text-transparent bg-gradient-to-r from-cyan-600 to-blue-600 flex items-center gap-2 tracking-tight">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 shrink-0">
+                <FunnelIcon className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
+              </div>
+              Smart Pipeline
+            </h1>
+          </div>
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <div className="text-[10px] sm:text-xs text-gray-500 bg-gray-100/80 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg border border-gray-200/60 font-bold whitespace-nowrap">
+              <span className="text-gray-400">Sel:</span> <span className="text-cyan-600">{selectedContacts.length}</span>
+            </div>
+            <button
+              onClick={() => setShowSchedulePanel(true)}
+              className="flex items-center gap-1.5 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-[10px] sm:text-xs font-bold shadow-lg shadow-cyan-500/20 hover:shadow-xl hover:shadow-cyan-500/30 transition-all whitespace-nowrap"
+            >
+              <QueueListIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span className="hidden xs:inline">Schedule</span>
+              {schedules.length > 0 && (
+                <span className="text-[9px] bg-white/25 px-1.5 py-0.5 rounded-full font-bold">{schedules.length}</span>
+              )}
+            </button>
+          </div>
         </div>
-        
-        <div className="flex items-center gap-2 flex-wrap justify-end">
+
+        {/* Filters Row */}
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           <select 
             value={selectedAgentId} 
             onChange={e => setSelectedAgentId(e.target.value)}
-            className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 outline-none transition-all shadow-sm font-medium"
+            className="flex-1 min-w-[120px] max-w-[200px] px-2.5 sm:px-3 py-1.5 sm:py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-[11px] sm:text-sm focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-400 outline-none transition-all font-semibold text-gray-700"
           >
-            <option value="all">🌐 All Channels & Agents</option>
+            <option value="all">🌐 All Agents</option>
             {agents.map(a => (
               <option key={a.id} value={a.id}>{a.name}</option>
             ))}
@@ -286,7 +306,7 @@ export default function SmartCRMPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 outline-none transition-all shadow-sm font-medium"
+            className="px-2.5 sm:px-3 py-1.5 sm:py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-[11px] sm:text-sm focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-400 outline-none transition-all font-semibold text-gray-700"
           >
             <option value="all">All Stages</option>
             {STAGES.map(s => (
@@ -298,37 +318,23 @@ export default function SmartCRMPage() {
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 outline-none transition-all shadow-sm font-medium"
+            className="px-2 sm:px-3 py-1.5 sm:py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-[11px] sm:text-sm focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-400 outline-none transition-all font-semibold text-gray-700 w-[110px] sm:w-auto"
           />
           <input
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 outline-none transition-all shadow-sm font-medium"
+            className="px-2 sm:px-3 py-1.5 sm:py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-[11px] sm:text-sm focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-400 outline-none transition-all font-semibold text-gray-700 w-[110px] sm:w-auto"
           />
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => { setScheduleAudienceCount(null); setIsScheduleModal(true); }}
-              className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold shadow hover:bg-emerald-700 transition"
-              disabled={selectedAgentId === "all" && selectedContacts.length === 0}
-              title={selectedAgentId === "all" && selectedContacts.length === 0 ? "একটি এজেন্ট বা কন্টাক্ট সিলেক্ট করুন" : "নতুন Schedule তৈরি করুন"}
-            >
-              + New Schedule
-            </button>
-          <div className="text-xs text-gray-500 bg-gray-100 px-3 py-2 rounded-lg border border-gray-200">
-            Selected: <span className="font-bold">{selectedContacts.length}</span>
-          </div>
+
           <button
-            onClick={() => setShowSchedulePanel(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-600 text-white text-sm font-semibold shadow hover:bg-cyan-700 transition"
+            onClick={() => { setScheduleAudienceCount(null); setIsScheduleModal(true); }}
+            className="px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-[10px] sm:text-xs font-bold shadow-lg shadow-emerald-500/20 hover:shadow-xl hover:shadow-emerald-500/30 transition-all whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled={selectedAgentId === "all" && selectedContacts.length === 0}
+            title={selectedAgentId === "all" && selectedContacts.length === 0 ? "একটি এজেন্ট বা কন্টাক্ট সিলেক্ট করুন" : "নতুন Schedule তৈরি করুন"}
           >
-            <QueueListIcon className="w-4 h-4" />
-              <span>Schedule Center</span>
-              {schedules.length > 0 && (
-                <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-bold">{schedules.length}</span>
-              )}
-            </button>
-          </div>
+            + Schedule
+          </button>
         </div>
       </div>
 

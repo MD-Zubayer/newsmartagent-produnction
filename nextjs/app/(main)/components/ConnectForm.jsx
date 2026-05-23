@@ -414,7 +414,7 @@ export default function IntegrationManager() {
             </div>
           </div>
 
-          <div className="p-6 md:p-16 lg:p-24 bg-[radial-gradient(circle_at_bottom_right,_var(--tw-gradient-stops))] from-white via-white to-indigo-50/20">
+          <div className="p-4 sm:p-8 md:p-16 lg:p-24 bg-[radial-gradient(circle_at_bottom_right,_var(--tw-gradient-stops))] from-white via-white to-indigo-50/20">
 
             <div className="grid grid-cols-1 xl:grid-cols-2 gap-12 xl:gap-24 items-center mb-16 md:mb-24">
               <div className="space-y-6 md:space-y-8 text-center xl:text-left">
@@ -476,7 +476,7 @@ export default function IntegrationManager() {
                   </div>
                   <Link 
                     href="/dashboard/connect/widget-customize"
-                    className="inline-flex items-center gap-4 bg-amber-600 text-white px-10 py-5 rounded-[2rem] font-black uppercase tracking-widest shadow-xl hover:bg-amber-700 transition-all active:scale-95"
+                    className="inline-flex items-center justify-center gap-4 bg-amber-600 text-white px-6 sm:px-10 py-3.5 sm:py-5 rounded-[1.5rem] sm:rounded-[2rem] font-black uppercase text-xs sm:text-sm tracking-widest shadow-xl hover:bg-amber-700 transition-all active:scale-95 w-full sm:w-auto text-center"
                   >
                     Go to Customizer <span className="text-xl">→</span>
                   </Link>
@@ -510,7 +510,7 @@ export default function IntegrationManager() {
                   </button>
                 </div>
 
-                <div className="bg-slate-50/50 rounded-[2.5rem] md:rounded-[4rem] p-6 md:p-16 border border-slate-100 relative overflow-hidden group/list">
+                <div className="bg-slate-50/50 rounded-[2rem] md:rounded-[4rem] p-4 sm:p-8 md:p-16 border border-slate-100 relative overflow-hidden group/list">
                   <div className="absolute inset-0 bg-white/20 backdrop-blur-3xl pointer-events-none"></div>
 
                   {isLoadingPages ? (
@@ -594,7 +594,7 @@ export default function IntegrationManager() {
                   </button>
                 </div>
 
-                <div className="bg-slate-50/50 rounded-[2.5rem] md:rounded-[4rem] p-6 md:p-16 border border-slate-100 relative overflow-hidden group/list">
+                <div className="bg-slate-50/50 rounded-[2rem] md:rounded-[4rem] p-4 sm:p-8 md:p-16 border border-slate-100 relative overflow-hidden group/list">
                   <div className="absolute inset-0 bg-white/20 backdrop-blur-3xl pointer-events-none"></div>
 
                   {isLoadingPages ? (
@@ -678,13 +678,13 @@ export default function IntegrationManager() {
                   </button>
                 </div>
 
-                <div className="bg-slate-50/50 rounded-[2.5rem] md:rounded-[4rem] p-6 md:p-16 border border-slate-100 relative overflow-hidden group/list">
+                <div className="bg-slate-50/50 rounded-[2rem] md:rounded-[4rem] p-4 sm:p-8 md:p-16 border border-slate-100 relative overflow-hidden group/list">
                   <div className="absolute inset-0 bg-white/20 backdrop-blur-3xl pointer-events-none"></div>
 
                   {/* Channel Selection UI */}
                   {stagedYoutubeChannels.length > 0 && (
-                    <div className="relative z-20 mb-12 p-8 bg-white/80 backdrop-blur-3xl rounded-[2.5rem] border-2 border-red-100 shadow-2xl animate-in slide-in-from-top-10 duration-700">
-                      <div className="flex items-center justify-between mb-8">
+                    <div className="relative z-20 mb-8 sm:mb-12 p-4 sm:p-8 bg-white/80 backdrop-blur-3xl rounded-[1.5rem] sm:rounded-[2.5rem] border-2 border-red-100 shadow-2xl animate-in slide-in-from-top-10 duration-700">
+                      <div className="flex items-center justify-between mb-6 sm:mb-8">
                         <div>
                           <h4 className="text-xl md:text-2xl font-black text-slate-900 italic uppercase">Select Your Channel</h4>
                           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Available channels in your account</p>
@@ -699,20 +699,20 @@ export default function IntegrationManager() {
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {stagedYoutubeChannels.map(channel => (
-                          <div key={channel.id} className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl hover:border-red-200 transition-all group/item">
-                            <div className="flex items-center gap-4">
-                              <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-red-100">
+                          <div key={channel.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl hover:border-red-200 transition-all group/item gap-4">
+                            <div className="flex items-center gap-4 min-w-0">
+                              <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-red-100 shrink-0">
                                 <img src={channel.thumbnail} alt={channel.name} className="w-full h-full object-cover" />
                               </div>
-                              <div className="min-w-0">
-                                <p className="font-black text-slate-900 truncate">{channel.name}</p>
-                                <p className="text-[9px] text-red-500 font-bold uppercase">{channel.handle}</p>
+                              <div className="min-w-0 text-left">
+                                <p className="font-black text-slate-900 truncate text-sm sm:text-base">{channel.name}</p>
+                                <p className="text-[9px] text-red-500 font-bold uppercase truncate">{channel.handle}</p>
                               </div>
                             </div>
                             <button
                               onClick={() => confirmYoutubeConnection(channel.id)}
                               disabled={isConfirmingChannel}
-                              className="px-6 py-2 bg-red-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-red-700 disabled:opacity-50 transition-all shadow-lg"
+                              className="w-full sm:w-auto px-6 py-2.5 bg-red-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-red-700 disabled:opacity-50 transition-all shadow-lg text-center"
                             >
                               {isConfirmingChannel ? "Linking..." : "Link"}
                             </button>
@@ -796,13 +796,13 @@ export default function IntegrationManager() {
                   </button>
                 </div>
 
-                <div className="bg-slate-50/50 rounded-[2.5rem] md:rounded-[4rem] p-6 md:p-16 border border-slate-100 relative overflow-hidden group/list">
+                <div className="bg-slate-50/50 rounded-[2rem] md:rounded-[4rem] p-4 sm:p-8 md:p-16 border border-slate-100 relative overflow-hidden group/list">
                   <div className="absolute inset-0 bg-white/20 backdrop-blur-3xl pointer-events-none"></div>
 
                   {/* Location Selection UI */}
                   {stagedGbpLocations.length > 0 && (
-                    <div className="relative z-20 mb-12 p-8 bg-white/80 backdrop-blur-3xl rounded-[2.5rem] border-2 border-blue-100 shadow-2xl animate-in slide-in-from-top-10 duration-700">
-                      <div className="flex items-center justify-between mb-8">
+                    <div className="relative z-20 mb-8 sm:mb-12 p-4 sm:p-8 bg-white/80 backdrop-blur-3xl rounded-[1.5rem] sm:rounded-[2.5rem] border-2 border-blue-100 shadow-2xl animate-in slide-in-from-top-10 duration-700">
+                      <div className="flex items-center justify-between mb-6 sm:mb-8">
                         <div>
                           <h4 className="text-xl md:text-2xl font-black text-slate-900 italic uppercase">Select Your Location</h4>
                           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Available locations in your account</p>
@@ -817,20 +817,20 @@ export default function IntegrationManager() {
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {stagedGbpLocations.map(loc => (
-                          <div key={loc.id} className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl hover:border-blue-200 transition-all group/item">
-                            <div className="flex items-center gap-4">
-                              <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 border-2 border-blue-100">
+                          <div key={loc.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl hover:border-blue-200 transition-all group/item gap-4">
+                            <div className="flex items-center gap-4 min-w-0">
+                              <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 border-2 border-blue-100 shrink-0">
                                 <FaShieldAlt />
                               </div>
-                              <div className="min-w-0">
-                                <p className="font-black text-slate-900 truncate">{loc.name}</p>
-                                <p className="text-[9px] text-blue-500 font-bold uppercase">{loc.handle}</p>
+                              <div className="min-w-0 text-left">
+                                <p className="font-black text-slate-900 truncate text-sm sm:text-base">{loc.name}</p>
+                                <p className="text-[9px] text-blue-500 font-bold uppercase truncate">{loc.handle}</p>
                               </div>
                             </div>
                             <button
                               onClick={() => confirmGbpConnection(loc.id)}
                               disabled={isConfirmingGbp}
-                              className="px-6 py-2 bg-blue-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50 transition-all shadow-lg"
+                              className="w-full sm:w-auto px-6 py-2.5 bg-blue-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50 transition-all shadow-lg text-center"
                             >
                               {isConfirmingGbp ? "Connecting..." : "Link"}
                             </button>
@@ -919,7 +919,7 @@ export default function IntegrationManager() {
                   </button>
                 </div>
 
-                <div className="bg-slate-50/50 rounded-[2.5rem] md:rounded-[4rem] p-6 md:p-16 border border-slate-100 relative overflow-hidden group/list">
+                <div className="bg-slate-50/50 rounded-[2rem] md:rounded-[4rem] p-4 sm:p-8 md:p-16 border border-slate-100 relative overflow-hidden group/list">
                   <div className="absolute inset-0 bg-white/20 backdrop-blur-3xl pointer-events-none"></div>
 
                   {isLoadingPages ? (
@@ -981,32 +981,32 @@ export default function IntegrationManager() {
             )}
 
             {/* Ultimate Action Gateway */}
-            <div className="pt-20 md:pt-32 border-t border-slate-100">
+            <div className="pt-12 md:pt-16 border-t border-slate-100">
               <Link href='/dashboard/aiAgent' className="block group">
-                <div className="relative overflow-hidden bg-slate-950 p-1.5 md:p-2 rounded-[2.5rem] md:rounded-[3.5rem] shadow-4xl transition-all duration-1000 hover:scale-[1.01] active:scale-[0.99] hover:shadow-[0_64px_128px_-32px_rgba(79,70,229,0.3)]">
+                <div className="relative overflow-hidden bg-slate-950 p-1.5 rounded-[2rem] md:rounded-[2.5rem] shadow-3xl transition-all duration-1000 hover:scale-[1.01] active:scale-[0.99] hover:shadow-[0_48px_96px_-24px_rgba(79,70,229,0.25)]">
                   {/* Moving Aurora Effect */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-purple-600 to-rose-500 opacity-20 group-hover:opacity-40 blur-[40px] md:blur-[80px] transition-opacity duration-1000 animate-pulse"></div>
+                  <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-purple-600 to-rose-500 opacity-20 group-hover:opacity-40 blur-[40px] md:blur-[60px] transition-opacity duration-1000 animate-pulse"></div>
 
-                  <div className="relative px-5 md:px-12 py-8 md:py-20 xl:py-24 rounded-[2rem] md:rounded-[3rem] border border-white/10 bg-slate-950 flex flex-col xl:flex-row items-center justify-between gap-10 xl:gap-16 overflow-hidden">
+                  <div className="relative px-6 md:px-10 py-6 md:py-10 rounded-[1.5rem] md:rounded-[2rem] border border-white/10 bg-slate-950 flex flex-col md:flex-row items-center justify-between gap-6 md:gap-10 overflow-hidden">
                     {/* Inner texture */}
                     <div className="absolute inset-0 opacity-[0.05] bg-[url('https://grainy-gradients.vercel.app/noise.svg')]"></div>
 
-                    <div className="flex flex-col lg:flex-row items-center gap-6 md:gap-10 text-center lg:text-left relative z-10 w-full xl:w-auto">
-                      <div className="w-16 h-16 md:w-28 md:h-28 bg-gradient-to-br from-indigo-600 to-violet-700 rounded-[1.5rem] md:rounded-[2.5rem] flex items-center justify-center text-white shadow-[0_20px_40px_rgba(0,0,0,0.4)] group-hover:rotate-12 group-hover:scale-110 transition-all duration-700 border border-white/10 shrink-0">
-                        <FaRobot className="text-3xl md:text-5xl" />
+                    <div className="flex flex-col sm:flex-row items-center gap-4 md:gap-6 text-center sm:text-left relative z-10 w-full md:w-auto">
+                      <div className="w-12 h-12 md:w-20 md:h-20 bg-gradient-to-br from-indigo-600 to-violet-700 rounded-xl md:rounded-[1.5rem] flex items-center justify-center text-white shadow-[0_12px_24px_rgba(0,0,0,0.4)] group-hover:rotate-12 group-hover:scale-110 transition-all duration-700 border border-white/10 shrink-0">
+                        <FaRobot className="text-2xl md:text-4xl" />
                       </div>
-                      <div className="space-y-2 min-w-0">
-                        <h4 className="text-2xl md:text-4xl lg:text-5xl xl:text-6xl font-black text-white italic tracking-tighter leading-none flex items-center gap-3 md:gap-4 justify-center lg:justify-start">
-                          ENTER COMMAND <span className="w-3 md:w-4 h-6 md:h-8 bg-indigo-500 animate-cursor shrink-0"></span>
+                      <div className="space-y-1 min-w-0">
+                        <h4 className="text-xl md:text-2xl lg:text-3xl font-black text-white italic tracking-tighter leading-none flex items-center gap-2 justify-center sm:justify-start">
+                          ENTER COMMAND <span className="w-2 h-4 md:h-6 bg-indigo-500 animate-cursor shrink-0"></span>
                         </h4>
-                        <p className="text-slate-400 text-sm md:text-xl xl:text-2xl font-light opacity-60 tracking-tight">Deploy your cognitive workforce across the connected ecosystem.</p>
+                        <p className="text-slate-400 text-xs md:text-sm lg:text-base font-medium opacity-65 tracking-tight">Deploy your cognitive workforce across the connected ecosystem.</p>
                       </div>
                     </div>
 
                     <div className="relative group/btn z-10 shrink-0">
-                      <div className="absolute -inset-6 bg-white/10 blur-[40px] rounded-full scale-0 group-hover:scale-100 transition-transform duration-700"></div>
-                      <div className="w-16 h-16 md:w-28 xl:w-36 md:h-16 xl:h-36 bg-white rounded-full flex items-center justify-center text-slate-950 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-700 shadow-[0_20px_40px_-10px_rgba(255,255,255,0.1)]">
-                        <span className="text-xl md:text-4xl xl:text-6xl font-black transform group-hover:translate-x-3 transition-all duration-700 tracking-tighter italic uppercase">GO</span>
+                      <div className="absolute -inset-4 bg-white/10 blur-[30px] rounded-full scale-0 group-hover:scale-100 transition-transform duration-700"></div>
+                      <div className="w-12 h-12 md:w-20 md:h-20 bg-white rounded-full flex items-center justify-center text-slate-950 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-700 shadow-lg">
+                        <span className="text-base md:text-2xl font-black transform group-hover:translate-x-1.5 transition-all duration-700 tracking-tighter italic uppercase">GO</span>
                       </div>
                     </div>
                   </div>

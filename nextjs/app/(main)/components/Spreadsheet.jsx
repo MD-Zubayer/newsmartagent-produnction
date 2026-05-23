@@ -132,18 +132,19 @@ const Cell = memo(({ columnIndex, rowIndex, style, data }) => {
         fontSize: `${fontSize * (zoom / 100)}px`,
         fontWeight: isImportant ? 'bold' : formatting.bold ? 'bold' : 'normal'
       }}
-      className={`border-r border-b flex items-center transition-all duration-100 px-1.5 relative group
+      className={`border-r border-b flex items-center transition-colors duration-100 px-1.5 relative group
         ${dark ? "border-slate-800 bg-slate-900 text-slate-200 hover:bg-slate-800/80" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50/80"} 
         ${inRange && !isStartCell ? (dark ? "bg-indigo-900/30" : "bg-indigo-50/70") : ""}
-        ${isStartCell ? "ring-[2px] ring-indigo-500 z-20 shadow-[0_4px_12px_rgba(99,102,241,0.15)] rounded-sm" : ""} 
+        ${isStartCell ? "ring-2 ring-inset ring-indigo-500 z-20 shadow-[inset_0_0_8px_rgba(99,102,241,0.2)]" : ""} 
         ${inRange ? "border-indigo-300 dark:border-indigo-500/50" : ""}
         ${isImportant && !inRange ? (dark ? "bg-rose-900/10 text-rose-300" : "bg-rose-50/50 text-rose-600") : ""}
       `}
       onMouseDown={(e) => handleMouseDown(rowIndex, columnIndex, e)}
+      onTouchStart={(e) => handleMouseDown(rowIndex, columnIndex, e)}
       onMouseEnter={() => handleMouseEnter(rowIndex, columnIndex)}
     >
       <input
-        className="w-full h-full bg-transparent outline-none px-1 cursor-text"
+        className={`w-full h-full bg-transparent outline-none px-1 ${!isStartCell ? 'pointer-events-none' : 'cursor-text'}`}
         style={{ textAlign: 'left' }}
         value={displayValue}
         onChange={(e) => updateCell(rowIndex, columnIndex, e.target.value)}
@@ -243,29 +244,7 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
   const sheetRef = useRef(sheet);
   useEffect(() => { sheetRef.current = sheet; }, [sheet]);
 
-  /* ---------------- FORCE DESKTOP MODE ON MOBILE ---------------- */
-  useEffect(() => {
-    const viewport = document.querySelector('meta[name="viewport"]');
-    let originalContent = '';
-    
-    if (viewport) {
-      originalContent = viewport.getAttribute('content');
-      // ডেস্কটপের মতো দেখাতে উইডথ ১০২৪ পিক্সেল ফিক্সড করে দেওয়া হলো
-      viewport.setAttribute('content', 'width=1024, user-scalable=yes'); 
-    } else {
-      const meta = document.createElement('meta');
-      meta.name = 'viewport';
-      meta.content = 'width=1024, user-scalable=yes';
-      document.head.appendChild(meta);
-    }
 
-    return () => {
-      // কম্পোনেন্ট আনমাউন্ট হলে আগের ভিউপোর্ট ফিরিয়ে আনবে
-      if (viewport && originalContent) {
-        viewport.setAttribute('content', originalContent);
-      }
-    };
-  },[]);
 
   /* ---------------- FETCH AGENTS ---------------- */
   useEffect(() => {
@@ -706,20 +685,20 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
       />
 
       {/* TOP HEADER */}
-      <div className={`relative z-40 h-16 sm:h-[72px] flex items-center justify-between px-4 sm:px-6 border-b transition-all duration-300 
+      <div className={`relative z-40 h-16 sm:h-[72px] flex items-center justify-between px-3 sm:px-6 border-b transition-all duration-300 
         ${dark ? "border-slate-800 bg-slate-900/80 backdrop-blur-lg" : "border-slate-200 bg-white/80 backdrop-blur-lg"}`}>
-        <div className="flex items-center gap-4">
-          <button onClick={() => setShowFileMenu(true)} className={`p-2.5 rounded-xl transition-all hover:shadow-md ${dark ? "hover:bg-slate-800 text-slate-300" : "hover:bg-indigo-50 text-slate-600 hover:text-indigo-600"}`}>
-             <Menu size={22} />
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+          <button onClick={() => setShowFileMenu(true)} className={`p-2 rounded-xl transition-all hover:shadow-md ${dark ? "hover:bg-slate-800 text-slate-300" : "hover:bg-indigo-50 text-slate-600 hover:text-indigo-600"}`}>
+             <Menu size={20} />
           </button>
-          <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-2 sm:p-2.5 rounded-xl text-white shadow-lg shadow-indigo-500/30">
-            <FileSpreadsheet size={24} strokeWidth={1.5} />
+          <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-2 rounded-xl text-white shadow-lg shadow-indigo-500/30 shrink-0">
+            <FileSpreadsheet size={20} strokeWidth={1.5} />
           </div>
-          <div className="flex flex-col justify-center">
+          <div className="flex flex-col justify-center min-w-0">
             <input 
               value={sheet.title} 
               onChange={(e) => setSheet({...sheet, title: e.target.value})}
-              className={`font-bold outline-none w-40 sm:w-64 overflow-hidden text-ellipsis whitespace-nowrap bg-transparent text-lg sm:text-xl transition-colors rounded-md px-1 -ml-1 hover:bg-black/5 dark:hover:bg-white/5 focus:bg-white dark:focus:bg-slate-800 focus:ring-2 focus:ring-indigo-500/50 
+              className={`font-bold outline-none w-28 sm:w-64 overflow-hidden text-ellipsis whitespace-nowrap bg-transparent text-sm sm:text-xl transition-colors rounded-md px-1 -ml-1 hover:bg-black/5 dark:hover:bg-white/5 focus:bg-white dark:focus:bg-slate-800 focus:ring-2 focus:ring-indigo-500/50 
                 ${dark ? "text-slate-100 placeholder-slate-600" : "text-slate-800 placeholder-slate-400"}`}
               placeholder="Untitled spreadsheet"
             />
@@ -745,43 +724,43 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
              </div>
 
              {sheet.scope === 'agent_specific' && (
-               <div className="flex items-center gap-2 px-2 animate-in fade-in slide-in-from-left-2 duration-300">
-                 <div className="w-[1px] h-4 bg-slate-300 dark:bg-slate-600 mx-1"></div>
-                 <select 
-                    value={sheet.agent || ""} 
-                    onChange={(e) => setSheet({...sheet, agent: e.target.value || null})}
-                    className="bg-transparent text-xs font-black text-purple-600 dark:text-purple-400 outline-none cursor-pointer max-w-[120px] truncate"
-                 >
-                    <option value="" className="text-slate-400">Select Agent...</option>
-                    {agents.map(a => (
-                      <option key={a.id} value={a.id} className="text-slate-800 font-sans">{a.name}</option>
-                    ))}
-                 </select>
-               </div>
+                <div className="flex items-center gap-2 px-2 animate-in fade-in slide-in-from-left-2 duration-300">
+                  <div className="w-[1px] h-4 bg-slate-300 dark:bg-slate-600 mx-1"></div>
+                  <select 
+                     value={sheet.agent || ""} 
+                     onChange={(e) => setSheet({...sheet, agent: e.target.value || null})}
+                     className="bg-transparent text-xs font-black text-purple-600 dark:text-purple-400 outline-none cursor-pointer max-w-[120px] truncate"
+                  >
+                     <option value="" className="text-slate-400">Select Agent...</option>
+                     {agents.map(a => (
+                       <option key={a.id} value={a.id} className="text-slate-800 font-sans">{a.name}</option>
+                     ))}
+                  </select>
+                </div>
              )}
           </div>
         </div>
-        <div className="flex items-center gap-3">
-            <button onClick={() => setDark(!dark)} className={`p-2.5 rounded-full transition-all duration-300 ${dark ? "bg-slate-800 hover:bg-slate-700 text-yellow-400 shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)]" : "bg-slate-100 hover:bg-slate-200 text-slate-600 shadow-[inset_0_2px_4px_rgba(0,0,0,0.05)]"}`}>
-                {dark ? <Sun size={20} /> : <Moon size={20} />}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <button onClick={() => setDark(!dark)} className={`p-2 sm:p-2.5 rounded-full transition-all duration-300 ${dark ? "bg-slate-800 hover:bg-slate-700 text-yellow-400 shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)]" : "bg-slate-100 hover:bg-slate-200 text-slate-600 shadow-[inset_0_2px_4px_rgba(0,0,0,0.05)]"}`}>
+                {dark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
-            <button onClick={handleManualSave} disabled={saving} className={`flex items-center gap-2 px-4 sm:px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 active:scale-95 ${dark ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-900/50" : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-500/30"} disabled:opacity-70 disabled:cursor-not-allowed`}>
-                {saving ? <div className="w-[18px] h-[18px] border-[2.5px] border-white/30 border-t-white rounded-full animate-spin"/> : <Save size={18} strokeWidth={2.5} />}
+            <button onClick={handleManualSave} disabled={saving} className={`flex items-center gap-2 px-3 sm:px-6 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 active:scale-95 ${dark ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-900/50" : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-500/30"} disabled:opacity-70 disabled:cursor-not-allowed`}>
+                {saving ? <div className="w-4 h-4 border-[2.5px] border-white/30 border-t-white rounded-full animate-spin"/> : <Save size={16} strokeWidth={2.5} />}
                 <span className="hidden sm:inline">Save</span>
             </button>
         </div>
       </div>
 
       {/* TOOLBAR */}
-      <div className={`relative z-30 py-2.5 px-4 sm:px-6 flex items-center gap-4 sm:gap-6 border-b overflow-x-auto no-scrollbar whitespace-nowrap shadow-sm transition-colors ${dark ? "bg-slate-800/80 border-slate-700/80 backdrop-blur" : "bg-slate-50/80 border-slate-200/80 backdrop-blur"}`}>
-        <div className="flex items-center gap-1 bg-white/50 dark:bg-slate-900/50 p-1 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-            <button onClick={undo} disabled={pointer <= 0} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-300 disabled:opacity-30 transition-all"><Undo2 size={18}/></button>
-            <button onClick={redo} disabled={pointer >= history.length - 1} className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-300 disabled:opacity-30 transition-all"><Redo2 size={18}/></button>
+      <div className={`relative z-30 py-1.5 sm:py-2.5 px-2 sm:px-6 flex items-center gap-2 sm:gap-4 md:gap-6 border-b overflow-x-auto no-scrollbar whitespace-nowrap shadow-sm transition-colors ${dark ? "bg-slate-800/80 border-slate-700/80 backdrop-blur" : "bg-slate-50/80 border-slate-200/80 backdrop-blur"}`}>
+        <div className="flex items-center gap-0.5 bg-white/50 dark:bg-slate-900/50 p-0.5 sm:p-1 rounded-lg sm:rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+            <button onClick={undo} disabled={pointer <= 0} className="p-1.5 sm:p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md sm:rounded-lg text-slate-600 dark:text-slate-300 disabled:opacity-30 transition-all"><Undo2 size={16}/></button>
+            <button onClick={redo} disabled={pointer >= history.length - 1} className="p-1.5 sm:p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md sm:rounded-lg text-slate-600 dark:text-slate-300 disabled:opacity-30 transition-all"><Redo2 size={16}/></button>
         </div>
-        <div className="h-8 w-[1px] bg-slate-300 dark:bg-slate-600 shrink-0"></div>
-        <div className="flex items-center gap-2">
-            <button onClick={toggleBold} className={`p-2 rounded-xl transition-all ${sheet.formatting?.[`${selection.start.row}-${selection.start.col}`]?.bold ? "bg-indigo-100 text-indigo-700 shadow-inner dark:bg-indigo-900/50 dark:text-indigo-300" : "hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"}`}>
-                <Bold size={18}/>
+        <div className="h-6 sm:h-8 w-[1px] bg-slate-300 dark:bg-slate-600 shrink-0"></div>
+        <div className="flex items-center gap-1 sm:gap-2">
+            <button onClick={toggleBold} className={`p-1.5 sm:p-2 rounded-lg sm:rounded-xl transition-all ${sheet.formatting?.[`${selection.start.row}-${selection.start.col}`]?.bold ? "bg-indigo-100 text-indigo-700 shadow-inner dark:bg-indigo-900/50 dark:text-indigo-300" : "hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"}`}>
+                <Bold size={16}/>
             </button>
             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-white shadow-sm dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl">
                 <Type size={16} className="text-slate-400"/>
@@ -791,53 +770,53 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
                     <option value="monospace">Mono</option>
                 </select>
             </div>
-            <div className="flex items-center bg-white shadow-sm dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl p-1">
-                <button onClick={() => setFontSize(s => Math.max(10, s-1))} className="w-8 h-7 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-300 font-medium transition-colors">-</button>
-                <span className="w-8 text-center text-xs font-semibold text-slate-700 dark:text-slate-200">{fontSize}</span>
-                <button onClick={() => setFontSize(s => Math.min(30, s+1))} className="w-8 h-7 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-300 font-medium transition-colors">+</button>
+            <div className="flex items-center bg-white shadow-sm dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl p-0.5 sm:p-1">
+                <button onClick={() => setFontSize(s => Math.max(10, s-1))} className="w-6 h-6 sm:w-8 sm:h-7 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md sm:rounded-lg text-slate-600 dark:text-slate-300 font-medium transition-colors text-xs sm:text-sm">-</button>
+                <span className="w-6 sm:w-8 text-center text-[10px] sm:text-xs font-semibold text-slate-700 dark:text-slate-200">{fontSize}</span>
+                <button onClick={() => setFontSize(s => Math.min(30, s+1))} className="w-6 h-6 sm:w-8 sm:h-7 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md sm:rounded-lg text-slate-600 dark:text-slate-300 font-medium transition-colors text-xs sm:text-sm">+</button>
             </div>
         </div>
-        <div className="h-8 w-[1px] bg-slate-300 dark:bg-slate-600 shrink-0 hidden sm:block"></div>
+        <div className="h-6 sm:h-8 w-[1px] bg-slate-300 dark:bg-slate-600 shrink-0 hidden sm:block"></div>
         <div className="hidden sm:flex items-center gap-1.5 bg-white shadow-sm dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl p-1">
              <button onClick={() => setZoom(z => Math.max(40, z - 10))} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-500 transition-colors"><ZoomOut size={16}/></button>
              <span className="text-xs font-semibold w-11 text-center text-slate-600 dark:text-slate-300">{zoom}%</span>
              <button onClick={() => setZoom(z => Math.min(200, z + 10))} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-500 transition-colors"><ZoomIn size={16}/></button>
         </div>
-        <div className="h-8 w-[1px] bg-slate-300 dark:bg-slate-600 shrink-0"></div>
-        <div className="flex items-center gap-2">
-            <button onClick={addRow} className="flex items-center gap-1.5 px-3 py-2 rounded-xl hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium transition-all shadow-sm border border-transparent hover:border-slate-200 dark:hover:border-slate-600"><Plus size={16} /> <span className="text-sm">Row</span></button>
-            <button onClick={addCol} className="flex items-center gap-1.5 px-3 py-2 rounded-xl hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium transition-all shadow-sm border border-transparent hover:border-slate-200 dark:hover:border-slate-600"><Plus size={16} /> <span className="text-sm">Col</span></button>
+        <div className="h-6 sm:h-8 w-[1px] bg-slate-300 dark:bg-slate-600 shrink-0 hidden sm:block"></div>
+        <div className="flex items-center gap-1 sm:gap-2">
+            <button onClick={addRow} className="flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium transition-all shadow-sm border border-transparent hover:border-slate-200 dark:hover:border-slate-600"><Plus size={14} /> <span className="text-xs sm:text-sm">Row</span></button>
+            <button onClick={addCol} className="flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium transition-all shadow-sm border border-transparent hover:border-slate-200 dark:hover:border-slate-600"><Plus size={14} /> <span className="text-xs sm:text-sm">Col</span></button>
         </div>
         <div className="flex-1"></div>
-        <div className="flex items-center gap-3">
-            <button onClick={toggleImportant} className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all duration-300 text-sm font-semibold shadow-sm ${dark ? "bg-slate-800 border-slate-700 text-slate-300 hover:text-yellow-400 hover:border-slate-600" : "bg-white border-slate-200 text-slate-600 hover:border-rose-300 hover:text-rose-600 hover:shadow-rose-100"}`}>
+        <div className="flex items-center gap-1.5 sm:gap-3">
+            <button onClick={toggleImportant} className={`hidden sm:flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border transition-all duration-300 text-xs sm:text-sm font-semibold shadow-sm ${dark ? "bg-slate-800 border-slate-700 text-slate-300 hover:text-yellow-400 hover:border-slate-600" : "bg-white border-slate-200 text-slate-600 hover:border-rose-300 hover:text-rose-600 hover:shadow-rose-100"}`}>
                 <Star size={16} className={sheet.data[`${selection.start.row}-${selection.start.col}`]?.endsWith('*') ? "fill-rose-500 text-rose-500 transform scale-110 transition-transform" : "transition-transform"} /> <span className="hidden lg:inline">Important</span>
             </button>
-            <div className="h-8 w-[1px] bg-slate-300 dark:bg-slate-600 shrink-0"></div>
+            <div className="h-6 sm:h-8 w-[1px] bg-slate-300 dark:bg-slate-600 shrink-0 hidden sm:block"></div>
             <input type="file" accept=".xlsx,.xls,.csv,.pdf,.docx" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
-            <button onClick={() => fileInputRef.current.click()} className="p-2.5 bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-xl border border-slate-200 dark:border-slate-700 transition-all shadow-sm group relative" title="Import File">
-              <Upload size={18} className="group-hover:-translate-y-0.5 transition-transform" />
+            <button onClick={() => fileInputRef.current.click()} className="p-2 sm:p-2.5 bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-lg sm:rounded-xl border border-slate-200 dark:border-slate-700 transition-all shadow-sm group relative" title="Import File">
+              <Upload size={16} className="group-hover:-translate-y-0.5 transition-transform" />
             </button>
-            <button onClick={exportCSV} className="p-2.5 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 rounded-xl border border-slate-200 dark:border-slate-700 transition-all shadow-sm group relative" title="Export CSV">
-              <Download size={18} className="group-hover:translate-y-0.5 transition-transform" />
+            <button onClick={exportCSV} className="p-2 sm:p-2.5 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 rounded-lg sm:rounded-xl border border-slate-200 dark:border-slate-700 transition-all shadow-sm group relative" title="Export CSV">
+              <Download size={16} className="group-hover:translate-y-0.5 transition-transform" />
             </button>
         </div>
       </div>
 
       {/* FORMULA BAR */}
-      <div className={`relative z-20 py-2 px-4 sm:px-6 flex items-center gap-3 text-sm shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05)] ${dark ? "bg-slate-800/95" : "bg-white"}`}>
-         <div className="w-12 h-9 flex items-center justify-center bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-bold text-indigo-600 dark:text-indigo-400 shadow-inner tracking-wider">
+      <div className={`relative z-20 py-1.5 sm:py-2 px-2 sm:px-6 flex items-center gap-2 sm:gap-3 text-sm shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05)] ${dark ? "bg-slate-800/95" : "bg-white"}`}>
+         <div className="w-10 sm:w-12 h-8 sm:h-9 flex items-center justify-center bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold text-indigo-600 dark:text-indigo-400 shadow-inner tracking-wider shrink-0">
             {getColumnLabel(selection.start.col)}{selection.start.row + 1}
          </div>
-         <div className="h-6 w-[1px] bg-slate-200 dark:bg-slate-700 shrink-0"></div>
-         <div className="flex flex-1 items-center bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 transition-colors focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-400 dark:focus-within:border-indigo-500 shadow-inner">
-           <div className="text-slate-400 font-mono font-bold mr-2 saturate-50 select-none">fx</div>
+         <div className="h-5 sm:h-6 w-[1px] bg-slate-200 dark:bg-slate-700 shrink-0"></div>
+         <div className="flex flex-1 items-center bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl px-2 sm:px-3 transition-colors focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-400 dark:focus-within:border-indigo-500 shadow-inner">
+           <div className="text-slate-400 font-mono font-bold mr-1.5 sm:mr-2 saturate-50 select-none text-xs sm:text-sm">fx</div>
            <input 
-              className={`w-full h-10 bg-transparent outline-none text-sm transition-all text-slate-700 dark:text-slate-200 placeholder-slate-400 font-medium`}
+              className={`w-full h-8 sm:h-10 bg-transparent outline-none text-xs sm:text-sm transition-all text-slate-700 dark:text-slate-200 placeholder-slate-400 font-medium`}
               value={sheet.data[`${selection.start.row}-${selection.start.col}`] || ""}
               onChange={(e) => updateCell(selection.start.row, selection.start.col, e.target.value)}
               onBlur={() => pushToHistory(sheet)}
-              placeholder="Type value or formula (Press Ctrl+Enter to fill range)..."
+              placeholder="Type value or formula..."
            />
          </div>
       </div>
@@ -853,16 +832,16 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
                         <div style={{ height, width, display: 'grid', gridTemplateColumns: `${ROW_HEADER_WIDTH}px 1fr`, gridTemplateRows: `${COL_HEADER_HEIGHT}px 1fr` }}>
                             <div className={`border-r border-b z-30 ${dark ? "bg-slate-800 border-slate-700" : "bg-slate-100 border-slate-300"}`} />
                             <div className="overflow-hidden">
-                                <List ref={colHeaderRef} layout="horizontal" height={COL_HEADER_HEIGHT} itemCount={sheet.cols} itemSize={scaledCellWidth} width={width - ROW_HEADER_WIDTH} className="no-scrollbar" itemData={{ dark, zoom, fontSize }}>
+                                <List ref={colHeaderRef} layout="horizontal" height={COL_HEADER_HEIGHT} itemCount={sheet.cols} itemSize={scaledCellWidth} width={width - ROW_HEADER_WIDTH} className="no-scrollbar !overflow-hidden" itemData={{ dark, zoom, fontSize }}>
                                     {ColumnHeader}
                                 </List>
                             </div>
                             <div className="overflow-hidden">
-                                <List ref={rowHeaderRef} layout="vertical" height={height - COL_HEADER_HEIGHT} itemCount={sheet.rows} itemSize={scaledCellHeight} width={ROW_HEADER_WIDTH} className="no-scrollbar" itemData={{ dark, zoom, fontSize }}>
+                                <List ref={rowHeaderRef} layout="vertical" height={height - COL_HEADER_HEIGHT} itemCount={sheet.rows} itemSize={scaledCellHeight} width={ROW_HEADER_WIDTH} className="no-scrollbar !overflow-hidden" itemData={{ dark, zoom, fontSize }}>
                                     {RowHeader}
                                 </List>
                             </div>
-                            <Grid ref={gridRef} className="outline-none" columnCount={sheet.cols} columnWidth={scaledCellWidth} height={height - COL_HEADER_HEIGHT} rowCount={sheet.rows} rowHeight={scaledCellHeight} width={width - ROW_HEADER_WIDTH} itemData={{ sheet, selection, handleMouseDown, handleMouseEnter, updateCell, dark, zoom, fontSize, fontFamily }} onScroll={onGridScroll}>
+                            <Grid ref={gridRef} className="outline-none custom-scrollbar" columnCount={sheet.cols} columnWidth={scaledCellWidth} height={height - COL_HEADER_HEIGHT} rowCount={sheet.rows} rowHeight={scaledCellHeight} width={width - ROW_HEADER_WIDTH} itemData={{ sheet, selection, handleMouseDown, handleMouseEnter, updateCell, dark, zoom, fontSize, fontFamily }} onScroll={onGridScroll}>
                                 {Cell}
                             </Grid>
                         </div>
@@ -873,14 +852,14 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
       </div>
 
       {/* FOOTER */}
-      <div className={`h-8 border-t flex items-center justify-between px-4 sm:px-6 text-[11px] font-bold uppercase select-none tracking-wider z-20 ${dark ? "bg-slate-900 border-slate-800 text-slate-400" : "bg-white border-slate-200 text-slate-500 shadow-[0_-2px_10px_rgba(0,0,0,0.02)]"}`}>
-         <div className="flex gap-6 items-center">
-            <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 bg-slate-300 dark:bg-slate-600 rounded-full"></div>{sheet.rows} Rows x {sheet.cols} Cols</span>
-            <span className="flex items-center gap-1.5"><div className="w-1.5 h-1.5 bg-indigo-400 rounded-full"></div>Selection: {getColumnLabel(selection.start.col)}{selection.start.row + 1}</span>
+      <div className={`h-7 sm:h-8 border-t flex items-center justify-between px-2 sm:px-6 text-[9px] sm:text-[11px] font-bold uppercase select-none tracking-wider z-20 ${dark ? "bg-slate-900 border-slate-800 text-slate-400" : "bg-white border-slate-200 text-slate-500 shadow-[0_-2px_10px_rgba(0,0,0,0.02)]"}`}>
+         <div className="flex gap-3 sm:gap-6 items-center">
+            <span className="flex items-center gap-1"><div className="w-1.5 h-1.5 bg-slate-300 dark:bg-slate-600 rounded-full"></div>{sheet.rows}×{sheet.cols}</span>
+            <span className="hidden sm:flex items-center gap-1.5"><div className="w-1.5 h-1.5 bg-indigo-400 rounded-full"></div>Selection: {getColumnLabel(selection.start.col)}{selection.start.row + 1}</span>
          </div>
          <div className="hidden sm:flex gap-2.5 items-center bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">
             <span className={`w-2 h-2 rounded-full ${saving ? "bg-yellow-400 animate-pulse shadow-[0_0_8px_rgba(250,204,21,0.6)]" : "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]"}`}></span>
-            <span className={saving ? "text-yellow-600 dark:text-yellow-400" : "text-emerald-600 dark:text-emerald-400"}>{saving ? "Saving Changes..." : "Auto Saved"}</span>
+            <span className={saving ? "text-yellow-600 dark:text-yellow-400" : "text-emerald-600 dark:text-emerald-400"}>{saving ? "Saving..." : "Saved"}</span>
          </div>
       </div>
     </div>

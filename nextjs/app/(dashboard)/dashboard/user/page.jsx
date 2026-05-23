@@ -204,7 +204,7 @@ export default function UserDashboard() {
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center relative z-10">
                 <div className="lg:col-span-5 flex items-center gap-4 md:gap-6 min-w-0">
-                  <div className="w-14 h-14 md:w-20 md:h-20 rounded-2xl md:rounded-3xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-xl group-hover:scale-110 transition-transform duration-500">
+                  <div className="w-14 h-14 md:w-20 md:h-20 rounded-2xl md:rounded-3xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-xl group-hover:scale-110 transition-transform duration-500 shrink-0">
                     <Zap size={32} className="text-yellow-400 fill-yellow-400" />
                   </div>
                   <div className="min-w-0">
@@ -235,7 +235,7 @@ export default function UserDashboard() {
 
                 <div className="lg:col-span-3">
                   <div className="bg-white/5 backdrop-blur-sm px-6 py-4 rounded-2xl md:rounded-3xl border border-white/10 flex items-center gap-4 group/box hover:bg-white/10 transition-all duration-300">
-                    <Hourglass size={24} className="text-emerald-400 animate-pulse" />
+                    <Hourglass size={24} className="text-emerald-400 animate-pulse shrink-0" />
                     <div>
                       <p className="text-[9px] md:text-[10px] font-black text-emerald-400/70 uppercase tracking-widest mb-0.5">Time Remaining</p>
                       <p className="text-lg md:text-2xl font-black tracking-tighter">{calculateTimeLeft(currentSub.end_date)}</p>
@@ -322,7 +322,7 @@ export default function UserDashboard() {
                     {/* Top Row: Icon & Name */}
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-4">
-                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg ${isLow ? 'bg-rose-600' : 'bg-indigo-600'}`}>
+                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg shrink-0 ${isLow ? 'bg-rose-600' : 'bg-indigo-600'}`}>
                           <Zap size={24} className="text-white fill-current" />
                         </div>
                         <div>

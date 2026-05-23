@@ -105,24 +105,24 @@ const [submitting, setSubmitting] = useState(false);
       <div className="max-w-4xl mx-auto">
         
         {/* Navigation Tabs */}
-        <div className="grid grid-cols-3 w-full bg-white p-2 rounded-[2rem] shadow-sm mb-10 border border-slate-100 overflow-hidden">
+        <div className="grid grid-cols-3 w-full bg-white p-1.5 sm:p-2 rounded-3xl sm:rounded-[2rem] shadow-sm mb-8 sm:mb-10 border border-slate-100 overflow-hidden gap-1">
           <button 
             onClick={() => setActiveTab("payment")}
-            className={`flex items-center justify-center gap-2 px-1 py-4 rounded-[1.5rem] font-black text-[9px] md:text-xs uppercase tracking-widest transition-all ${activeTab === 'payment' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
+            className={`flex items-center justify-center gap-1 sm:gap-2 px-1 py-3 sm:py-4 rounded-2xl sm:rounded-[1.5rem] font-black text-[8px] xs:text-[9px] md:text-xs uppercase tracking-wider sm:tracking-widest transition-all ${activeTab === 'payment' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
           >
-            <FaCreditCard className="hidden xs:block" size={16}/> Add Balance
+            <FaCreditCard className="hidden sm:block" size={14}/> Add Balance
           </button>
           <button 
             onClick={() => setActiveTab("transfer")}
-            className={`flex items-center justify-center gap-2 px-1 py-4 rounded-[1.5rem] font-black text-[9px] md:text-xs uppercase tracking-widest transition-all ${activeTab === 'transfer' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
+            className={`flex items-center justify-center gap-1 sm:gap-2 px-1 py-3 sm:py-4 rounded-2xl sm:rounded-[1.5rem] font-black text-[8px] xs:text-[9px] md:text-xs uppercase tracking-wider sm:tracking-widest transition-all ${activeTab === 'transfer' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
           >
-            <FaExchangeAlt className="hidden xs:block" size={16}/> Transfer
+            <FaExchangeAlt className="hidden sm:block" size={14}/> Transfer
           </button>
           <button 
             onClick={() => setActiveTab("history")}
-            className={`flex items-center justify-center gap-2 px-1 py-4 rounded-[1.5rem] font-black text-[9px] md:text-xs uppercase tracking-widest transition-all ${activeTab === 'history' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
+            className={`flex items-center justify-center gap-1 sm:gap-2 px-1 py-3 sm:py-4 rounded-2xl sm:rounded-[1.5rem] font-black text-[8px] xs:text-[9px] md:text-xs uppercase tracking-wider sm:tracking-widest transition-all ${activeTab === 'history' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'}`}
           >
-            <FaHistory className="hidden xs:block" size={16}/> History
+            <FaHistory className="hidden sm:block" size={14}/> History
           </button>
         </div>
 
@@ -269,33 +269,32 @@ const [submitting, setSubmitting] = useState(false);
         {/* --- HISTORY TABLE (Updated with Transfer) --- */}
         {activeTab === "history" && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-             <div className="bg-white rounded-[2.5rem] shadow-xl border border-slate-50 overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left">
+             <div className="bg-white rounded-3xl sm:rounded-[2.5rem] shadow-xl border border-slate-50 overflow-hidden">
+                <div className="overflow-x-auto no-scrollbar">
+                    <table className="w-full text-left min-w-[320px]">
                         <thead>
-                            <tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
-                                <th className="p-6">Details</th>
-                                <th className="p-6">Date</th>
-                                <th className="p-6">Status</th>
+                            <tr className="text-[8px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
+                                <th className="p-4 sm:p-6">Details</th>
+                                <th className="p-4 sm:p-6">Date</th>
+                                <th className="p-4 sm:p-6">Status</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50 text-xs">
                             {history.length === 0 ? (
-                              <tr><td colSpan="3" className="p-10 text-center text-slate-400 font-bold tracking-widest uppercase">No transactions found</td></tr>
+                              <tr><td colSpan="3" className="p-6 sm:p-10 text-center text-slate-400 font-bold tracking-widest uppercase text-[10px] sm:text-xs">No transactions found</td></tr>
                             ) : (
                               history.map((pay, index) => (
                                   <tr key={index} className="hover:bg-slate-50 transition-colors">
-                                      <td className="p-6">
-                                          <div className="flex items-center gap-3">
-                                            {/* আইকন দিয়ে ইন/আউট বোঝানো হচ্ছে */}
-                                            <div className={`p-2 rounded-full ${pay.type === 'transfer' ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-500'}`}>
-                                              {pay.type === 'transfer' ? <FaArrowUp size={12}/> : <FaArrowDown size={12}/>}
+                                      <td className="p-4 sm:p-6">
+                                          <div className="flex items-center gap-2 sm:gap-3">
+                                            <div className={`p-1.5 sm:p-2 rounded-full shrink-0 ${pay.type === 'transfer' ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-500'}`}>
+                                              {pay.type === 'transfer' ? <FaArrowUp size={10} className="sm:w-3 sm:h-3"/> : <FaArrowDown size={10} className="sm:w-3 sm:h-3"/>}
                                             </div>
-                                            <div>
-                                              <p className={`font-black text-base ${pay.type === 'transfer' ? 'text-red-500' : 'text-slate-700'}`}>
+                                            <div className="min-w-0">
+                                              <p className={`font-black text-sm sm:text-base ${pay.type === 'transfer' ? 'text-red-500' : 'text-slate-700'}`}>
                                                 {pay.type === 'transfer' ? '-' : '+'}৳{pay.amount}
                                               </p>
-                                              <p className="font-mono text-[10px] text-slate-400 uppercase">
+                                              <p className="font-mono text-[8px] sm:text-[10px] text-slate-400 uppercase truncate max-w-[100px] sm:max-w-[200px]">
                                                 {pay.type === 'transfer' 
                                                   ? `To: ${pay.receiver_unique_id || 'User'}` 
                                                   : `Trx: ${pay.transaction_id || 'N/A'}`
@@ -304,11 +303,11 @@ const [submitting, setSubmitting] = useState(false);
                                             </div>
                                           </div>
                                       </td>
-                                      <td className="p-6 text-slate-500 font-bold uppercase text-[10px]">
+                                      <td className="p-4 sm:p-6 text-slate-500 font-bold uppercase text-[8px] sm:text-[10px] whitespace-nowrap">
                                           {new Date(pay.created_at).toLocaleDateString()}
                                       </td>
-                                      <td className="p-6">
-                                          <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase ${pay.status === 'paid' || pay.status === 'success' ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-600'}`}>
+                                      <td className="p-4 sm:p-6 whitespace-nowrap">
+                                          <span className={`px-2 sm:px-4 py-1 sm:py-1.5 rounded-full text-[8px] sm:text-[9px] font-black uppercase ${pay.status === 'paid' || pay.status === 'success' ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-600'}`}>
                                               {pay.status || 'Pending'}
                                           </span>
                                       </td>
