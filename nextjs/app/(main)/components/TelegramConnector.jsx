@@ -177,33 +177,35 @@ export default function TelegramConnector() {
       </div>
 
       {/* Tab Selection */}
-      <div className="flex bg-slate-100 rounded-[2rem] p-2">
+      <div className="flex bg-slate-100 rounded-[2rem] p-1.5 sm:p-2">
         <button
           onClick={() => setActiveTab('shared')}
-          className={`flex-1 py-3 px-6 rounded-xl font-bold uppercase tracking-wider transition-all ${
+          className={`flex-1 py-2.5 px-2 sm:py-3 sm:px-6 rounded-[1.5rem] font-black uppercase text-[10px] sm:text-xs md:text-sm tracking-normal sm:tracking-wider transition-all ${
             activeTab === 'shared'
               ? 'bg-sky-500 text-white shadow-lg'
               : 'text-slate-600 hover:bg-slate-200'
           }`}
         >
-          <FaUsers className="inline mr-2" />
-          Shared Bot (Easy)
+          <FaUsers className="inline mr-1.5 sm:mr-2" />
+          <span className="inline">Shared Bot</span>
+          <span className="hidden sm:inline"> (Easy)</span>
         </button>
         <button
           onClick={() => setActiveTab('custom')}
-          className={`flex-1 py-3 px-6 rounded-xl font-bold uppercase tracking-wider transition-all ${
+          className={`flex-1 py-2.5 px-2 sm:py-3 sm:px-6 rounded-[1.5rem] font-black uppercase text-[10px] sm:text-xs md:text-sm tracking-normal sm:tracking-wider transition-all ${
             activeTab === 'custom'
               ? 'bg-sky-500 text-white shadow-lg'
               : 'text-slate-600 hover:bg-slate-200'
           }`}
         >
-          <FaRobot className="inline mr-2" />
-          Custom Bot (Advanced)
+          <FaRobot className="inline mr-1.5 sm:mr-2" />
+          <span className="inline">Custom Bot</span>
+          <span className="hidden sm:inline"> (Advanced)</span>
         </button>
       </div>
 
       {/* Main Content */}
-      <div className="bg-slate-50/50 rounded-[2.5rem] md:rounded-[3rem] p-8 md:p-12 border border-slate-100 relative overflow-hidden">
+      <div className="bg-slate-50/50 rounded-[2rem] md:rounded-[3rem] p-4 sm:p-8 md:p-12 border border-slate-100 relative overflow-hidden">
 
         {activeTab === 'shared' ? (
           /* Shared Bot Section */
@@ -223,11 +225,11 @@ export default function TelegramConnector() {
             </div>
 
             {/* Create New Shared Agent */}
-            <div className="flex justify-center">
+            <div className="flex justify-center w-full px-4 sm:px-0">
               <button
                 onClick={() => createSharedBotAgent()}
                 disabled={isLoading}
-                className="bg-sky-500 text-white px-8 py-4 rounded-xl font-bold uppercase tracking-wider hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                className="w-full sm:w-auto bg-sky-500 text-white px-6 sm:px-8 py-3.5 sm:py-4 rounded-xl font-black uppercase text-xs sm:text-sm tracking-wider hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
               >
                 {isLoading ? (
                   <>
@@ -353,11 +355,11 @@ export default function TelegramConnector() {
               )}
 
               {/* Action Buttons */}
-              <div className="flex gap-4">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full">
                 <button
                   onClick={validateToken}
                   disabled={isValidating || !botToken.trim()}
-                  className="flex-1 bg-sky-500 text-white px-6 py-3 rounded-xl font-bold uppercase tracking-wider hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                  className="w-full sm:flex-1 bg-sky-500 text-white px-4 sm:px-6 py-3.5 rounded-xl font-black uppercase text-xs sm:text-sm tracking-wider hover:bg-sky-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
                 >
                   {isValidating ? (
                     <>
@@ -376,7 +378,7 @@ export default function TelegramConnector() {
                   <button
                     onClick={createNewAgent}
                     disabled={isLoading || !botToken.trim()}
-                    className="flex-1 bg-slate-600 text-white px-6 py-3 rounded-xl font-bold uppercase tracking-wider hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                    className="w-full sm:flex-1 bg-slate-600 text-white px-4 sm:px-6 py-3.5 rounded-xl font-black uppercase text-xs sm:text-sm tracking-wider hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
                   >
                     {isLoading ? (
                       <>
