@@ -89,7 +89,7 @@ export default function PaymentPage() {
         <FaChevronLeft /> Back to Offers
       </Link>
 
-      <div className="bg-white rounded-[3.5rem] p-8 md:p-12 shadow-2xl border border-slate-50 relative overflow-hidden">
+      <div className="bg-white rounded-3xl md:rounded-[3.5rem] p-5 sm:p-8 md:p-12 shadow-2xl border border-slate-50 relative overflow-hidden">
         <div className="absolute -right-10 -top-10 w-32 h-32 bg-blue-600/5 rounded-full"></div>
 
         <div className="text-center mb-10">
@@ -106,7 +106,7 @@ export default function PaymentPage() {
         <div className="mb-10">
           <button 
             onClick={handleBalancePurchaseClick}
-            className="w-full p-6 bg-blue-50 border-2 border-dashed border-blue-200 rounded-[2.5rem] flex items-center justify-between group hover:bg-blue-600 hover:border-blue-600 transition-all shadow-sm"
+            className="w-full p-4 sm:p-6 bg-blue-50 border-2 border-dashed border-blue-200 rounded-3xl sm:rounded-[2.5rem] flex items-center justify-between group hover:bg-blue-600 hover:border-blue-600 transition-all shadow-sm"
           >
             <div className="flex items-center gap-4 text-left">
               <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-blue-600 shadow-sm group-hover:scale-110 transition-all">
@@ -133,7 +133,7 @@ export default function PaymentPage() {
           <PaymentRow icon={<FaMobileAlt className="text-[#F7941D]"/>} label="Nagad (Personal)" val="01326277782" />
 
           {/* 🏦 Premium Bank Card */}
-          <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-[2.5rem] shadow-2xl relative overflow-hidden text-white border border-slate-700/50 mt-6">
+          <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-5 sm:p-6 rounded-3xl sm:rounded-[2.5rem] shadow-2xl relative overflow-hidden text-white border border-slate-700/50 mt-6">
             <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full blur-3xl"></div>
             
             <div className="flex items-center gap-3 mb-6">
@@ -156,12 +156,12 @@ export default function PaymentPage() {
         </div>
 
         {/* Manual Input Section */}
-        <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100">
-          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 ml-2">Manual Transaction ID</label>
+        <div className="bg-slate-50 p-4 sm:p-6 rounded-3xl sm:rounded-[2.5rem] border border-slate-100">
+          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 ml-1 sm:ml-2">Manual Transaction ID</label>
           <div className="relative">
-            <FaHashtag className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <FaHashtag className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
             <input 
-              className="w-full p-5 pl-12 bg-white rounded-2xl border-2 border-transparent focus:border-blue-600 outline-none font-bold text-slate-800"
+              className="w-full p-4 sm:p-5 pl-10 sm:pl-12 bg-white rounded-xl sm:rounded-2xl border-2 border-transparent focus:border-blue-600 outline-none font-bold text-slate-800 text-sm"
               placeholder="Enter ID here..."
               value={tranId}
               onChange={(e) => setTranId(e.target.value)}
@@ -170,7 +170,7 @@ export default function PaymentPage() {
           <button 
             onClick={handleManualPayment}
             disabled={submitting}
-            className="w-full mt-4 p-6 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs tracking-[0.3em] hover:bg-blue-600 transition-all shadow-xl"
+            className="w-full mt-4 p-4 sm:p-6 bg-slate-900 text-white rounded-xl sm:rounded-2xl font-black uppercase text-[10px] sm:text-xs tracking-wider sm:tracking-[0.3em] hover:bg-blue-600 transition-all shadow-xl whitespace-nowrap"
           >
             {submitting ? "Processing..." : "Submit Transaction"}
           </button>

@@ -329,21 +329,21 @@ export default function DocumentMain() {
       <FileMenu isOpen={showFileMenu} onClose={() => setShowFileMenu(false)} onCreate={createNewDoc} currentId={null} />
       
       {/* Header */}
-      <div className="bg-[#2B579A] text-white px-4 py-2 flex items-center justify-between shadow-md z-10">
-        <div className="flex items-center gap-3">
-          <button onClick={() => setShowFileMenu(true)} className="p-1.5 hover:bg-white/20 rounded-md transition-colors mr-1">
-             <Menu size={22} />
+      <div className="bg-[#2B579A] text-white px-2 md:px-4 py-2 flex flex-wrap items-center justify-between shadow-md z-10 gap-2 md:gap-0">
+        <div className="flex items-center gap-1 sm:gap-3 flex-1 min-w-0">
+          <button onClick={() => setShowFileMenu(true)} className="p-1 sm:p-1.5 hover:bg-white/20 rounded-md transition-colors mr-1 shrink-0">
+             <Menu size={20} className="sm:w-5 sm:h-5 w-4 h-4" />
           </button>
-          <div className="bg-white/20 p-1.5 rounded-md"><FileText size={20} /></div>
+          <div className="bg-white/20 p-1 sm:p-1.5 rounded-md shrink-0"><FileText size={18} className="sm:w-[20px] sm:h-[20px] w-[16px] h-[16px]" /></div>
           <input
             type="text" value={docTitle} onChange={(e) => setDocTitle(e.target.value)}
-            className="bg-transparent border-b border-transparent hover:border-white/50 focus:border-white outline-none text-sm md:text-lg font-medium px-1 placeholder-white/70 w-32 md:w-64 transition-colors text-white"
+            className="bg-transparent border-b border-transparent hover:border-white/50 focus:border-white outline-none text-xs sm:text-sm md:text-lg font-medium px-1 placeholder-white/70 w-24 sm:w-32 md:w-64 transition-colors text-white truncate"
             placeholder="Document Title"
           />
-          <div className="h-6 w-[1px] bg-white/20 mx-2 hidden lg:block"></div>
+          <div className="h-6 w-[1px] bg-white/20 mx-1 sm:mx-2 hidden lg:block shrink-0"></div>
           
           {/* SCOPE SELECTOR */}
-          <div className="hidden lg:flex items-center gap-2 bg-white/10 p-1 rounded-xl border border-white/10">
+          <div className="hidden lg:flex items-center gap-2 bg-white/10 p-1 rounded-xl border border-white/10 shrink-0">
              <button 
                onClick={() => { setScope('global'); setAgent(null); }}
                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${scope === 'global' ? "bg-white text-[#2B579A] shadow-sm" : "text-white/60 hover:text-white"}`}
@@ -363,7 +363,7 @@ export default function DocumentMain() {
                  <select 
                     value={agent || ""} 
                     onChange={(e) => setAgent(e.target.value || null)}
-                    className="bg-transparent text-[10px] font-black text-white outline-none cursor-pointer max-w-[100px] truncate"
+                    className="bg-transparent text-[10px] font-black text-white outline-none cursor-pointer max-w-[80px] sm:max-w-[100px] truncate"
                  >
                     <option value="" className="text-slate-800">Select Agent...</option>
                     {agents.map(a => (
@@ -374,30 +374,30 @@ export default function DocumentMain() {
              )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
           <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".docx,.pdf" className="hidden" />
-          <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors">
-            <Upload size={16} /> <span className="hidden sm:inline">Upload</span>
+          <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1 sm:gap-2 bg-white/10 hover:bg-white/20 text-white px-2 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors">
+            <Upload size={16} className="sm:w-4 sm:h-4 w-3.5 h-3.5" /> <span className="hidden sm:inline">Upload</span>
           </button>
           
           <div className="relative">
-            <button onClick={() => setDownloadDropdown(!downloadDropdown)} className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors">
-              <Download size={16} /> <span className="hidden sm:inline">Download</span>
+            <button onClick={() => setDownloadDropdown(!downloadDropdown)} className="flex items-center gap-1 sm:gap-2 bg-white/10 hover:bg-white/20 text-white px-2 sm:px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors">
+              <Download size={16} className="sm:w-4 sm:h-4 w-3.5 h-3.5" /> <span className="hidden sm:inline">Download</span>
             </button>
             {downloadDropdown && (
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50 animate-in fade-in slide-in-from-top-2">
-                <button onClick={downloadAsPDF} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
-                  <FileDown size={16} className="text-red-500" /> Download as PDF
+              <div className="absolute right-0 mt-2 w-40 sm:w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50 animate-in fade-in slide-in-from-top-2">
+                <button onClick={downloadAsPDF} className="w-full text-left px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+                  <FileDown size={16} className="text-red-500 sm:w-4 sm:h-4 w-3.5 h-3.5" /> Download PDF
                 </button>
-                <button onClick={downloadAsWord} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
-                  <FileText size={16} className="text-blue-500" /> Download as Word
+                <button onClick={downloadAsWord} className="w-full text-left px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
+                  <FileText size={16} className="text-blue-500 sm:w-4 sm:h-4 w-3.5 h-3.5" /> Download Word
                 </button>
               </div>
             )}
           </div>
 
-          <button onClick={handleSave} disabled={loading} className="flex items-center gap-2 bg-white text-[#2B579A] px-4 py-1.5 rounded-md text-sm font-semibold hover:bg-gray-100 transition-colors shadow-sm disabled:opacity-70">
-            <Save size={16} /> {loading ? "Saving..." : "Save to Smart Agent"}
+          <button onClick={handleSave} disabled={loading} className="flex items-center gap-1 sm:gap-2 bg-white text-[#2B579A] px-2 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-semibold hover:bg-gray-100 transition-colors shadow-sm disabled:opacity-70 shrink-0">
+            <Save size={16} className="sm:w-4 sm:h-4 w-3.5 h-3.5" /> <span className="hidden sm:inline">{loading ? "Saving..." : "Save to Smart Agent"}</span><span className="sm:hidden">{loading ? "..." : "Save"}</span>
           </button>
         </div>
       </div>
@@ -424,12 +424,12 @@ export default function DocumentMain() {
       </div>
 
       {/* Editor Pages */}
-      <div className="flex-1 bg-[#F3F2F1] p-4 md:p-12 flex flex-col items-center gap-10 overflow-y-auto">
+      <div className="flex-1 bg-[#F3F2F1] p-2 sm:p-4 md:p-12 flex flex-col items-center gap-6 md:gap-10 overflow-y-auto overflow-x-hidden">
         {pages.map((_, idx) => (
-          <div key={idx} className="relative group">
+          <div key={idx} className="relative group w-full max-w-[816px]">
             <div 
               ref={el => pageRefs.current[idx] = el}
-              className="bg-white w-[816px] min-h-[1056px] shadow-2xl border border-gray-300 p-[72px] text-gray-900 outline-none editor-page transition-all focus:border-[#2B579A]"
+              className="bg-white w-full min-h-[600px] md:min-h-[1056px] shadow-lg md:shadow-2xl border border-gray-300 p-6 sm:p-10 md:p-[72px] text-gray-900 outline-none editor-page transition-all focus:border-[#2B579A]"
               contentEditable
               suppressContentEditableWarning
               onInput={(e) => handlePageInput(idx, e)}

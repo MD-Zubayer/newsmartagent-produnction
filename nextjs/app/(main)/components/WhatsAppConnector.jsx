@@ -97,13 +97,13 @@ export default function WhatsAppConnector() {
       </div>
 
       {/* Main Connection Area */}
-      <div className="bg-slate-50/50 rounded-[2.5rem] md:rounded-[3rem] p-8 md:p-12 border border-slate-100 relative overflow-hidden">
-        <div className="relative z-10 flex flex-col md:flex-row items-center gap-12">
+      <div className="bg-slate-50/50 rounded-[2rem] md:rounded-[3rem] p-4 sm:p-8 md:p-12 border border-slate-100 relative overflow-hidden">
+        <div className="relative z-10 flex flex-col md:flex-row items-center gap-6 md:gap-12">
           
           {/* Status Display / QR Code / Pairing Code */}
-          <div className="shrink-0 w-full md:w-auto">
+          <div className="shrink-0 w-full md:w-auto flex flex-col items-center">
             {status === "open" ? (
-              <div className="bg-white p-10 rounded-[2rem] border border-emerald-100 shadow-2xl flex flex-col items-center gap-6 text-center">
+              <div className="bg-white p-6 sm:p-10 rounded-[2rem] border border-emerald-100 shadow-2xl flex flex-col items-center gap-6 text-center w-full max-w-[320px] md:w-auto">
                 <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-500">
                   <FaCheckCircle size={48} />
                 </div>
@@ -124,14 +124,14 @@ export default function WhatsAppConnector() {
                 </button>
               </div>
             ) : status === "connecting" ? (
-              <div className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-2xl relative group min-w-[300px] flex flex-col items-center justify-center min-h-[300px]">
+              <div className="bg-white p-6 rounded-[2rem] sm:rounded-[2.5rem] border border-slate-100 shadow-2xl relative group w-full max-w-[320px] md:min-w-[320px] flex flex-col items-center justify-center min-h-[300px]">
                 {pairingCode ? (
-                   <div className="space-y-6 flex flex-col items-center text-center">
-                      <div className="space-y-2">
+                   <div className="space-y-6 flex flex-col items-center text-center w-full">
+                      <div className="space-y-2 w-full flex flex-col items-center">
                         <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Your Pairing Code</p>
-                        <div className="flex gap-2">
+                        <div className="flex gap-1 sm:gap-2 justify-center w-full overflow-x-auto py-1">
                           {pairingCode.split('').map((char, i) => (
-                            <div key={i} className={`w-8 h-12 md:w-10 md:h-14 flex items-center justify-center rounded-xl text-xl md:text-2xl font-black shadow-sm border ${char === '-' ? 'bg-transparent border-none w-4' : 'bg-slate-50 border-slate-100 text-indigo-600'}`}>
+                            <div key={i} className={`w-7 h-10 sm:w-8 sm:h-12 md:w-10 md:h-14 flex items-center justify-center rounded-xl text-base sm:text-xl md:text-2xl font-black shadow-sm border ${char === '-' ? 'bg-transparent border-none w-2 sm:w-4' : 'bg-slate-50 border-slate-100 text-indigo-600'}`}>
                               {char}
                             </div>
                           ))}
@@ -148,7 +148,7 @@ export default function WhatsAppConnector() {
                 ) : qrCode && !usePairingCode ? (
                   <div className="space-y-6 flex flex-col items-center">
                     <div className="bg-white p-4 rounded-3xl border-2 border-slate-50 shadow-inner">
-                      <div className="w-48 h-48 md:w-64 md:h-64 bg-slate-100 rounded-2xl flex items-center justify-center overflow-hidden">
+                      <div className="w-48 h-48 sm:w-64 sm:h-64 bg-slate-100 rounded-2xl flex items-center justify-center overflow-hidden">
                         <img 
                           src={`https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(qrCode)}`}
                           alt="WhatsApp QR Code"
@@ -168,7 +168,7 @@ export default function WhatsAppConnector() {
                 )}
               </div>
             ) : (
-              <div className="bg-white p-8 md:p-12 rounded-[3rem] border border-slate-100 shadow-2xl flex flex-col items-center justify-center gap-8 min-w-[320px]">
+              <div className="bg-white p-6 sm:p-8 md:p-12 rounded-[2rem] sm:rounded-[3rem] border border-slate-100 shadow-2xl flex flex-col items-center justify-center gap-6 sm:gap-8 w-full max-w-[320px] md:min-w-[320px]">
                 {usePairingCode ? (
                   <div className="w-full space-y-6">
                     <div className="text-center space-y-2">

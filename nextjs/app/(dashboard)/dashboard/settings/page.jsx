@@ -349,7 +349,7 @@ export default function SettingsPage() {
   const SettingRow = ({ icon: Icon, title, desc, active, onClick, color }) => (
     <div className="flex items-center justify-between gap-4 p-4 sm:p-5 bg-slate-50 rounded-xl border border-slate-200 hover:bg-white transition-all">
       <div className="flex items-center gap-3 min-w-0">
-        <div className={`p-2.5 rounded-lg ${color} bg-white border border-slate-200 shadow-sm`}>
+        <div className={`p-2.5 rounded-lg ${color} bg-white border border-slate-200 shadow-sm shrink-0`}>
           <Icon className="text-lg" />
         </div>
         <div className="min-w-0">
@@ -359,7 +359,7 @@ export default function SettingsPage() {
       </div>
       <button 
         onClick={onClick}
-        className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus:outline-none ring-1 ring-inset ${active ? 'bg-indigo-600 ring-indigo-600' : 'bg-slate-300 ring-slate-300'}`}
+        className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus:outline-none ring-1 ring-inset ${active ? 'bg-indigo-600 ring-indigo-600' : 'bg-slate-300 ring-slate-300'}`}
       >
         <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${active ? 'translate-x-6' : 'translate-x-1'}`} />
       </button>
