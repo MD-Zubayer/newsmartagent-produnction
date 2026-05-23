@@ -41,3 +41,8 @@ backup/files/
 **/logs/*.log
 jwtauth/logs/ai_agent.log
 jwtauth/logs/*.log
+
+*.sql
+*.gz
+*.sql.gz
+backups/
