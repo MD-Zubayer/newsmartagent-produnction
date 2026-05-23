@@ -5,6 +5,7 @@ from django.contrib.auth import admin as auth_admin
 from django.utils.translation import gettext_lazy as _
 from .models import FacebookPage
 from .models import OrderForm, CustomerOrder, EmailVerificationToken
+from django.db.models import Sum
 
 from users.forms import UserAdminChangeForm, UserAdminCreationForm
 from .models import User, Profile, Payment, Offer, Subscription, Platform, NSATransfer, WithdrawMethod, CashoutRequest, TikTokAccount, LoginHistory, TrustedDevice, RecoveryCode, LoginSession
@@ -65,7 +66,6 @@ class UserAdmin(auth_admin.UserAdmin):
     # List display in user list
     list_display = ["id","email", "name", "phone_number", "division", "is_superuser", "is_staff", "id_type", "total_prompt_tokens", "created_by", "created_at"]
     
-    from django.db.models import Sum
     @admin.display(description="Total Prompt Tokens")
     def total_prompt_tokens(self, obj):
         return obj.agentsAi.aggregate(t=Sum('prompt_tokens'))['t'] or 0
