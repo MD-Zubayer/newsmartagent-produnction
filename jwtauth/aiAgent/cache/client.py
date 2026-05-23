@@ -3,7 +3,7 @@ import redis
 
 # Connection Pool — কানেকশন রিসাইকেল হয়, পারফরম্যান্স বাড়ে
 pool = redis.ConnectionPool(
-    host='newsmartagent-redis',
+    host='production-redis',
     port=6379,
     decode_responses=False,
     health_check_interval=30,
