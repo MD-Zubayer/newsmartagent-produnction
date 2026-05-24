@@ -32,10 +32,12 @@
     var isOpen = false;
 
     // ── Fetch config then boot ────────────────────────────────────────────────
-    fetch(apiBase + '/config/' + widgetKey + '/')
-        .then(function(r){ return r.json(); })
-        .then(function(data){ config = data; initWidget(); })
-        .catch(function(e){ console.error("NSA Widget: config load failed", e); });
+    if (sessionStorage.getItem('nsa_widget_hidden_' + widgetKey) !== 'true') {
+        fetch(apiBase + '/config/' + widgetKey + '/')
+            .then(function(r){ return r.json(); })
+            .then(function(data){ config = data; initWidget(); })
+            .catch(function(e){ console.error("NSA Widget: config load failed", e); });
+    }
 
     // ── Build Widget ──────────────────────────────────────────────────────────
     function initWidget() {
@@ -49,6 +51,9 @@
         var msLink     = s.messenger_link || '';
         var hasMulti   = !!(waNum || msLink);
         var isMenuOpen = false;
+        
+        var enableCancel = s.enable_cancel !== false;
+        var enableDrag   = !!s.enable_drag;
         
         // Roundness: 0-100 translated to border-radius
         var roundness = typeof s.bubble_roundness !== 'undefined' ? s.bubble_roundness : 28;
@@ -74,9 +79,11 @@
         var css = [
             '@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");',
             '#nsa-wrap { font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; position: fixed; z-index: 2147483647; display: flex; flex-direction: column; align-items: ' + (isRight ? 'flex-end' : 'flex-start') + '; ' + posStyle + ' }',
-            '#nsa-bubble { width: ' + size + 'px; height: ' + size + 'px; border-radius: ' + radius + '; background: ' + bubbleBg + '; border: ' + bubbleBorder + '; ' + (showBg ? 'box-shadow: 0 8px 32px rgba(0,0,0,0.15);' : '') + ' display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: hidden; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }',
+            '#nsa-bubble { width: ' + size + 'px; height: ' + size + 'px; border-radius: ' + radius + '; background: ' + bubbleBg + '; border: ' + bubbleBorder + '; ' + (showBg ? 'box-shadow: 0 8px 32px rgba(0,0,0,0.15);' : '') + ' display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: visible; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); position: relative; }',
             '#nsa-bubble:hover { transform: scale(1.1) rotate(5deg); ' + (showBg ? 'box-shadow: 0 12px 40px rgba(0,0,0,0.2);' : '') + ' }',
-            '#nsa-bubble img { width: ' + (showBg ? Math.round(size * 0.6) : size) + 'px; height: ' + (showBg ? Math.round(size * 0.6) : size) + 'px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)); }',
+            '#nsa-bubble img { width: ' + (showBg ? Math.round(size * 0.6) : size) + 'px; height: ' + (showBg ? Math.round(size * 0.6) : size) + 'px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)); border-radius: ' + radius + '; }',
+            '.nsa-close-bubble-btn { position: absolute; top: -4px; right: -4px; width: 18px; height: 18px; border-radius: 50%; background: #ef4444; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.2); border: 1px solid #fff; transition: all 0.2s; z-index: 10; }',
+            '.nsa-close-bubble-btn:hover { transform: scale(1.1); background: #dc2626; }',
             '#nsa-fab-menu { position: absolute; bottom: calc(100% + 15px); display: none; flex-direction: column; gap: 12px; align-items: center; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); opacity: 0; transform: translateY(15px); z-index: 2147483648; pointer-events: none; }',
             '#nsa-fab-menu.nsa-open { display: flex; opacity: 1; transform: translateY(0); pointer-events: auto; }',
             '.nsa-fab-btn { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.1); transition: all 0.3s; text-decoration: none; border: 1px solid rgba(255,255,255,0.2); }',
@@ -212,7 +219,106 @@
         var menuEl = document.getElementById('nsa-fab-menu');
         var aiBtn  = document.getElementById('nsa-fab-ai');
 
+        // Cancel Widget logic
+        if (enableCancel) {
+            var closeBtn = document.createElement('div');
+            closeBtn.className = 'nsa-close-bubble-btn';
+            closeBtn.innerHTML = '×';
+            closeBtn.title = 'Close chat widget';
+            closeBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var wrapEl = document.getElementById('nsa-wrap');
+                if (wrapEl) {
+                    wrapEl.style.display = 'none';
+                    sessionStorage.setItem('nsa_widget_hidden_' + widgetKey, 'true');
+                }
+            });
+            bubble.appendChild(closeBtn);
+        }
+
+        // Draggable Widget logic
+        var hasDragged = false;
+        if (enableDrag) {
+            var isDragging = false;
+            var startX = 0, startY = 0;
+            var dragThreshold = 5;
+            var moveX = 0, moveY = 0;
+            
+            bubble.style.cursor = 'grab';
+            var wrapEl = document.getElementById('nsa-wrap');
+            
+            bubble.addEventListener('mousedown', dragStart);
+            bubble.addEventListener('touchstart', dragStart, { passive: true });
+            
+            function dragStart(e) {
+                if (e.target.className === 'nsa-close-bubble-btn') return;
+                
+                isDragging = false;
+                hasDragged = false;
+                
+                var clientX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
+                var clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+                
+                var rect = wrapEl.getBoundingClientRect();
+                startX = clientX - rect.left;
+                startY = clientY - rect.top;
+                
+                moveX = clientX;
+                moveY = clientY;
+                
+                document.addEventListener('mousemove', dragMove, { passive: false });
+                document.addEventListener('touchmove', dragMove, { passive: false });
+                document.addEventListener('mouseup', dragEnd);
+                document.addEventListener('touchend', dragEnd);
+            }
+            
+            function dragMove(e) {
+                var clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
+                var clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+                
+                var dist = Math.sqrt(Math.pow(clientX - moveX, 2) + Math.pow(clientY - moveY, 2));
+                if (!isDragging && dist > dragThreshold) {
+                    isDragging = true;
+                    hasDragged = true;
+                    bubble.style.cursor = 'grabbing';
+                }
+                
+                if (isDragging) {
+                    if (e.cancelable) e.preventDefault();
+                    var x = clientX - startX;
+                    var y = clientY - startY;
+                    
+                    var w = window.innerWidth;
+                    var h = window.innerHeight;
+                    var rect = wrapEl.getBoundingClientRect();
+                    
+                    x = Math.max(0, Math.min(x, w - rect.width));
+                    y = Math.max(0, Math.min(y, h - rect.height));
+                    
+                    wrapEl.style.top = y + 'px';
+                    wrapEl.style.left = x + 'px';
+                    wrapEl.style.bottom = 'auto';
+                    wrapEl.style.right = 'auto';
+                }
+            }
+            
+            function dragEnd(e) {
+                isDragging = false;
+                bubble.style.cursor = 'grab';
+                
+                document.removeEventListener('mousemove', dragMove);
+                document.removeEventListener('touchmove', dragMove);
+                document.removeEventListener('mouseup', dragEnd);
+                document.removeEventListener('touchend', dragEnd);
+                
+                setTimeout(function() {
+                    hasDragged = false;
+                }, 50);
+            }
+        }
+
         bubble.addEventListener('click', function() {
+            if (hasDragged) return;
             if (hasMulti) {
                 if (isOpen) {
                     isOpen = false;

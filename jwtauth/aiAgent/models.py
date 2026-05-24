@@ -483,6 +483,10 @@ class WidgetSettings(models.Model):
     menu_ai_icon_bg_color = models.CharField(max_length=7, blank=True, null=True, help_text="Background color for AI icon in FAB menu (leave blank for transparent)")
     menu_ai_icon_roundness = models.IntegerField(default=50, help_text="AI Icon corner roundness in percentage (0-100)")
 
+    # Cancel & Drag Options
+    enable_cancel = models.BooleanField(default=True, help_text="Allow visitors to close/hide the widget icon")
+    enable_drag = models.BooleanField(default=False, help_text="Allow visitors to drag and move the widget bubble anywhere")
+
     updated_at = models.DateTimeField(auto_now=True)
 
 

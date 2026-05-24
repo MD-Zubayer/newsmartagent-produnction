@@ -56,7 +56,9 @@ export default function WidgetCustomizePage() {
     enable_ai_control: true,
     menu_ai_icon_size: 44,
     menu_ai_icon_bg_color: "",
-    menu_ai_icon_roundness: 50
+    menu_ai_icon_roundness: 50,
+    enable_cancel: true,
+    enable_drag: false
   });
 
 
@@ -642,6 +644,30 @@ export default function WidgetCustomizePage() {
               ))}
             </div>
 
+            {/* Visitor Interaction Settings */}
+            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4 mt-6">
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                <HiOutlineSparkles className="text-indigo-600" /> Visitor Interaction Settings
+              </h3>
+              {[
+                { label: 'Allow Visitors to Cancel/Hide Widget', key: 'enable_cancel', description: 'Shows a cancel "×" button on the bubble' },
+                { label: 'Allow Visitors to Drag Widget Anywhere', key: 'enable_drag', description: 'Enables dragging the bubble on screen' }
+              ].map(f => (
+                <div key={f.key} className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div>
+                    <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight">{f.label}</p>
+                    <p className="text-[9px] text-slate-400 font-medium">{f.description}</p>
+                  </div>
+                  <button 
+                    onClick={() => set(f.key, !settings[f.key])}
+                    className={`w-10 h-5 rounded-full transition-all relative ${settings[f.key] ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                  >
+                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${settings[f.key] ? 'right-0.5' : 'left-0.5'}`} />
+                  </button>
+                </div>
+              ))}
+            </div>
+
           </div>
 
           {/* ───── Preview & Code ───── */}
@@ -762,6 +788,14 @@ export default function WidgetCustomizePage() {
                           height: settings.show_bubble_background ? Math.round(settings.bubble_size * 0.45) : Math.round(settings.bubble_size * 0.65) 
                         }}
                       />
+                      {settings.enable_cancel !== false && (
+                        <div 
+                          style={{ width: '18px', height: '18px', fontSize: '10px' }}
+                          className="absolute -top-1 -right-1 rounded-full bg-red-500 text-white flex items-center justify-center font-black border border-white cursor-pointer hover:bg-red-600 transition-colors shadow-md z-20"
+                        >
+                          ×
+                        </div>
+                      )}
                       {/* Drag hint tooltip */}
                       <div className={`absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[9px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-lg whitespace-nowrap transition-all duration-200 pointer-events-none ${
                         isDragging ? 'opacity-100 scale-100' : 'opacity-0 scale-90 group-hover/bubble:opacity-100 group-hover/bubble:scale-100'
