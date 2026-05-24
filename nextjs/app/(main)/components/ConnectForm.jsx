@@ -27,6 +27,10 @@ export default function IntegrationManager() {
   const [gbpSessionId, setGbpSessionId] = useState(null);
   const [isConfirmingGbp, setIsConfirmingGbp] = useState(false);
 
+  // Widget settings state
+  const [widgetAgent, setWidgetAgent] = useState(null);
+  const [isUpdatingWidget, setIsUpdatingWidget] = useState(false);
+
   useEffect(() => {
     // Listen for OAuth Success Messages
     const handleMessage = (event) => {
@@ -206,6 +210,17 @@ export default function IntegrationManager() {
         })
         .catch(err => console.error("Error fetching TikTok accounts", err))
         .finally(() => setIsLoadingPages(false));
+    } else if (selectedPlatform?.id === 'web_widget') {
+      setIsLoadingPages(true);
+      axiosInstance.get("/AgentAI/agents/")
+        .then(res => {
+          const agents = res.data.filter(a => a.platform === 'web_widget');
+          if (agents.length > 0) {
+            setWidgetAgent(agents[0]);
+          }
+        })
+        .catch(err => console.error("Error fetching widget agents", err))
+        .finally(() => setIsLoadingPages(false));
     }
   }, [selectedPlatform]);
 
@@ -219,6 +234,31 @@ export default function IntegrationManager() {
       import("react-hot-toast").then(({ toast }) => toast.success("Pages connected successfully!"));
     }
   }, []);
+
+  const toggleWidgetSetting = async (key) => {
+    if (!widgetAgent) return;
+    setIsUpdatingWidget(true);
+    try {
+      const currentVal = widgetAgent.widget_settings?.[key];
+      // Default to true if not set for enable_cancel, false for enable_drag
+      let current = currentVal;
+      if (current === undefined) {
+          if (key === 'enable_cancel') current = true;
+          if (key === 'enable_drag') current = false;
+      }
+      const newVal = !current;
+      
+      const newSettings = { ...widgetAgent.widget_settings, [key]: newVal };
+      const res = await axiosInstance.patch(`/AgentAI/agents/${widgetAgent.id}/`, { widget_settings: newSettings });
+      setWidgetAgent(res.data);
+      import("react-hot-toast").then(({ toast }) => toast.success(`Widget setting updated!`));
+    } catch (err) {
+      console.error("Error updating widget setting", err);
+      import("react-hot-toast").then(({ toast }) => toast.error("Failed to update setting"));
+    } finally {
+      setIsUpdatingWidget(false);
+    }
+  };
 
   const platformConfigs = {
     facebook: {
@@ -474,12 +514,53 @@ export default function IntegrationManager() {
                       Create and customize your embeddable AI widget. No API keys required.
                     </p>
                   </div>
-                  <Link 
-                    href="/dashboard/connect/widget-customize"
-                    className="inline-flex items-center justify-center gap-4 bg-amber-600 text-white px-6 sm:px-10 py-3.5 sm:py-5 rounded-[1.5rem] sm:rounded-[2rem] font-black uppercase text-xs sm:text-sm tracking-widest shadow-xl hover:bg-amber-700 transition-all active:scale-95 w-full sm:w-auto text-center"
-                  >
-                    Go to Customizer <span className="text-xl">→</span>
-                  </Link>
+                  
+                  <div className="flex flex-col gap-4 items-center justify-center max-w-md mx-auto">
+                    {isLoadingPages ? (
+                      <div className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest animate-pulse my-6">Loading settings...</div>
+                    ) : widgetAgent ? (
+                      <div className="w-full space-y-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm text-left mb-4">
+                        <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight flex items-center gap-2 mb-4">
+                          <HiOutlineSparkles className="text-amber-600" /> Quick Settings
+                        </h4>
+                        
+                        <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                          <div>
+                            <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight">Allow Visitors to Cancel/Hide Widget</p>
+                            <p className="text-[9px] text-slate-400 font-medium">Shows a cancel "×" button on the bubble</p>
+                          </div>
+                          <button 
+                            onClick={() => toggleWidgetSetting('enable_cancel')}
+                            disabled={isUpdatingWidget}
+                            className={`w-10 h-5 rounded-full transition-all relative ${widgetAgent.widget_settings?.enable_cancel !== false ? 'bg-amber-500' : 'bg-slate-200'} ${isUpdatingWidget ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          >
+                            <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${widgetAgent.widget_settings?.enable_cancel !== false ? 'right-0.5' : 'left-0.5'}`} />
+                          </button>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 bg-slate-50 rounded-2xl border border-slate-100">
+                          <div>
+                            <p className="text-[10px] font-black text-slate-900 uppercase tracking-tight">Allow Visitors to Drag Widget</p>
+                            <p className="text-[9px] text-slate-400 font-medium">Enables dragging the bubble on screen</p>
+                          </div>
+                          <button 
+                            onClick={() => toggleWidgetSetting('enable_drag')}
+                            disabled={isUpdatingWidget}
+                            className={`w-10 h-5 rounded-full transition-all relative ${widgetAgent.widget_settings?.enable_drag ? 'bg-amber-500' : 'bg-slate-200'} ${isUpdatingWidget ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          >
+                            <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${widgetAgent.widget_settings?.enable_drag ? 'right-0.5' : 'left-0.5'}`} />
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <Link 
+                      href="/dashboard/connect/widget-customize"
+                      className="inline-flex items-center justify-center gap-4 bg-amber-600 text-white px-6 sm:px-10 py-3.5 sm:py-5 rounded-[1.5rem] sm:rounded-[2rem] font-black uppercase text-xs sm:text-sm tracking-widest shadow-xl hover:bg-amber-700 transition-all active:scale-95 w-full text-center"
+                    >
+                      Advanced Customizer <span className="text-xl">→</span>
+                    </Link>
+                  </div>
                 </div>
               </div>
             )}
