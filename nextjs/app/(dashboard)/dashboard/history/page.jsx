@@ -391,7 +391,7 @@ function TabButton({ active, onClick, icon, label }) {
   return (
     <button
       onClick={onClick}
-      className={`relative flex items-center justify-center gap-1.5 sm:gap-2.5 px-2.5 py-2.5 sm:px-4 sm:py-3 rounded-xl font-extrabold text-[10px] sm:text-xs uppercase tracking-wider transition-all duration-300 flex-1 min-w-[90px] sm:min-w-[120px] md:min-w-[140px] group ${
+      className={`relative flex items-center justify-center gap-1.5 sm:gap-2 px-3 py-2.5 sm:px-4 sm:py-3 rounded-xl font-extrabold text-[10px] sm:text-xs uppercase tracking-wider transition-all duration-300 flex-1 whitespace-nowrap group ${
         active 
           ? "text-white" 
           : "text-slate-500 hover:text-slate-800 hover:bg-slate-50/50"
@@ -404,10 +404,10 @@ function TabButton({ active, onClick, icon, label }) {
           transition={{ type: "spring", stiffness: 380, damping: 30 }}
         />
       )}
-      <span className={`transition-all duration-300 ${active ? "scale-110 text-pink-500" : "group-hover:scale-110 text-slate-400 group-hover:text-indigo-500"}`}>
+      <span className={`shrink-0 transition-all duration-300 ${active ? "scale-110 text-pink-500" : "group-hover:scale-110 text-slate-400 group-hover:text-indigo-500"}`}>
         {icon}
       </span>
-      <span>{label}</span>
+      <span className="hidden sm:inline">{label}</span>
     </button>
   );
 }
