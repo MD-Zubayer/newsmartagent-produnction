@@ -468,7 +468,36 @@ export default function DocumentPage() {
               onPaste={(e) => {
                 e.preventDefault();
                 const text = e.clipboardData.getData("text/plain");
-                document.execCommand("insertText", false, text);
+                const CHUNK_SIZE = 3000;
+                
+                if (text.length <= CHUNK_SIZE) {
+                  document.execCommand("insertText", false, text);
+                  return;
+                }
+                
+                const currentLength = pageRefs.current[idx]?.innerText.length || 0;
+                const spaceLeft = Math.max(0, CHUNK_SIZE - currentLength);
+                
+                let firstChunk = "";
+                let remainingText = text;
+                
+                if (spaceLeft > 0) {
+                  firstChunk = text.substring(0, spaceLeft);
+                  remainingText = text.substring(spaceLeft);
+                  document.execCommand("insertText", false, firstChunk);
+                }
+                
+                if (remainingText.length > 0) {
+                  const newChunks = [];
+                  for (let i = 0; i < remainingText.length; i += CHUNK_SIZE) {
+                    newChunks.push(remainingText.substring(i, i + CHUNK_SIZE));
+                  }
+                  
+                  const currentPagesText = pageRefs.current.map(ref => ref?.innerText || "");
+                  currentPagesText.splice(idx + 1, 0, ...newChunks);
+                  setPages(currentPagesText);
+                  toast.success("Long text pasted and split into multiple pages.");
+                }
               }}
             >
             </div>

@@ -32,12 +32,10 @@
     var isOpen = false;
 
     // ── Fetch config then boot ────────────────────────────────────────────────
-    if (sessionStorage.getItem('nsa_widget_hidden_' + widgetKey) !== 'true') {
-        fetch(apiBase + '/config/' + widgetKey + '/')
-            .then(function(r){ return r.json(); })
-            .then(function(data){ config = data; initWidget(); })
-            .catch(function(e){ console.error("NSA Widget: config load failed", e); });
-    }
+    fetch(apiBase + '/config/' + widgetKey + '/')
+        .then(function(r){ return r.json(); })
+        .then(function(data){ config = data; initWidget(); })
+        .catch(function(e){ console.error("NSA Widget: config load failed", e); });
 
     // ── Build Widget ──────────────────────────────────────────────────────────
     function initWidget() {
@@ -82,8 +80,10 @@
             '#nsa-bubble { width: ' + size + 'px; height: ' + size + 'px; border-radius: ' + radius + '; background: ' + bubbleBg + '; border: ' + bubbleBorder + '; ' + (showBg ? 'box-shadow: 0 8px 32px rgba(0,0,0,0.15);' : '') + ' display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: visible; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); position: relative; }',
             '#nsa-bubble:hover { transform: scale(1.1) rotate(5deg); ' + (showBg ? 'box-shadow: 0 12px 40px rgba(0,0,0,0.2);' : '') + ' }',
             '#nsa-bubble img { width: ' + (showBg ? Math.round(size * 0.6) : size) + 'px; height: ' + (showBg ? Math.round(size * 0.6) : size) + 'px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1)); border-radius: ' + radius + '; }',
-            '.nsa-close-bubble-btn { position: absolute; top: -4px; right: -4px; width: 18px; height: 18px; border-radius: 50%; background: #ef4444; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.2); border: 1px solid #fff; transition: all 0.2s; z-index: 10; }',
-            '.nsa-close-bubble-btn:hover { transform: scale(1.1); background: #dc2626; }',
+            '.nsa-close-bubble-btn { position: absolute; top: -5px; right: -5px; width: 20px; height: 20px; border-radius: 50%; background: #ef4444; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 900; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.3); border: 2px solid #fff; transition: opacity 0.2s ease, transform 0.2s ease; z-index: 20; opacity: 0; transform: scale(0.7); pointer-events: none; line-height: 1; }',
+            '#nsa-bubble:hover .nsa-close-bubble-btn { opacity: 1; transform: scale(1); pointer-events: auto; }',
+            '.nsa-close-bubble-btn.nsa-show { opacity: 1 !important; transform: scale(1) !important; pointer-events: auto !important; }',
+            '.nsa-close-bubble-btn:hover { transform: scale(1.2) !important; background: #dc2626; }',
             '#nsa-fab-menu { position: absolute; bottom: calc(100% + 15px); display: none; flex-direction: column; gap: 12px; align-items: center; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); opacity: 0; transform: translateY(15px); z-index: 2147483648; pointer-events: none; }',
             '#nsa-fab-menu.nsa-open { display: flex; opacity: 1; transform: translateY(0); pointer-events: auto; }',
             '.nsa-fab-btn { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.1); transition: all 0.3s; text-decoration: none; border: 1px solid rgba(255,255,255,0.2); }',
@@ -222,20 +222,35 @@
         var aiBtn  = document.getElementById('nsa-fab-ai');
 
         // Cancel Widget logic
+        var closeBtn = null;
         if (enableCancel) {
-            var closeBtn = document.createElement('div');
+            closeBtn = document.createElement('div');
             closeBtn.className = 'nsa-close-bubble-btn';
             closeBtn.innerHTML = '×';
             closeBtn.title = 'Close chat widget';
             closeBtn.addEventListener('click', function(e) {
                 e.stopPropagation();
+                e.preventDefault();
                 var wrapEl = document.getElementById('nsa-wrap');
-                if (wrapEl) {
-                    wrapEl.style.display = 'none';
-                    sessionStorage.setItem('nsa_widget_hidden_' + widgetKey, 'true');
-                }
+                if (wrapEl) wrapEl.style.display = 'none';
             });
             bubble.appendChild(closeBtn);
+            
+            // Mobile: tap bubble to toggle close button visibility
+            var closeBtnTimer = null;
+            bubble.addEventListener('touchend', function(e) {
+                if (hasDragged) return;
+                if (closeBtn.classList.contains('nsa-show')) {
+                    closeBtn.classList.remove('nsa-show');
+                    clearTimeout(closeBtnTimer);
+                } else {
+                    closeBtn.classList.add('nsa-show');
+                    clearTimeout(closeBtnTimer);
+                    closeBtnTimer = setTimeout(function() {
+                        closeBtn.classList.remove('nsa-show');
+                    }, 3000);
+                }
+            }, { passive: true });
         }
 
         // Draggable Widget logic
