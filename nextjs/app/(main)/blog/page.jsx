@@ -41,14 +41,14 @@ export default function BlogIndex() {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.02]"></div>
       </div>
 
-      <div className="max-w-[1300px] mx-auto px-6 py-24 relative z-10">
+      <div className="max-w-[1300px] mx-auto px-4 md:px-6 py-16 md:py-24 relative z-10">
         
         {/* Header Section */}
         <header className="text-center mb-24 md:mb-40 space-y-10">
           <div className="inline-flex items-center gap-2 px-6 py-2 bg-white border border-slate-100 rounded-full shadow-sm text-[10px] font-black text-purple-600 uppercase tracking-[0.4em] mx-auto bg-clip-padding backdrop-filter backdrop-blur-xl bg-opacity-60">
             Protocols & Insights
           </div>
-          <h1 className="text-6xl md:text-9xl font-black text-slate-950 tracking-tighter leading-[0.85] uppercase">
+          <h1 className="text-3xl md:text-6xl font-black text-slate-950 tracking-tighter leading-[0.85] uppercase">
             The <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-indigo-600">Intelligence</span> <br/> Hub
           </h1>
           <p className="max-w-2xl mx-auto text-slate-500 font-medium text-base md:text-lg leading-relaxed opacity-70">
@@ -58,7 +58,7 @@ export default function BlogIndex() {
           {/* Search Bar - Premium Design */}
           <div className="max-w-2xl mx-auto relative group mt-16">
             <div className="absolute inset-0 bg-purple-500/10 rounded-3xl blur-2xl group-hover:bg-purple-500/15 transition-all duration-700"></div>
-            <div className="relative bg-white border border-slate-100 rounded-[2rem] p-2 shadow-xl shadow-slate-200/50 flex items-center gap-6 group-focus-within:border-purple-400 group-focus-within:ring-8 group-focus-within:ring-purple-50/50 transition-all duration-500">
+            <div className="relative bg-white border border-slate-100 rounded-[2rem] p-2 shadow-xl shadow-slate-200/50 flex items-center gap-6 group-focus-within:border-purple-400 group-focus-within:ring-8 group-focus-within:ring-purple-50/50 transition-all duration-500 max-w-full">
               <div className="pl-6 text-slate-400 text-2xl">
                 <HiOutlineSearch />
               </div>
@@ -131,11 +131,11 @@ export default function BlogIndex() {
                        </div>
                     </div>
                     
-                    <h2 className="text-3xl font-black text-slate-950 tracking-tight leading-[1.1] mb-6 group-hover:text-purple-600 transition-colors duration-500 uppercase">
+                    <h2 className="text-xl md:text-2xl font-black text-slate-950 tracking-tight leading-[1.1] mb-6 group-hover:text-purple-600 transition-colors duration-500 uppercase">
                       {post.title}
                     </h2>
                     
-                    <div className="mt-auto pt-10 flex items-center gap-3 text-[10px] font-black text-purple-600 uppercase tracking-[0.3em] group-hover:gap-6 bg-transparent border-none p-0 transition-all duration-500 ease-in-out">
+                    <div className="mt-auto pt-10 flex items-center gap-3 text-[9px] md:text-[10px] font-black text-purple-600 uppercase tracking-[0.3em] group-hover:gap-6 bg-transparent border-none p-0 transition-all duration-500 ease-in-out">
                       Access Briefing <HiOutlineArrowRight className="text-xl group-hover:translate-x-2 transition-transform duration-500" />
                     </div>
                   </div>

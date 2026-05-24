@@ -30,6 +30,12 @@ export default function WidgetCustomizePage() {
   const [iconUrlInput, setIconUrlInput] = useState('');
   const [previewMode, setPreviewMode] = useState('desktop');
   const iconInputRef = useRef(null);
+  const previewContainerRef = useRef(null);
+
+  // Drag & Drop state for bubble icon
+  const [isDragging, setIsDragging] = useState(false);
+  const [bubblePos, setBubblePos] = useState(null); // { x, y } in px from top-left of preview
+  const dragStartRef = useRef({ mouseX: 0, mouseY: 0, elX: 0, elY: 0 });
 
   const [settings, setSettings] = useState({
     primary_color: "#4f46e5",
@@ -171,6 +177,119 @@ export default function WidgetCustomizePage() {
   };
 
   const effectiveIconUrl = settings.bubble_icon_url || DEFAULT_ICON;
+
+  // ── Drag & Drop handlers for bubble icon ──────────────────────────────────
+  const getBubbleSizePx = () => Math.round(settings.bubble_size * 0.65);
+
+  const handleDragStart = useCallback((clientX, clientY) => {
+    const container = previewContainerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const bubbleSize = getBubbleSizePx();
+
+    // Calculate current bubble position if not set yet
+    let currentX, currentY;
+    if (bubblePos) {
+      currentX = bubblePos.x;
+      currentY = bubblePos.y;
+    } else {
+      // Derive from corner position
+      const pos = settings.widget_position;
+      const containerW = rect.width;
+      const containerH = rect.height;
+      currentX = pos.includes('right') ? containerW - bubbleSize - 8 : 8;
+      currentY = pos.includes('bottom') ? containerH - bubbleSize - 8 : 8;
+    }
+
+    dragStartRef.current = {
+      mouseX: clientX,
+      mouseY: clientY,
+      elX: currentX,
+      elY: currentY,
+    };
+    setIsDragging(true);
+  }, [bubblePos, settings.widget_position, settings.bubble_size]);
+
+  const handleDragMove = useCallback((clientX, clientY) => {
+    if (!isDragging) return;
+    const container = previewContainerRef.current;
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    const bubbleSize = getBubbleSizePx();
+    const { mouseX, mouseY, elX, elY } = dragStartRef.current;
+
+    let newX = elX + (clientX - mouseX);
+    let newY = elY + (clientY - mouseY);
+
+    // Clamp within container bounds
+    newX = Math.max(0, Math.min(newX, rect.width - bubbleSize));
+    newY = Math.max(0, Math.min(newY, rect.height - bubbleSize));
+
+    setBubblePos({ x: newX, y: newY });
+  }, [isDragging, settings.bubble_size]);
+
+  const handleDragEnd = useCallback(() => {
+    if (!isDragging) return;
+    setIsDragging(false);
+
+    // Snap to nearest corner and update settings
+    const container = previewContainerRef.current;
+    if (!container || !bubblePos) return;
+    const rect = container.getBoundingClientRect();
+    const bubbleSize = getBubbleSizePx();
+    const centerX = bubblePos.x + bubbleSize / 2;
+    const centerY = bubblePos.y + bubbleSize / 2;
+    const midX = rect.width / 2;
+    const midY = rect.height / 2;
+
+    const isRight = centerX >= midX;
+    const isBottom = centerY >= midY;
+    const newPos = `${isBottom ? 'bottom' : 'top'}-${isRight ? 'right' : 'left'}`;
+    set('widget_position', newPos);
+
+    // Snap bubble to corner
+    const snappedX = isRight ? rect.width - bubbleSize - 8 : 8;
+    const snappedY = isBottom ? rect.height - bubbleSize - 8 : 8;
+    setBubblePos({ x: snappedX, y: snappedY });
+  }, [isDragging, bubblePos, settings.bubble_size]);
+
+  // Mouse event listeners for drag
+  useEffect(() => {
+    if (!isDragging) return;
+    const onMouseMove = (e) => {
+      e.preventDefault();
+      handleDragMove(e.clientX, e.clientY);
+    };
+    const onMouseUp = () => handleDragEnd();
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [isDragging, handleDragMove, handleDragEnd]);
+
+  // Touch event listeners for drag
+  useEffect(() => {
+    if (!isDragging) return;
+    const onTouchMove = (e) => {
+      e.preventDefault();
+      const touch = e.touches[0];
+      handleDragMove(touch.clientX, touch.clientY);
+    };
+    const onTouchEnd = () => handleDragEnd();
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd);
+    return () => {
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [isDragging, handleDragMove, handleDragEnd]);
+
+  // Reset bubble position when widget_position changes from the grid selector
+  useEffect(() => {
+    setBubblePos(null);
+  }, [settings.widget_position]);
 
   // ── Position grid ─────────────────────────────────────────────────────────
   const positionClasses = {
@@ -557,7 +676,7 @@ export default function WidgetCustomizePage() {
 
                 {/* Mock browser */}
                 <div className={`mx-auto bg-white rounded-[2rem] overflow-hidden shadow-2xl border-4 border-slate-800 transition-all duration-500 ${previewMode === 'mobile' ? 'w-[300px]' : 'w-full max-w-xl'}`}>
-                  <div className="relative bg-slate-50" style={{ minHeight: 420 }}>
+                  <div ref={previewContainerRef} className="relative bg-slate-50" style={{ minHeight: 420 }}>
 
                     {/* Background content */}
                     <div className="flex items-center justify-center h-full pt-16 pb-32">
@@ -605,7 +724,7 @@ export default function WidgetCustomizePage() {
                       </div>
                     </div>
 
-                    {/* Bubble */}
+                    {/* Bubble — Draggable */}
                     <div
                       style={{
                         backgroundColor: settings.show_bubble_background ? settings.primary_color : 'transparent',
@@ -613,17 +732,43 @@ export default function WidgetCustomizePage() {
                         height: Math.round(settings.bubble_size * 0.65),
                         borderRadius: `${Math.round(settings.bubble_roundness * 0.5)}%`,
                         border: settings.show_bubble_background ? 'none' : `2px solid ${settings.primary_color}`,
-                        boxShadow: settings.show_bubble_background ? '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)' : 'none',
+                        boxShadow: isDragging
+                          ? '0 20px 40px -5px rgba(0,0,0,0.25), 0 0 0 3px rgba(99,102,241,0.4)'
+                          : settings.show_bubble_background
+                            ? '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)'
+                            : 'none',
+                        ...(bubblePos
+                          ? { left: bubblePos.x, top: bubblePos.y }
+                          : {}),
+                        transition: isDragging ? 'box-shadow 0.2s' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                        transform: isDragging ? 'scale(1.1)' : 'scale(1)',
+                        zIndex: isDragging ? 50 : 10,
                       }}
-                      className={`absolute ${positionClasses[settings.widget_position]} flex items-center justify-center overflow-hidden pointer-events-none`}
+                      className={`absolute ${!bubblePos ? positionClasses[settings.widget_position] : ''} flex items-center justify-center overflow-visible cursor-grab active:cursor-grabbing group/bubble select-none`}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleDragStart(e.clientX, e.clientY);
+                      }}
+                      onTouchStart={(e) => {
+                        const touch = e.touches[0];
+                        handleDragStart(touch.clientX, touch.clientY);
+                      }}
                     >
                       <img src={effectiveIconUrl} alt=""
-                        className="object-contain"
+                        className="object-contain pointer-events-none"
+                        draggable={false}
                         style={{ 
                           width: settings.show_bubble_background ? Math.round(settings.bubble_size * 0.45) : Math.round(settings.bubble_size * 0.65), 
                           height: settings.show_bubble_background ? Math.round(settings.bubble_size * 0.45) : Math.round(settings.bubble_size * 0.65) 
                         }}
                       />
+                      {/* Drag hint tooltip */}
+                      <div className={`absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[9px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-lg whitespace-nowrap transition-all duration-200 pointer-events-none ${
+                        isDragging ? 'opacity-100 scale-100' : 'opacity-0 scale-90 group-hover/bubble:opacity-100 group-hover/bubble:scale-100'
+                      }`}>
+                        {isDragging ? '↕ Dragging...' : '✋ Drag me!'}
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[4px] border-r-[4px] border-t-[4px] border-transparent border-t-slate-900" />
+                      </div>
                     </div>
                   </div>
                 </div>

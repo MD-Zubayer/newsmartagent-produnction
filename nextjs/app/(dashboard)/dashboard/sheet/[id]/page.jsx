@@ -18,13 +18,13 @@ export default function SheetPage() {
   }, [params]);
 
   return (
-    <div className="h-screen bg-[#f8fafc] flex flex-col p-0 sm:p-4 overflow-hidden">
+    <div className="h-[calc(100vh-80px)] bg-[#f8fafc] flex flex-col p-0 sm:p-4 overflow-hidden">
       {/* মোবাইলে টাইটেল হাইড করে স্পেস বাঁচানো যায় */}
       <h1 className="hidden sm:block text-xl font-black mb-3 px-2 text-slate-800 tracking-tight">
         Workspace / <span className="text-indigo-600">Spreadsheet</span>
       </h1>
 
-      <div className="flex-1 border-none sm:border border-slate-200 rounded-none sm:rounded-2xl overflow-hidden shadow-2xl shadow-slate-200/50">
+      <div className="flex-1 min-h-0 border-none sm:border border-slate-200 rounded-none sm:rounded-2xl overflow-hidden shadow-2xl shadow-slate-200/50">
         {activeSheetId ? (
           <Spreadsheet sheetId={activeSheetId} />
         ) : (

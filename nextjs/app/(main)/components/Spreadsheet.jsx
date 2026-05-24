@@ -140,7 +140,6 @@ const Cell = memo(({ columnIndex, rowIndex, style, data }) => {
         ${isImportant && !inRange ? (dark ? "bg-rose-900/10 text-rose-300" : "bg-rose-50/50 text-rose-600") : ""}
       `}
       onMouseDown={(e) => handleMouseDown(rowIndex, columnIndex, e)}
-      onTouchStart={(e) => handleMouseDown(rowIndex, columnIndex, e)}
       onMouseEnter={() => handleMouseEnter(rowIndex, columnIndex)}
     >
       <input
@@ -664,7 +663,7 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
   };
 
   if (loading) return (
-    <div className="h-screen flex items-center justify-center bg-slate-50">
+    <div className="h-full flex items-center justify-center bg-slate-50">
       <div className="animate-pulse flex flex-col items-center gap-2">
         <FileSpreadsheet className="text-indigo-400" size={40} />
       </div>
@@ -672,7 +671,7 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
   );
 
   return (
-    <div className={`h-screen flex flex-col font-sans selection:bg-indigo-200 selection:text-indigo-900 
+    <div className={`h-full flex flex-col font-sans selection:bg-indigo-200 selection:text-indigo-900 
       ${dark ? "bg-slate-900 text-slate-100" : "bg-slate-50 text-slate-800"}`}>
       
       <FileMenu 

@@ -341,9 +341,9 @@ export default function UserDashboard() {
                           </div>
                         </div>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right shrink-0">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Status</p>
-                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter ${isLow ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter whitespace-nowrap ${isLow ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'}`}>
                           {isLow ? 'Low Fuel' : 'Optimal'}
                         </span>
                       </div>

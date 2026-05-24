@@ -277,46 +277,46 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:flex gap-4 w-full md:w-auto">
-             <div className="bg-indigo-50 px-6 py-4 rounded-3xl border border-indigo-100 shadow-sm text-center flex-1">
-                <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Account Balance</p>
-                <p className="text-xl font-black text-indigo-700 tracking-tighter italic">৳{user?.profile?.acount_balance}</p>
+          <div className="grid grid-cols-2 md:flex gap-3 md:gap-4 w-full md:w-auto">
+             <div className="bg-indigo-50 px-4 py-3 sm:px-6 sm:py-4 rounded-2xl sm:rounded-3xl border border-indigo-100 shadow-sm text-center flex-1">
+                <p className="text-[9px] sm:text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Account Balance</p>
+                <p className="text-base sm:text-xl font-black text-indigo-700 tracking-tighter italic">৳{user?.profile?.acount_balance}</p>
              </div>
-             <div className="bg-emerald-50 px-6 py-4 rounded-3xl border border-emerald-100 shadow-sm text-center flex-1">
-                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Commission</p>
-                <p className="text-xl font-black text-emerald-700 tracking-tighter italic">৳{user?.profile?.commission_balance || "0.00"}</p>
+             <div className="bg-emerald-50 px-4 py-3 sm:px-6 sm:py-4 rounded-2xl sm:rounded-3xl border border-emerald-100 shadow-sm text-center flex-1">
+                <p className="text-[9px] sm:text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Commission</p>
+                <p className="text-base sm:text-xl font-black text-emerald-700 tracking-tighter italic">৳{user?.profile?.commission_balance || "0.00"}</p>
              </div>
           </div>
         </div>
       </div>
 
       <div className="max-w-6xl mx-auto px-4">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
           
           {/* Left: Identity Details */}
-          <div className="lg:col-span-8 space-y-8">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                <div className="bg-indigo-600 rounded-[2.5rem] p-8 text-white flex items-center justify-between shadow-xl shadow-indigo-100 border border-indigo-500">
+          <div className="lg:col-span-8 space-y-6 md:space-y-8">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+                <div className="bg-indigo-600 rounded-2xl sm:rounded-[2.5rem] p-5 sm:p-8 text-white flex items-center justify-between shadow-xl shadow-indigo-100 border border-indigo-500">
                     <div>
-                        <p className="text-[10px] font-black text-indigo-200 uppercase tracking-[0.3em] mb-1">Tokens Remaining</p>
-                        <h4 className="text-2xl font-black italic uppercase">{user?.profile?.word_balance?.toLocaleString()}</h4>
+                        <p className="text-[9px] sm:text-[10px] font-black text-indigo-200 uppercase tracking-[0.2em] sm:tracking-[0.3em] mb-1">Tokens Remaining</p>
+                        <h4 className="text-lg sm:text-2xl font-black italic uppercase">{user?.profile?.word_balance?.toLocaleString()}</h4>
                     </div>
-                    <FaCoins size={32} className="text-indigo-300/50" />
+                    <FaCoins className="w-6 h-6 sm:w-8 sm:h-8 text-indigo-300/50" />
                 </div>
-                <div className="bg-slate-900 rounded-[2.5rem] p-8 text-white flex items-center justify-between shadow-xl shadow-slate-200">
+                <div className="bg-slate-900 rounded-2xl sm:rounded-[2.5rem] p-5 sm:p-8 text-white flex items-center justify-between shadow-xl shadow-slate-200">
                     <div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-1">Total Used</p>
-                        <h4 className="text-2xl font-black italic uppercase">{analytics?.summary?.total_tokens?.toLocaleString() || "0"}</h4>
+                        <p className="text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] sm:tracking-[0.3em] mb-1">Total Used</p>
+                        <h4 className="text-lg sm:text-2xl font-black italic uppercase">{analytics?.summary?.total_tokens?.toLocaleString() || "0"}</h4>
                     </div>
-                    <FaChartLine size={32} className="text-emerald-500" />
+                    <FaChartLine className="w-6 h-6 sm:w-8 sm:h-8 text-emerald-500" />
                 </div>
-                <div className="bg-emerald-50 rounded-[2.5rem] p-8 text-emerald-900 flex items-center justify-between shadow-xl border border-emerald-100">
+                <div className="bg-emerald-50 rounded-2xl sm:rounded-[2.5rem] p-5 sm:p-8 text-emerald-900 flex items-center justify-between shadow-xl border border-emerald-100">
                     <div>
-                        <p className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em] mb-1">Schedule Contacts Left</p>
-                        <h4 className="text-2xl font-black italic uppercase">{(remainingSchedules || 0).toLocaleString()}</h4>
-                        <p className="text-[10px] font-black text-emerald-400 mt-1">Used: {usedSchedules.toLocaleString()} / {totalScheduleSlots.toLocaleString() || "0"}</p>
+                        <p className="text-[9px] sm:text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em] sm:tracking-[0.3em] mb-1">Schedule Contacts Left</p>
+                        <h4 className="text-lg sm:text-2xl font-black italic uppercase">{(remainingSchedules || 0).toLocaleString()}</h4>
+                        <p className="text-[9px] sm:text-[10px] font-black text-emerald-400 mt-1">Used: {usedSchedules.toLocaleString()} / {totalScheduleSlots.toLocaleString() || "0"}</p>
                     </div>
-                    <FaCalendar size={32} className="text-emerald-500/60" />
+                    <FaCalendar className="w-6 h-6 sm:w-8 sm:h-8 text-emerald-500/60" />
                 </div>
             </div>
 
