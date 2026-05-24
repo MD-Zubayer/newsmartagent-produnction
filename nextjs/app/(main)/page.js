@@ -6,7 +6,7 @@ import { FaPhoneAlt, FaEnvelope, FaMapMarkerAlt, FaPaperPlane, FaWhatsapp } from
 import { FaArrowRight, FaRocket, FaShieldAlt, FaLightbulb } from "react-icons/fa";
 import { FaRobot, FaShareAlt, FaChartBar } from "react-icons/fa";
 import { FaFacebook, FaYoutube, FaCheckCircle, FaInstagram, FaTelegram, FaTiktok, FaCode, FaBug, FaRegCommentDots, FaStar } from "react-icons/fa";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "@/lib/api";
 import { useLanguage } from "@/context/LanguageContext";
@@ -204,6 +204,31 @@ export default function HomePage() {
   const [formData, setFormData] = useState({ name: "", email: "", subjects: "", messages: "" });
   const [status, setStatus] = useState({ loading: false, success: null, error: null });
   const [activeCommunityCard, setActiveCommunityCard] = useState(0);
+  const [activeScrollCard, setActiveScrollCard] = useState(null);
+  const [hoveredCardId, setHoveredCardId] = useState(null);
+  const [clickedCardId, setClickedCardId] = useState(null);
+  const [cardMetrics, setCardMetrics] = useState({});
+
+  const handleCardMetricChange = useCallback((cardId, metric) => {
+    setCardMetrics((prev) => {
+      if (!metric) {
+        if (!prev[cardId]) return prev;
+        const next = { ...prev };
+        delete next[cardId];
+        return next;
+      }
+      const existing = prev[cardId];
+      if (
+        existing &&
+        existing.isIntersecting === metric.isIntersecting &&
+        existing.ratio === metric.ratio &&
+        existing.centerDistance === metric.centerDistance
+      ) {
+        return prev;
+      }
+      return { ...prev, [cardId]: metric };
+    });
+  }, []);
 
   useEffect(() => {
     if (!t?.communityActions?.length) return;
@@ -212,6 +237,21 @@ export default function HomePage() {
     }, 2800);
     return () => clearInterval(timer);
   }, [t]);
+
+  useEffect(() => {
+    const visibleCards = Object.entries(cardMetrics).filter(([, metric]) => metric?.isIntersecting);
+    if (!visibleCards.length) {
+      setActiveScrollCard(null);
+      return;
+    }
+    visibleCards.sort((a, b) => {
+      const centerA = a[1].centerDistance ?? Number.MAX_SAFE_INTEGER;
+      const centerB = b[1].centerDistance ?? Number.MAX_SAFE_INTEGER;
+      if (centerA !== centerB) return centerA - centerB;
+      return (b[1].ratio ?? 0) - (a[1].ratio ?? 0);
+    });
+    setActiveScrollCard(visibleCards[0][0]);
+  }, [cardMetrics]);
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
@@ -317,6 +357,13 @@ export default function HomePage() {
               return (
                 <HomeIntegrationCard
                   key={item.title}
+                  cardId={`integration-${index}`}
+                  activeScrollCard={activeScrollCard}
+                  hoveredCardId={hoveredCardId}
+                  clickedCardId={clickedCardId}
+                  setHoveredCardId={setHoveredCardId}
+                  setClickedCardId={setClickedCardId}
+                  onCardMetricChange={handleCardMetricChange}
                   Icon={Icon}
                   title={item.title}
                   desc={item.desc}
@@ -350,12 +397,18 @@ export default function HomePage() {
               return (
                 <HomeServiceCard
                   key={index}
+                  cardId={`service-${index}`}
+                  activeScrollCard={activeScrollCard}
+                  hoveredCardId={hoveredCardId}
+                  clickedCardId={clickedCardId}
+                  setHoveredCardId={setHoveredCardId}
+                  setClickedCardId={setClickedCardId}
+                  onCardMetricChange={handleCardMetricChange}
                   icon={icons[index]}
                   title={service.title}
                   desc={service.desc}
                   learnMoreText={t.learnMore}
                   color={cardColor}
-                  delay={index * 0.1}
                 />
               );
             })}
@@ -388,12 +441,26 @@ export default function HomePage() {
             <div className="grid grid-cols-2 gap-4 md:gap-6 order-2 lg:order-1">
               <div className="space-y-4 md:space-y-6">
                 <HomeFeatureCard
+                  cardId="feature-smart-velocity"
+                  activeScrollCard={activeScrollCard}
+                  hoveredCardId={hoveredCardId}
+                  clickedCardId={clickedCardId}
+                  setHoveredCardId={setHoveredCardId}
+                  setClickedCardId={setClickedCardId}
+                  onCardMetricChange={handleCardMetricChange}
                   icon={<FaRocket />}
                   color="indigo"
                   title="Smart Velocity"
                   desc={t.smartVelocityDesc}
                 />
                 <HomeFeatureCard
+                  cardId="feature-ironclad-security"
+                  activeScrollCard={activeScrollCard}
+                  hoveredCardId={hoveredCardId}
+                  clickedCardId={clickedCardId}
+                  setHoveredCardId={setHoveredCardId}
+                  setClickedCardId={setClickedCardId}
+                  onCardMetricChange={handleCardMetricChange}
                   icon={<FaShieldAlt />}
                   color="rose"
                   title="Ironclad Security"
@@ -402,12 +469,26 @@ export default function HomePage() {
               </div>
               <div className="pt-8 md:pt-12 space-y-4 md:space-y-6">
                 <HomeFeatureCard
+                  cardId="feature-adaptive-ai"
+                  activeScrollCard={activeScrollCard}
+                  hoveredCardId={hoveredCardId}
+                  clickedCardId={clickedCardId}
+                  setHoveredCardId={setHoveredCardId}
+                  setClickedCardId={setClickedCardId}
+                  onCardMetricChange={handleCardMetricChange}
                   icon={<FaLightbulb />}
                   color="amber"
                   title="Adaptive AI"
                   desc={t.adaptiveDesc}
                 />
                 <HomeFeatureCard
+                  cardId="feature-10x-efficiency"
+                  activeScrollCard={activeScrollCard}
+                  hoveredCardId={hoveredCardId}
+                  clickedCardId={clickedCardId}
+                  setHoveredCardId={setHoveredCardId}
+                  setClickedCardId={setClickedCardId}
+                  onCardMetricChange={handleCardMetricChange}
                   icon={<span className="font-black text-lg">10X</span>}
                   color="cyan"
                   title="10X Efficiency"
@@ -588,6 +669,13 @@ export default function HomePage() {
                 return (
                   <HomeContactCard
                     key={idx}
+                    cardId={`contact-${idx}`}
+                    activeScrollCard={activeScrollCard}
+                    hoveredCardId={hoveredCardId}
+                    clickedCardId={clickedCardId}
+                    setHoveredCardId={setHoveredCardId}
+                    setClickedCardId={setClickedCardId}
+                    onCardMetricChange={handleCardMetricChange}
                     icon={icons[idx]}
                     title={card.title}
                     value={card.value}
@@ -638,7 +726,39 @@ export default function HomePage() {
 
 /* ── Helper Card Components ── */
 
-function HomeIntegrationCard({ Icon, title, desc, cta, color }) {
+function useScrollGlowCard(cardId, onCardMetricChange) {
+  const cardRef = useRef(null);
+
+  useEffect(() => {
+    if (!cardRef.current || !onCardMetricChange) return;
+    const thresholds = Array.from({ length: 11 }, (_, idx) => idx / 10);
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const rect = entry.boundingClientRect;
+          const viewportCenter = window.innerHeight / 2;
+          const cardCenter = rect.top + rect.height / 2;
+          onCardMetricChange(cardId, {
+            isIntersecting: entry.isIntersecting,
+            ratio: Number(entry.intersectionRatio.toFixed(3)),
+            centerDistance: Math.round(Math.abs(cardCenter - viewportCenter)),
+          });
+        });
+      },
+      { threshold: thresholds, rootMargin: "-10% 0px -10% 0px" }
+    );
+
+    observer.observe(cardRef.current);
+    return () => {
+      observer.disconnect();
+      onCardMetricChange(cardId, null);
+    };
+  }, [cardId, onCardMetricChange]);
+
+  return cardRef;
+}
+
+function HomeIntegrationCard({ Icon, title, desc, cta, color, cardId, activeScrollCard, hoveredCardId, clickedCardId, setHoveredCardId, setClickedCardId, onCardMetricChange }) {
   const integrationColors = {
     blue: { color: '#1877F2', bg: 'rgba(24,119,242,0.06)', border: 'rgba(24,119,242,0.15)' },
     green: { color: '#25D366', bg: 'rgba(37,211,102,0.06)', border: 'rgba(37,211,102,0.15)' },
@@ -651,12 +771,24 @@ function HomeIntegrationCard({ Icon, title, desc, cta, color }) {
   };
 
   const theme = integrationColors[color] || integrationColors.indigo;
+  const cardRef = useScrollGlowCard(cardId, onCardMetricChange);
+  const isActive = hoveredCardId
+    ? hoveredCardId === cardId
+    : clickedCardId
+      ? clickedCardId === cardId
+      : activeScrollCard === cardId;
 
   return (
     <motion.article
+      ref={cardRef}
       variants={fadeInUp}
       whileHover={{ y: -8 }}
-      className="group cursor-pointer h-full"
+      className="group cursor-pointer h-full home-glow-card"
+      data-active-glow={isActive ? "true" : "false"}
+      style={{ "--card-glow-color": theme.color }}
+      onMouseEnter={() => setHoveredCardId(cardId)}
+      onMouseLeave={() => setHoveredCardId(null)}
+      onClick={() => setClickedCardId((prev) => (prev === cardId ? null : cardId))}
     >
       {/* Outer Card */}
       <div
@@ -720,7 +852,7 @@ function HomeIntegrationCard({ Icon, title, desc, cta, color }) {
   );
 }
 
-function HomeServiceCard({ icon, title, desc, learnMoreText, color, delay }) {
+function HomeServiceCard({ icon, title, desc, learnMoreText, color, cardId, activeScrollCard, hoveredCardId, clickedCardId, setHoveredCardId, setClickedCardId, onCardMetricChange }) {
   const serviceColors = {
     indigo: { color: '#4f46e5', bg: 'rgba(79,70,229,0.06)', border: 'rgba(79,70,229,0.15)' },
     cyan: { color: '#06b6d4', bg: 'rgba(6,182,212,0.06)', border: 'rgba(6,182,212,0.15)' },
@@ -730,12 +862,24 @@ function HomeServiceCard({ icon, title, desc, learnMoreText, color, delay }) {
   };
 
   const theme = serviceColors[color] || serviceColors.indigo;
+  const cardRef = useScrollGlowCard(cardId, onCardMetricChange);
+  const isActive = hoveredCardId
+    ? hoveredCardId === cardId
+    : clickedCardId
+      ? clickedCardId === cardId
+      : activeScrollCard === cardId;
 
   return (
     <motion.div
+      ref={cardRef}
       variants={fadeInUp}
       whileHover={{ y: -8 }}
-      className="group cursor-pointer h-full"
+      className="group cursor-pointer h-full home-glow-card"
+      data-active-glow={isActive ? "true" : "false"}
+      style={{ "--card-glow-color": theme.color }}
+      onMouseEnter={() => setHoveredCardId(cardId)}
+      onMouseLeave={() => setHoveredCardId(null)}
+      onClick={() => setClickedCardId((prev) => (prev === cardId ? null : cardId))}
     >
       {/* Outer Card */}
       <div
@@ -798,7 +942,7 @@ function HomeServiceCard({ icon, title, desc, learnMoreText, color, delay }) {
   );
 }
 
-function HomeFeatureCard({ icon, title, desc, badgeText, color }) {
+function HomeFeatureCard({ icon, title, desc, badgeText, color, cardId, activeScrollCard, hoveredCardId, clickedCardId, setHoveredCardId, setClickedCardId, onCardMetricChange }) {
   const featureColors = {
     indigo: { color: '#4f46e5', bg: 'rgba(79,70,229,0.06)', border: 'rgba(79,70,229,0.15)' },
     rose: { color: '#f43f5e', bg: 'rgba(244,63,94,0.06)', border: 'rgba(244,63,94,0.15)' },
@@ -807,11 +951,23 @@ function HomeFeatureCard({ icon, title, desc, badgeText, color }) {
   };
 
   const theme = featureColors[color] || featureColors.indigo;
+  const cardRef = useScrollGlowCard(cardId, onCardMetricChange);
+  const isActive = hoveredCardId
+    ? hoveredCardId === cardId
+    : clickedCardId
+      ? clickedCardId === cardId
+      : activeScrollCard === cardId;
 
   return (
     <motion.div
+      ref={cardRef}
       whileHover={{ y: -6 }}
-      className="group cursor-pointer"
+      className="group cursor-pointer home-glow-card"
+      data-active-glow={isActive ? "true" : "false"}
+      style={{ "--card-glow-color": theme.color }}
+      onMouseEnter={() => setHoveredCardId(cardId)}
+      onMouseLeave={() => setHoveredCardId(null)}
+      onClick={() => setClickedCardId((prev) => (prev === cardId ? null : cardId))}
     >
       {/* Outer Card */}
       <div
@@ -872,7 +1028,7 @@ function HomeFeatureCard({ icon, title, desc, badgeText, color }) {
   );
 }
 
-function HomeContactCard({ icon, title, value, color }) {
+function HomeContactCard({ icon, title, value, color, cardId, activeScrollCard, hoveredCardId, clickedCardId, setHoveredCardId, setClickedCardId, onCardMetricChange }) {
   const contactColors = {
     indigo: { color: '#4f46e5', bg: 'rgba(79,70,229,0.06)', border: 'rgba(79,70,229,0.15)' },
     rose: { color: '#f43f5e', bg: 'rgba(244,63,94,0.06)', border: 'rgba(244,63,94,0.15)' },
@@ -880,11 +1036,23 @@ function HomeContactCard({ icon, title, value, color }) {
   };
 
   const theme = contactColors[color] || contactColors.indigo;
+  const cardRef = useScrollGlowCard(cardId, onCardMetricChange);
+  const isActive = hoveredCardId
+    ? hoveredCardId === cardId
+    : clickedCardId
+      ? clickedCardId === cardId
+      : activeScrollCard === cardId;
 
   return (
     <motion.div
+      ref={cardRef}
       whileHover={{ x: 8 }}
-      className="group cursor-pointer w-full"
+      className="group cursor-pointer w-full home-glow-card"
+      data-active-glow={isActive ? "true" : "false"}
+      style={{ "--card-glow-color": theme.color }}
+      onMouseEnter={() => setHoveredCardId(cardId)}
+      onMouseLeave={() => setHoveredCardId(null)}
+      onClick={() => setClickedCardId((prev) => (prev === cardId ? null : cardId))}
     >
       {/* Outer Card */}
       <div
