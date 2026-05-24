@@ -519,11 +519,11 @@ export default function HomePage() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-10 lg:gap-12 items-start">
             <motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} className="lg:col-span-5 space-y-6">
               {t.contactItems.map((card, idx) => (
-                <motion.div key={idx} whileHover={{ x: 10 }} whileTap={{ x: 6, scale: 0.98 }} className="bg-white/90 backdrop-blur-md py-6 px-4 rounded-[2.5rem] shadow-lg shadow-slate-200/40 border border-slate-100 flex items-start gap-6 group cursor-default active:shadow-md transition-all duration-500 hover:border-indigo-200 hover:shadow-[0_24px_60px_-28px_rgba(79,70,229,0.45)] active:scale-[0.985]">
+                <motion.div key={idx} whileHover={{ x: 10 }} whileTap={{ x: 6, scale: 0.98 }} className="bg-white/90 backdrop-blur-md py-8 px-6 rounded-[3rem] shadow-lg shadow-slate-200/40 border border-slate-100 flex items-start gap-6 group cursor-default active:shadow-md transition-all duration-500 hover:border-indigo-200 hover:shadow-[0_24px_60px_-28px_rgba(79,70,229,0.45)] active:scale-[0.985]">
                   <div className={`w-14 h-14 ${contactColors[idx].bg} rounded-2xl flex items-center justify-center ${contactColors[idx].color} text-xl group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300`}>{contactIcons[idx]}</div>
                   <div>
                     <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">{card.title}</p>
-                    <p className="text-[clamp(1rem,1.8vw,1.25rem)] font-black text-gray-800 tracking-tight truncate max-w-[200px] md:max-w-none">{card.value}</p>
+                    <p className="text-[clamp(1rem,1.8vw,1.25rem)] font-black text-gray-800 tracking-tight">{card.value}</p>
                   </div>
                 </motion.div>
               ))}
