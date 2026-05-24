@@ -10,6 +10,7 @@ import {
   XCircleIcon,
   ArrowRightIcon
 } from "@heroicons/react/24/outline";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function HistoryPage() {
   const [activeTab, setActiveTab] = useState("all");
@@ -84,162 +85,253 @@ export default function HistoryPage() {
 
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-gray-800 p-3 md:p-10 font-sans overflow-x-hidden transition-colors duration-300">
+    <div className="min-h-screen bg-slate-50/50 text-gray-800 p-4 md:p-10 font-sans overflow-x-hidden relative">
+      {/* Background Decorative Blobs */}
+      <div className="absolute top-0 right-1/4 w-96 h-96 bg-purple-200/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 left-10 w-96 h-96 bg-blue-200/10 rounded-full blur-3xl pointer-events-none" />
       
       {/* Header Section */}
-      <div className="max-w-7xl mx-auto mb-6 sm:mb-10 border-l-8 border-pink-500 pl-4 sm:pl-6 space-y-1 sm:space-y-2">
-        <h1 className="text-xl sm:text-2xl md:text-4xl font-black text-gray-900 tracking-tighter italic uppercase">History & Logs</h1>
-        <p className="text-gray-400 font-bold text-xs sm:text-sm uppercase tracking-widest">Real-time Activity Intelligence</p>
+      <div className="max-w-5xl mx-auto mb-8 sm:mb-12 flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-100 pb-6 relative z-10">
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="h-2 w-2 rounded-full bg-pink-500 animate-pulse" />
+            <span className="text-[10px] font-bold text-pink-500 uppercase tracking-widest">Workspace Logs</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-slate-900 tracking-tight uppercase">
+            History &amp; <span className="bg-gradient-to-r from-pink-500 to-indigo-600 bg-clip-text text-transparent">Logs</span>
+          </h1>
+          <p className="text-slate-400 font-medium text-xs sm:text-sm mt-1">Real-time Activity Intelligence &amp; Transaction Details</p>
+        </div>
+        <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-full border border-slate-100 shadow-sm self-start md:self-auto">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </span>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">System Live</span>
+        </div>
       </div>
 
-      <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-4 sm:gap-8">
-        
-        {/* Sidebar Tabs */}
-        <div className="w-full lg:w-72 shrink-0">
-          <div className="sticky top-8 grid grid-cols-4 lg:grid-cols-1 gap-2 sm:gap-3 pb-2 lg:pb-0">
-            <TabButton 
-              active={activeTab === "all"} 
-              onClick={() => setActiveTab("all")}
-              icon={<ClockIcon className="h-5 w-5 sm:h-6 sm:w-6" />}
-              label="All Activity"
-            />
-            <TabButton 
-              active={activeTab === "payment"} 
-              onClick={() => setActiveTab("payment")}
-              icon={<CreditCardIcon className="h-5 w-5 sm:h-6 sm:w-6" />}
-              label="Payments"
-            />
-            <TabButton 
-              active={activeTab === "usage"} 
-              onClick={() => setActiveTab("usage")}
-              icon={<CpuChipIcon className="h-5 w-5 sm:h-6 sm:w-6" />}
-              label="Token Usage"
-            />
-            <TabButton 
-              active={activeTab === "offer"} 
-              onClick={() => setActiveTab("offer")}
-              icon={<TagIcon className="h-5 w-5 sm:h-6 sm:w-6" />}
-              label="Offers & Plans"
-            />
-          </div>
+      <div className="max-w-5xl mx-auto space-y-8 relative z-10">
+        {/* Horizontal Tabs Container */}
+        <div className="bg-white/80 backdrop-blur-md p-1.5 rounded-2xl border border-slate-200/60 shadow-lg shadow-slate-100/40 flex flex-row items-center gap-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          <TabButton 
+            active={activeTab === "all"} 
+            onClick={() => setActiveTab("all")}
+            icon={<ClockIcon className="h-4 w-4" />}
+            label="All Activity"
+          />
+          <TabButton 
+            active={activeTab === "payment"} 
+            onClick={() => setActiveTab("payment")}
+            icon={<CreditCardIcon className="h-4 w-4" />}
+            label="Payments"
+          />
+          <TabButton 
+            active={activeTab === "usage"} 
+            onClick={() => setActiveTab("usage")}
+            icon={<CpuChipIcon className="h-4 w-4" />}
+            label="Token Usage"
+          />
+          <TabButton 
+            active={activeTab === "offer"} 
+            onClick={() => setActiveTab("offer")}
+            icon={<TagIcon className="h-4 w-4" />}
+            label="Offers & Plans"
+          />
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 space-y-6">
+        <div className="space-y-8">
+          {error && (
+            <div className="bg-rose-50 border border-rose-100 text-rose-800 p-4 rounded-xl flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <XCircleIcon className="h-5 w-5 text-rose-500 shrink-0" />
+                <span className="text-sm font-medium">{error}</span>
+              </div>
+              <button 
+                onClick={() => window.location.reload()} 
+                className="text-xs font-bold uppercase tracking-wider text-rose-600 hover:text-rose-700 hover:underline"
+              >
+                Retry
+              </button>
+            </div>
+          )}
           
           {loading ? (
-            <div className="flex flex-col items-center justify-center p-12">
-               <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-               <p className="mt-4 text-slate-500 font-medium">Loading history records...</p>
+            <div className="flex flex-col items-center justify-center p-16 bg-white/40 backdrop-blur-sm rounded-2xl border border-slate-100">
+               <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+               <p className="mt-4 text-slate-400 font-bold text-xs uppercase tracking-widest">Loading history records...</p>
             </div>
           ) : (
-            <>
+            <AnimatePresence mode="popLayout">
               {/* --- Offers History --- */}
-              {(activeTab === "all" || activeTab === "offer") && (
-                <div className="space-y-4">
-                  <h2 className="text-xl font-black text-gray-800 flex items-center gap-2 mb-6 italic uppercase">
-                    <TagIcon className="h-6 w-6 text-purple-600" />
-                    Offers History
-                  </h2>
-                  {offerHistory.map((offer) => (
-                    <div key={offer.id} className="group relative bg-white p-4 sm:p-6 md:p-8 rounded-2xl sm:rounded-[2.5rem] shadow-xl border border-gray-100 hover:shadow-2xl transition-all overflow-hidden flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-6">
-                      <div className="flex items-center gap-3 sm:gap-6 min-w-0">
-                        <div className={`w-10 h-10 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg shrink-0 transition-transform duration-500 group-hover:scale-110 ${offer.status === 'Active' ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                          <TagIcon className="h-5 w-5 sm:h-8 sm:w-8" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm sm:text-lg font-black text-slate-800 uppercase tracking-tighter truncate">{offer.name}</p>
-                          <p className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5 sm:mt-1 truncate">{offer.date} • {offer.id}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4 sm:gap-10 w-full sm:w-auto justify-between sm:justify-end pl-13 sm:pl-0">
-                        <div className="text-left sm:text-right">
-                          <p className="text-[8px] sm:text-[9px] font-black text-slate-300 uppercase tracking-widest mb-0.5 sm:mb-1">Price</p>
-                          <p className="text-lg sm:text-2xl font-black text-gray-900 tracking-tighter">{offer.discount}</p>
-                        </div>
-                        <div className="text-right min-w-[70px] sm:min-w-[100px]">
-                          <p className="text-[8px] sm:text-[9px] font-black text-slate-300 uppercase tracking-widest mb-0.5 sm:mb-1">Status</p>
-                          <span className={`px-2 sm:px-4 py-1 sm:py-1.5 rounded-full text-[8px] sm:text-[10px] font-black uppercase tracking-tighter ${offer.status === 'Active' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
-                            {offer.status}
-                          </span>
-                        </div>
-                      </div>
+              {(activeTab === "all" || activeTab === "offer") && offerHistory.length > 0 && (
+                <motion.div 
+                  key="offers-section"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-4"
+                >
+                  <div className="flex items-center gap-3 pb-2 border-b border-slate-100">
+                    <div className="p-1.5 bg-purple-50 rounded-lg text-purple-600">
+                      <TagIcon className="h-4 w-4" />
                     </div>
-                  ))}
-                </div>
+                    <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider">Offers History</h2>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4">
+                    {offerHistory.map((offer, index) => (
+                      <motion.div 
+                        key={offer.id}
+                        initial={{ opacity: 0, y: 15 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: index * 0.05 }}
+                        className="group relative bg-white/70 backdrop-blur-md p-5 rounded-2xl shadow-sm border border-slate-200/50 hover:border-purple-200 hover:bg-white/90 hover:shadow-md transition-all duration-300 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+                      >
+                        <div className="flex items-center gap-4 min-w-0">
+                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-sm shrink-0 transition-transform duration-500 group-hover:scale-105 group-hover:rotate-6 ${offer.status === 'Active' ? 'bg-gradient-to-br from-purple-500 to-indigo-600 text-white shadow-purple-200/30' : 'bg-slate-100 text-slate-400'}`}>
+                            <TagIcon className="h-5 w-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-base font-bold text-slate-800 uppercase tracking-tight truncate">{offer.name}</p>
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                              <span className="font-mono text-[10px] text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-100/50 font-bold">{offer.id}</span>
+                              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{offer.date}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-6 w-full sm:w-auto justify-between sm:justify-end pl-16 sm:pl-0">
+                          <div className="text-left sm:text-right">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Price</p>
+                            <p className="text-lg font-black text-slate-900 tracking-tight">{offer.discount}</p>
+                          </div>
+                          <div className="text-right min-w-[90px]">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Status</p>
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${offer.status === 'Active' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-50 text-slate-400 border border-slate-100'}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${offer.status === 'Active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                              {offer.status}
+                            </span>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </motion.div>
               )}
 
               {/* --- Payment History --- */}
-              {(activeTab === "all" || activeTab === "payment") && (
-                <div className={`space-y-4 ${activeTab === 'all' ? 'pt-12 border-t border-slate-100' : ''}`}>
-                  <h2 className="text-xl font-black text-gray-800 flex items-center gap-2 mb-6 italic uppercase">
-                    <CreditCardIcon className="h-6 w-6 text-emerald-600" />
-                    Payment History
-                  </h2>
-                  {paymentHistory.map((txn) => (
-                    <div key={txn.id} className="group relative bg-white p-4 sm:p-6 md:p-8 rounded-2xl sm:rounded-[2.5rem] shadow-xl border border-gray-100 hover:shadow-2xl transition-all overflow-hidden flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-6">
-                      <div className="flex items-center gap-3 sm:gap-6 min-w-0">
-                        <div className={`w-10 h-10 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-lg shrink-0 transition-transform duration-500 group-hover:scale-110 ${txn.status === 'Success' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'}`}>
-                          {txn.status === 'Success' ? <CheckCircleIcon className="h-5 w-5 sm:h-8 sm:w-8" /> : <XCircleIcon className="h-5 w-5 sm:h-8 sm:w-8" />}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm sm:text-lg font-black text-slate-800 uppercase tracking-tighter truncate">{txn.id}</p>
-                          <p className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5 sm:mt-1 truncate">{txn.date} • via {txn.method}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4 sm:gap-10 w-full sm:w-auto justify-between sm:justify-end pl-13 sm:pl-0">
-                        <div className="text-left sm:text-right">
-                          <p className="text-[8px] sm:text-[9px] font-black text-slate-300 uppercase tracking-widest mb-0.5 sm:mb-1">Amount</p>
-                          <p className="text-lg sm:text-2xl font-black text-gray-900 tracking-tighter">৳{txn.amount}</p>
-                        </div>
-                        <div className="text-right min-w-[70px] sm:min-w-[100px]">
-                          <p className="text-[8px] sm:text-[9px] font-black text-slate-300 uppercase tracking-widest mb-0.5 sm:mb-1">Outcome</p>
-                          <span className={`px-2 sm:px-4 py-1 sm:py-1.5 rounded-full text-[8px] sm:text-[10px] font-black uppercase tracking-tighter ${txn.status === 'Success' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
-                            {txn.status}
-                          </span>
-                        </div>
-                      </div>
+              {(activeTab === "all" || activeTab === "payment") && paymentHistory.length > 0 && (
+                <motion.div 
+                  key="payments-section"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-4"
+                >
+                  <div className="flex items-center gap-3 pb-2 border-b border-slate-100">
+                    <div className="p-1.5 bg-emerald-50 rounded-lg text-emerald-600">
+                      <CreditCardIcon className="h-4 w-4" />
                     </div>
-                  ))}
-                </div>
+                    <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider">Payment History</h2>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4">
+                    {paymentHistory.map((txn, index) => (
+                      <motion.div 
+                        key={txn.id}
+                        initial={{ opacity: 0, y: 15 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: index * 0.05 }}
+                        className="group relative bg-white/70 backdrop-blur-md p-5 rounded-2xl shadow-sm border border-slate-200/50 hover:border-emerald-200 hover:bg-white/90 hover:shadow-md transition-all duration-300 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+                      >
+                        <div className="flex items-center gap-4 min-w-0">
+                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-sm shrink-0 transition-transform duration-500 group-hover:scale-105 group-hover:rotate-6 ${txn.status === 'Success' ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-emerald-200/30' : txn.status === 'Pending' ? 'bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-amber-200/30' : 'bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-rose-200/30'}`}>
+                            {txn.status === 'Success' ? (
+                              <CheckCircleIcon className="h-5 w-5" />
+                            ) : txn.status === 'Pending' ? (
+                              <ClockIcon className="h-5 w-5" />
+                            ) : (
+                              <XCircleIcon className="h-5 w-5" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-base font-bold text-slate-800 uppercase tracking-tight truncate">{txn.id}</p>
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{txn.date}</span>
+                              <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50/50 px-1.5 py-0.5 rounded border border-indigo-100/50">via {txn.method}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-6 w-full sm:w-auto justify-between sm:justify-end pl-16 sm:pl-0">
+                          <div className="text-left sm:text-right">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Amount</p>
+                            <p className="text-lg font-black text-slate-900 tracking-tight">৳{txn.amount}</p>
+                          </div>
+                          <div className="text-right min-w-[90px]">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Outcome</p>
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${txn.status === 'Success' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : txn.status === 'Pending' ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${txn.status === 'Success' ? 'bg-emerald-500 animate-pulse' : txn.status === 'Pending' ? 'bg-amber-500 animate-pulse' : 'bg-rose-500'}`} />
+                              {txn.status}
+                            </span>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </motion.div>
               )}
 
               {/* --- Token Usage History --- */}
-              {(activeTab === "all" || activeTab === "usage") && (
-                <div className={`space-y-4 ${activeTab === 'all' ? 'pt-12 border-t border-slate-100' : ''}`}>
-                  <h2 className="text-xl font-black text-gray-800 flex items-center gap-2 mb-6 italic uppercase">
-                    <CpuChipIcon className="h-6 w-6 text-blue-600" />
-                    Token Usage
-                  </h2>
-                  {usageHistory.map((log) => (
-                    <div key={log.id} className="group relative bg-white p-4 sm:p-6 md:p-8 rounded-2xl sm:rounded-[2.5rem] shadow-xl border border-gray-100 hover:shadow-2xl transition-all overflow-hidden flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-6">
-                      <div className="flex items-center gap-3 sm:gap-6 min-w-0">
-                        <div className="w-10 h-10 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl flex items-center justify-center bg-blue-600 text-white shadow-lg shrink-0 transition-transform duration-500 group-hover:scale-110">
-                          <CpuChipIcon className="h-5 w-5 sm:h-8 sm:w-8" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-sm sm:text-lg font-black text-slate-800 uppercase tracking-tighter truncate">{log.task}</p>
-                          <div className="flex flex-wrap items-center gap-1.5 sm:gap-3 mt-1 sm:mt-1.5">
-                            <span className="text-[8px] sm:text-[10px] font-black bg-slate-100 text-slate-500 px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg uppercase tracking-tight border border-slate-200/50">{log.model}</span>
-                            <span className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase tracking-wider sm:tracking-widest truncate">{log.date} • {log.id}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 sm:gap-6 w-full sm:w-auto justify-between sm:justify-end pl-13 sm:pl-0">
-                        <div className="text-left sm:text-right">
-                          <p className="text-[8px] sm:text-[9px] font-black text-slate-300 uppercase tracking-widest mb-0.5 sm:mb-1">Consumption</p>
-                          <div className="flex items-center gap-1 sm:gap-1.5">
-                            <span className="font-black text-lg sm:text-2xl text-rose-600 tracking-tighter">-{log.tokens}</span>
-                            <span className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase tracking-wider sm:tracking-widest shrink-0">Tokens</span>
-                          </div>
-                        </div>
-                        <button className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-all sm:opacity-0 sm:group-hover:opacity-100 sm:scale-75 sm:group-hover:scale-100 shrink-0">
-                          <ArrowRightIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                        </button>
-                      </div>
+              {(activeTab === "all" || activeTab === "usage") && usageHistory.length > 0 && (
+                <motion.div 
+                  key="usages-section"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-4"
+                >
+                  <div className="flex items-center gap-3 pb-2 border-b border-slate-100">
+                    <div className="p-1.5 bg-blue-50 rounded-lg text-blue-600">
+                      <CpuChipIcon className="h-4 w-4" />
                     </div>
-                  ))}
-                </div>
+                    <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider">Token Usage</h2>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4">
+                    {usageHistory.map((log, index) => (
+                      <motion.div 
+                        key={log.id}
+                        initial={{ opacity: 0, y: 15 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: index * 0.05 }}
+                        className="group relative bg-white/70 backdrop-blur-md p-5 rounded-2xl shadow-sm border border-slate-200/50 hover:border-blue-200 hover:bg-white/90 hover:shadow-md transition-all duration-300 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+                      >
+                        <div className="flex items-center gap-4 min-w-0">
+                          <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-blue-200/30 shadow-sm shrink-0 transition-transform duration-500 group-hover:scale-105 group-hover:rotate-6">
+                            <CpuChipIcon className="h-5 w-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-base font-bold text-slate-800 uppercase tracking-tight truncate">{log.task}</p>
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                              <span className="text-[10px] font-bold bg-slate-900 text-slate-100 px-2 py-0.5 rounded border border-slate-800 uppercase tracking-tight font-mono">{log.model}</span>
+                              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{log.date} • {log.id}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-6 w-full sm:w-auto justify-between sm:justify-end pl-16 sm:pl-0">
+                          <div className="text-left sm:text-right">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Consumption</p>
+                            <div className="flex items-center gap-1">
+                              <span className="font-extrabold text-lg text-rose-600 tracking-tight">-{log.tokens}</span>
+                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Tokens</span>
+                            </div>
+                          </div>
+                          <button className="w-9 h-9 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-all hover:scale-105 shrink-0 border border-slate-150">
+                            <ArrowRightIcon className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </motion.div>
               )}
 
               {/* Empty State */}
@@ -248,15 +340,21 @@ export default function HistoryPage() {
                 (activeTab === "offer" && offerHistory.length === 0) ||
                 (activeTab === "all" && paymentHistory.length === 0 && usageHistory.length === 0 && offerHistory.length === 0)
                 ) && (
-                <div className="flex flex-col items-center justify-center p-16 bg-white rounded-[2.5rem] border border-dashed border-slate-200">
-                   <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mb-6 shadow-sm">
-                      <ClockIcon className="h-10 w-10 text-slate-300" />
+                <motion.div 
+                  key="empty-state"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="flex flex-col items-center justify-center p-16 bg-white/70 backdrop-blur-md rounded-2xl border border-slate-200/60 shadow-sm"
+                >
+                   <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mb-4 border border-slate-100">
+                      <ClockIcon className="h-8 w-8 text-slate-400" />
                    </div>
-                  <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight mb-2">No Records Found</h3>
-                  <p className="text-slate-400 font-bold text-xs uppercase tracking-widest text-center px-10">There is no history available for this category yet.</p>
-                </div>
+                  <h3 className="text-lg font-bold text-slate-800 uppercase tracking-tight mb-1">No Records Found</h3>
+                  <p className="text-slate-400 font-medium text-xs uppercase tracking-wider text-center max-w-sm">There is no history available for this category yet.</p>
+                </motion.div>
               )}
-            </>
+            </AnimatePresence>
           )}
         </div>
       </div>
@@ -269,19 +367,23 @@ function TabButton({ active, onClick, icon, label }) {
   return (
     <button
       onClick={onClick}
-      className={`flex flex-col lg:flex-row items-center lg:items-center gap-1 lg:gap-4 px-2 py-2.5 sm:px-4 sm:py-3 lg:px-6 lg:py-4 rounded-xl lg:rounded-2xl font-black transition-all duration-300 text-center lg:text-left group border w-full ${
+      className={`relative flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all duration-300 flex-1 min-w-[120px] md:min-w-[140px] group ${
         active 
-        ? "bg-slate-900 text-white border-transparent shadow-2xl shadow-slate-900/20" 
-        : "bg-white text-slate-400 border-slate-100 hover:bg-slate-50 hover:text-slate-600 shadow-sm"
+          ? "text-white" 
+          : "text-slate-500 hover:text-slate-800 hover:bg-slate-50/50"
       }`}
     >
-      <div className={`${active ? "text-pink-500" : "group-hover:text-indigo-500 transition-colors"} shrink-0`}>
-        {icon}
-      </div>
-      <span className="text-[7px] sm:text-[9px] lg:text-xs uppercase tracking-wide lg:tracking-[0.1em] leading-tight">{label}</span>
       {active && (
-        <div className="hidden lg:block ml-auto w-1 h-6 bg-pink-500 rounded-full shrink-0" />
+        <motion.div 
+          layoutId="activeTabIndicator"
+          className="absolute inset-0 bg-slate-900 rounded-xl -z-10 shadow-md shadow-slate-950/10"
+          transition={{ type: "spring", stiffness: 380, damping: 30 }}
+        />
       )}
+      <span className={`transition-all duration-300 ${active ? "scale-110 text-pink-500" : "group-hover:scale-110 text-slate-400 group-hover:text-indigo-500"}`}>
+        {icon}
+      </span>
+      <span>{label}</span>
     </button>
   );
 }
