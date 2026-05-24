@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+@property --angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
 /* :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -64,4 +70,83 @@ body {
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background-color: #94a3b8;
+}
+
+.home-glow-card {
+  position: relative;
+  isolation: isolate;
+  --home-glow-radius: 2.4rem;
+  z-index: 0;
+}
+
+.home-glow-card::before,
+.home-glow-card::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: calc(var(--home-glow-radius) + 5px);
+  padding: 2px;
+  background: conic-gradient(
+    from var(--angle),
+    color-mix(in srgb, var(--card-glow-color, #716be2) 70%, #68ab9d),
+    color-mix(in srgb, var(--card-glow-color, #4f46e5) 68%, #2af598),
+    color-mix(in srgb, var(--card-glow-color, #4f46e5) 68%, #45737a),
+    color-mix(in srgb, var(--card-glow-color, #4f46e5) 68%, #205b8f),
+    color-mix(in srgb, var(--card-glow-color, #4f46e5) 68%, #60a5fa),
+    color-mix(in srgb, var(--card-glow-color, #4f46e5) 68%, #7c3aed),
+    color-mix(in srgb, var(--card-glow-color, #4f46e5) 68%, #a78bfa),
+    color-mix(in srgb, var(--card-glow-color, #2217e7) 68%, #f355da),
+    color-mix(in srgb, var(--card-glow-color, #4f46e5) 68%, #702d5d),
+    color-mix(in srgb, var(--card-glow-color, #46e58b) 68%, #b15462),
+    color-mix(in srgb, var(--card-glow-color, #857ff1) 68%, #b67b51),
+    color-mix(in srgb, var(--card-glow-color, #4f46e5) 68%, #aa8950),
+    color-mix(in srgb, var(--card-glow-color, #4f46e5) 68%, #fde047),
+    color-mix(in srgb, var(--card-glow-color, #4f46e5) 70%, #34ad95)
+  );
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms ease;
+  z-index: -1;
+  animation: rotate-border 2.1s linear infinite;
+  animation-play-state: paused;
+}
+
+.home-glow-card::before {
+  filter: blur(11px) saturate(135%);
+  opacity: 0;
+  animation: rotate-border 2.1s linear infinite, glow-shadow-shift 2.6s ease-in-out infinite;
+}
+
+.home-glow-card::after {
+  filter: saturate(150%) contrast(112%);
+  box-shadow:
+    0 0 12px color-mix(in srgb, var(--card-glow-color, #4f46e5) 52%, #22d3ee),
+    0 0 20px color-mix(in srgb, var(--card-glow-color, #4f46e5) 46%, #f355da),
+    0 0 32px color-mix(in srgb, var(--card-glow-color, #4f46e5) 38%, #00ffcc);
+}
+
+.home-glow-card[data-active-glow="true"]::before {
+  opacity: 0.74;
+  animation-play-state: running;
+}
+
+.home-glow-card[data-active-glow="true"]::after {
+  opacity: 0.96;
+  animation-play-state: running;
+}
+
+@keyframes rotate-border {
+  to { --angle: 360deg; }
+}
+
+@keyframes glow-shadow-shift {
+  0% {
+    filter: blur(10px) saturate(130%) hue-rotate(0deg);
+  }
+  50% {
+    filter: blur(12px) saturate(165%) hue-rotate(20deg);
+  }
+  100% {
+    filter: blur(10px) saturate(130%) hue-rotate(0deg);
+  }
 }
