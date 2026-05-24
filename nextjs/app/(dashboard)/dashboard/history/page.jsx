@@ -85,7 +85,7 @@ export default function HistoryPage() {
 
 
   return (
-    <div className="min-h-screen bg-slate-50/50 text-gray-800 p-4 md:p-10 font-sans overflow-x-hidden relative">
+    <div className="min-h-screen bg-slate-50/50 text-gray-800 p-3.5 sm:p-6 md:p-10 font-sans overflow-x-hidden relative">
       {/* Background Decorative Blobs */}
       <div className="absolute top-0 right-1/4 w-96 h-96 bg-purple-200/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-1/4 left-10 w-96 h-96 bg-blue-200/10 rounded-full blur-3xl pointer-events-none" />
@@ -113,7 +113,7 @@ export default function HistoryPage() {
 
       <div className="max-w-5xl mx-auto space-y-8 relative z-10">
         {/* Horizontal Tabs Container */}
-        <div className="bg-white/80 backdrop-blur-md p-1.5 rounded-2xl border border-slate-200/60 shadow-lg shadow-slate-100/40 flex flex-row items-center gap-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+        <div className="bg-white/80 backdrop-blur-md p-1 rounded-2xl border border-slate-200/60 shadow-lg shadow-slate-100/40 flex flex-row items-center gap-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
           <TabButton 
             active={activeTab === "all"} 
             onClick={() => setActiveTab("all")}
@@ -186,26 +186,34 @@ export default function HistoryPage() {
                         initial={{ opacity: 0, y: 15 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3, delay: index * 0.05 }}
-                        className="group relative bg-white/70 backdrop-blur-md p-5 rounded-2xl shadow-sm border border-slate-200/50 hover:border-purple-200 hover:bg-white/90 hover:shadow-md transition-all duration-300 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+                        className="group relative bg-white/70 backdrop-blur-md p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200/50 hover:border-purple-200 hover:bg-white/95 hover:shadow-md transition-all duration-300 flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
                       >
-                        <div className="flex items-center gap-4 min-w-0">
-                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-sm shrink-0 transition-transform duration-500 group-hover:scale-105 group-hover:rotate-6 ${offer.status === 'Active' ? 'bg-gradient-to-br from-purple-500 to-indigo-600 text-white shadow-purple-200/30' : 'bg-slate-100 text-slate-400'}`}>
-                            <TagIcon className="h-5 w-5" />
+                        <div className="flex items-center gap-3 sm:gap-4 min-w-0 w-full md:w-auto">
+                          <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shadow-sm shrink-0 transition-transform duration-500 group-hover:scale-105 group-hover:rotate-3 ${offer.status === 'Active' ? 'bg-gradient-to-br from-purple-500 to-indigo-600 text-white shadow-purple-200/30' : 'bg-slate-100 text-slate-400'}`}>
+                            <TagIcon className="h-5 w-5 sm:h-6 sm:w-6" />
                           </div>
-                          <div className="min-w-0">
-                            <p className="text-base font-bold text-slate-800 uppercase tracking-tight truncate">{offer.name}</p>
-                            <div className="flex flex-wrap items-center gap-2 mt-1">
-                              <span className="font-mono text-[10px] text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-100/50 font-bold">{offer.id}</span>
-                              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{offer.date}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm sm:text-base font-extrabold text-slate-800 uppercase tracking-tight truncate">{offer.name}</p>
+                              <span className={`inline-flex md:hidden items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${offer.status === 'Active' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-50 text-slate-400 border border-slate-100'}`}>
+                                {offer.status}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[10px] sm:text-xs">
+                              <span className="font-mono text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100/50 font-bold">{offer.id}</span>
+                              <span className="text-slate-400 font-medium flex items-center gap-1">
+                                <ClockIcon className="h-3 w-3 shrink-0" />
+                                {offer.date} {offer.end_date && `– ${offer.end_date}`}
+                              </span>
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-6 w-full sm:w-auto justify-between sm:justify-end pl-16 sm:pl-0">
-                          <div className="text-left sm:text-right">
+                        <div className="flex flex-row md:flex-row items-center justify-between md:justify-end gap-6 w-full md:w-auto border-t border-slate-100/80 md:border-none pt-3 md:pt-0">
+                          <div className="text-left md:text-right">
                             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Price</p>
-                            <p className="text-lg font-black text-slate-900 tracking-tight">{offer.discount}</p>
+                            <p className="text-base sm:text-lg font-black text-slate-900 tracking-tight">{offer.discount}</p>
                           </div>
-                          <div className="text-right min-w-[90px]">
+                          <div className="hidden md:block text-right min-w-[90px]">
                             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Status</p>
                             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${offer.status === 'Active' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-50 text-slate-400 border border-slate-100'}`}>
                               <span className={`w-1.5 h-1.5 rounded-full ${offer.status === 'Active' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
@@ -241,32 +249,40 @@ export default function HistoryPage() {
                         initial={{ opacity: 0, y: 15 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3, delay: index * 0.05 }}
-                        className="group relative bg-white/70 backdrop-blur-md p-5 rounded-2xl shadow-sm border border-slate-200/50 hover:border-emerald-200 hover:bg-white/90 hover:shadow-md transition-all duration-300 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+                        className="group relative bg-white/70 backdrop-blur-md p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200/50 hover:border-emerald-200 hover:bg-white/95 hover:shadow-md transition-all duration-300 flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
                       >
-                        <div className="flex items-center gap-4 min-w-0">
-                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-sm shrink-0 transition-transform duration-500 group-hover:scale-105 group-hover:rotate-6 ${txn.status === 'Success' ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-emerald-200/30' : txn.status === 'Pending' ? 'bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-amber-200/30' : 'bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-rose-200/30'}`}>
+                        <div className="flex items-center gap-3 sm:gap-4 min-w-0 w-full md:w-auto">
+                          <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shadow-sm shrink-0 transition-transform duration-500 group-hover:scale-105 group-hover:rotate-3 ${txn.status === 'Success' ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-emerald-200/30' : txn.status === 'Pending' ? 'bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-amber-200/30' : 'bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-rose-200/30'}`}>
                             {txn.status === 'Success' ? (
-                              <CheckCircleIcon className="h-5 w-5" />
+                              <CheckCircleIcon className="h-5 w-5 sm:h-6 sm:w-6" />
                             ) : txn.status === 'Pending' ? (
-                              <ClockIcon className="h-5 w-5" />
+                              <ClockIcon className="h-5 w-5 sm:h-6 sm:w-6" />
                             ) : (
-                              <XCircleIcon className="h-5 w-5" />
+                              <XCircleIcon className="h-5 w-5 sm:h-6 sm:w-6" />
                             )}
                           </div>
-                          <div className="min-w-0">
-                            <p className="text-base font-bold text-slate-800 uppercase tracking-tight truncate">{txn.id}</p>
-                            <div className="flex flex-wrap items-center gap-2 mt-1">
-                              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{txn.date}</span>
-                              <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50/50 px-1.5 py-0.5 rounded border border-indigo-100/50">via {txn.method}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm sm:text-base font-extrabold text-slate-800 uppercase tracking-tight truncate">{txn.id}</p>
+                              <span className={`inline-flex md:hidden items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${txn.status === 'Success' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : txn.status === 'Pending' ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}>
+                                {txn.status}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[10px] sm:text-xs">
+                              <span className="text-slate-400 font-semibold uppercase">{txn.date}</span>
+                              <span className="text-indigo-600 bg-indigo-50/50 px-1.5 py-0.5 rounded border border-indigo-100/50 font-bold">via {txn.method}</span>
+                              {txn.offer_name && txn.offer_name !== "—" && (
+                                <span className="text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200/60 font-semibold">{txn.offer_name}</span>
+                              )}
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-6 w-full sm:w-auto justify-between sm:justify-end pl-16 sm:pl-0">
-                          <div className="text-left sm:text-right">
+                        <div className="flex flex-row md:flex-row items-center justify-between md:justify-end gap-6 w-full md:w-auto border-t border-slate-100/80 md:border-none pt-3 md:pt-0">
+                          <div className="text-left md:text-right">
                             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Amount</p>
-                            <p className="text-lg font-black text-slate-900 tracking-tight">৳{txn.amount}</p>
+                            <p className="text-base sm:text-lg font-black text-slate-900 tracking-tight">৳{(txn.amount || 0).toLocaleString()}</p>
                           </div>
-                          <div className="text-right min-w-[90px]">
+                          <div className="hidden md:block text-right min-w-[90px]">
                             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-1">Outcome</p>
                             <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${txn.status === 'Success' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : txn.status === 'Pending' ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-rose-50 text-rose-600 border border-rose-100'}`}>
                               <span className={`w-1.5 h-1.5 rounded-full ${txn.status === 'Success' ? 'bg-emerald-500 animate-pulse' : txn.status === 'Pending' ? 'bg-amber-500 animate-pulse' : 'bg-rose-500'}`} />
@@ -302,29 +318,37 @@ export default function HistoryPage() {
                         initial={{ opacity: 0, y: 15 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3, delay: index * 0.05 }}
-                        className="group relative bg-white/70 backdrop-blur-md p-5 rounded-2xl shadow-sm border border-slate-200/50 hover:border-blue-200 hover:bg-white/90 hover:shadow-md transition-all duration-300 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+                        className="group relative bg-white/70 backdrop-blur-md p-4 sm:p-5 rounded-2xl shadow-sm border border-slate-200/50 hover:border-blue-200 hover:bg-white/95 hover:shadow-md transition-all duration-300 flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
                       >
-                        <div className="flex items-center gap-4 min-w-0">
-                          <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-blue-200/30 shadow-sm shrink-0 transition-transform duration-500 group-hover:scale-105 group-hover:rotate-6">
-                            <CpuChipIcon className="h-5 w-5" />
+                        <div className="flex items-center gap-3 sm:gap-4 min-w-0 w-full md:w-auto">
+                          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-blue-200/30 shadow-sm shrink-0 transition-transform duration-500 group-hover:scale-105 group-hover:rotate-3">
+                            <CpuChipIcon className="h-5 w-5 sm:h-6 sm:w-6" />
                           </div>
-                          <div className="min-w-0">
-                            <p className="text-base font-bold text-slate-800 uppercase tracking-tight truncate">{log.task}</p>
-                            <div className="flex flex-wrap items-center gap-2 mt-1">
-                              <span className="text-[10px] font-bold bg-slate-900 text-slate-100 px-2 py-0.5 rounded border border-slate-800 uppercase tracking-tight font-mono">{log.model}</span>
-                              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{log.date} • {log.id}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm sm:text-base font-extrabold text-slate-800 uppercase tracking-tight truncate">{log.task}</p>
+                              <span className="text-[9px] font-bold bg-slate-900 text-slate-100 px-1.5 py-0.5 rounded border border-slate-800 uppercase tracking-tight font-mono">
+                                {log.model}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[10px] sm:text-xs text-slate-400 font-medium">
+                              <span>{log.date}</span>
+                              <span className="font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200/60 font-semibold">{log.id}</span>
+                              {log.platform && log.platform !== "—" && (
+                                <span className="text-blue-600 bg-blue-50/50 px-1.5 py-0.5 rounded border border-blue-100/50 font-bold">via {log.platform}</span>
+                              )}
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-6 w-full sm:w-auto justify-between sm:justify-end pl-16 sm:pl-0">
-                          <div className="text-left sm:text-right">
+                        <div className="flex flex-row md:flex-row items-center justify-between md:justify-end gap-6 w-full md:w-auto border-t border-slate-100/80 md:border-none pt-3 md:pt-0">
+                          <div className="text-left md:text-right">
                             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Consumption</p>
                             <div className="flex items-center gap-1">
-                              <span className="font-extrabold text-lg text-rose-600 tracking-tight">-{log.tokens}</span>
+                              <span className="font-extrabold text-base sm:text-lg text-rose-600 tracking-tight">-{ (log.tokens || 0).toLocaleString() }</span>
                               <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Tokens</span>
                             </div>
                           </div>
-                          <button className="w-9 h-9 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-all hover:scale-105 shrink-0 border border-slate-150">
+                          <button className="hidden md:flex w-9 h-9 rounded-xl bg-slate-50 items-center justify-center text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-all hover:scale-105 shrink-0 border border-slate-200/60 shadow-sm">
                             <ArrowRightIcon className="h-4 w-4" />
                           </button>
                         </div>
@@ -367,7 +391,7 @@ function TabButton({ active, onClick, icon, label }) {
   return (
     <button
       onClick={onClick}
-      className={`relative flex items-center justify-center gap-2.5 px-4 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all duration-300 flex-1 min-w-[120px] md:min-w-[140px] group ${
+      className={`relative flex items-center justify-center gap-1.5 sm:gap-2.5 px-2.5 py-2.5 sm:px-4 sm:py-3 rounded-xl font-extrabold text-[10px] sm:text-xs uppercase tracking-wider transition-all duration-300 flex-1 min-w-[90px] sm:min-w-[120px] md:min-w-[140px] group ${
         active 
           ? "text-white" 
           : "text-slate-500 hover:text-slate-800 hover:bg-slate-50/50"
