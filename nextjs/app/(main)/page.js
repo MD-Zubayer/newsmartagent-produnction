@@ -135,7 +135,7 @@ const translations = {
     featuresTitle1: "Business Automation with",
     featuresTitle2: "Smart AI",
     featuresTitle3: "is now easy",
-    featuresDesc: "আপনার ফেসবুক, হোয়াটসঅ্যাপ ও ইউটিউবের এনগেজমেন্ট বাড়াতে প্রয়োজনীয় সব আধুনিক টুলস এখন এক ড্যাশবোর্ডে।",
+    featuresDesc: "আপনার ফেসবুক, হোয়াটসঅ্যাপ ও ইউটিউবের এনগেজমেন্ট বাডাতে প্রয়াোজনীয় সব আধুনিক টুলস এখন এক ড্যাশবোর্ডে।",
     featuresList: [
       { title: "ফেসবুক অটোমেশন", desc: "আপনার Facebook পোস্ট, পেজ ও অ্যাডের কমেন্টে স্বয়ংক্রিয়ভাবে উত্তর দেবে। এনগেজমেন্ট বাড়বে বহুগুণ।" },
       { title: "মেসেঞ্জার ও হোয়াটসঅ্যাপ", desc: "মেসেঞ্জার এবং হোয়াটসঅ্যাপ মেসেজ এক জায়গায় ম্যানেজ করুন এবং স্মার্টলি রিপ্লাই সেট করুন।" },
@@ -194,22 +194,8 @@ const translations = {
   },
 };
 
-const serviceIcons = [<FaRobot key="robot" />, <FaShareAlt key="share" />, <FaChartBar key="chart" />];
-const serviceGradients = [
-  { gradient: "from-indigo-600 via-purple-600 to-pink-500", shadow: "shadow-purple-200" },
-  { gradient: "from-teal-400 via-cyan-500 to-blue-600", shadow: "shadow-cyan-200" },
-  { gradient: "from-orange-400 via-rose-500 to-red-600", shadow: "shadow-rose-200" },
-];
-const contactIcons = [<FaPhoneAlt key="ph" />, <FaEnvelope key="env" />, <FaWhatsapp key="wp" />];
-const contactColors = [
-  { bg: "bg-indigo-50", color: "text-indigo-600" },
-  { bg: "bg-pink-50", color: "text-pink-600" },
-  { bg: "bg-green-50", color: "text-green-600" },
-];
 const integrationIcons = [FaFacebook, FaWhatsapp, FaInstagram, FaTelegram, FaYoutube, FaShieldAlt, FaTiktok, FaCode];
-const integrationAccents = ["text-blue-600", "text-green-600", "text-pink-600", "text-sky-600", "text-red-600", "text-indigo-600", "text-black", "text-amber-600"];
 const communityActionIcons = [FaRegCommentDots, FaBug, FaLightbulb, FaRocket, FaStar];
-const communityActionColors = ["from-indigo-600 to-violet-600", "from-rose-600 to-orange-500", "from-amber-500 to-yellow-500", "from-purple-600 to-indigo-600", "from-yellow-500 to-orange-500"];
 
 export default function HomePage() {
   const { lang } = useLanguage();
@@ -295,44 +281,51 @@ export default function HomePage() {
       </section>
 
       {/* Integrations Section */}
-      <section className="py-16 md:py-20 lg:py-24 px-4 md:px-8 lg:px-10 bg-slate-950 relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(99,102,241,0.25),transparent_35%),radial-gradient(circle_at_85%_10%,rgba(14,165,233,0.2),transparent_30%),radial-gradient(circle_at_50%_100%,rgba(236,72,153,0.15),transparent_35%)]"></div>
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:42px_42px]"></div>
+      <section className="py-16 md:py-20 lg:py-24 px-4 md:px-8 lg:px-10 bg-slate-50 relative overflow-hidden">
+        {/* ── Background Colorful Gradients ── */}
+        <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
+          <div className="absolute -top-40 -left-40 w-[600px] h-[600px] bg-indigo-400/10 blur-[120px] rounded-full mix-blend-multiply animate-pulse" />
+          <div className="absolute top-20 -right-20 w-[500px] h-[500px] bg-rose-400/10 blur-[120px] rounded-full mix-blend-multiply" />
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-amber-400/10 blur-[100px] rounded-full mix-blend-multiply" />
+        </div>
 
         <div className="max-w-7xl mx-auto relative z-10">
-          <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.8 }} className="max-w-4xl mx-auto text-center mb-10 md:mb-12 lg:mb-14 space-y-3 md:space-y-4">
-            <h2 className="text-cyan-300 font-black uppercase tracking-[0.2em] text-xs">{t.integrationsBadge}</h2>
-            <h3 className="text-[length:var(--h2)] font-black text-white tracking-[-0.02em] leading-[1.1]">
-              {t.integrationsTitle1} <span className="text-indigo-300">{t.integrationsTitle2}</span>
+          <motion.div initial={{ opacity: 0, y: 30 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.8 }} className="max-w-4xl mx-auto text-center mb-10 md:mb-12 lg:mb-14 space-y-4">
+            <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-white shadow-xl shadow-indigo-500/10 border border-indigo-100 text-indigo-600 text-xs font-black tracking-widest uppercase mb-4 transform transition-transform hover:scale-105 cursor-default">
+              <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">{t.integrationsBadge}</span>
+            </div>
+
+            <h3 className="text-[length:var(--h2)] font-black text-slate-900 tracking-[-0.02em] leading-[1.1]">
+              {t.integrationsTitle1} <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">{t.integrationsTitle2}</span>
             </h3>
-            <p className="text-slate-300 font-medium text-[length:var(--body)] leading-relaxed">{t.integrationsDesc}</p>
+            <p className="text-slate-600 font-medium text-[length:var(--body)] leading-relaxed">{t.integrationsDesc}</p>
           </motion.div>
 
           <motion.div initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8 md:mb-10">
             {["AI-first SaaS", "Multi-platform Hub", "Automation Ready", "SEO-friendly Content"].map((pill) => (
-              <div key={pill} className="rounded-2xl border border-white/15 bg-white/5 backdrop-blur-md px-4 py-3 text-center text-[11px] md:text-xs font-black tracking-wider uppercase text-slate-200">
+              <div key={pill} className="rounded-2xl border border-indigo-100 bg-white/80 backdrop-blur-md px-4 py-3 text-center text-[11px] md:text-xs font-black tracking-wider uppercase text-indigo-600 shadow-sm">
                 {pill}
               </div>
             ))}
           </motion.div>
 
-          <motion.div variants={staggerContainer} initial="hidden" whileInView="visible" viewport={{ once: true }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5 lg:gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5 lg:gap-6">
             {t.integrationsList.map((item, index) => {
               const Icon = integrationIcons[index];
+              const colors = ["blue", "green", "pink", "sky", "red", "indigo", "black", "amber"];
+              const cardColor = colors[index] || "indigo";
               return (
-                <motion.article key={item.title} variants={fadeInUp} whileHover={{ y: -10, scale: 1.01 }} whileTap={{ y: -4, scale: 0.99 }} className="group rounded-3xl border border-white/15 bg-white/10 backdrop-blur-xl p-6 flex flex-col h-full shadow-[0_24px_80px_-24px_rgba(15,23,42,0.85)] transition-all duration-500 hover:border-cyan-300/60 hover:bg-white/15 hover:shadow-[0_32px_90px_-28px_rgba(34,211,238,0.45)] active:scale-[0.985] active:bg-white/20">
-                  <div className={`w-12 h-12 rounded-xl bg-white/90 flex items-center justify-center text-2xl mb-5 ${integrationAccents[index]}`}>
-                    <Icon />
-                  </div>
-                  <h4 className="text-[length:var(--h3)] font-black text-white mb-3 tracking-tight leading-tight">{item.title}</h4>
-                  <p className="text-slate-200/90 font-medium text-[length:var(--muted)] leading-relaxed flex-1">{item.desc}</p>
-                  <Link href="/dashboard/connect" className="mt-6 inline-flex items-center gap-2 text-cyan-300 group-hover:text-white font-black text-xs uppercase tracking-widest transition-colors">
-                    {item.cta} <FaArrowRight className="group-hover:translate-x-1 transition-transform" />
-                  </Link>
-                </motion.article>
+                <HomeIntegrationCard
+                  key={item.title}
+                  Icon={Icon}
+                  title={item.title}
+                  desc={item.desc}
+                  cta={item.cta}
+                  color={cardColor}
+                />
               );
             })}
-          </motion.div>
+          </div>
         </div>
       </section>
 
@@ -349,22 +342,24 @@ export default function HomePage() {
             <p className="text-gray-600 max-w-2xl mx-auto font-medium text-[length:var(--body)] leading-relaxed px-4">{t.servicesDesc}</p>
           </motion.div>
 
-          <motion.div variants={staggerContainer} initial="hidden" whileInView="visible" viewport={{ once: true }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-7 lg:gap-9 relative">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 md:gap-7 lg:gap-9 relative">
             {t.servicesList.map((service, index) => {
-              const sg = serviceGradients[index];
+              const icons = [<FaRobot key="robot" />, <FaShareAlt key="share" />, <FaChartBar key="chart" />];
+              const colors = ["indigo", "cyan", "amber"];
+              const cardColor = colors[index] || "indigo";
               return (
-                <motion.div key={index} variants={fadeInUp} whileHover={{ y: -12 }} whileTap={{ y: -6, scale: 0.98 }} className="relative group h-full rounded-[2.5rem] bg-white/90 backdrop-blur-md border border-white/60 p-8 md:p-10 shadow-[0_24px_70px_-28px_rgba(30,41,59,0.35)] flex flex-col transition-all duration-500 hover:border-indigo-200 hover:shadow-[0_30px_80px_-30px_rgba(79,70,229,0.45)] active:scale-[0.985]">
-                  <div className={`service-overlay absolute inset-0 bg-gradient-to-br ${sg.gradient} opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-500 rounded-[2.5rem] -z-10`}></div>
-                  <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${sg.gradient} flex items-center justify-center text-white text-3xl mb-8 shadow-lg ${sg.shadow}`}>{serviceIcons[index]}</div>
-                  <h3 className="text-[length:var(--h3)] font-black text-gray-900 mb-4 group-hover:text-white transition-colors duration-300 leading-tight">{service.title}</h3>
-                  <p className="text-gray-600 font-medium text-[length:var(--muted)] leading-relaxed mb-8 group-hover:text-indigo-50 group-active:text-indigo-50 transition-colors duration-300 flex-1">{service.desc}</p>
-                  <div className="flex items-center gap-3 text-xs font-black uppercase tracking-[0.2em] text-indigo-600 group-hover:text-white group-active:text-white transition-all duration-300">
-                    <span>{t.learnMore}</span><FaArrowRight className="group-hover:translate-x-2 transition-transform" />
-                  </div>
-                </motion.div>
+                <HomeServiceCard
+                  key={index}
+                  icon={icons[index]}
+                  title={service.title}
+                  desc={service.desc}
+                  learnMoreText={t.learnMore}
+                  color={cardColor}
+                  delay={index * 0.1}
+                />
               );
             })}
-          </motion.div>
+          </div>
 
           <motion.div initial={{ opacity: 0, y: 50 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="mt-12 md:mt-16 lg:mt-20 p-6 md:p-10 lg:p-14 rounded-[2rem] md:rounded-[2.75rem] lg:rounded-[3.5rem] bg-gradient-to-r from-slate-900 via-indigo-900 to-cyan-900 text-white flex flex-col md:flex-row items-center justify-between gap-6 md:gap-8 relative overflow-hidden shadow-2xl shadow-indigo-300/30">
             <div className="relative z-10 text-center md:text-left space-y-4">
@@ -388,31 +383,39 @@ export default function HomePage() {
       <section className="py-16 md:py-20 lg:py-24 px-4 md:px-8 lg:px-10 bg-gradient-to-b from-white to-slate-50/70 relative">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 md:gap-12 lg:gap-16 items-center">
-            <motion.div initial={{ opacity: 0, x: -50 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} className="grid grid-cols-2 gap-4 md:gap-6 order-2 lg:order-1">
+
+            {/* Redesigned Features Grid */}
+            <div className="grid grid-cols-2 gap-4 md:gap-6 order-2 lg:order-1">
               <div className="space-y-4 md:space-y-6">
-                <div className="bg-gradient-to-br from-indigo-600 to-cyan-600 p-8 rounded-[2rem] shadow-xl text-white transition-all duration-500 hover:shadow-[0_22px_50px_-20px_rgba(34,211,238,0.65)] hover:-translate-y-1 active:scale-[0.985]">
-                  <FaRocket size={32} className="mb-4" />
-                  <h4 className="font-black text-xl tracking-tight uppercase">Smart Velocity</h4>
-                  <p className="text-indigo-100 text-[11px] leading-relaxed mt-2 font-bold italic">{t.smartVelocityDesc}</p>
-                </div>
-                <div className="bg-white/80 backdrop-blur-md p-8 rounded-[2rem] border border-slate-200 flex flex-col items-center text-center group hover:bg-white hover:shadow-xl hover:border-indigo-200 transition-all duration-500 active:scale-[0.985]">
-                  <FaShieldAlt size={32} className="mb-4 text-indigo-600" />
-                  <h4 className="font-black text-xl text-gray-800 tracking-tight uppercase">Ironclad Security</h4>
-                  <p className="text-gray-400 text-[11px] leading-relaxed mt-2 font-bold">{t.ironcladDesc}</p>
-                </div>
+                <HomeFeatureCard
+                  icon={<FaRocket />}
+                  color="indigo"
+                  title="Smart Velocity"
+                  desc={t.smartVelocityDesc}
+                />
+                <HomeFeatureCard
+                  icon={<FaShieldAlt />}
+                  color="rose"
+                  title="Ironclad Security"
+                  desc={t.ironcladDesc}
+                />
               </div>
               <div className="pt-8 md:pt-12 space-y-4 md:space-y-6">
-                <div className="bg-white/80 backdrop-blur-md p-8 rounded-[2rem] border border-slate-200 flex flex-col items-center text-center group hover:bg-white hover:shadow-xl hover:border-cyan-200 transition-all duration-500 active:scale-[0.985]">
-                  <FaLightbulb size={32} className="mb-4 text-amber-500" />
-                  <h4 className="font-black text-xl text-gray-800 tracking-tight uppercase">Adaptive AI</h4>
-                  <p className="text-gray-400 text-[11px] leading-relaxed mt-2 font-bold">{t.adaptiveDesc}</p>
-                </div>
-                <div className="bg-gradient-to-br from-indigo-50 to-cyan-50 p-8 rounded-[2rem] border border-indigo-100 flex flex-col items-center text-center transition-all duration-500 hover:from-indigo-100 hover:to-cyan-100 hover:shadow-lg active:scale-[0.985]">
-                  <h3 className="text-4xl font-black text-indigo-600">10X</h3>
-                  <p className="text-indigo-900 font-bold text-sm mt-2 uppercase tracking-[0.2em]">Efficiency</p>
-                </div>
+                <HomeFeatureCard
+                  icon={<FaLightbulb />}
+                  color="amber"
+                  title="Adaptive AI"
+                  desc={t.adaptiveDesc}
+                />
+                <HomeFeatureCard
+                  icon={<span className="font-black text-lg">10X</span>}
+                  color="cyan"
+                  title="10X Efficiency"
+                  desc={lang === 'bn' ? 'অটোমেশনের মাধ্যমে দক্ষতা বৃদ্ধি করুন ১০ গুণ পর্যন্ত।' : 'Multiply your business operational capacity by ten.'}
+                  badgeText="10X"
+                />
               </div>
-            </motion.div>
+            </div>
 
             <motion.div initial={{ opacity: 0, x: 50 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} className="space-y-6 md:space-y-7 lg:space-y-8 order-1 lg:order-2">
               <div className="space-y-4">
@@ -462,7 +465,16 @@ export default function HomePage() {
               {t.communityActions.map((item, index) => {
                 if (index !== activeCommunityCard) return null;
                 const Icon = communityActionIcons[index];
-                const grad = communityActionColors[index];
+
+                const actionColors = [
+                  { color: '#4f46e5', bg: 'rgba(79,70,229,0.06)', border: 'rgba(79,70,229,0.15)' }, // Feedback
+                  { color: '#f43f5e', bg: 'rgba(244,63,94,0.06)', border: 'rgba(244,63,94,0.15)' }, // Bug Report
+                  { color: '#f59e0b', bg: 'rgba(245,158,11,0.06)', border: 'rgba(245,158,11,0.15)' }, // Feature Request
+                  { color: '#8b5cf6', bg: 'rgba(139,92,246,0.06)', border: 'rgba(139,92,246,0.15)' }, // Roadmap
+                  { color: '#d97706', bg: 'rgba(217,119,6,0.06)', border: 'rgba(217,119,6,0.15)' }, // Review
+                ];
+                const activeColors = actionColors[index] || actionColors[0];
+
                 return (
                   <motion.div
                     key={`${item.title}-${index}`}
@@ -470,20 +482,71 @@ export default function HomePage() {
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -20, scale: 0.98 }}
                     transition={{ duration: 0.35 }}
-                    className="group rounded-[2rem] border border-slate-200 bg-white p-7 md:p-8 shadow-[0_18px_60px_-30px_rgba(30,41,59,0.35)] transition-all duration-500 hover:border-indigo-200 hover:shadow-[0_24px_70px_-30px_rgba(79,70,229,0.45)] active:scale-[0.985]"
+                    className="group cursor-pointer w-full"
                   >
-                    <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${grad} text-white text-2xl flex items-center justify-center mb-5 transition-all duration-500 group-hover:scale-110 group-hover:shadow-[0_16px_34px_-14px_rgba(79,70,229,0.7)] group-active:scale-105`}>
-                      <Icon />
-                    </div>
-                    <h4 className="text-[length:var(--h3)] text-slate-900 font-black mb-3">{item.title}</h4>
-                    <p className="text-slate-600 text-[length:var(--muted)] leading-relaxed font-medium mb-7">{item.desc}</p>
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                      <Link href={item.href} className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-slate-900 to-indigo-900 text-white font-black text-sm hover:from-indigo-700 hover:to-cyan-700 active:from-indigo-800 active:to-cyan-800 transition-all duration-300">
-                        {item.cta} <FaArrowRight />
-                      </Link>
-                      <Link href="/community" className="inline-flex items-center gap-2 text-indigo-600 font-black text-sm">
-                        {t.communityViewAll} <FaArrowRight />
-                      </Link>
+                    {/* Outer Card */}
+                    <div
+                      className="relative p-2 rounded-[2.5rem] w-full transition-all duration-500"
+                      style={{
+                        background: `linear-gradient(145deg, ${activeColors.bg}, #ffffff)`,
+                        boxShadow: `0 20px 40px -15px ${activeColors.color}30, 0 0 0 1px ${activeColors.border}`,
+                      }}
+                    >
+                      {/* Inner Card */}
+                      <div className="relative bg-white/90 backdrop-blur-2xl w-full rounded-[2.25rem] p-8 flex flex-col border border-white overflow-hidden shadow-sm transition-all duration-300 group-hover:bg-white group-hover:shadow-lg">
+
+                        {/* Glowing blur */}
+                        <div
+                          className="absolute -top-12 -right-12 w-40 h-40 rounded-full opacity-20 blur-3xl transition-opacity duration-500 group-hover:opacity-40"
+                          style={{ background: activeColors.color }}
+                        />
+
+                        {/* Realistic 3D Icon Container */}
+                        <div className="flex items-start justify-between mb-8 relative z-10">
+                          <div
+                            className="w-16 h-16 rounded-[1.25rem] flex items-center justify-center text-white text-2xl shrink-0 transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-3"
+                            style={{
+                              background: `linear-gradient(135deg, ${activeColors.color}, ${activeColors.color}dd)`,
+                              boxShadow: `0 10px 25px -5px ${activeColors.color}40`,
+                            }}
+                          >
+                            <Icon />
+                          </div>
+
+                          <span
+                            className="px-4 py-1.5 rounded-full text-xs font-black tracking-wide shadow-sm"
+                            style={{
+                              background: `linear-gradient(135deg, ${activeColors.color}, ${activeColors.color}dd)`,
+                              color: '#fff',
+                              boxShadow: `0 4px 10px ${activeColors.color}40`
+                            }}
+                          >
+                            {item.title}
+                          </span>
+                        </div>
+
+                        {/* Content */}
+                        <div className="relative z-10 flex-1">
+                          <h4 className="text-[length:var(--h3)] text-slate-900 font-black mb-3">{item.title}</h4>
+                          <p className="text-slate-600 text-[length:var(--muted)] leading-relaxed font-medium mb-7">{item.desc}</p>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex flex-wrap items-center justify-between gap-4 relative z-10">
+                          <Link href={item.href} className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-white font-black text-sm transition-all duration-300"
+                            style={{
+                              background: `linear-gradient(135deg, ${activeColors.color}, ${activeColors.color}dd)`,
+                              boxShadow: `0 4px 12px ${activeColors.color}30`
+                            }}
+                          >
+                            {item.cta} <FaArrowRight />
+                          </Link>
+                          <Link href="/community" className="inline-flex items-center gap-2 font-black text-sm" style={{ color: activeColors.color }}>
+                            {t.communityViewAll} <FaArrowRight />
+                          </Link>
+                        </div>
+
+                      </div>
                     </div>
                   </motion.div>
                 );
@@ -517,17 +580,22 @@ export default function HomePage() {
           </motion.div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-10 lg:gap-12 items-start">
-            <motion.div initial={{ opacity: 0, x: -30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} className="lg:col-span-5 space-y-6">
-              {t.contactItems.map((card, idx) => (
-                <motion.div key={idx} whileHover={{ x: 10 }} whileTap={{ x: 6, scale: 0.98 }} className="bg-white/90 backdrop-blur-md py-8 px-6 rounded-[3rem] shadow-lg shadow-slate-200/40 border border-slate-100 flex items-start gap-6 group cursor-default active:shadow-md transition-all duration-500 hover:border-indigo-200 hover:shadow-[0_24px_60px_-28px_rgba(79,70,229,0.45)] active:scale-[0.985]">
-                  <div className={`w-14 h-14 ${contactColors[idx].bg} rounded-2xl flex items-center justify-center ${contactColors[idx].color} text-xl group-hover:bg-indigo-600 group-hover:text-white transition-all duration-300`}>{contactIcons[idx]}</div>
-                  <div>
-                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">{card.title}</p>
-                    <p className="text-[clamp(1rem,1.8vw,1.25rem)] font-black text-gray-800 tracking-tight">{card.value}</p>
-                  </div>
-                </motion.div>
-              ))}
-            </motion.div>
+            <div className="lg:col-span-5 space-y-6">
+              {t.contactItems.map((card, idx) => {
+                const icons = [<FaPhoneAlt key="ph" />, <FaEnvelope key="env" />, <FaWhatsapp key="wp" />];
+                const colors = ["indigo", "rose", "green"];
+                const cardColor = colors[idx] || "indigo";
+                return (
+                  <HomeContactCard
+                    key={idx}
+                    icon={icons[idx]}
+                    title={card.title}
+                    value={card.value}
+                    color={cardColor}
+                  />
+                );
+              })}
+            </div>
 
             <motion.div initial={{ opacity: 0, x: 30 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} className="lg:col-span-7">
               <div className="bg-white/90 backdrop-blur-xl p-8 md:p-12 rounded-[3rem] shadow-2xl shadow-slate-300/30 border border-slate-100 relative overflow-hidden group">
@@ -565,5 +633,294 @@ export default function HomePage() {
         </div>
       </section>
     </div>
+  );
+}
+
+/* ── Helper Card Components ── */
+
+function HomeIntegrationCard({ Icon, title, desc, cta, color }) {
+  const integrationColors = {
+    blue: { color: '#1877F2', bg: 'rgba(24,119,242,0.06)', border: 'rgba(24,119,242,0.15)' },
+    green: { color: '#25D366', bg: 'rgba(37,211,102,0.06)', border: 'rgba(37,211,102,0.15)' },
+    pink: { color: '#E1306C', bg: 'rgba(225,48,108,0.06)', border: 'rgba(225,48,108,0.15)' },
+    sky: { color: '#0088cc', bg: 'rgba(0,136,204,0.06)', border: 'rgba(0,136,204,0.15)' },
+    red: { color: '#FF0000', bg: 'rgba(255,0,0,0.06)', border: 'rgba(255,0,0,0.15)' },
+    indigo: { color: '#4f46e5', bg: 'rgba(79,70,229,0.06)', border: 'rgba(79,70,229,0.15)' },
+    black: { color: '#000000', bg: 'rgba(0,0,0,0.06)', border: 'rgba(0,0,0,0.15)' },
+    amber: { color: '#f59e0b', bg: 'rgba(245,158,11,0.06)', border: 'rgba(245,158,11,0.15)' },
+  };
+
+  const theme = integrationColors[color] || integrationColors.indigo;
+
+  return (
+    <motion.article
+      variants={fadeInUp}
+      whileHover={{ y: -8 }}
+      className="group cursor-pointer h-full"
+    >
+      {/* Outer Card */}
+      <div
+        className="relative p-1.5 rounded-[2rem] h-full transition-all duration-500"
+        style={{
+          background: `linear-gradient(145deg, ${theme.bg}, #ffffff)`,
+          boxShadow: `0 20px 40px -15px ${theme.color}25, 0 0 0 1px ${theme.border}`,
+        }}
+      >
+        {/* Inner Card */}
+        <div className="relative bg-white/90 backdrop-blur-2xl h-full rounded-[1.8rem] p-6 flex flex-col border border-white overflow-hidden shadow-sm transition-all duration-300 group-hover:bg-white group-hover:shadow-lg">
+
+          {/* Glowing blur */}
+          <div
+            className="absolute -top-12 -right-12 w-32 h-32 rounded-full opacity-10 blur-3xl transition-opacity duration-500 group-hover:opacity-25"
+            style={{ background: theme.color }}
+          />
+
+          {/* 3D Icon container */}
+          <div className="flex items-start justify-between mb-5 relative z-10">
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-3 text-2xl"
+              style={{
+                background: `linear-gradient(135deg, ${theme.bg}, #ffffff)`,
+                border: `1px solid ${theme.border}`,
+                boxShadow: `inset 0 4px 8px rgba(255,255,255,0.8), 0 10px 25px -5px ${theme.color}30`,
+                color: theme.color
+              }}
+            >
+              <Icon />
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="relative z-10 flex-1">
+            <h4 className="text-[length:var(--h3)] font-black text-slate-900 mb-2.5 tracking-tight group-hover:text-slate-800 transition-colors">
+              {title}
+            </h4>
+            <p className="text-slate-500 font-medium text-[length:var(--muted)] leading-relaxed">
+              {desc}
+            </p>
+          </div>
+
+          {/* Fancy CTA Button */}
+          <div className="mt-6 relative z-10 flex items-center justify-between">
+            <Link href="/dashboard/connect" className="flex items-center gap-2 font-black text-xs px-4 py-2 rounded-xl transition-all duration-300 group-hover:px-5"
+              style={{
+                background: theme.bg,
+                color: theme.color,
+                border: `1px solid ${theme.border}`
+              }}
+            >
+              {cta}
+              <FaArrowRight className="transition-transform duration-300 group-hover:translate-x-1" />
+            </Link>
+          </div>
+
+        </div>
+      </div>
+    </motion.article>
+  );
+}
+
+function HomeServiceCard({ icon, title, desc, learnMoreText, color, delay }) {
+  const serviceColors = {
+    indigo: { color: '#4f46e5', bg: 'rgba(79,70,229,0.06)', border: 'rgba(79,70,229,0.15)' },
+    cyan: { color: '#06b6d4', bg: 'rgba(6,182,212,0.06)', border: 'rgba(6,182,212,0.15)' },
+    emerald: { color: '#10b981', bg: 'rgba(16,185,129,0.06)', border: 'rgba(16,185,129,0.15)' },
+    purple: { color: '#a855f7', bg: 'rgba(168,85,247,0.06)', border: 'rgba(168,85,247,0.15)' },
+    amber: { color: '#f59e0b', bg: 'rgba(245,158,11,0.06)', border: 'rgba(245,158,11,0.15)' },
+  };
+
+  const theme = serviceColors[color] || serviceColors.indigo;
+
+  return (
+    <motion.div
+      variants={fadeInUp}
+      whileHover={{ y: -8 }}
+      className="group cursor-pointer h-full"
+    >
+      {/* Outer Card */}
+      <div
+        className="relative p-2 rounded-[2.5rem] h-full transition-all duration-500"
+        style={{
+          background: `linear-gradient(145deg, ${theme.bg}, #ffffff)`,
+          boxShadow: `0 20px 40px -15px ${theme.color}30, 0 0 0 1px ${theme.border}`,
+        }}
+      >
+        {/* Inner Card */}
+        <div className="relative bg-white/90 backdrop-blur-2xl h-full rounded-[2.25rem] p-8 flex flex-col border border-white overflow-hidden shadow-sm transition-all duration-300 group-hover:bg-white group-hover:shadow-lg">
+
+          {/* Glowing blur */}
+          <div
+            className="absolute -top-12 -right-12 w-40 h-40 rounded-full opacity-20 blur-3xl transition-opacity duration-500 group-hover:opacity-40"
+            style={{ background: theme.color }}
+          />
+
+          {/* 3D Icon Container */}
+          <div className="flex items-start justify-between mb-8 relative z-10">
+            <div
+              className="w-16 h-16 rounded-[1.25rem] flex items-center justify-center text-white text-2xl shrink-0 transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-3"
+              style={{
+                background: `linear-gradient(135deg, ${theme.color}, ${theme.color}dd)`,
+                boxShadow: `0 10px 25px -5px ${theme.color}40`,
+              }}
+            >
+              {icon}
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="relative z-10 flex-1">
+            <h3 className="text-[length:var(--h3)] font-black text-gray-900 mb-4 tracking-tight group-hover:text-slate-800 transition-colors">
+              {title}
+            </h3>
+            <p className="text-gray-600 font-medium text-[length:var(--muted)] leading-relaxed mb-6">
+              {desc}
+            </p>
+          </div>
+
+          {/* Fancy CTA Button */}
+          <div className="mt-4 relative z-10 flex items-center justify-between">
+            <div
+              className="flex items-center gap-3 font-black text-xs px-5 py-2.5 rounded-2xl transition-all duration-300 group-hover:px-6"
+              style={{
+                background: theme.bg,
+                color: theme.color,
+                border: `1px solid ${theme.border}`
+              }}
+            >
+              {learnMoreText}
+              <FaArrowRight size={12} className="transition-transform duration-300 group-hover:translate-x-1" />
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function HomeFeatureCard({ icon, title, desc, badgeText, color }) {
+  const featureColors = {
+    indigo: { color: '#4f46e5', bg: 'rgba(79,70,229,0.06)', border: 'rgba(79,70,229,0.15)' },
+    rose: { color: '#f43f5e', bg: 'rgba(244,63,94,0.06)', border: 'rgba(244,63,94,0.15)' },
+    amber: { color: '#f59e0b', bg: 'rgba(245,158,11,0.06)', border: 'rgba(245,158,11,0.15)' },
+    cyan: { color: '#06b6d4', bg: 'rgba(6,182,212,0.06)', border: 'rgba(6,182,212,0.15)' },
+  };
+
+  const theme = featureColors[color] || featureColors.indigo;
+
+  return (
+    <motion.div
+      whileHover={{ y: -6 }}
+      className="group cursor-pointer"
+    >
+      {/* Outer Card */}
+      <div
+        className="relative p-1.5 rounded-[2.25rem] transition-all duration-500"
+        style={{
+          background: `linear-gradient(145deg, ${theme.bg}, #ffffff)`,
+          boxShadow: `0 15px 30px -10px ${theme.color}25, 0 0 0 1px ${theme.border}`,
+        }}
+      >
+        {/* Inner Card */}
+        <div className="relative bg-white/90 backdrop-blur-2xl rounded-[2rem] p-6 flex flex-col border border-white overflow-hidden shadow-sm transition-all duration-300 group-hover:bg-white group-hover:shadow-md">
+
+          {/* Glowing blur */}
+          <div
+            className="absolute -top-12 -right-12 w-32 h-32 rounded-full opacity-10 blur-3xl transition-opacity duration-500 group-hover:opacity-25"
+            style={{ background: theme.color }}
+          />
+
+          {/* 3D Icon container */}
+          <div className="flex items-start justify-between mb-5 relative z-10">
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-3 text-2xl text-white"
+              style={{
+                background: `linear-gradient(135deg, ${theme.color}, ${theme.color}dd)`,
+                boxShadow: `0 8px 20px -4px ${theme.color}40`,
+              }}
+            >
+              {icon}
+            </div>
+
+            {badgeText && (
+              <span
+                className="px-3 py-1 rounded-full text-[10px] font-black tracking-wide shadow-sm"
+                style={{
+                  background: `linear-gradient(135deg, ${theme.color}, ${theme.color}dd)`,
+                  color: '#fff',
+                  boxShadow: `0 3px 8px ${theme.color}30`
+                }}
+              >
+                {badgeText}
+              </span>
+            )}
+          </div>
+
+          {/* Content */}
+          <div className="relative z-10">
+            <h4 className="font-black text-lg text-slate-900 mb-2 tracking-tight group-hover:text-slate-800 transition-colors">
+              {title}
+            </h4>
+            <p className="text-gray-500 font-medium text-xs leading-relaxed">
+              {desc}
+            </p>
+          </div>
+
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function HomeContactCard({ icon, title, value, color }) {
+  const contactColors = {
+    indigo: { color: '#4f46e5', bg: 'rgba(79,70,229,0.06)', border: 'rgba(79,70,229,0.15)' },
+    rose: { color: '#f43f5e', bg: 'rgba(244,63,94,0.06)', border: 'rgba(244,63,94,0.15)' },
+    green: { color: '#16a34a', bg: 'rgba(22,163,74,0.06)', border: 'rgba(22,163,74,0.15)' },
+  };
+
+  const theme = contactColors[color] || contactColors.indigo;
+
+  return (
+    <motion.div
+      whileHover={{ x: 8 }}
+      className="group cursor-pointer w-full"
+    >
+      {/* Outer Card */}
+      <div
+        className="relative p-1.5 rounded-[2.25rem] w-full transition-all duration-500"
+        style={{
+          background: `linear-gradient(145deg, ${theme.bg}, #ffffff)`,
+          boxShadow: `0 15px 30px -10px ${theme.color}20, 0 0 0 1px ${theme.border}`,
+        }}
+      >
+        {/* Inner Card */}
+        <div className="relative bg-white/90 backdrop-blur-2xl w-full rounded-[2rem] p-6 flex items-start gap-5 border border-white overflow-hidden shadow-sm transition-all duration-300 group-hover:bg-white group-hover:shadow-md">
+
+          {/* Glowing blur */}
+          <div
+            className="absolute -top-12 -right-12 w-32 h-32 rounded-full opacity-10 blur-3xl transition-opacity duration-500 group-hover:opacity-25"
+            style={{ background: theme.color }}
+          />
+
+          {/* 3D Icon container */}
+          <div
+            className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-3 text-xl text-white relative z-10"
+            style={{
+              background: `linear-gradient(135deg, ${theme.color}, ${theme.color}dd)`,
+              boxShadow: `0 8px 20px -4px ${theme.color}40`,
+            }}
+          >
+            {icon}
+          </div>
+
+          <div className="relative z-10">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{title}</p>
+            <p className="text-[clamp(1rem,1.8vw,1.25rem)] font-black text-gray-800 tracking-tight group-hover:text-slate-900 transition-colors">{value}</p>
+          </div>
+
+        </div>
+      </div>
+    </motion.div>
   );
 }

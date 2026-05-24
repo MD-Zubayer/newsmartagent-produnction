@@ -436,17 +436,19 @@ function GeneralForm({ onSubmit, isSubmitting, config, tx, lang, lookupUser, per
 // ── Shared Form Sub-components ─────────────────────────────────────────────
 function FormHeader({ config, tx, lang }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24, position: 'relative', zIndex: 10 }}>
       <div style={{
-        width: 44, height: 44, borderRadius: 13, fontSize: 22, flexShrink: 0,
-        background: config.bg, border: `1px solid ${config.border}`,
+        width: 56, height: 56, borderRadius: 18, fontSize: 26, flexShrink: 0,
+        background: `linear-gradient(135deg, ${config.bg}, #ffffff)`, border: `1px solid ${config.border}`,
+        boxShadow: `inset 0 4px 8px rgba(255,255,255,0.8), 0 10px 25px -5px ${config.color}40`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
+        filter: 'drop-shadow(0 8px 12px rgba(0,0,0,0.05))'
       }}>{config.emoji}</div>
       <div>
-        <h2 style={{ fontSize: 16, fontWeight: 800, color: '#1e293b', margin: 0 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 900, color: '#1e293b', margin: 0 }}>
           {tx.newTitle} {config.name[lang] || config.name.en}
         </h2>
-        <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>{tx.formSubtitle}</p>
+        <p style={{ fontSize: 13, color: '#64748b', margin: 0, fontWeight: 500, marginTop: 2 }}>{tx.formSubtitle}</p>
       </div>
     </div>
   );
@@ -455,16 +457,16 @@ function FormHeader({ config, tx, lang }) {
 function SubmitButton({ isSubmitting, config, label, lang }) {
   return (
     <motion.button type="submit" disabled={isSubmitting}
-      whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
+      whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
       style={{
-        padding: '13px', borderRadius: 12, border: 'none', cursor: isSubmitting ? 'not-allowed' : 'pointer',
-        fontWeight: 800, fontSize: 14, width: '100%',
+        padding: '15px', borderRadius: 16, border: 'none', cursor: isSubmitting ? 'not-allowed' : 'pointer',
+        fontWeight: 900, fontSize: 15, width: '100%',
         background: isSubmitting ? 'rgba(79,70,229,0.3)' : config.gradient,
-        color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-        boxShadow: isSubmitting ? 'none' : `0 4px 20px ${config.color}30`,
-        marginTop: 4,
+        color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+        boxShadow: isSubmitting ? 'none' : `0 10px 25px -5px ${config.color}50`,
+        marginTop: 10, letterSpacing: '0.02em'
       }}>
-      {isSubmitting ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={16} />}
+      {isSubmitting ? <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={18} />}
       {isSubmitting ? (lang === 'bn' ? 'জমা হচ্ছে…' : 'Submitting…') : label}
     </motion.button>
   );
@@ -985,14 +987,14 @@ function ReportCard({ report, idx, config, slug, isLiked, onLike, expandedCommen
       initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.97 }}
       transition={{ delay: idx * 0.04 }}
       style={{
-        background: '#fff',
-        border: '1px solid rgba(0,0,0,0.06)', borderRadius: 20, padding: '22px 24px',
-        borderLeft: `3px solid ${config.color}`,
-        boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
+        background: `linear-gradient(135deg, #ffffff, ${config.bg})`,
+        border: `1px solid ${config.border}`, borderRadius: 24, padding: '26px 28px',
+        borderLeft: `5px solid ${config.color}`,
+        boxShadow: `0 10px 25px -10px ${config.color}20`,
         transform: 'translateZ(0)',
         WebkitBackfaceVisibility: 'hidden',
       }}
-      whileHover={{ boxShadow: `0 8px 30px rgba(0,0,0,0.06)`, y: -2 }}
+      whileHover={{ boxShadow: `0 15px 35px -5px ${config.color}30`, y: -4 }}
     >
       {/* Header row */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1182,22 +1184,22 @@ function SkeletonCard() {
 
 // ── Style Helpers ──────────────────────────────────────────────────────────
 const inp = {
-  width: '100%', padding: '12px 14px', borderRadius: 12, fontSize: 13, outline: 'none', boxSizing: 'border-box',
-  background: '#fff', border: '1px solid rgba(0,0,0,0.08)', color: '#1e293b',
-  transition: 'all 0.2s',
-  boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.02)',
+  width: '100%', padding: '14px 16px', borderRadius: 14, fontSize: 14, outline: 'none', boxSizing: 'border-box',
+  background: 'rgba(255,255,255,0.7)', border: '1px solid rgba(0,0,0,0.08)', color: '#1e293b',
+  transition: 'all 0.3s ease',
+  boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)', backdropFilter: 'blur(8px)'
 };
 
 const labelStyle = {
-  display: 'block', fontSize: 11, color: '#475569', fontWeight: 800,
-  marginBottom: 6, letterSpacing: '0.04em', textTransform: 'uppercase',
+  display: 'block', fontSize: 12, color: '#475569', fontWeight: 800,
+  marginBottom: 8, letterSpacing: '0.05em', textTransform: 'uppercase',
 };
 
 function formCardStyle(config) {
   return {
-    background: '#fff',
-    border: `1px solid rgba(0,0,0,0.05)`, borderRadius: 24, padding: 'clamp(16px, 5vw, 28px)',
-    boxShadow: `0 10px 30px rgba(0,0,0,0.04)`,
+    background: `linear-gradient(145deg, #ffffff, ${config.bg})`,
+    border: `1px solid ${config.border}`, borderRadius: 28, padding: 'clamp(20px, 5vw, 36px)',
+    boxShadow: `0 20px 40px -15px ${config.color}30, 0 0 0 1px ${config.border}`,
     position: 'relative', overflow: 'hidden',
   };
 }
