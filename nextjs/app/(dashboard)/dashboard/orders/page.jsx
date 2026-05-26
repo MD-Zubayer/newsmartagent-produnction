@@ -5,7 +5,7 @@ import { useAuth } from "app/context/AuthContext";
 import {
   Package, Phone, CheckSquare, Square, Store,
   ChevronRight, Link as LinkIcon, Check, MapPin,
-  Search, Printer, LayoutDashboard, BarChart3, TrendingUp
+  Search, Printer, LayoutDashboard, BarChart3, TrendingUp, Truck
 } from "lucide-react";
 
 // Chart JS Imports
@@ -46,6 +46,39 @@ export default function OrderDashboard() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [districtFilter, setDistrictFilter] = useState("all");
   const [selectedOrders, setSelectedOrders] = useState([]);
+  
+  // Pathao Booking States
+  const [courierActive, setCourierActive] = useState(false);
+  const [bookingModalOpen, setBookingModalOpen] = useState(false);
+  const [bookingOrder, setBookingOrder] = useState(null);
+  const [bookingInProgress, setBookingInProgress] = useState(false);
+  
+  // Courier Config Modal States
+  const [courierConfigModalOpen, setCourierConfigModalOpen] = useState(false);
+  const [pathaoConfig, setPathaoConfig] = useState({
+    client_id: "",
+    client_secret: "",
+    username: "",
+    password: "",
+    store_id: "",
+    is_sandbox: true
+  });
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
+
+  // Custom Order Manual Entry States
+  const [addOrderModalOpen, setAddOrderModalOpen] = useState(false);
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+  const [newOrderDetails, setNewOrderDetails] = useState({
+    customer_name: "",
+    phone_number: "",
+    district: "",
+    upazila: "",
+    address: "",
+    product_name: "",
+    price: "",
+    extra_info: ""
+  });
+
   const { notifications } = useNotifications(user, setOrders);
 
 
@@ -78,7 +111,139 @@ export default function OrderDashboard() {
   useEffect(() => {
     fetchOrders();
     fetchFormId();
+    checkCourierConfig();
   }, []);
+
+  const checkCourierConfig = async () => {
+    try {
+      const res = await api.get("/courier/config/");
+      if (res.data.client_id) {
+        setPathaoConfig({
+          client_id: res.data.client_id,
+          client_secret: res.data.client_secret,
+          username: res.data.username,
+          password: "", 
+          store_id: res.data.store_id || "",
+          is_sandbox: res.data.is_sandbox
+        });
+      }
+      if (res.data.is_active && res.data.client_id) {
+        setCourierActive(true);
+        // Pre-fetch stores to improve UX speed
+        try {
+          const storesRes = await api.get("/courier/stores/");
+          setStores(storesRes.data || []);
+        } catch (e) {
+          console.error("Failed to load courier stores:", e);
+        }
+      }
+    } catch (e) {
+      console.log("Courier integration not configured.");
+    }
+  };
+
+  const handleSavePathaoConfig = async () => {
+    setIsSavingConfig(true);
+    try {
+      const payload = { ...pathaoConfig };
+      if (!payload.password) delete payload.password;
+      
+      await api.post("/courier/config/", payload);
+      toast.success("Pathao credentials verified & saved successfully!", { icon: "🚚" });
+      setCourierConfigModalOpen(false);
+      checkCourierConfig(); // Re-check to enable courier functionality
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to verify or save Pathao credentials.");
+    } finally {
+      setIsSavingConfig(false);
+    }
+  };
+
+  const handleAddOrder = async () => {
+    if (!newOrderDetails.customer_name || !newOrderDetails.phone_number || !newOrderDetails.address) {
+      return toast.error("Please fill the required fields: Name, Phone, and Address.");
+    }
+    setIsSubmittingOrder(true);
+    const loadingToast = toast.loading("Adding custom order...");
+    try {
+      const payload = { ...newOrderDetails, form_id: formId };
+      await api.post("/orders/", payload);
+      toast.success("Order added successfully!", { id: loadingToast, icon: "📦" });
+      setAddOrderModalOpen(false);
+      setNewOrderDetails({
+        customer_name: "", phone_number: "", district: "", upazila: "", address: "", product_name: "", price: "", extra_info: ""
+      });
+      fetchOrders();
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to add order.", { id: loadingToast });
+    } finally {
+      setIsSubmittingOrder(false);
+    }
+  };
+
+
+  const openBookingModal = (order) => {
+    setBookingOrder(order);
+    
+    setBookingDetails({
+      recipient_name: order.customer_name || "",
+      recipient_phone: order.phone_number || "",
+      recipient_address: order.address || "",
+      item_quantity: 1,
+      item_weight: 0.5,
+      amount_to_collect: order.price || 0,
+      item_description: order.product_name || "Order Parcel",
+      store_id: stores[0]?.store_id || ""
+    });
+    
+    setBookingModalOpen(true);
+  };
+
+  const handleBookCourier = async () => {
+    if (!bookingDetails.recipient_address) {
+      return toast.error("Please provide a valid delivery address.");
+    }
+    
+    setBookingInProgress(true);
+    const loadingToast = toast.loading("Booking parcel in Pathao Courier...");
+    
+    try {
+      const payload = {
+        order_id: bookingOrder.id,
+        recipient_name: bookingDetails.recipient_name,
+        recipient_phone: bookingDetails.recipient_phone,
+        recipient_address: bookingDetails.recipient_address,
+        item_quantity: bookingDetails.item_quantity,
+        item_weight: bookingDetails.item_weight,
+        amount_to_collect: bookingDetails.amount_to_collect,
+        item_description: bookingDetails.item_description,
+        store_id: bookingDetails.store_id || null
+      };
+      
+      const res = await api.post("/courier/book-order/", payload);
+      toast.success(res.data.message || "Parcel successfully booked!", { id: loadingToast, icon: "🚚" });
+      
+      // Update order status and details locally
+      setOrders(prev => prev.map(o => {
+        if (o.id === bookingOrder.id) {
+          const tracking = `\nPathao Courier Tracking ID: ${res.data.consignment_id}`;
+          return {
+            ...o,
+            status: "shipped",
+            extra_info: o.extra_info ? o.extra_info + tracking : tracking.trim()
+          };
+        }
+        return o;
+      }));
+      
+      setBookingModalOpen(false);
+    } catch (e) {
+      const errText = e.response?.data?.error || "Failed to book parcel.";
+      toast.error(errText, { id: loadingToast });
+    } finally {
+      setBookingInProgress(false);
+    }
+  };
 
   const fetchOrders = async () => {
     try {
@@ -553,6 +718,16 @@ export default function OrderDashboard() {
           <h1 className="text-2xl xs:text-3xl md:text-5xl font-black text-gray-900 tracking-tighter leading-tight">
             Order <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-500">Center</span>
           </h1>
+          
+          {/* Action Buttons row at the top */}
+          <div className="mt-4 flex flex-wrap items-center justify-center lg:justify-start gap-3">
+            <button onClick={() => setCourierConfigModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl font-bold text-[10px] md:text-xs transition-all border border-indigo-200 shadow-sm active:scale-95">
+              <Truck className="w-4 h-4" /> Configure Pathao Courier
+            </button>
+            <button onClick={() => setAddOrderModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl font-bold text-[10px] md:text-xs transition-all border border-emerald-200 shadow-sm active:scale-95">
+              <Package className="w-4 h-4" /> Add Custom Order
+            </button>
+          </div>
         </div>
 
         <div className="w-full lg:w-auto">
@@ -846,6 +1021,16 @@ export default function OrderDashboard() {
                       <Printer className="w-4 h-4" />
                     </button>
 
+                    {order.status === "pending" && (
+                      <button
+                        onClick={() => courierActive ? openBookingModal(order) : setCourierConfigModalOpen(true)}
+                        title={courierActive ? "Book Pathao Delivery" : "Configure Pathao Courier"}
+                        className={`p-2 sm:p-2.5 rounded-xl transition-all shadow-sm flex items-center justify-center active:scale-95 ${courierActive ? 'bg-indigo-600 text-white hover:bg-indigo-700 border-indigo-600 hover:border-indigo-700' : 'bg-slate-100 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200'}`}
+                      >
+                        <Truck className="w-4 h-4" />
+                      </button>
+                    )}
+
                     <div className="relative flex-1 sm:flex-none">
                       <select
                         value={order.status}
@@ -874,6 +1059,336 @@ export default function OrderDashboard() {
         <div className="bg-white rounded-3xl border-2 border-dashed border-gray-100 py-10 text-center mt-6">
           <Package className="w-10 h-10 text-gray-200 mx-auto mb-2" />
           <p className="text-gray-400 font-bold text-xs uppercase tracking-widest">No orders</p>
+        </div>
+      )}
+      {/* ── Pathao Booking Modal ── */}
+      {bookingModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => !bookingInProgress && setBookingModalOpen(false)} />
+          
+          {/* Dialog Container */}
+          <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-8 animate-in zoom-in-95 duration-200 border border-slate-100 z-10 max-h-[90vh] overflow-y-auto custom-scrollbar">
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+              <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
+                <Truck className="w-6 h-6 animate-bounce" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900 tracking-tight">Book Pathao Courier</h3>
+                <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Order #{bookingOrder?.id} • {bookingOrder?.customer_name}</p>
+              </div>
+            </div>
+
+            {/* Form */}
+            <div className="space-y-5">
+              {/* Pickup Store */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Pickup Store Address</label>
+                <select
+                  value={bookingDetails.store_id}
+                  onChange={(e) => setBookingDetails(prev => ({ ...prev, store_id: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-indigo-500/10 cursor-pointer transition-all"
+                >
+                  <option value="" disabled>Select pickup location</option>
+                  {stores.map(store => (
+                    <option key={store.store_id} value={store.store_id}>
+                      {store.store_name} ({store.store_address})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Recipient Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Customer Name</label>
+                  <input
+                    type="text"
+                    value={bookingDetails.recipient_name}
+                    onChange={(e) => setBookingDetails(prev => ({ ...prev, recipient_name: e.target.value }))}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Phone Number</label>
+                  <input
+                    type="text"
+                    value={bookingDetails.recipient_phone}
+                    onChange={(e) => setBookingDetails(prev => ({ ...prev, recipient_phone: e.target.value }))}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Full Delivery Address</label>
+                <textarea
+                  rows="2"
+                  value={bookingDetails.recipient_address}
+                  onChange={(e) => setBookingDetails(prev => ({ ...prev, recipient_address: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-indigo-500/10 resize-none"
+                />
+              </div>
+
+              {/* Delivery Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-100">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">COD Amount (৳)</label>
+                  <input
+                    type="number"
+                    value={bookingDetails.amount_to_collect}
+                    onChange={(e) => setBookingDetails(prev => ({ ...prev, amount_to_collect: e.target.value }))}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Weight (kg)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={bookingDetails.item_weight}
+                    onChange={(e) => setBookingDetails(prev => ({ ...prev, item_weight: e.target.value }))}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Item Description</label>
+                  <input
+                    type="text"
+                    value={bookingDetails.item_description}
+                    onChange={(e) => setBookingDetails(prev => ({ ...prev, item_description: e.target.value }))}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 mt-8 pt-4 border-t border-slate-100">
+              <button
+                disabled={bookingInProgress}
+                onClick={() => setBookingModalOpen(false)}
+                className="flex-1 px-4 py-3 text-xs sm:text-sm font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all active:scale-95 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={bookingInProgress || !bookingDetails.recipient_address}
+                onClick={handleBookCourier}
+                className="flex-1 px-4 py-3 text-xs sm:text-sm font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {bookingInProgress ? "Booking Delivery..." : "Book Delivery"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Pathao Settings Modal ── */}
+      {courierConfigModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => !isSavingConfig && setCourierConfigModalOpen(false)} />
+          
+          <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-8 animate-in zoom-in-95 duration-200 z-10 max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+              <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
+                <Truck className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900 tracking-tight">Configure Pathao Courier</h3>
+                <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Set API credentials to book parcels</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Client ID</label>
+                <input
+                  type="text"
+                  value={pathaoConfig.client_id}
+                  onChange={(e) => setPathaoConfig(prev => ({ ...prev, client_id: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Client Secret</label>
+                <input
+                  type="password"
+                  value={pathaoConfig.client_secret}
+                  onChange={(e) => setPathaoConfig(prev => ({ ...prev, client_secret: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Username (Email)</label>
+                <input
+                  type="email"
+                  value={pathaoConfig.username}
+                  onChange={(e) => setPathaoConfig(prev => ({ ...prev, username: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Password</label>
+                <input
+                  type="password"
+                  placeholder="Leave empty if unchanged"
+                  value={pathaoConfig.password}
+                  onChange={(e) => setPathaoConfig(prev => ({ ...prev, password: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                />
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <div className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${pathaoConfig.is_sandbox ? 'bg-amber-400' : 'bg-slate-300'}`} onClick={() => setPathaoConfig(prev => ({ ...prev, is_sandbox: !prev.is_sandbox }))}>
+                  <div className={`w-4 h-4 bg-white rounded-full transition-transform ${pathaoConfig.is_sandbox ? 'translate-x-6' : 'translate-x-0'}`} />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-slate-700">Sandbox Mode</p>
+                  <p className="text-[10px] font-bold text-slate-400">Use test API endpoints</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-8 pt-4 border-t border-slate-100">
+              <button
+                disabled={isSavingConfig}
+                onClick={() => setCourierConfigModalOpen(false)}
+                className="flex-1 px-4 py-3 text-sm font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all active:scale-95 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={isSavingConfig || !pathaoConfig.client_id || !pathaoConfig.client_secret || !pathaoConfig.username}
+                onClick={handleSavePathaoConfig}
+                className="flex-1 px-4 py-3 text-sm font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-50"
+              >
+                {isSavingConfig ? "Saving..." : "Save & Verify"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Add Custom Order Modal ── */}
+      {addOrderModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => !isSubmittingOrder && setAddOrderModalOpen(false)} />
+          
+          <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-2xl p-6 sm:p-8 animate-in zoom-in-95 duration-200 z-10 max-h-[90vh] overflow-y-auto custom-scrollbar">
+            <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+              <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl">
+                <Package className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900 tracking-tight">Manual Order Entry</h3>
+                <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Add customer data to your table</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Customer Name <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={newOrderDetails.customer_name}
+                  onChange={(e) => setNewOrderDetails(prev => ({ ...prev, customer_name: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-emerald-500/10"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Phone Number <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={newOrderDetails.phone_number}
+                  onChange={(e) => setNewOrderDetails(prev => ({ ...prev, phone_number: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-emerald-500/10"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Product Name</label>
+                <input
+                  type="text"
+                  value={newOrderDetails.product_name}
+                  onChange={(e) => setNewOrderDetails(prev => ({ ...prev, product_name: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-emerald-500/10"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">District</label>
+                <input
+                  type="text"
+                  value={newOrderDetails.district}
+                  onChange={(e) => setNewOrderDetails(prev => ({ ...prev, district: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-emerald-500/10"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Upazila / Area</label>
+                <input
+                  type="text"
+                  value={newOrderDetails.upazila}
+                  onChange={(e) => setNewOrderDetails(prev => ({ ...prev, upazila: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-emerald-500/10"
+                />
+              </div>
+
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Full Address <span className="text-red-500">*</span></label>
+                <textarea
+                  rows="2"
+                  value={newOrderDetails.address}
+                  onChange={(e) => setNewOrderDetails(prev => ({ ...prev, address: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-emerald-500/10 resize-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Price (৳)</label>
+                <input
+                  type="number"
+                  value={newOrderDetails.price}
+                  onChange={(e) => setNewOrderDetails(prev => ({ ...prev, price: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-emerald-500/10"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Extra Info</label>
+                <input
+                  type="text"
+                  value={newOrderDetails.extra_info}
+                  onChange={(e) => setNewOrderDetails(prev => ({ ...prev, extra_info: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-emerald-500/10"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-8 pt-4 border-t border-slate-100">
+              <button
+                disabled={isSubmittingOrder}
+                onClick={() => setAddOrderModalOpen(false)}
+                className="flex-1 px-4 py-3 text-sm font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all active:scale-95 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={isSubmittingOrder}
+                onClick={handleAddOrder}
+                className="flex-1 px-4 py-3 text-sm font-black text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-50"
+              >
+                {isSubmittingOrder ? "Saving..." : "Add Order"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

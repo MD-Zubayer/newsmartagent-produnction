@@ -5,7 +5,7 @@ import {
   FaBell, FaRobot, FaShieldAlt, FaGlobe, 
   FaSave, FaCog, FaExclamationCircle,
   FaUserEdit, FaSearch, FaChevronRight,
-  FaShoppingCart, FaChevronDown, FaClock, FaCoins
+  FaShoppingCart, FaChevronDown, FaClock, FaCoins, FaTruck
 } from "react-icons/fa";
 import api from "@/lib/api";
 import { toast } from 'react-hot-toast';
@@ -42,6 +42,20 @@ export default function SettingsPage() {
   const [loginHistory, setLoginHistory] = useState([]);
   const [showCodes, setShowCodes] = useState(false);
 
+  // Pathao Settings States
+  const [pathaoConfig, setPathaoConfig] = useState({
+    client_id: "",
+    client_secret: "",
+    username: "",
+    password: "",
+    store_id: "",
+    is_sandbox: true,
+    is_active: true
+  });
+  const [stores, setStores] = useState([]);
+  const [loadingStores, setLoadingStores] = useState(false);
+  const [fetchingConfig, setFetchingConfig] = useState(false);
+
   // Custom Confirm Modal State
   const [confirmModal, setConfirmModal] = useState({ open: false, title: "", message: "", icon: null, confirmLabel: "Confirm", confirmColor: "rose", onConfirm: null });
   const showConfirm = ({ title, message, icon, confirmLabel, confirmColor = "rose", onConfirm }) => {
@@ -70,6 +84,9 @@ export default function SettingsPage() {
       fetchSecurityData();
       fetchLoginHistory();
     }
+    if (activeTab === "courier") {
+      fetchPathaoConfig();
+    }
   }, [activeTab]);
 
   useEffect(() => {
@@ -90,6 +107,69 @@ export default function SettingsPage() {
       setTwoFactorEnabled(user.profile.two_factor_enabled);
     }
   }, [user]);
+
+  const fetchPathaoConfig = async () => {
+    setFetchingConfig(true);
+    try {
+      const res = await api.get("/courier/config/");
+      setPathaoConfig(prev => ({
+        ...prev,
+        ...res.data,
+        password: "" // Keep password blank as visual cue
+      }));
+      if (res.data.client_id) {
+        // Fetch stores if config exists
+        try {
+          const sRes = await api.get("/courier/stores/");
+          setStores(sRes.data || []);
+        } catch (e) {
+          console.error("Failed to fetch stores on initial load:", e);
+        }
+      }
+    } catch (err) {
+      console.log("No Pathao config found yet.");
+    } finally {
+      setFetchingConfig(false);
+    }
+  };
+
+  const fetchStores = async () => {
+    setLoadingStores(true);
+    try {
+      const res = await api.get("/courier/stores/");
+      setStores(res.data || []);
+      toast.success("Pickup stores refreshed!");
+    } catch (err) {
+      console.error("Failed to fetch Pathao stores:", err);
+      toast.error("Failed to fetch stores from Pathao API.");
+    } finally {
+      setLoadingStores(false);
+    }
+  };
+
+  const handleSavePathaoConfig = async () => {
+    setIsSaving(true);
+    try {
+      const payload = { ...pathaoConfig };
+      if (!payload.password) {
+        delete payload.password;
+      }
+      await api.post("/courier/config/", payload);
+      toast.success("Pathao credentials verified & saved successfully!", { icon: "🚚" });
+      
+      // Immediately fetch stores upon saving successfully
+      try {
+        const sRes = await api.get("/courier/stores/");
+        setStores(sRes.data || []);
+      } catch (e) {
+        console.error("Failed to fetch stores post-save:", e);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to verify or save Pathao credentials.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const fetchAgentSettings = async () => {
     try {
@@ -371,6 +451,7 @@ export default function SettingsPage() {
     { id: "automation", label: "Automation", icon: FaRobot },
     { id: "contacts", label: "Contact-Specific", icon: FaUserEdit },
     { id: "security", label: "Security", icon: FaShieldAlt },
+    { id: "courier", label: "Courier Settings", icon: FaTruck },
   ];
 
   return (
@@ -1031,6 +1112,157 @@ export default function SettingsPage() {
                   </table>
                 </div>
               </section>
+            </div>
+          )}
+
+          {activeTab === "courier" && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+              <section>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Pathao Courier Credentials</h3>
+                    <p className="text-xs text-slate-400 font-medium">Connect your Pathao Merchant account to book deliveries instantly.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${pathaoConfig.is_active ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-100 text-slate-400 border border-slate-200'}`}>
+                      {pathaoConfig.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Client ID</label>
+                    <input
+                      type="text"
+                      placeholder="Enter Client ID"
+                      value={pathaoConfig.client_id}
+                      onChange={(e) => setPathaoConfig(prev => ({ ...prev, client_id: e.target.value }))}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10 focus:bg-white transition-all shadow-sm"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Client Secret</label>
+                    <input
+                      type="password"
+                      placeholder="Enter Client Secret"
+                      value={pathaoConfig.client_secret}
+                      onChange={(e) => setPathaoConfig(prev => ({ ...prev, client_secret: e.target.value }))}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10 focus:bg-white transition-all shadow-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Merchant Username (Email)</label>
+                    <input
+                      type="email"
+                      placeholder="merchant@example.com"
+                      value={pathaoConfig.username}
+                      onChange={(e) => setPathaoConfig(prev => ({ ...prev, username: e.target.value }))}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10 focus:bg-white transition-all shadow-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Merchant Password</label>
+                    <input
+                      type="password"
+                      placeholder={pathaoConfig.client_id ? "•••••••• (Leave blank to keep current)" : "Enter password"}
+                      value={pathaoConfig.password}
+                      onChange={(e) => setPathaoConfig(prev => ({ ...prev, password: e.target.value }))}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10 focus:bg-white transition-all shadow-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col lg:flex-row gap-6 mb-6 pt-4 border-t border-slate-100">
+                  <div className="flex-1 flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-white transition-all">
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-sm">Sandbox Environment</h4>
+                      <p className="text-xs text-slate-500 font-medium">Use the Pathao test sandbox for fake booking/testing.</p>
+                    </div>
+                    <button
+                      onClick={() => setPathaoConfig(prev => ({ ...prev, is_sandbox: !prev.is_sandbox }))}
+                      className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus:outline-none ring-1 ring-inset ${pathaoConfig.is_sandbox ? 'bg-amber-500 ring-amber-500' : 'bg-slate-300 ring-slate-300'}`}
+                    >
+                      <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${pathaoConfig.is_sandbox ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+
+                  <div className="flex-1 flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-white transition-all">
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-sm">Enable Service</h4>
+                      <p className="text-xs text-slate-500 font-medium">Make courier booking options visible on your orders dashboard.</p>
+                    </div>
+                    <button
+                      onClick={() => setPathaoConfig(prev => ({ ...prev, is_active: !prev.is_active }))}
+                      className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus:outline-none ring-1 ring-inset ${pathaoConfig.is_active ? 'bg-indigo-600 ring-indigo-600' : 'bg-slate-300 ring-slate-300'}`}
+                    >
+                      <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${pathaoConfig.is_active ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-3 mt-6">
+                  <button
+                    disabled={isSaving || fetchingConfig}
+                    onClick={handleSavePathaoConfig}
+                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm px-6 py-3 rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-50"
+                  >
+                    <FaSave className="text-sm" />
+                    <span>{isSaving ? "Verifying & Saving..." : "Verify & Save Credentials"}</span>
+                  </button>
+                </div>
+              </section>
+
+              {pathaoConfig.client_id && (
+                <section className="pt-8 border-t border-slate-100 animate-in fade-in duration-500">
+                  <div className="flex items-center justify-between gap-4 mb-4">
+                    <div>
+                      <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Select Default Store</h3>
+                      <p className="text-xs text-slate-400 font-medium">Select which store will be the default pickup address for your parcels.</p>
+                    </div>
+                    <button
+                      onClick={fetchStores}
+                      disabled={loadingStores}
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                    >
+                      {loadingStores ? "Fetching..." : "Refresh Stores"}
+                    </button>
+                  </div>
+
+                  {stores.length > 0 ? (
+                    <div className="relative group/dropdown max-w-md">
+                      <select
+                        value={pathaoConfig.store_id || ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setPathaoConfig(prev => ({ ...prev, store_id: val }));
+                          // Auto save store ID selection
+                          api.post("/courier/config/", { ...pathaoConfig, store_id: val })
+                            .then(() => toast.success("Default pickup store updated!", { icon: "🏪" }))
+                            .catch(() => toast.error("Failed to save default store."));
+                        }}
+                        className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/10 text-sm shadow-sm flex items-center justify-between group hover:border-indigo-300 transition-all cursor-pointer"
+                      >
+                        <option value="" disabled>Select Pickup Store</option>
+                        {stores.map(store => (
+                          <option key={store.store_id} value={store.store_id}>
+                            {store.store_name} ({store.store_address || "No Address"})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="p-6 bg-slate-50 border border-slate-200 border-dashed rounded-xl text-center">
+                      <p className="text-xs font-medium text-slate-400 italic">
+                        {loadingStores ? "Retrieving merchant stores..." : "No stores found. Verify your credentials or confirm you have created a store in the Pathao Merchant panel."}
+                      </p>
+                    </div>
+                  )}
+                </section>
+              )}
             </div>
           )}
         </div>

@@ -3,7 +3,29 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import api from "@/lib/api";
-import { FaCheckCircle, FaChevronLeft, FaShoppingCart, FaInfoCircle, FaCube } from "react-icons/fa";
+import { FaCheckCircle, FaChevronLeft, FaShoppingCart, FaInfoCircle, FaCube, FaCoins, FaCrown, FaStar, FaTag, FaTicketAlt, FaGift } from "react-icons/fa";
+import { motion } from 'framer-motion';
+
+function getOfferIcon(name) {
+  if(!name) return FaCube;
+  const n = String(name).toLowerCase();
+  if(n.includes('gift') || n.includes('present') || n.includes('bonus')) return FaGift;
+  if(n.includes('coin') || n.includes('token') || n.includes('credit') || n.includes('coins')) return FaCoins;
+  if(n.includes('pro') || n.includes('premium') || n.includes('business') || n.includes('agency')) return FaCrown;
+  if(n.includes('star') || n.includes('elite') || n.includes('plus')) return FaStar;
+  if(n.includes('ticket') || n.includes('coupon') || n.includes('voucher')) return FaTicketAlt;
+  if(n.includes('tag') || n.includes('label')) return FaTag;
+  return FaCube;
+}
+
+function getPaletteColor(index) {
+  const palettes = [
+    { color: '#4f46e5', bg: 'rgba(79,70,229,0.08)', border: 'rgba(79,70,229,0.12)' },
+    { color: '#0ea5b7', bg: 'rgba(14,165,183,0.08)', border: 'rgba(14,165,183,0.12)' },
+    { color: '#f59e0b', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.12)' },
+  ];
+  return palettes[index % palettes.length];
+}
 
 export default function OfferDetailsPage() {
   const { id } = useParams();

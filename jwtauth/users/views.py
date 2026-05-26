@@ -475,10 +475,11 @@ class ForgotPasswordView(APIView):
         if isinstance(token, bytes):
             token = token.decode("utf-8")
 
-        reset_link = f"{settings.SITE_URL}/reset-password?token={token}"
+        web_reset_link = f"{settings.SITE_URL}/reset-password?token={token}"
+        mobile_reset_link = f"newsmartagentmobaile://reset-password?token={token}"
 
-        # send email
-        send_reset_email(user.email, reset_link)
+        # send email with mobile app deep link and web fallback
+        send_reset_email(user.email, web_reset_link, mobile_reset_link)
 
         return Response(
            { "message": 'if email exists, reset link sent'},
