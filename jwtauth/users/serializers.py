@@ -220,7 +220,13 @@ class CustomerOrderSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CustomerOrder
-        fields = ['id', 'form_id', 'customer_name', 'customer_profile_photo', 'phone_number', 'district', 'upazila', 'address', 'product_name', 'price', 'status', 'extra_info', 'created_at', 'updated_at']
+        fields = [
+            'id', 'form_id', 'customer_name', 'customer_profile_photo', 
+            'phone_number', 'district', 'upazila', 'address', 
+            'product_name', 'price', 'status', 'extra_info', 
+            'city_id', 'zone_id', 'area_id', 'item_weight', 
+            'item_quantity', 'special_instruction', 'created_at', 'updated_at'
+        ]
         read_only_fields = ['id', 'created_at', 'customer_profile_photo']
 
     def get_customer_profile_photo(self, obj):

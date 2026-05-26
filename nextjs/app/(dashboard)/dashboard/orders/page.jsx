@@ -5,7 +5,7 @@ import { useAuth } from "app/context/AuthContext";
 import {
   Package, Phone, CheckSquare, Square, Store,
   ChevronRight, Link as LinkIcon, Check, MapPin,
-  Search, Printer, LayoutDashboard, BarChart3, TrendingUp, Truck
+  Search, Printer, LayoutDashboard, BarChart3, TrendingUp, Truck, Plus
 } from "lucide-react";
 
 // Chart JS Imports
@@ -47,11 +47,38 @@ export default function OrderDashboard() {
   const [districtFilter, setDistrictFilter] = useState("all");
   const [selectedOrders, setSelectedOrders] = useState([]);
   
+  // Create Store States
+  const [createStoreModalOpen, setCreateStoreModalOpen] = useState(false);
+  const [newStoreData, setNewStoreData] = useState({ name: "", contact_name: "", contact_number: "", address: "", city_id: "", zone_id: "", area_id: "" });
+  const [isCreatingStore, setIsCreatingStore] = useState(false);
+  
+  const [pathaoCities, setPathaoCities] = useState([]);
+  const [pathaoZones, setPathaoZones] = useState([]);
+  const [pathaoAreas, setPathaoAreas] = useState([]);
+
   // Pathao Booking States
   const [courierActive, setCourierActive] = useState(false);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [bookingOrder, setBookingOrder] = useState(null);
   const [bookingInProgress, setBookingInProgress] = useState(false);
+  const [stores, setStores] = useState([]);
+  const [bookingDetails, setBookingDetails] = useState({
+    recipient_name: "",
+    recipient_phone: "",
+    recipient_address: "",
+    item_quantity: 1,
+    item_weight: 0.5,
+    amount_to_collect: 0,
+    item_description: "Order Parcel",
+    store_id: "",
+    recipient_city: "",
+    recipient_zone: "",
+    recipient_area: "",
+    special_instruction: ""
+  });
+  const [bookingCities, setBookingCities] = useState([]);
+  const [bookingZones, setBookingZones] = useState([]);
+  const [bookingAreas, setBookingAreas] = useState([]);
   
   // Courier Config Modal States
   const [courierConfigModalOpen, setCourierConfigModalOpen] = useState(false);
@@ -64,6 +91,8 @@ export default function OrderDashboard() {
     is_sandbox: true
   });
   const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const [courierFormMode, setCourierFormMode] = useState("list");
+  const [isDeletingConfig, setIsDeletingConfig] = useState(false);
 
   // Custom Order Manual Entry States
   const [addOrderModalOpen, setAddOrderModalOpen] = useState(false);
@@ -76,8 +105,33 @@ export default function OrderDashboard() {
     address: "",
     product_name: "",
     price: "",
-    extra_info: ""
+    extra_info: "",
+    city_id: "",
+    zone_id: "",
+    area_id: "",
+    item_weight: 0.5,
+    item_quantity: 1,
+    special_instruction: ""
   });
+
+  const [manualCities, setManualCities] = useState([]);
+  const [manualZones, setManualZones] = useState([]);
+  const [manualAreas, setManualAreas] = useState([]);
+  const [selectedManualCity, setSelectedManualCity] = useState("");
+  const [selectedManualZone, setSelectedManualZone] = useState("");
+  const [selectedManualArea, setSelectedManualArea] = useState("");
+
+  const [calculatedPrice, setCalculatedPrice] = useState(null);
+  const [calculatingPrice, setCalculatingPrice] = useState(false);
+  const [trackingDetails, setTrackingDetails] = useState(null);
+  const [trackingModalOpen, setTrackingModalOpen] = useState(false);
+  const [loadingTracking, setLoadingTracking] = useState(false);
+
+  const getConsignmentId = (extraInfo) => {
+    if (!extraInfo) return null;
+    const match = extraInfo.match(/Tracking ID:\s*([A-Za-z0-9\-]+)/i);
+    return match ? match[1] : null;
+  };
 
   const { notifications } = useNotifications(user, setOrders);
 
@@ -150,12 +204,34 @@ export default function OrderDashboard() {
       
       await api.post("/courier/config/", payload);
       toast.success("Pathao credentials verified & saved successfully!", { icon: "🚚" });
-      setCourierConfigModalOpen(false);
+      setCourierFormMode("list");
       checkCourierConfig(); // Re-check to enable courier functionality
     } catch (err) {
       toast.error(err.response?.data?.error || "Failed to verify or save Pathao credentials.");
     } finally {
       setIsSavingConfig(false);
+    }
+  };
+
+  const handleDeletePathaoConfig = async () => {
+    if (!window.confirm("Are you sure you want to delete this courier configuration?")) return;
+    setIsDeletingConfig(true);
+    try {
+      await api.delete("/courier/config/");
+      toast.success("Courier configuration deleted successfully!", { icon: "🗑️" });
+      setPathaoConfig({
+        client_id: "",
+        client_secret: "",
+        username: "",
+        password: "",
+        store_id: "",
+        is_sandbox: true
+      });
+      setCourierActive(false);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to delete courier configuration.");
+    } finally {
+      setIsDeletingConfig(false);
     }
   };
 
@@ -171,8 +247,12 @@ export default function OrderDashboard() {
       toast.success("Order added successfully!", { id: loadingToast, icon: "📦" });
       setAddOrderModalOpen(false);
       setNewOrderDetails({
-        customer_name: "", phone_number: "", district: "", upazila: "", address: "", product_name: "", price: "", extra_info: ""
+        customer_name: "", phone_number: "", district: "", upazila: "", address: "", product_name: "", price: "", extra_info: "",
+        city_id: "", zone_id: "", area_id: "", item_weight: 0.5, item_quantity: 1, special_instruction: ""
       });
+      setSelectedManualCity("");
+      setSelectedManualZone("");
+      setSelectedManualArea("");
       fetchOrders();
     } catch (err) {
       toast.error(err.response?.data?.error || "Failed to add order.", { id: loadingToast });
@@ -189,11 +269,15 @@ export default function OrderDashboard() {
       recipient_name: order.customer_name || "",
       recipient_phone: order.phone_number || "",
       recipient_address: order.address || "",
-      item_quantity: 1,
-      item_weight: 0.5,
+      item_quantity: order.item_quantity || 1,
+      item_weight: order.item_weight || 0.5,
       amount_to_collect: order.price || 0,
       item_description: order.product_name || "Order Parcel",
-      store_id: stores[0]?.store_id || ""
+      store_id: stores[0]?.store_id || "",
+      recipient_city: order.city_id || "",
+      recipient_zone: order.zone_id || "",
+      recipient_area: order.area_id || "",
+      special_instruction: order.special_instruction || ""
     });
     
     setBookingModalOpen(true);
@@ -217,7 +301,11 @@ export default function OrderDashboard() {
         item_weight: bookingDetails.item_weight,
         amount_to_collect: bookingDetails.amount_to_collect,
         item_description: bookingDetails.item_description,
-        store_id: bookingDetails.store_id || null
+        store_id: bookingDetails.store_id || null,
+        recipient_city: bookingDetails.recipient_city || null,
+        recipient_zone: bookingDetails.recipient_zone || null,
+        recipient_area: bookingDetails.recipient_area || null,
+        special_instruction: bookingDetails.special_instruction || null
       };
       
       const res = await api.post("/courier/book-order/", payload);
@@ -242,6 +330,164 @@ export default function OrderDashboard() {
       toast.error(errText, { id: loadingToast });
     } finally {
       setBookingInProgress(false);
+    }
+  };
+
+  useEffect(() => {
+    if (createStoreModalOpen) {
+      api.get("/courier/cities/").then(res => setPathaoCities(res.data || [])).catch(console.error);
+    }
+  }, [createStoreModalOpen]);
+
+  useEffect(() => {
+    if (bookingModalOpen) {
+      api.get("/courier/cities/").then(res => setBookingCities(res.data || [])).catch(console.error);
+    }
+  }, [bookingModalOpen]);
+
+  useEffect(() => {
+    if (newStoreData.city_id) {
+      api.get(`/courier/zones/?city_id=${newStoreData.city_id}`).then(res => setPathaoZones(res.data || [])).catch(console.error);
+    } else {
+      setPathaoZones([]);
+    }
+  }, [newStoreData.city_id]);
+
+  useEffect(() => {
+    if (bookingDetails.recipient_city) {
+      api.get(`/courier/zones/?city_id=${bookingDetails.recipient_city}`).then(res => setBookingZones(res.data || [])).catch(console.error);
+    } else {
+      setBookingZones([]);
+    }
+  }, [bookingDetails.recipient_city]);
+
+  useEffect(() => {
+    if (newStoreData.zone_id) {
+      api.get(`/courier/areas/?zone_id=${newStoreData.zone_id}`).then(res => setPathaoAreas(res.data || [])).catch(console.error);
+    } else {
+      setPathaoAreas([]);
+    }
+  }, [newStoreData.zone_id]);
+
+  useEffect(() => {
+    if (bookingDetails.recipient_zone) {
+      api.get(`/courier/areas/?zone_id=${bookingDetails.recipient_zone}`).then(res => setBookingAreas(res.data || [])).catch(console.error);
+    } else {
+      setBookingAreas([]);
+    }
+  }, [bookingDetails.recipient_zone]);
+
+  useEffect(() => {
+    if (addOrderModalOpen) {
+      api.get("/courier/cities/").then(res => setManualCities(res.data || [])).catch(console.error);
+    } else {
+      setManualCities([]);
+      setManualZones([]);
+      setManualAreas([]);
+      setSelectedManualCity("");
+      setSelectedManualZone("");
+      setSelectedManualArea("");
+    }
+  }, [addOrderModalOpen]);
+
+  useEffect(() => {
+    if (selectedManualCity) {
+      api.get(`/courier/zones/?city_id=${selectedManualCity}`).then(res => setManualZones(res.data || [])).catch(console.error);
+    } else {
+      setManualZones([]);
+    }
+    setSelectedManualZone("");
+    setSelectedManualArea("");
+  }, [selectedManualCity]);
+
+  useEffect(() => {
+    if (selectedManualZone) {
+      api.get(`/courier/areas/?zone_id=${selectedManualZone}`).then(res => setManualAreas(res.data || [])).catch(console.error);
+    } else {
+      setManualAreas([]);
+    }
+    setSelectedManualArea("");
+  }, [selectedManualZone]);
+
+  useEffect(() => {
+    const calculateDeliveryCharge = async () => {
+      if (
+        bookingDetails.store_id &&
+        bookingDetails.recipient_city &&
+        bookingDetails.recipient_zone &&
+        bookingDetails.item_weight
+      ) {
+        setCalculatingPrice(true);
+        try {
+          const payload = {
+            store_id: bookingDetails.store_id,
+            recipient_city: bookingDetails.recipient_city,
+            recipient_zone: bookingDetails.recipient_zone,
+            item_weight: bookingDetails.item_weight,
+            item_type: 2, // Default: Parcel
+            delivery_type: 48 // Default: Normal (48 hours)
+          };
+          const res = await api.post("/courier/price-calculator/", payload);
+          setCalculatedPrice(res.data);
+        } catch (err) {
+          console.error("Price calculation failed", err);
+          setCalculatedPrice(null);
+        } finally {
+          setCalculatingPrice(false);
+        }
+      } else {
+        setCalculatedPrice(null);
+      }
+    };
+
+    calculateDeliveryCharge();
+  }, [
+    bookingDetails.store_id,
+    bookingDetails.recipient_city,
+    bookingDetails.recipient_zone,
+    bookingDetails.item_weight
+  ]);
+
+  const handleTrackOrder = async (consignmentId) => {
+    setLoadingTracking(true);
+    setTrackingModalOpen(true);
+    setTrackingDetails(null);
+    try {
+      const res = await api.get(`/courier/order-info/${consignmentId}/`);
+      setTrackingDetails(res.data);
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to fetch tracking details.");
+      setTrackingModalOpen(false);
+    } finally {
+      setLoadingTracking(false);
+    }
+  };
+
+  const handleCreateStore = async () => {
+    if (!newStoreData.name || !newStoreData.contact_name || !newStoreData.contact_number || !newStoreData.address || !newStoreData.city_id || !newStoreData.zone_id || !newStoreData.area_id) {
+      toast.error("Please fill all required fields");
+      return;
+    }
+    setIsCreatingStore(true);
+    const loadingToast = toast.loading("Creating store...");
+    try {
+      const res = await api.post("/courier/stores/create/", newStoreData);
+      toast.success("Store created successfully!", { id: loadingToast, icon: "🏪" });
+      
+      const storesRes = await api.get("/courier/stores/");
+      setStores(storesRes.data || []);
+      
+      if (res.data.store_id) {
+        setBookingDetails(prev => ({ ...prev, store_id: res.data.store_id }));
+        setPathaoConfig(prev => ({ ...prev, store_id: res.data.store_id }));
+      }
+      
+      setCreateStoreModalOpen(false);
+      setNewStoreData({ name: "", contact_name: "", contact_number: "", address: "" });
+    } catch (e) {
+      toast.error(e.response?.data?.error || "Failed to create store", { id: loadingToast });
+    } finally {
+      setIsCreatingStore(false);
     }
   };
 
@@ -721,8 +967,8 @@ export default function OrderDashboard() {
           
           {/* Action Buttons row at the top */}
           <div className="mt-4 flex flex-wrap items-center justify-center lg:justify-start gap-3">
-            <button onClick={() => setCourierConfigModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl font-bold text-[10px] md:text-xs transition-all border border-indigo-200 shadow-sm active:scale-95">
-              <Truck className="w-4 h-4" /> Configure Pathao Courier
+            <button onClick={() => { setCourierFormMode("list"); setCourierConfigModalOpen(true); }} className="flex items-center gap-2 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl font-bold text-[10px] md:text-xs transition-all border border-indigo-200 shadow-sm active:scale-95">
+              <Truck className="w-4 h-4" /> Manage Couriers
             </button>
             <button onClick={() => setAddOrderModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl font-bold text-[10px] md:text-xs transition-all border border-emerald-200 shadow-sm active:scale-95">
               <Package className="w-4 h-4" /> Add Custom Order
@@ -1003,6 +1249,21 @@ export default function OrderDashboard() {
                         Info: {order.extra_info}
                       </span>
                     )}
+                    {order.item_weight && (
+                      <span className="text-xs font-medium text-slate-500 bg-slate-50 px-2 py-1 rounded-md border border-slate-200">
+                        Weight: {order.item_weight} kg
+                      </span>
+                    )}
+                    {order.item_quantity && (
+                      <span className="text-xs font-medium text-slate-500 bg-slate-50 px-2 py-1 rounded-md border border-slate-200">
+                        Qty: {order.item_quantity}
+                      </span>
+                    )}
+                    {order.special_instruction && (
+                      <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-md border border-amber-100 truncate max-w-[180px]" title={order.special_instruction}>
+                        Note: {order.special_instruction}
+                      </span>
+                    )}
                   </div>
                   <div className="text-xs text-gray-500 line-clamp-2 leading-relaxed" title={order.address}>
                     <span className="font-semibold text-gray-400 uppercase tracking-widest text-[9px] mr-1">Address:</span> {order.address}
@@ -1028,6 +1289,16 @@ export default function OrderDashboard() {
                         className={`p-2 sm:p-2.5 rounded-xl transition-all shadow-sm flex items-center justify-center active:scale-95 ${courierActive ? 'bg-indigo-600 text-white hover:bg-indigo-700 border-indigo-600 hover:border-indigo-700' : 'bg-slate-100 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200'}`}
                       >
                         <Truck className="w-4 h-4" />
+                      </button>
+                    )}
+
+                    {getConsignmentId(order.extra_info) && (
+                      <button
+                        onClick={() => handleTrackOrder(getConsignmentId(order.extra_info))}
+                        title="Track Pathao Delivery"
+                        className="p-2 sm:p-2.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl transition-all border border-indigo-100 shadow-sm flex items-center justify-center active:scale-95"
+                      >
+                        <Search className="w-4 h-4" />
                       </button>
                     )}
 
@@ -1084,7 +1355,10 @@ export default function OrderDashboard() {
             <div className="space-y-5">
               {/* Pickup Store */}
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Pickup Store Address</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Pickup Store Address</label>
+                  <button type="button" onClick={() => setCreateStoreModalOpen(true)} className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-lg transition-colors border border-indigo-100"><Plus className="w-3 h-3" /> New Store</button>
+                </div>
                 <select
                   value={bookingDetails.store_id}
                   onChange={(e) => setBookingDetails(prev => ({ ...prev, store_id: e.target.value }))}
@@ -1122,7 +1396,7 @@ export default function OrderDashboard() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Full Delivery Address</label>
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Full Delivery Address <span className="text-red-500">*</span></label>
                 <textarea
                   rows="2"
                   value={bookingDetails.recipient_address}
@@ -1131,10 +1405,49 @@ export default function OrderDashboard() {
                 />
               </div>
 
-              {/* Delivery Details */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-100">
+              {/* City, Zone, Area Selector for Booking */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">COD Amount (৳)</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">City</label>
+                  <select
+                    value={bookingDetails.recipient_city}
+                    onChange={(e) => setBookingDetails(prev => ({ ...prev, recipient_city: e.target.value, recipient_zone: "", recipient_area: "" }))}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
+                  >
+                    <option value="">Select City</option>
+                    {bookingCities.map(city => <option key={city.city_id} value={city.city_id}>{city.city_name}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Zone</label>
+                  <select
+                    value={bookingDetails.recipient_zone}
+                    onChange={(e) => setBookingDetails(prev => ({ ...prev, recipient_zone: e.target.value, recipient_area: "" }))}
+                    disabled={!bookingDetails.recipient_city}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 disabled:opacity-50 cursor-pointer"
+                  >
+                    <option value="">Select Zone</option>
+                    {bookingZones.map(zone => <option key={zone.zone_id} value={zone.zone_id}>{zone.zone_name}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Area</label>
+                  <select
+                    value={bookingDetails.recipient_area}
+                    onChange={(e) => setBookingDetails(prev => ({ ...prev, recipient_area: e.target.value }))}
+                    disabled={!bookingDetails.recipient_zone}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 disabled:opacity-50 cursor-pointer"
+                  >
+                    <option value="">Select Area</option>
+                    {bookingAreas.map(area => <option key={area.area_id} value={area.area_id}>{area.area_name}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* Delivery Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">COD Amount (৳) <span className="text-red-500">*</span></label>
                   <input
                     type="number"
                     value={bookingDetails.amount_to_collect}
@@ -1143,7 +1456,7 @@ export default function OrderDashboard() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Weight (kg)</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Weight (kg) <span className="text-red-500">*</span></label>
                   <input
                     type="number"
                     step="0.1"
@@ -1152,6 +1465,9 @@ export default function OrderDashboard() {
                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
                   />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Item Description</label>
                   <input
@@ -1161,8 +1477,43 @@ export default function OrderDashboard() {
                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
                   />
                 </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Special Instruction</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Deliver before 5 PM"
+                    value={bookingDetails.special_instruction}
+                    onChange={(e) => setBookingDetails(prev => ({ ...prev, special_instruction: e.target.value }))}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                  />
+                </div>
               </div>
             </div>
+
+            {/* Price Estimate */}
+            {(calculatingPrice || calculatedPrice) && (
+              <div className="mt-5 p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl flex flex-col gap-2">
+                <p className="text-[10px] font-black uppercase tracking-widest text-indigo-500">Delivery Charge Estimate</p>
+                {calculatingPrice ? (
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+                    <div className="w-3 h-3 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                    Calculating delivery fee...
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3 text-xs font-semibold text-slate-700">
+                    <div>Delivery Fee: <span className="font-bold text-slate-900">৳ {calculatedPrice.delivery_fee}</span></div>
+                    <div>COD Charge: <span className="font-bold text-slate-900">৳ {calculatedPrice.cod_charge || 0}</span></div>
+                    {calculatedPrice.discount > 0 && (
+                      <div className="col-span-2 text-emerald-600">Discount: -৳ {calculatedPrice.discount}</div>
+                    )}
+                    <div className="col-span-2 pt-2 border-t border-indigo-100 font-bold text-indigo-600 text-sm flex justify-between">
+                      <span>Total Estimated Cost:</span>
+                      <span>৳ {calculatedPrice.total_amount}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex gap-3 mt-8 pt-4 border-t border-slate-100">
@@ -1188,88 +1539,196 @@ export default function OrderDashboard() {
       {/* ── Pathao Settings Modal ── */}
       {courierConfigModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 overflow-y-auto">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => !isSavingConfig && setCourierConfigModalOpen(false)} />
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => (!isSavingConfig && !isDeletingConfig) && setCourierConfigModalOpen(false)} />
           
           <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-8 animate-in zoom-in-95 duration-200 z-10 max-h-[90vh] overflow-y-auto custom-scrollbar">
-            <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
-              <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
-                <Truck className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-lg font-black text-slate-900 tracking-tight">Configure Pathao Courier</h3>
-                <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Set API credentials to book parcels</p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Client ID</label>
-                <input
-                  type="text"
-                  value={pathaoConfig.client_id}
-                  onChange={(e) => setPathaoConfig(prev => ({ ...prev, client_id: e.target.value }))}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Client Secret</label>
-                <input
-                  type="password"
-                  value={pathaoConfig.client_secret}
-                  onChange={(e) => setPathaoConfig(prev => ({ ...prev, client_secret: e.target.value }))}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Username (Email)</label>
-                <input
-                  type="email"
-                  value={pathaoConfig.username}
-                  onChange={(e) => setPathaoConfig(prev => ({ ...prev, username: e.target.value }))}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Password</label>
-                <input
-                  type="password"
-                  placeholder="Leave empty if unchanged"
-                  value={pathaoConfig.password}
-                  onChange={(e) => setPathaoConfig(prev => ({ ...prev, password: e.target.value }))}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
-                />
-              </div>
-
-              <div className="flex items-center gap-3 pt-2">
-                <div className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${pathaoConfig.is_sandbox ? 'bg-amber-400' : 'bg-slate-300'}`} onClick={() => setPathaoConfig(prev => ({ ...prev, is_sandbox: !prev.is_sandbox }))}>
-                  <div className={`w-4 h-4 bg-white rounded-full transition-transform ${pathaoConfig.is_sandbox ? 'translate-x-6' : 'translate-x-0'}`} />
+            
+            {courierFormMode === "list" ? (
+              <>
+                <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+                  <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
+                    <Truck className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900 tracking-tight">Manage Couriers</h3>
+                    <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Your connected courier services</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-bold text-slate-700">Sandbox Mode</p>
-                  <p className="text-[10px] font-bold text-slate-400">Use test API endpoints</p>
-                </div>
-              </div>
-            </div>
+                
+                {courierActive ? (
+                  <div className="space-y-4">
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center">
+                          <Truck className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-800">Pathao Courier</p>
+                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full uppercase">Active</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => setCourierFormMode("form")} className="px-3 py-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors">Edit</button>
+                        <button onClick={handleDeletePathaoConfig} disabled={isDeletingConfig} className="px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">{isDeletingConfig ? "..." : "Delete"}</button>
+                      </div>
+                    </div>
 
-            <div className="flex gap-3 mt-8 pt-4 border-t border-slate-100">
-              <button
-                disabled={isSavingConfig}
-                onClick={() => setCourierConfigModalOpen(false)}
-                className="flex-1 px-4 py-3 text-sm font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all active:scale-95 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                disabled={isSavingConfig || !pathaoConfig.client_id || !pathaoConfig.client_secret || !pathaoConfig.username}
-                onClick={handleSavePathaoConfig}
-                className="flex-1 px-4 py-3 text-sm font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-50"
-              >
-                {isSavingConfig ? "Saving..." : "Save & Verify"}
-              </button>
-            </div>
+                    {/* Stores List */}
+                    <div className="border border-slate-100 rounded-2xl p-4 bg-white space-y-3">
+                      <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                        <p className="text-xs font-black uppercase tracking-wider text-slate-500">Merchant Stores ({stores.length})</p>
+                        <button type="button" onClick={() => setCreateStoreModalOpen(true)} className="text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg transition-colors flex items-center gap-0.5 border border-indigo-100">
+                          <Plus className="w-3.5 h-3.5" /> New Store
+                        </button>
+                      </div>
+                      {stores.length > 0 ? (
+                        <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto custom-scrollbar space-y-2">
+                          {stores.map(store => (
+                            <div key={store.store_id} className="py-2.5 flex items-start justify-between gap-3 text-xs">
+                              <div className="space-y-0.5 min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <p className="font-bold text-slate-800 truncate">{store.store_name}</p>
+                                  {String(store.store_id) === String(pathaoConfig.store_id) && (
+                                    <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.2 rounded uppercase">Default</span>
+                                  )}
+                                  {(store.store_status || store.status) && (
+                                    <span className={`text-[8px] font-extrabold px-1.5 py-0.2 rounded uppercase border ${
+                                      String(store.store_status || store.status).toLowerCase() === 'active' || String(store.store_status || store.status).toLowerCase() === 'approved'
+                                        ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
+                                        : String(store.store_status || store.status).toLowerCase() === 'pending'
+                                          ? 'bg-amber-50 text-amber-600 border-amber-100'
+                                          : 'bg-slate-50 text-slate-500 border-slate-200'
+                                    }`}>
+                                      {store.store_status || store.status}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-slate-400 font-medium">Store ID: <span className="font-mono text-slate-700 bg-slate-100 px-1 rounded">{store.store_id}</span></p>
+                                <p className="text-slate-500 line-clamp-1">{store.store_address}</p>
+                                <p className="text-slate-400">Phone: {store.contact_number || store.contact_phone || "N/A"}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-center py-4 text-xs text-slate-400 font-medium">No stores retrieved. Try clicking "Edit" and verifying config.</p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <Truck className="w-12 h-12 text-slate-200 mx-auto mb-3" />
+                    <p className="text-slate-500 font-medium mb-4">No courier services configured yet.</p>
+                    <button onClick={() => setCourierFormMode("form")} className="px-4 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-md">Add Pathao Courier</button>
+                  </div>
+                )}
+                
+                <div className="mt-8 pt-4 border-t border-slate-100">
+                  <button
+                    onClick={() => setCourierConfigModalOpen(false)}
+                    className="w-full px-4 py-3 text-sm font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all active:scale-95"
+                  >
+                    Close
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+                  <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
+                    <Truck className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900 tracking-tight">Configure Pathao Courier</h3>
+                    <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Set API credentials to book parcels</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Client ID</label>
+                    <input
+                      type="text"
+                      value={pathaoConfig.client_id}
+                      onChange={(e) => setPathaoConfig(prev => ({ ...prev, client_id: e.target.value }))}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Client Secret</label>
+                    <input
+                      type="password"
+                      value={pathaoConfig.client_secret}
+                      onChange={(e) => setPathaoConfig(prev => ({ ...prev, client_secret: e.target.value }))}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Username (Email)</label>
+                    <input
+                      type="email"
+                      value={pathaoConfig.username}
+                      onChange={(e) => setPathaoConfig(prev => ({ ...prev, username: e.target.value }))}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Password</label>
+                    <input
+                      type="password"
+                      placeholder="Leave empty if unchanged"
+                      value={pathaoConfig.password}
+                      onChange={(e) => setPathaoConfig(prev => ({ ...prev, password: e.target.value }))}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Store ID</label>
+                      <button type="button" onClick={() => setCreateStoreModalOpen(true)} className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-lg transition-colors border border-indigo-100"><Plus className="w-3 h-3" /> New Store</button>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="e.g. 12345"
+                      value={pathaoConfig.store_id || ""}
+                      onChange={(e) => setPathaoConfig(prev => ({ ...prev, store_id: e.target.value }))}
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-3 pt-2">
+                    <div className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${pathaoConfig.is_sandbox ? 'bg-amber-400' : 'bg-slate-300'}`} onClick={() => setPathaoConfig(prev => ({ ...prev, is_sandbox: !prev.is_sandbox }))}>
+                      <div className={`w-4 h-4 bg-white rounded-full transition-transform ${pathaoConfig.is_sandbox ? 'translate-x-6' : 'translate-x-0'}`} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-700">Sandbox Mode</p>
+                      <p className="text-[10px] font-bold text-slate-400">Use test API endpoints</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-8 pt-4 border-t border-slate-100">
+                  <button
+                    disabled={isSavingConfig}
+                    onClick={() => setCourierFormMode("list")}
+                    className="flex-1 px-4 py-3 text-sm font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all active:scale-95 disabled:opacity-50"
+                  >
+                    Back to List
+                  </button>
+                  <button
+                    disabled={isSavingConfig || !pathaoConfig.client_id || !pathaoConfig.client_secret || !pathaoConfig.username}
+                    onClick={handleSavePathaoConfig}
+                    className="flex-1 px-4 py-3 text-sm font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-50"
+                  >
+                    {isSavingConfig ? "Saving..." : "Save & Verify"}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -1322,23 +1781,63 @@ export default function OrderDashboard() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">District</label>
-                <input
-                  type="text"
-                  value={newOrderDetails.district}
-                  onChange={(e) => setNewOrderDetails(prev => ({ ...prev, district: e.target.value }))}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-emerald-500/10"
-                />
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">City / District</label>
+                <select
+                  value={selectedManualCity}
+                  onChange={(e) => {
+                    const cid = e.target.value;
+                    setSelectedManualCity(cid);
+                    const name = manualCities.find(c => String(c.city_id) === String(cid))?.city_name || "";
+                    setNewOrderDetails(prev => ({ ...prev, district: name, upazila: "", city_id: cid, zone_id: "", area_id: "" }));
+                  }}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-emerald-500/10 cursor-pointer"
+                >
+                  <option value="">Select City / District</option>
+                  {manualCities.map(city => (
+                    <option key={city.city_id} value={city.city_id}>{city.city_name}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Upazila / Area</label>
-                <input
-                  type="text"
-                  value={newOrderDetails.upazila}
-                  onChange={(e) => setNewOrderDetails(prev => ({ ...prev, upazila: e.target.value }))}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-emerald-500/10"
-                />
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Zone</label>
+                <select
+                  value={selectedManualZone}
+                  onChange={(e) => {
+                    const zid = e.target.value;
+                    setSelectedManualZone(zid);
+                    const name = manualZones.find(z => String(z.zone_id) === String(zid))?.zone_name || "";
+                    setNewOrderDetails(prev => ({ ...prev, upazila: name, zone_id: zid, area_id: "" }));
+                  }}
+                  disabled={!selectedManualCity}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-emerald-500/10 disabled:opacity-50 cursor-pointer"
+                >
+                  <option value="">Select Zone</option>
+                  {manualZones.map(zone => (
+                    <option key={zone.zone_id} value={zone.zone_id}>{zone.zone_name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Area</label>
+                <select
+                  value={selectedManualArea}
+                  onChange={(e) => {
+                    const aid = e.target.value;
+                    setSelectedManualArea(aid);
+                    const areaName = manualAreas.find(a => String(a.area_id) === String(aid))?.area_name || "";
+                    const zoneName = manualZones.find(z => String(z.zone_id) === String(selectedManualZone))?.zone_name || "";
+                    setNewOrderDetails(prev => ({ ...prev, upazila: areaName ? `${zoneName} - ${areaName}` : zoneName, area_id: aid }));
+                  }}
+                  disabled={!selectedManualZone}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-emerald-500/10 disabled:opacity-50 cursor-pointer"
+                >
+                  <option value="">Select Area</option>
+                  {manualAreas.map(area => (
+                    <option key={area.area_id} value={area.area_id}>{area.area_name}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="space-y-1.5 md:col-span-2">
@@ -1348,6 +1847,38 @@ export default function OrderDashboard() {
                   value={newOrderDetails.address}
                   onChange={(e) => setNewOrderDetails(prev => ({ ...prev, address: e.target.value }))}
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-emerald-500/10 resize-none"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Item Weight (kg) <span className="text-red-500">*</span></label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={newOrderDetails.item_weight}
+                  onChange={(e) => setNewOrderDetails(prev => ({ ...prev, item_weight: parseFloat(e.target.value) || 0.5 }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-emerald-500/10"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Item Quantity <span className="text-red-500">*</span></label>
+                <input
+                  type="number"
+                  value={newOrderDetails.item_quantity}
+                  onChange={(e) => setNewOrderDetails(prev => ({ ...prev, item_quantity: parseInt(e.target.value) || 1 }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-emerald-500/10"
+                />
+              </div>
+
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Special Instruction</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Deliver before 5 PM"
+                  value={newOrderDetails.special_instruction}
+                  onChange={(e) => setNewOrderDetails(prev => ({ ...prev, special_instruction: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-emerald-500/10"
                 />
               </div>
 
@@ -1386,6 +1917,210 @@ export default function OrderDashboard() {
                 className="flex-1 px-4 py-3 text-sm font-black text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-50"
               >
                 {isSubmittingOrder ? "Saving..." : "Add Order"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Create Store Modal ── */}
+      {createStoreModalOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => !isCreatingStore && setCreateStoreModalOpen(false)} />
+          
+          <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-8 animate-in zoom-in-95 duration-200 z-10">
+            <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+              <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
+                <Store className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900 tracking-tight">Create New Store</h3>
+                <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Add a new pickup location</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Store Name <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  placeholder="e.g. Main Branch"
+                  value={newStoreData.name}
+                  onChange={(e) => setNewStoreData(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Contact Name <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    value={newStoreData.contact_name}
+                    onChange={(e) => setNewStoreData(prev => ({ ...prev, contact_name: e.target.value }))}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Contact Phone <span className="text-red-500">*</span></label>
+                  <input
+                    type="text"
+                    value={newStoreData.contact_number}
+                    onChange={(e) => setNewStoreData(prev => ({ ...prev, contact_number: e.target.value }))}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Full Address <span className="text-red-500">*</span></label>
+                <textarea
+                  rows="2"
+                  value={newStoreData.address}
+                  onChange={(e) => setNewStoreData(prev => ({ ...prev, address: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10 resize-none"
+                />
+              </div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">City <span className="text-red-500">*</span></label>
+                  <select
+                    value={newStoreData.city_id}
+                    onChange={(e) => setNewStoreData(prev => ({ ...prev, city_id: e.target.value, zone_id: "", area_id: "" }))}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                  >
+                    <option value="">Select City</option>
+                    {pathaoCities.map(city => <option key={city.city_id} value={city.city_id}>{city.city_name}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Zone <span className="text-red-500">*</span></label>
+                  <select
+                    value={newStoreData.zone_id}
+                    onChange={(e) => setNewStoreData(prev => ({ ...prev, zone_id: e.target.value, area_id: "" }))}
+                    disabled={!newStoreData.city_id}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10 disabled:opacity-50"
+                  >
+                    <option value="">Select Zone</option>
+                    {pathaoZones.map(zone => <option key={zone.zone_id} value={zone.zone_id}>{zone.zone_name}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Area <span className="text-red-500">*</span></label>
+                  <select
+                    value={newStoreData.area_id}
+                    onChange={(e) => setNewStoreData(prev => ({ ...prev, area_id: e.target.value }))}
+                    disabled={!newStoreData.zone_id}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10 disabled:opacity-50"
+                  >
+                    <option value="">Select Area</option>
+                    {pathaoAreas.map(area => <option key={area.area_id} value={area.area_id}>{area.area_name}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-8 pt-4 border-t border-slate-100">
+              <button
+                disabled={isCreatingStore}
+                onClick={() => setCreateStoreModalOpen(false)}
+                className="flex-1 px-4 py-3 text-sm font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all active:scale-95 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={isCreatingStore || !newStoreData.name || !newStoreData.contact_name || !newStoreData.contact_number || !newStoreData.address || !newStoreData.city_id || !newStoreData.zone_id || !newStoreData.area_id}
+                onClick={handleCreateStore}
+                className="flex-1 px-4 py-3 text-sm font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {isCreatingStore ? "Creating..." : "Create Store"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── Tracking Details Modal ── */}
+      {trackingModalOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 overflow-y-auto">
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setTrackingModalOpen(false)} />
+          
+          {/* Dialog Container */}
+          <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-8 animate-in zoom-in-95 duration-200 border border-slate-100 z-10 max-h-[90vh] overflow-y-auto custom-scrollbar">
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+              <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
+                <Search className="w-6 h-6 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900 tracking-tight">Pathao Live Tracking</h3>
+                <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Real-time Delivery Status</p>
+              </div>
+            </div>
+
+            {loadingTracking ? (
+              <div className="py-12 flex flex-col items-center justify-center gap-3 text-sm text-slate-500 font-bold">
+                <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                Fetching tracking details...
+              </div>
+            ) : trackingDetails ? (
+              <div className="space-y-6">
+                {/* Consignment Status card */}
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Consignment ID</p>
+                    <p className="font-bold text-slate-800 text-sm">{trackingDetails.consignment_id}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Status</p>
+                    <span className="inline-block px-3 py-1 rounded-full text-xs font-black bg-indigo-50 text-indigo-700 uppercase tracking-wider">
+                      {trackingDetails.order_status}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Details */}
+                <div className="space-y-3.5 text-xs text-slate-700 font-medium">
+                  <div className="flex justify-between pb-2 border-b border-slate-100">
+                    <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Recipient Name</span>
+                    <span className="font-bold text-slate-900">{trackingDetails.recipient_name}</span>
+                  </div>
+                  <div className="flex justify-between pb-2 border-b border-slate-100">
+                    <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Phone Number</span>
+                    <span className="font-bold text-slate-900">{trackingDetails.recipient_phone}</span>
+                  </div>
+                  <div className="flex justify-between pb-2 border-b border-slate-100">
+                    <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Address</span>
+                    <span className="font-bold text-slate-900 text-right max-w-[250px]">{trackingDetails.recipient_address}</span>
+                  </div>
+                  {trackingDetails.price_plan && (
+                    <>
+                      <div className="flex justify-between pb-2 border-b border-slate-100">
+                        <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Delivery Fee</span>
+                        <span className="font-bold text-slate-900">৳ {trackingDetails.price_plan.delivery_fee}</span>
+                      </div>
+                      <div className="flex justify-between pb-2 border-b border-slate-100">
+                        <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Total Charge</span>
+                        <span className="font-bold text-indigo-600 text-sm">৳ {trackingDetails.price_plan.total_amount}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-6 text-sm text-red-500 font-bold">
+                Could not retrieve tracking information.
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="mt-8 pt-4 border-t border-slate-100">
+              <button
+                onClick={() => setTrackingModalOpen(false)}
+                className="w-full px-4 py-3 text-sm font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all active:scale-95"
+              >
+                Close
               </button>
             </div>
           </div>

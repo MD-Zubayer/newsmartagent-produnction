@@ -38,3 +38,50 @@ class PathaoBookingLog(models.Model):
 
     def __str__(self):
         return f"Booking {self.consignment_id} for Order #{self.order.id}"
+
+class PathaoCity(models.Model):
+    city_id = models.IntegerField(unique=True)
+    city_name = models.CharField(max_length=255)
+    
+    def __str__(self):
+        return self.city_name
+
+class PathaoZone(models.Model):
+    zone_id = models.IntegerField(unique=True)
+    zone_name = models.CharField(max_length=255)
+    city = models.ForeignKey(PathaoCity, on_delete=models.CASCADE, related_name='zones', to_field='city_id')
+    
+    def __str__(self):
+        return self.zone_name
+
+class PathaoArea(models.Model):
+    area_id = models.IntegerField(unique=True)
+    area_name = models.CharField(max_length=255)
+    zone = models.ForeignKey(PathaoZone, on_delete=models.CASCADE, related_name='areas', to_field='zone_id')
+    
+    def __str__(self):
+        return self.area_name
+
+
+class PathaoZonePrice(models.Model):
+    store_id = models.CharField(max_length=100)
+    city_id = models.IntegerField()
+    zone_id = models.IntegerField()
+    weight = models.FloatField(default=0.5)
+    
+    delivery_fee = models.DecimalField(max_digits=10, decimal_places=2)
+    cod_charge = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
+    discount = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('store_id', 'city_id', 'zone_id', 'weight')
+        indexes = [
+            models.Index(fields=['store_id', 'city_id', 'zone_id', 'weight']),
+        ]
+
+    def __str__(self):
+        return f"Store {self.store_id} - Zone {self.zone_id} ({self.weight}kg): {self.total_amount} BDT"
