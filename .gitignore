@@ -46,3 +46,4 @@ jwtauth/logs/*.log
 *.gz
 *.sql.gz
 backups/
+jwtauth/backups/*.sql.gz
