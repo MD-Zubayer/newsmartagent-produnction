@@ -1,7 +1,7 @@
 # webhooks/tasks.py
 
 from celery import shared_task
-import re, json, time, uuid, logging, hashlib, redis, requests
+import os, re, json, time, uuid, logging, hashlib, redis, requests
 from datetime import timedelta
 from aiAgent.models import AgentAI
 from django.db.models import Q
@@ -47,6 +47,42 @@ def setup_celery_logging(logger, **kwargs):
 logger = logging.getLogger(__name__)
 
 r = get_redis_client(db=0)
+
+BUTTON_VOICE_PLATFORMS = {'whatsapp', 'messenger', 'facebook_comment', 'instagram', 'telegram'}
+
+
+def _maybe_send_button_voice_hint(request_type, data, sender_id, page_id, effective_access_token, contact_obj):
+    """Send one periodic voice hint when control buttons are delivered externally."""
+    if not contact_obj or request_type not in BUTTON_VOICE_PLATFORMS:
+        return False
+
+    voice_file = os.getenv("BUTTON_CONTROL_VOICE_FILE", "on-human-mode.wav")
+    ttl_seconds = int(os.getenv("BUTTON_CONTROL_VOICE_TTL_SECONDS", str(30 * 24 * 60 * 60)))
+    cache_key = f"button_voice_hint_sent:{contact_obj.id}:{request_type}:{voice_file}"
+
+    try:
+        if r.get(cache_key):
+            return False
+
+        from aiAgent.business_logic.logic_handler import send_voice_notification
+
+        token = effective_access_token if request_type == 'telegram' else None
+        success = send_voice_notification(
+            sender_id=sender_id,
+            platform=request_type,
+            voice_file=voice_file,
+            agent_data=data,
+            page_id=page_id,
+            access_token=effective_access_token,
+            token=token
+        )
+
+        if success:
+            r.setex(cache_key, ttl_seconds, "1")
+        return success
+    except Exception as e:
+        logger.error(f"Failed to send button voice hint: {e}", exc_info=True)
+        return False
 
 
 def refresh_fb_page_token(fb_page):
@@ -260,19 +296,22 @@ def _send_platform_buttons_alone(request_type, data, sender_id, page_id, effecti
     if not contact_obj:
         return
     try:
+        sent = False
         if request_type == 'whatsapp':
             from aiAgent.business_logic.logic_handler import send_whatsapp_buttons
-            send_whatsapp_buttons(data, contact_obj)
+            sent = send_whatsapp_buttons(data, contact_obj)
         elif request_type == 'instagram':
             from aiAgent.business_logic.logic_handler import send_instagram_buttons
-            send_instagram_buttons(sender_id, page_id, effective_access_token, contact_obj)
+            sent = send_instagram_buttons(sender_id, page_id, effective_access_token, contact_obj)
         elif request_type == 'telegram':
             from aiAgent.business_logic.logic_handler import send_telegram_buttons
             chat_id = data.get('chat_id') or sender_id
-            send_telegram_buttons(chat_id, effective_access_token, contact_obj)
+            sent = send_telegram_buttons(chat_id, effective_access_token, contact_obj)
         elif request_type in ['messenger', 'facebook_comment']:
             from aiAgent.business_logic.logic_handler import send_messenger_buttons
-            send_messenger_buttons(sender_id, page_id, effective_access_token, contact_obj)
+            sent = send_messenger_buttons(sender_id, page_id, effective_access_token, contact_obj)
+        if sent:
+            _maybe_send_button_voice_hint(request_type, data, sender_id, page_id, effective_access_token, contact_obj)
     except Exception as e:
         logger.error(f"Failed to send standalone buttons: {e}")
 
@@ -285,13 +324,17 @@ def _deliver_reply_with_buttons(request_type, data, clean_reply, sender_id, page
             try:
                 from aiAgent.business_logic.logic_handler import send_whatsapp_buttons
                 delivered = send_whatsapp_buttons(data, contact_obj, reply_text=clean_reply)
-                if delivered: return True
+                if delivered:
+                    _maybe_send_button_voice_hint(request_type, data, sender_id, page_id, effective_access_token, contact_obj)
+                    return True
             except Exception as e:
                 logger.warning(f"Combined buttons failed: {e}")
         delivered = deliver_whatsapp_reply(data, clean_reply)
         if delivered and contact_obj:
             from aiAgent.business_logic.logic_handler import send_whatsapp_buttons
-            send_whatsapp_buttons(data, contact_obj)
+            buttons_sent = send_whatsapp_buttons(data, contact_obj)
+            if buttons_sent:
+                _maybe_send_button_voice_hint(request_type, data, sender_id, page_id, effective_access_token, contact_obj)
         return delivered
 
     elif request_type == 'instagram':
@@ -299,13 +342,17 @@ def _deliver_reply_with_buttons(request_type, data, clean_reply, sender_id, page
             try:
                 from aiAgent.business_logic.logic_handler import send_instagram_buttons
                 delivered = send_instagram_buttons(sender_id, page_id, effective_access_token, contact_obj, reply_text=clean_reply)
-                if delivered: return True
+                if delivered:
+                    _maybe_send_button_voice_hint(request_type, data, sender_id, page_id, effective_access_token, contact_obj)
+                    return True
             except Exception as e:
                 logger.warning(f"Combined buttons failed: {e}")
         delivered = deliver_instagram_reply(data, clean_reply, page_id, effective_access_token)
         if delivered and contact_obj:
             from aiAgent.business_logic.logic_handler import send_instagram_buttons
-            send_instagram_buttons(sender_id, page_id, effective_access_token, contact_obj)
+            buttons_sent = send_instagram_buttons(sender_id, page_id, effective_access_token, contact_obj)
+            if buttons_sent:
+                _maybe_send_button_voice_hint(request_type, data, sender_id, page_id, effective_access_token, contact_obj)
         return delivered
 
     elif request_type == 'telegram':
@@ -313,13 +360,17 @@ def _deliver_reply_with_buttons(request_type, data, clean_reply, sender_id, page
             try:
                 from aiAgent.business_logic.logic_handler import send_telegram_buttons
                 delivered = send_telegram_buttons(data.get('chat_id') or sender_id, effective_access_token, contact_obj, reply_text=clean_reply)
-                if delivered: return True
+                if delivered:
+                    _maybe_send_button_voice_hint(request_type, data, sender_id, page_id, effective_access_token, contact_obj)
+                    return True
             except Exception as e:
                 logger.warning(f"Combined buttons failed: {e}")
         delivered = deliver_telegram_reply(data, clean_reply, effective_access_token)
         if delivered and contact_obj:
             from aiAgent.business_logic.logic_handler import send_telegram_buttons
-            send_telegram_buttons(data.get('chat_id') or sender_id, effective_access_token, contact_obj)
+            buttons_sent = send_telegram_buttons(data.get('chat_id') or sender_id, effective_access_token, contact_obj)
+            if buttons_sent:
+                _maybe_send_button_voice_hint(request_type, data, sender_id, page_id, effective_access_token, contact_obj)
         return delivered
 
     elif request_type == 'youtube':
@@ -343,7 +394,9 @@ def _deliver_reply_with_buttons(request_type, data, clean_reply, sender_id, page
         delivered = deliver_facebook_reply(data, clean_reply, page_id, effective_access_token)
         if delivered and contact_obj:
             from aiAgent.business_logic.logic_handler import send_messenger_buttons
-            send_messenger_buttons(sender_id, page_id, effective_access_token, contact_obj)
+            buttons_sent = send_messenger_buttons(sender_id, page_id, effective_access_token, contact_obj)
+            if buttons_sent:
+                _maybe_send_button_voice_hint(request_type, data, sender_id, page_id, effective_access_token, contact_obj)
         return delivered
 
 def deliver_dashboard_reply(user_id, reply, msg_id):

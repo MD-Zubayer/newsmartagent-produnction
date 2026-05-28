@@ -632,7 +632,7 @@ class WhatsAppButtonClickView(APIView):
                 return Response({"error": "Unknown action"}, status=status.HTTP_400_BAD_REQUEST)
                 
             contact.save()
-            
+
             # Simple text response for now, can be a template later
             return Response({
                 "success": True, 
