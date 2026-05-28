@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { 
   FaBell, FaCheckCircle, FaInfoCircle, FaExclamationTriangle, 
   FaCreditCard, FaTrashAlt, FaSearch, FaChevronRight, FaTimes, 
-  FaEnvelopeOpen 
+  FaEnvelopeOpen, FaHeadset, FaRobot 
 } from "react-icons/fa";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useAuth } from "@/context/AuthContext";
@@ -21,6 +21,82 @@ export default function NotificationsPage() {
   
   // ডিলিট লোডিং স্টেট (কোন আইডি ডিলিট হচ্ছে তা ট্র্যাক করবে)
   const [isDeleting, setIsDeleting] = useState(null);
+  
+  // ভয়েস প্লে স্টেট - প্রতিটি notification এর জন্য ট্র্যাক করা
+  const [voicePlayedNotifications, setVoicePlayedNotifications] = useState(new Set());
+  const audioRef = useRef(null);
+  const [isPlayingVoice, setIsPlayingVoice] = useState(false);
+
+  // ভয়েস প্লে ফাংশন
+  const playVoice = async (voiceFileName) => {
+    try {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      
+      // API এর মাধ্যমে voice play করা (nginx এর through)
+      audioRef.current = new Audio(`/media/voice/${voiceFileName}`);
+      audioRef.current.volume = 1;
+      setIsPlayingVoice(true);
+      
+      audioRef.current.addEventListener('ended', () => {
+        setIsPlayingVoice(false);
+      });
+      
+      await audioRef.current.play().catch(error => {
+        console.error("Voice play error:", error);
+        setIsPlayingVoice(false);
+      });
+    } catch (error) {
+      console.error("Voice setup error:", error);
+      setIsPlayingVoice(false);
+    }
+  };
+
+  // নতুন notification এ ভয়েস অটোপ্লে করার ইফেক্ট
+  useEffect(() => {
+    if (notifications && notifications.length > 0) {
+      const latestNotification = notifications[0];
+      
+      // যদি এই notification এর voice এখনো play হয়নি তাহলে play করি
+      if (!voicePlayedNotifications.has(latestNotification.id)) {
+        const newPlayedSet = new Set(voicePlayedNotifications);
+        newPlayedSet.add(latestNotification.id);
+        setVoicePlayedNotifications(newPlayedSet);
+        
+        // সাধারণ notification sound বাজান
+        setTimeout(() => {
+          playVoice("on-ai-reply.wav");
+        }, 300);
+      }
+    }
+  }, [notifications, voicePlayedNotifications]);
+
+  // --- ৩. মানব সাহায্য বাটন ---
+  const handleHumanHelp = async () => {
+    playVoice("on-human-mode.wav");
+    
+    // Optional: আপনি চাইলে API কল করতে পারেন human help এর জন্য
+    // await api.post(`/aiAgent/human-help/${selectedNotification.contact_id}/`);
+    
+    toast.success("🙋 Human Help activated! Voice notification sent.", {
+      duration: 3000,
+      icon: "🎤"
+    });
+  };
+
+  // --- ৪. AI রিপ্লি বন্ধ করার বাটন ---
+  const handleAIReplyOff = async () => {
+    playVoice("off-ai-reply.wav");
+    
+    // Optional: আপনি চাইলে API কল করতে পারেন AI reply disable এর জন্য
+    // await api.post(`/aiAgent/toggle-auto-reply/${selectedNotification.contact_id}/`);
+    
+    toast.success("🔇 AI Reply disabled! Voice notification sent.", {
+      duration: 3000,
+      icon: "🎤"
+    });
+  };
 
   // --- ১. মার্ক অ্যাজ রিড ---
   const handleMarkAsRead = async (notification) => {
@@ -243,7 +319,28 @@ const handleDelete = async (id) => {
                 <h3 className="text-xl font-black text-slate-900 mb-4 uppercase tracking-tighter">Notification Detail</h3>
                 
                 <div className="bg-slate-50 p-6 rounded-2xl text-left mb-8">
-                   <p className="text-slate-600 leading-relaxed font-bold italic text-sm md:text-base italic">"{selectedNotification.message}"</p>
+                   <p className="text-slate-600 leading-relaxed font-bold italic text-sm md:text-base">{selectedNotification.message}</p>
+                </div>
+
+                {/* Action Buttons - Human Help & AI Reply Off */}
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                  <button 
+                    onClick={handleHumanHelp}
+                    disabled={isPlayingVoice}
+                    className="flex items-center justify-center gap-2 py-3 bg-cyan-500 hover:bg-cyan-600 disabled:bg-cyan-300 text-white font-bold text-[9px] uppercase tracking-widest rounded-xl transition-all shadow-lg"
+                  >
+                    <FaHeadset size={12} />
+                    Human Help
+                  </button>
+                  
+                  <button 
+                    onClick={handleAIReplyOff}
+                    disabled={isPlayingVoice}
+                    className="flex items-center justify-center gap-2 py-3 bg-purple-500 hover:bg-purple-600 disabled:bg-purple-300 text-white font-bold text-[9px] uppercase tracking-widest rounded-xl transition-all shadow-lg"
+                  >
+                    <FaRobot size={12} />
+                    AI Off
+                  </button>
                 </div>
 
                 <div className="flex flex-col gap-3">
