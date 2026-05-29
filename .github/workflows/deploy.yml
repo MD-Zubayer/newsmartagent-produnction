@@ -72,9 +72,13 @@ jobs:
 
       - name: "🏗️ Build New Image"
         run: |
-          echo "🔨 Building new images..."
-          # নতুন কোড অনুযায়ী ইমেজ বিল্ড করবে
-          docker compose build --pull
+          echo "🔨 Setting up Docker Buildx..."
+          # ডকারের নতুন বিল্ড ইঞ্জিন অ্যাক্টিভেট করা যা নেটওয়ার্ক এরর হ্যান্ডেল করতে পারে
+          docker buildx create --use || true
+
+          echo "🔨 Building new images with local cache fallback..."
+          # --pull এর বদলে আমরা লোকাল ক্যাশ প্রাধান্য দিচ্ছি যেন টোকেন/নেটওয়ার্ক এরর এড়ানো যায়
+          docker compose build --build-arg BUILDKIT_INLINE_CACHE=1
           
       - name: "🚢 Zero Downtime Deployment & Rollback"
         run: |
