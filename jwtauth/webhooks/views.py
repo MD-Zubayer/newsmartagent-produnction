@@ -95,16 +95,21 @@ def handle_button_action(action, sender_id, page_id, platform):
         )
         
         # Apply the action
+        voice_file = None
         if action == "HUMAN_HELP":
             contact.is_human_needed = True
             contact.is_auto_reply_enabled = False
+            voice_file = "on-human-mode.wav"
         elif action == "STOP_AI_REPLY":
             contact.is_auto_reply_enabled = False
+            voice_file = "off-ai-reply.wav"
         elif action == "ON_AI_REPLY":
             contact.is_auto_reply_enabled = True
+            voice_file = "on-ai-reply.wav"
         elif action == "RESOLVE_HUMAN":
             contact.is_human_needed = False
             contact.is_auto_reply_enabled = True
+            voice_file = "off-human-mode.wav"
             
         contact.save()
         logger.info(f"✅ Handled button action {action} for contact {contact.id} ({sender_id})")
@@ -124,22 +129,34 @@ def handle_button_action(action, sender_id, page_id, platform):
         # Delivery logic
         if platform == 'whatsapp':
             data = {'sender_id': sender_id, 'delivery_jid': sender_id, 'sessionId': f"user_{agent.user.id}"}
-            from aiAgent.business_logic.logic_handler import send_whatsapp_buttons
+            from aiAgent.business_logic.logic_handler import send_whatsapp_buttons, send_voice_notification
             send_whatsapp_buttons(data, contact, confirmation_text)
+            # Send voice notification for button action
+            if voice_file:
+                send_voice_notification(sender_id, platform, voice_file, agent_data=data)
         elif platform == 'instagram':
             fb_page = FacebookPage.objects.filter(page_id=agent.page_id, is_active=True).first()
             token = fb_page.access_token if fb_page else agent.access_token
-            from aiAgent.business_logic.logic_handler import send_instagram_buttons
+            from aiAgent.business_logic.logic_handler import send_instagram_buttons, send_voice_notification
             send_instagram_buttons(sender_id, page_id, token, contact, confirmation_text)
+            # Send voice notification for button action
+            if voice_file:
+                send_voice_notification(sender_id, platform, voice_file, page_id=page_id, access_token=token)
         elif platform == 'telegram':
             token = agent.access_token
-            from aiAgent.business_logic.logic_handler import send_telegram_buttons
+            from aiAgent.business_logic.logic_handler import send_telegram_buttons, send_voice_notification
             send_telegram_buttons(sender_id, token, contact, confirmation_text)
+            # Send voice notification for button action
+            if voice_file:
+                send_voice_notification(sender_id, platform, voice_file, token=token, agent_data={'chat_id': sender_id})
         elif platform == 'messenger':
             fb_page = FacebookPage.objects.filter(page_id=agent.page_id, is_active=True).first()
             token = fb_page.access_token if fb_page else agent.access_token
-            from aiAgent.business_logic.logic_handler import send_messenger_buttons
+            from aiAgent.business_logic.logic_handler import send_messenger_buttons, send_voice_notification
             send_messenger_buttons(sender_id, page_id, token, contact, confirmation_text)
+            # Send voice notification for button action
+            if voice_file:
+                send_voice_notification(sender_id, platform, voice_file, page_id=page_id, access_token=token)
             
         # Remove buttons or send new ones (optional)
         
@@ -174,6 +191,8 @@ def ai_webhook(request):
     # If it's WhatsApp, prioritize 'phone' or 'from' over a generic 'sender_id' if present
     sender_id = data.get('sender_id')
     if request_type == 'whatsapp':
+        logger.info(f"📱 [WhatsApp] Processing WhatsApp message")
+        logger.info(f"   From: {data.get('from')}, Phone: {data.get('phone')}, Message: {data.get('message', '')[:60]}")
         # WhatsApp specific: 'from' is often more accurate (contains @s.whatsapp.net)
         wa_sender = data.get('from') or data.get('phone')
         if wa_sender:
@@ -183,6 +202,7 @@ def ai_webhook(request):
                 sender_id = f"{wa_str}@s.whatsapp.net"
             else:
                 sender_id = wa_str
+            logger.info(f"   ✅ Extracted sender_id: {sender_id}")
     
     logger.info(f"🔍 [ai_webhook] Type: {request_type}, Extracted Sender: {sender_id}")
 

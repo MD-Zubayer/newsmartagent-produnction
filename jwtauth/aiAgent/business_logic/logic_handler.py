@@ -898,6 +898,215 @@ def send_whatsapp_buttons(data, contact, reply_text="\u200e"):
         return False
 
 
+# ============================================================================
+# 🎤 VOICE NOTIFICATION FUNCTIONS - Send Voice Files to All Platforms
+# ============================================================================
+
+def send_voice_notification(sender_id, platform, voice_file, agent_data=None, page_id=None, access_token=None, token=None):
+    """
+    Send voice notification to user on their platform
+    
+    Args:
+        sender_id: User's ID on the platform
+        platform: 'whatsapp', 'messenger', 'facebook_comment', 'instagram', 'telegram', etc
+        voice_file: Filename of voice (e.g., 'on-human-mode.wav', 'off-ai-reply.wav')
+        agent_data: Optional dict with additional platform-specific data
+        page_id: Facebook page ID (for messenger/instagram)
+        access_token: Facebook access token
+        token: Telegram bot token
+    
+    Returns:
+        bool: True if voice was sent successfully
+    """
+    
+    if not sender_id or not voice_file:
+        logger.error("🎤 Voice send failed: Missing sender_id or voice_file")
+        return False
+    
+    agent_data = agent_data or {}
+    platform = (platform or 'whatsapp').lower()
+    
+    try:
+        if platform == 'whatsapp':
+            return _send_whatsapp_voice(sender_id, voice_file, agent_data)
+        elif platform == 'messenger':
+            return _send_messenger_voice(sender_id, voice_file, page_id, access_token)
+        elif platform == 'facebook_comment':
+            return _send_messenger_voice(sender_id, voice_file, page_id, access_token)
+        elif platform == 'instagram':
+            return _send_instagram_voice(sender_id, voice_file, page_id, access_token)
+        elif platform == 'telegram':
+            return _send_telegram_voice(sender_id, voice_file, token, agent_data)
+        else:
+            logger.warning(f"🎤 Voice delivery not supported for platform: {platform}")
+            return False
+    except Exception as e:
+        logger.error(f"🎤 Voice notification send error: {e}", exc_info=True)
+        return False
+
+
+def get_voice_media_url(voice_file, platform=None):
+    """Return an environment-aware URL for voice files."""
+    import os
+
+    voice_file = str(voice_file)
+    selected_file = voice_file
+    if platform and platform.lower() == 'whatsapp' and voice_file.lower().endswith('.wav'):
+        selected_file = voice_file[:-4] + '.ogg'
+        logger.debug(f"🎤 WhatsApp target detected; using OGG voice file {selected_file}")
+
+    explicit_voice_url = os.getenv('VOICE_MEDIA_URL')
+    if explicit_voice_url:
+        url = explicit_voice_url.rstrip('/') + '/' + selected_file
+        logger.debug(f"🎤 Voice media resolved via VOICE_MEDIA_URL: {url}")
+        return url
+
+    minio_ext_endpoint = os.getenv('MINIO_EXTERNAL_ENDPOINT', '').rstrip('/')
+    bucket = os.getenv('MINIO_STORAGE_BUCKET_NAME', 'newsmartagent-media')
+    if minio_ext_endpoint:
+        url = f"{minio_ext_endpoint}/{bucket}/{selected_file}"
+        logger.debug(f"🎤 Voice media resolved via MINIO_EXTERNAL_ENDPOINT: {url}")
+        return url
+
+    media_url = os.getenv('MEDIA_URL', '/media/')
+    url = f"{media_url.rstrip('/')}/voice/{selected_file}"
+    logger.debug(f"🎤 Voice media resolved via MEDIA_URL fallback: {url}")
+    return url
+
+
+def _send_whatsapp_voice(sender_id, voice_file, data):
+    """Send voice file via WhatsApp through n8n webhook"""
+    import os
+    webhook_url = os.getenv("N8N_WHATSAPP_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/whatsapp-delivery")
+    
+    final_target = data.get('delivery_jid') or sender_id
+    
+    payload = {
+        "to": str(final_target),
+        "delivery_jid": str(data.get('delivery_jid', final_target)),
+        "phone": str(sender_id),
+        "sender_id": str(sender_id),
+        "sessionId": str(data.get('sessionId', '')),
+        "type": "whatsapp",
+        "message_type": "audio",  # Important: Tell n8n this is audio
+        "voice_file": str(voice_file),
+        "media_url": get_voice_media_url(voice_file, platform='whatsapp'),
+    }
+
+    try:
+        logger.info(f'🎤 [Logic] Sending WhatsApp voice: {voice_file} to {sender_id}')
+        response = requests.post(webhook_url, json=payload, timeout=15)
+        if response.status_code == 200:
+            logger.info(f'🎤 [Logic] WhatsApp voice delivery success: {voice_file}')
+            return True
+        else:
+            logger.error(f'🎤 [Logic] WhatsApp voice delivery failed: {response.status_code} - {response.text}')
+            return False
+    except Exception as e:
+        logger.error(f"🎤 WhatsApp voice delivery error: {e}")
+        return False
+
+
+def _send_messenger_voice(sender_id, voice_file, page_id, access_token):
+    """Send voice file via Messenger/Facebook through n8n webhook"""
+    import os
+    webhook_url = os.getenv("N8N_FACEBOOK_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/fb-comment-message-delivery")
+    
+    if not page_id or not access_token:
+        logger.error("🎤 Messenger voice send failed: Missing page_id or access_token")
+        return False
+    
+    payload = {
+        "sender_id": str(sender_id),
+        "page_id": str(page_id),
+        "page_access_token": str(access_token),
+        "type": "messenger",
+        "message_type": "audio",  # Important: Tell n8n this is audio
+        "voice_file": str(voice_file),
+        "media_url": get_voice_media_url(voice_file, platform='messenger'),
+    }
+    
+    try:
+        logger.info(f'🎤 [Logic] Sending Messenger voice: {voice_file} to {sender_id}')
+        response = requests.post(webhook_url, json=payload, timeout=15)
+        if response.status_code == 200:
+            logger.info(f'🎤 [Logic] Messenger voice delivery success: {voice_file}')
+            return True
+        else:
+            logger.error(f'🎤 [Logic] Messenger voice delivery failed: {response.status_code} - {response.text}')
+            return False
+    except Exception as e:
+        logger.error(f"🎤 Messenger voice delivery error: {e}")
+        return False
+
+
+def _send_instagram_voice(sender_id, voice_file, page_id, access_token):
+    """Send voice file via Instagram through n8n webhook"""
+    import os
+    webhook_url = os.getenv("N8N_INSTAGRAM_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/instagram-delivery")
+    
+    if not page_id or not access_token:
+        logger.error("🎤 Instagram voice send failed: Missing page_id or access_token")
+        return False
+    
+    payload = {
+        "sender_id": str(sender_id),
+        "page_id": str(page_id),
+        "page_access_token": str(access_token),
+        "type": "instagram",
+        "message_type": "audio",  # Important: Tell n8n this is audio
+        "voice_file": str(voice_file),
+        "media_url": get_voice_media_url(voice_file, platform='instagram'),
+    }
+    
+    try:
+        logger.info(f'🎤 [Logic] Sending Instagram voice: {voice_file} to {sender_id}')
+        response = requests.post(webhook_url, json=payload, timeout=15)
+        if response.status_code == 200:
+            logger.info(f'🎤 [Logic] Instagram voice delivery success: {voice_file}')
+            return True
+        else:
+            logger.error(f'🎤 [Logic] Instagram voice delivery failed: {response.status_code} - {response.text}')
+            return False
+    except Exception as e:
+        logger.error(f"🎤 Instagram voice delivery error: {e}")
+        return False
+
+
+def _send_telegram_voice(sender_id, voice_file, token, data):
+    """Send voice file via Telegram through n8n webhook"""
+    import os
+    webhook_url = os.getenv("N8N_TELEGRAM_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/telegram-delivery")
+    
+    chat_id = data.get('chat_id') or sender_id
+    
+    if not chat_id or not token:
+        logger.error("🎤 Telegram voice send failed: Missing chat_id or token")
+        return False
+    
+    payload = {
+        "chat_id": str(chat_id),
+        "sender_id": str(sender_id),
+        "access_token": str(token),
+        "platform": "telegram",
+        "message_type": "audio",  # Important: Tell n8n this is audio
+        "voice_file": str(voice_file),
+        "media_url": get_voice_media_url(voice_file, platform='telegram'),
+    }
+    
+    try:
+        logger.info(f'🎤 [Logic] Sending Telegram voice: {voice_file} to {chat_id}')
+        response = requests.post(webhook_url, json=payload, timeout=15)
+        if response.status_code == 200:
+            logger.info(f'🎤 [Logic] Telegram voice delivery success: {voice_file}')
+            return True
+        else:
+            logger.error(f'🎤 [Logic] Telegram voice delivery failed: {response.status_code} - {response.text}')
+            return False
+    except Exception as e:
+        logger.error(f"🎤 Telegram voice delivery error: {e}")
+        return False
+
 def deliver_dashboard_reply(user_id, reply_text, message_id):
     """Deliver final reply to the dashboard via WebSocket and update the log"""
     try:

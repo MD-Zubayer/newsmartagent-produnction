@@ -3,6 +3,10 @@
         "/^cd /home/md-zubayer/newsmartagent/production/jwtauth && python3 -m py_compile aiAgent/models\\.py$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^node -e \"const fs=require\\('fs'\\);const parser=require\\('@babel/parser'\\);const f='nextjs/app/\\(dashboard\\)/dashboard/offers/page\\.jsx';try\\{parser\\.parse\\(fs\\.readFileSync\\(f,'utf8'\\),\\{sourceType:'module',plugins:\\['jsx','typescript'\\]\\}\\);console\\.log\\('OK'\\)\\}catch\\(e\\)\\{console\\.error\\('ERROR',e\\.message,'line',e\\.loc&&e\\.loc\\.line\\)\\}\"$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     }
 }

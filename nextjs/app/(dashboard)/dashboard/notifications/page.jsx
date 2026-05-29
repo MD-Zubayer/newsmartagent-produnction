@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { 
   FaBell, FaCheckCircle, FaInfoCircle, FaExclamationTriangle, 
   FaCreditCard, FaTrashAlt, FaSearch, FaChevronRight, FaTimes, 
-  FaEnvelopeOpen 
+  FaEnvelopeOpen, FaHeadset, FaRobot 
 } from "react-icons/fa";
 import { useNotifications } from "@/hooks/useNotifications";
 import { useAuth } from "@/context/AuthContext";
@@ -21,6 +21,28 @@ export default function NotificationsPage() {
   
   // ডিলিট লোডিং স্টেট (কোন আইডি ডিলিট হচ্ছে তা ট্র্যাক করবে)
   const [isDeleting, setIsDeleting] = useState(null);
+  
+  // --- ৩. মানব সাহায্য বাটন ---
+  const handleHumanHelp = async () => {
+    // Optional: আপনি চাইলে API কল করতে পারেন human help এর জন্য
+    // await api.post(`/aiAgent/human-help/${selectedNotification.contact_id}/`);
+    
+    toast.success("🙋 Human Help activated.", {
+      duration: 3000,
+      icon: "🙋"
+    });
+  };
+
+  // --- ৪. AI রিপ্লি বন্ধ করার বাটন ---
+  const handleAIReplyOff = async () => {
+    // Optional: আপনি চাইলে API কল করতে পারেন AI reply disable এর জন্য
+    // await api.post(`/aiAgent/toggle-auto-reply/${selectedNotification.contact_id}/`);
+    
+    toast.success("🔇 AI Reply disabled.", {
+      duration: 3000,
+      icon: "🔇"
+    });
+  };
 
   // --- ১. মার্ক অ্যাজ রিড ---
   const handleMarkAsRead = async (notification) => {
@@ -243,7 +265,26 @@ const handleDelete = async (id) => {
                 <h3 className="text-xl font-black text-slate-900 mb-4 uppercase tracking-tighter">Notification Detail</h3>
                 
                 <div className="bg-slate-50 p-6 rounded-2xl text-left mb-8">
-                   <p className="text-slate-600 leading-relaxed font-bold italic text-sm md:text-base italic">"{selectedNotification.message}"</p>
+                   <p className="text-slate-600 leading-relaxed font-bold italic text-sm md:text-base">{selectedNotification.message}</p>
+                </div>
+
+                {/* Action Buttons - Human Help & AI Reply Off */}
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                  <button 
+                    onClick={handleHumanHelp}
+                    className="flex items-center justify-center gap-2 py-3 bg-cyan-500 hover:bg-cyan-600 text-white font-bold text-[9px] uppercase tracking-widest rounded-xl transition-all shadow-lg"
+                  >
+                    <FaHeadset size={12} />
+                    Human Help
+                  </button>
+                  
+                  <button 
+                    onClick={handleAIReplyOff}
+                    className="flex items-center justify-center gap-2 py-3 bg-purple-500 hover:bg-purple-600 text-white font-bold text-[9px] uppercase tracking-widest rounded-xl transition-all shadow-lg"
+                  >
+                    <FaRobot size={12} />
+                    AI Off
+                  </button>
                 </div>
 
                 <div className="flex flex-col gap-3">

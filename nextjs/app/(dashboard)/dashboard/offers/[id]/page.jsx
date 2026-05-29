@@ -64,7 +64,8 @@ export default function OfferDetailsPage() {
         <FaChevronLeft /> Back to Offers
       </Link>
 
-      <div className="bg-white rounded-[2rem] md:rounded-[3.5rem] p-6 md:p-12 shadow-xl shadow-slate-100/50 border border-slate-50">
+      <div className="p-2 rounded-[2.5rem] bg-gradient-to-br from-indigo-100/30 via-sky-50 to-pink-100/20">
+          <div className="bg-white rounded-[2rem] md:rounded-[3.5rem] p-6 md:p-12 shadow-xl shadow-slate-100/50 border border-slate-50">
         
         {/* Header Section */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10 border-b border-slate-50 pb-10">
@@ -133,6 +134,7 @@ export default function OfferDetailsPage() {
             </button>
             </Link>
         </div>
+          </div>
       </div>
     </div>
   );
