@@ -781,7 +781,10 @@ function HomeIntegrationCard({ Icon, title, desc, cta, color, cardId, activeScro
   return (
     <motion.article
       ref={cardRef}
-      variants={fadeInUp}
+      initial={{ opacity: 0, x: 40 }}
+      whileInView={{ opacity: 1, x: 0 }}
+      viewport={{ once: true, amount: 0.3 }}
+      transition={{ duration: 0.85, ease: "easeOut" }}
       whileHover={{ y: -8 }}
       className="group cursor-pointer h-full home-glow-card"
       data-active-glow={isActive ? "true" : "false"}
@@ -872,7 +875,10 @@ function HomeServiceCard({ icon, title, desc, learnMoreText, color, cardId, acti
   return (
     <motion.div
       ref={cardRef}
-      variants={fadeInUp}
+      initial={{ opacity: 0, y: 40, scale: 0.96 }}
+      whileInView={{ opacity: 1, y: 0, scale: 1 }}
+      viewport={{ once: true, amount: 0.25 }}
+      transition={{ duration: 0.85, ease: "easeOut" }}
       whileHover={{ y: -8 }}
       className="group cursor-pointer h-full home-glow-card"
       data-active-glow={isActive ? "true" : "false"}
@@ -961,6 +967,10 @@ function HomeFeatureCard({ icon, title, desc, badgeText, color, cardId, activeSc
   return (
     <motion.div
       ref={cardRef}
+      initial={{ opacity: 0, y: -30 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.3 }}
+      transition={{ duration: 0.85, ease: "easeOut" }}
       whileHover={{ y: -6 }}
       className="group cursor-pointer home-glow-card"
       data-active-glow={isActive ? "true" : "false"}
@@ -1046,6 +1056,10 @@ function HomeContactCard({ icon, title, value, color, cardId, activeScrollCard, 
   return (
     <motion.div
       ref={cardRef}
+      initial={{ opacity: 0, x: -40 }}
+      whileInView={{ opacity: 1, x: 0 }}
+      viewport={{ once: true, amount: 0.25 }}
+      transition={{ duration: 0.85, ease: "easeOut" }}
       whileHover={{ x: 8 }}
       className="group cursor-pointer w-full home-glow-card"
       data-active-glow={isActive ? "true" : "false"}

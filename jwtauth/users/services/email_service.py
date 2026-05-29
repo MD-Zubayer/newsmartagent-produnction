@@ -43,15 +43,20 @@ from datetime import datetime
 
 year = datetime.now().year
 
-def send_reset_email(to_email, reset_link):
+def send_reset_email(to_email, web_reset_link, mobile_reset_link=None):
 
    subject = "🔒 Action Required: Reset Your New Smart Agent Password"
+
+   if mobile_reset_link is None:
+       mobile_reset_link = web_reset_link
+
+   intent_link = mobile_reset_link.replace("newsmartagentmobaile://", "intent://", 1) + "#Intent;scheme=newsmartagentmobaile;package=com.newsmartagent.mobile;end"
 
 # টেক্সট ভার্সন (যদি ইমেইল ক্লায়েন্ট HTML সাপোর্ট না করে)
    message = (
     "Hello 👋\n\n"
     "We received a request to reset the password for your New Smart Agent account.\n\n"
-    f"Reset Link: {reset_link}\n\n"
+    f"Reset Link: {web_reset_link}\n\n"
     "⏳ This link expires in 1 hour.\n\n"
     "If you didn’t request this, you can safely ignore this email.\n\n"
     "— New Smart Agent Team"
@@ -89,12 +94,21 @@ def send_reset_email(to_email, reset_link):
             <table border="0" cellspacing="0" cellpadding="0">
               <tr>
                 <td align="center" bgcolor="#4f46e5" style="border-radius:16px;">
-                  <a href="{reset_link}" style="padding: 18px 40px; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 900; display: inline-block;">Reset Password</a>
+                  <a href="{mobile_reset_link}" style="padding: 18px 40px; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 900; display: inline-block;">Reset Password</a>
                 </td>
               </tr>
             </table>
 
-            <p style="color:#94a3b8; font-size:11px; margin-top:40px; text-transform:uppercase; letter-spacing:1.5px; font-weight:800;">
+            <p style="color:#475569; font-size:14px; line-height:22px; margin-top:24px;">
+              If you are on Android, tap this link if the button does not open the app:<br>
+              <a href="{intent_link}" style="color:#2563eb; text-decoration:none;">Open in App</a>
+            </p>
+            <p style="color:#475569; font-size:14px; line-height:22px; margin-top:12px;">
+              If that still fails, use this web link instead:<br>
+              <a href="{web_reset_link}" style="color:#2563eb; text-decoration:none;">{web_reset_link}</a>
+            </p>
+
+            <p style="color:#94a3b8; font-size:11px; margin-top:24px; text-transform:uppercase; letter-spacing:1.5px; font-weight:800;">
               🛡 Secured by SSL • ✅ New Smart Agent
             </p>
           </td>

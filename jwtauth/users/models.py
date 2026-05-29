@@ -340,6 +340,15 @@ class CustomerOrder(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     extra_info = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=20,choices=STATUS_CHOICES, default='pending')
+    
+    # Pathao Booking Fields
+    city_id = models.CharField(max_length=20, null=True, blank=True)
+    zone_id = models.CharField(max_length=20, null=True, blank=True)
+    area_id = models.CharField(max_length=20, null=True, blank=True)
+    item_weight = models.FloatField(default=0.5)
+    item_quantity = models.IntegerField(default=1)
+    special_instruction = models.TextField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
