@@ -21,7 +21,7 @@ services:
     restart: always
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 10s
+      interval: 100s
       timeout: 5s
       retries: 5
     logging: *default-logging
@@ -37,7 +37,7 @@ services:
     restart: always
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
+      interval: 100s
       timeout: 5s
       retries: 5
     logging: *default-logging
@@ -78,6 +78,7 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - REDIS_URL=${REDIS_URL}
+      - VOICE_MEDIA_URL=${VOICE_MEDIA_URL}
       - FB_APP_ID=${FB_APP_ID}
       - FB_APP_SECRET=${FB_APP_SECRET}
       - FB_REDIRECT_URI=${FB_REDIRECT_URI}
@@ -93,7 +94,7 @@ services:
     restart: always
     healthcheck:
       test: ["CMD-SHELL", "python -c 'import socket; s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.connect((\"localhost\", 8000))' || exit 1"]
-      interval: 15s
+      interval: 150s
       timeout: 10s
       retries: 3
     deploy:
@@ -115,7 +116,7 @@ services:
     restart: always
     healthcheck:
       test: ["CMD-SHELL", "node -e \"const http = require('http'); const req = http.get('http://127.0.0.1:3000/frontend-health', (res) => { if (res.statusCode === 200) process.exit(0); else process.exit(1); }); req.on('error', () => process.exit(1));\""]
-      interval: 15s
+      interval: 150s
       timeout: 10s
       retries: 3
     logging: *default-logging
@@ -153,7 +154,7 @@ services:
     restart: always
     healthcheck:
       test: ["CMD-SHELL", "nginx -t && wget --no-verbose --tries=1 --spider http://127.0.0.1:80 || exit 1"]
-      interval: 15s
+      interval: 150s
       timeout: 10s
       retries: 3
     logging: *default-logging
@@ -175,6 +176,7 @@ services:
     environment:
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - REDIS_URL=${REDIS_URL}
+      - VOICE_MEDIA_URL=${VOICE_MEDIA_URL}
       - GOOGLE_DRIVE_LOG_FOLDER_ID=${GOOGLE_DRIVE_LOG_FOLDER_ID}
       - GOOGLE_DRIVE_LOG_SUBFOLDER=${GOOGLE_DRIVE_LOG_SUBFOLDER}
       - GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE=/app/gdrive_key.json
@@ -203,6 +205,7 @@ services:
     environment:
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       - REDIS_URL=${REDIS_URL}
+      - VOICE_MEDIA_URL=${VOICE_MEDIA_URL}
       - GOOGLE_DRIVE_LOG_FOLDER_ID=${GOOGLE_DRIVE_LOG_FOLDER_ID}
       - GOOGLE_DRIVE_LOG_SUBFOLDER=${GOOGLE_DRIVE_LOG_SUBFOLDER}
       - GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE=/app/gdrive_key.json
@@ -225,10 +228,14 @@ services:
       N8N_URL: https://${N8N_DOMAIN}
       WEBHOOK_URL: https://${N8N_DOMAIN}
       N8N_TRUST_PROXY: "true"
-      EXPLICIT_TRUST_PROXY: "true"
+      TRUST_PROXY: "1"
+      N8N_LOG_LEVEL: "debug"
+      N8N_EXPRESS_TRUST_PROXY: "true"
+      
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "false"
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
       N8N_PROTOCOL: https
+      N8N_DISABLE_UI_RATE_LIMITING_DISABLED: "true"
       GENERIC_TIMEZONE: Asia/Dhaka
       NODE_OPTIONS: --max-old-space-size=2048
       DB_TYPE: postgresdb
@@ -247,6 +254,9 @@ services:
       update_config:
         order: start-first
     restart: always 
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     logging: *default-logging
     hostname: newsmartagent-n8n
     networks:
@@ -301,7 +311,8 @@ services:
       - SYNC_AGENT_URL=http://backend:8000/api/whatsapp/sync-agent/
       - BAILEYS_API_SECRET=${BAILEYS_API_SECRET}
       - BAILEYS_API_URL=http://baileys:3001
-      - LOG_LEVEL=info
+      - LOG_LEVEL=debug
+      - NODE_ENV=development
     volumes:
       - baileys_auth:/app/auth_info_baileys
     depends_on:

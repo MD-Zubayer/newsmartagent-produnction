@@ -374,6 +374,13 @@ class Contact(models.Model):
     name = models.CharField(max_length=255, blank=True, null=True)
     push_name = models.CharField(max_length=255, blank=True, null=True)
     # Use non-expiring public URLs for dashboard rendering; WhatsApp sync keeps uploading here.
+    profile_photo = models.ImageField(
+        upload_to='contact_profiles/',
+        storage=ContactProfileStorage(),
+        null=True,
+        blank=True,
+    )
+    profile_photo_url = models.CharField(max_length=500, blank=True, null=True)
     profile_picture = models.ImageField(
         upload_to='contact_profiles/',
         storage=ContactProfileStorage(),
@@ -381,6 +388,7 @@ class Contact(models.Model):
         blank=True,
     )
     profile_picture_hash = models.CharField(max_length=64, blank=True, null=True, help_text="MD5 hash to prevent duplicate MinIO uploads")
+    heard_voice_warnings = models.JSONField(default=list, blank=True)
     is_auto_reply_enabled = models.BooleanField(default=True)
     custom_prompt = models.TextField(blank=True, null=True, help_text="Custom system prompt for this specific contact")
     custom_instructions = models.TextField(blank=True, null=True, help_text="Additional instructions for this contact")
