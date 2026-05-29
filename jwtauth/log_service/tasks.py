@@ -14,6 +14,24 @@ from django.core.mail import send_mail
 
 logger = logging.getLogger(__name__)
 
+INVALID_DRIVE_FOLDER_IDS = {
+    '',
+    'your_log_folder_id_here',
+    'your_log_folder_id',
+    'default',
+    'none',
+    'null',
+}
+
+
+def normalize_drive_folder_id(folder_id):
+    if not folder_id:
+        return None
+    candidate = str(folder_id).strip()
+    if candidate.lower() in INVALID_DRIVE_FOLDER_IDS:
+        return None
+    return candidate
+
 def send_upload_notification(subject, message_body):
     """
     আপনার ইমেইলে নোটিফিকেশন পাঠানোর জন্য হেল্পার ফাংশন।
@@ -41,10 +59,14 @@ def sync_logs_to_drive(self):
     # Lazy import যাতে Drive service শুধু প্রয়োজনে load হয়
     from log_service.google_drive import get_or_create_folder, upload_or_update_file
 
-    root_folder_id = getattr(settings, 'GOOGLE_DRIVE_LOG_FOLDER_ID', None)
+    root_folder_id = normalize_drive_folder_id(
+        os.environ.get('GOOGLE_DRIVE_LOG_FOLDER_ID') or getattr(settings, 'GOOGLE_DRIVE_LOG_FOLDER_ID', None)
+    )
     if not root_folder_id:
-        logger.warning("GOOGLE_DRIVE_LOG_FOLDER_ID settings-এ নেই। Log sync বন্ধ।")
-        return {'status': 'skipped', 'reason': 'no folder id'}
+        logger.warning(
+            "Invalid or missing GOOGLE_DRIVE_LOG_FOLDER_ID environment variable. Log sync বন্ধ।"
+        )
+        return {'status': 'skipped', 'reason': 'invalid folder id'}
 
     log_dir = getattr(settings, 'LOG_DIR', os.path.join(settings.BASE_DIR, 'logs'))
 
@@ -57,7 +79,10 @@ def sync_logs_to_drive(self):
     # Sub-folder তৈরি: "newsmartagent-logs"
     try:
         sub_folder_id = get_or_create_folder(
-            folder_name=getattr(settings, 'GOOGLE_DRIVE_LOG_SUBFOLDER', 'newsmartagent-logs'),
+            folder_name=os.environ.get(
+                'GOOGLE_DRIVE_LOG_SUBFOLDER',
+                getattr(settings, 'GOOGLE_DRIVE_LOG_SUBFOLDER', 'newsmartagent-logs')
+            ),
             parent_folder_id=root_folder_id
         )
     except Exception as e:
@@ -113,7 +138,11 @@ def backup_db_to_drive():
         if result.returncode != 0:
             return {'status': 'error', 'reason': f"pg_dump failed: {result.stderr}"}
 
-        root_folder_id = getattr(settings, 'GOOGLE_DRIVE_LOG_FOLDER_ID', None)
+        root_folder_id = normalize_drive_folder_id(
+            os.environ.get('GOOGLE_DRIVE_LOG_FOLDER_ID') or getattr(settings, 'GOOGLE_DRIVE_LOG_FOLDER_ID', None)
+        )
+        if not root_folder_id:
+            raise ValueError("Invalid or missing GOOGLE_DRIVE_LOG_FOLDER_ID for database backup")
         
         # Sub-folder: "database-backups"
         folder_id = get_or_create_folder(
@@ -182,7 +211,11 @@ def backup_redis_to_drive():
             return {'status': 'error', 'reason': f"Redis CLI failed: {result.stderr}"}
 
         # Google Drive Integration
-        root_folder_id = getattr(settings, 'GOOGLE_DRIVE_LOG_FOLDER_ID', None)
+        root_folder_id = normalize_drive_folder_id(
+            os.environ.get('GOOGLE_DRIVE_LOG_FOLDER_ID') or getattr(settings, 'GOOGLE_DRIVE_LOG_FOLDER_ID', None)
+        )
+        if not root_folder_id:
+            raise ValueError("Invalid or missing GOOGLE_DRIVE_LOG_FOLDER_ID for redis backup")
         
         # Sub-folder: "redis-backups"
         folder_id = get_or_create_folder(
