@@ -32,8 +32,25 @@ jobs:
           mkdir -p /home/ubuntu/configs
           
           # service_account.json কপি করুন
-          if [ -f ~/service_account.json ]; then
-            cp ~/service_account.json /home/ubuntu/configs/service_account.json
+          if [ -d "$HOME/service_account.json" ]; then
+            echo "⚠️  Found $HOME/service_account.json as a directory, expected a JSON file"
+            json_files=$(find "$HOME/service_account.json" -maxdepth 1 -type f -name '*.json' | sort)
+            if [ -n "$json_files" ]; then
+              echo "ℹ️  JSON file(s) found inside the directory:"
+              echo "$json_files"
+              if [ "$(echo "$json_files" | wc -l)" -eq 1 ]; then
+                cp "$(echo "$json_files" | head -n 1)" /home/ubuntu/configs/service_account.json
+                echo "✅ Copied JSON file from directory to /home/ubuntu/configs/service_account.json"
+              else
+                echo "🚨 Multiple JSON files found inside $HOME/service_account.json; cannot determine which one to use"
+                exit 1
+              fi
+            else
+              echo "🚨 No JSON files found inside $HOME/service_account.json"
+              exit 1
+            fi
+          elif [ -f "$HOME/service_account.json" ]; then
+            cp "$HOME/service_account.json" /home/ubuntu/configs/service_account.json
             echo "✅ Service account copied to /home/ubuntu/configs/"
             
             # ফাইল ভ্যালিডেশন
@@ -43,7 +60,7 @@ jobs:
               echo "⚠️  Warning: Service account may not be valid JSON"
             fi
           else
-            echo "⚠️  Warning: ~/service_account.json not found, using existing config"
+            echo "⚠️  Warning: $HOME/service_account.json not found, using existing config"
           fi
           
           # Env ফাইল-এ HOST_CONFIG_PATH সেট করুন
@@ -69,11 +86,23 @@ jobs:
           
           # service_account.json কপি করুন এবং সেট করুন
           if [ -d "$HOME/service_account.json" ]; then
-            echo "🚨 Error: $HOME/service_account.json is a directory, expected a JSON file"
-            exit 1
-          fi
-
-          if [ -f "$HOME/service_account.json" ]; then
+            echo "⚠️  Found $HOME/service_account.json as a directory, expected a JSON file"
+            json_files=$(find "$HOME/service_account.json" -maxdepth 1 -type f -name '*.json' | sort)
+            if [ -n "$json_files" ]; then
+              echo "ℹ️  JSON file(s) found inside the directory:"
+              echo "$json_files"
+              if [ "$(echo "$json_files" | wc -l)" -eq 1 ]; then
+                cp "$(echo "$json_files" | head -n 1)" /home/ubuntu/configs/service_account.json
+                echo "✅ Copied JSON file from directory to /home/ubuntu/configs/service_account.json"
+              else
+                echo "🚨 Multiple JSON files found inside $HOME/service_account.json; cannot determine which one to use"
+                exit 1
+              fi
+            else
+              echo "🚨 No JSON files found inside $HOME/service_account.json"
+              exit 1
+            fi
+          elif [ -f "$HOME/service_account.json" ]; then
             cp "$HOME/service_account.json" /home/ubuntu/configs/service_account.json
             echo "✅ Service account prepared for deployment at /home/ubuntu/configs/"
           else
