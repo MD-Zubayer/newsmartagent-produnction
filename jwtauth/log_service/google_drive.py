@@ -24,7 +24,10 @@ def _get_drive_service():
     """
     Service account credentials দিয়ে Google Drive API service তৈরি করে।
     """
-    service_account_file = getattr(settings, 'GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE', None)
+    service_account_file = (
+        os.environ.get('GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE') or
+        getattr(settings, 'GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE', None)
+    )
     service_account_info = getattr(settings, 'GOOGLE_DRIVE_SERVICE_ACCOUNT_INFO', None)
 
     if service_account_info:
@@ -54,7 +57,13 @@ def get_or_create_folder(folder_name: str, parent_folder_id: str = None) -> str:
 
     query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
     if parent_folder_id:
-        query += f" and '{parent_folder_id}' in parents"
+        normalized_parent_id = str(parent_folder_id).strip()
+        if normalized_parent_id.lower() in ('', 'your_log_folder_id_here', 'your_log_folder_id', 'default', 'none', 'null'):
+            raise ValueError(
+                f"Invalid Google Drive parent_folder_id: {parent_folder_id!r}. "
+                "Set GOOGLE_DRIVE_LOG_FOLDER_ID to a real Drive folder id."
+            )
+        query += f" and '{normalized_parent_id}' in parents"
 
     results = service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
     folders = results.get('files', [])
@@ -68,7 +77,7 @@ def get_or_create_folder(folder_name: str, parent_folder_id: str = None) -> str:
         'mimeType': 'application/vnd.google-apps.folder'
     }
     if parent_folder_id:
-        file_metadata['parents'] = [parent_folder_id]
+        file_metadata['parents'] = [normalized_parent_id]
 
     # ফোল্ডার তৈরির সময়ও supportsAllDrives=True দিন
     folder = service.files().create(body=file_metadata, fields='id', supportsAllDrives=True).execute()

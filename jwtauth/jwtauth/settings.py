@@ -16,9 +16,17 @@ import os
 from dotenv import load_dotenv
 import dj_database_url
 
-load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+# Load env variables from the repo root .env first, then fallback to local .env inside jwtauth
+root_env = BASE_DIR.parent / '.env'
+local_env = BASE_DIR / '.env'
+if root_env.exists():
+    load_dotenv(root_env)
+elif local_env.exists():
+    load_dotenv(local_env)
+else:
+    load_dotenv()
 
 
 # Quick-start development settings - unsuitable for production
