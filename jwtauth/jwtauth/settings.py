@@ -112,6 +112,7 @@ INSTALLED_APPS = [
     'storages',
     'minio_management',
     'community',
+    'courier',
 ]
 
 CKEDITOR_UPLOAD_PATH = "uploads/"
@@ -441,6 +442,14 @@ CELERY_BEAT_SCHEDULE = {
     'delete-unverified-accounts': {
         'task': 'users.delete_unverified_accounts',
         'schedule': crontab(minute='*/10'),  # প্রতি ১০ মিনিটে ১ ঘণ্টা পুরনো unverifed user মুছে দেবে
+    },
+    'sync-pathao-locations-monthly': {
+        'task': 'courier.tasks.sync_pathao_locations',
+        'schedule': crontab(day_of_month='1', hour=0, minute=0),
+    },
+    'sync-cached-pathao-prices-every-3-days': {
+        'task': 'courier.tasks.sync_cached_pathao_prices',
+        'schedule': timedelta(days=3),
     },
 }
 

@@ -17,6 +17,42 @@ jobs:
       - name: "📂 Checkout Repository"
         uses: actions/checkout@v4
 
+      - name: "🔧 Fix Config & Service Account Setup"
+        run: |
+          echo "🔍 Validating gdrive_key.json structure..."
+          
+          # ডিরেক্টরি যদি থাকে তবে সরিয়ে দিন
+          if [ -d "jwtauth/gdrive_key.json" ]; then
+            echo "⚠️  Found gdrive_key.json as directory, removing it..."
+            sudo rm -rf jwtauth/gdrive_key.json
+            echo "✅ Removed gdrive_key.json directory"
+          fi
+          
+          # কনফিগ ডিরেক্টরি তৈরি করুন
+          mkdir -p /home/ubuntu/configs
+          
+          # service_account.json কপি করুন
+          if [ -f ~/service_account.json ]; then
+            cp ~/service_account.json /home/ubuntu/configs/service_account.json
+            echo "✅ Service account copied to /home/ubuntu/configs/"
+            
+            # ফাইল ভ্যালিডেশন
+            if file /home/ubuntu/configs/service_account.json | grep -q "JSON"; then
+              echo "✅ Service account is valid JSON file"
+            else
+              echo "⚠️  Warning: Service account may not be valid JSON"
+            fi
+          else
+            echo "⚠️  Warning: ~/service_account.json not found, using existing config"
+          fi
+          
+          # Env ফাইল-এ HOST_CONFIG_PATH সেট করুন
+          if [ -f .env ]; then
+            # হোস্ট কনফিগ পাথ সেট করুন
+            grep -q "^HOST_CONFIG_PATH=" .env && sed -i 's|^HOST_CONFIG_PATH=.*|HOST_CONFIG_PATH=/home/ubuntu/configs|' .env || echo "HOST_CONFIG_PATH=/home/ubuntu/configs" >> .env
+            echo "✅ HOST_CONFIG_PATH set in .env"
+          fi
+
       - name: "🏗️ Build New Image"
         run: |
           echo "🔨 Building new images..."
@@ -27,10 +63,49 @@ jobs:
         run: |
           # এনভায়রনমেন্ট ও ফাইল সেটআপ
           cp ~/newsmartagent.env .env || echo ".env file already in place"
-
+          grep -q '^HOST_CONFIG_PATH=' .env && sed -i 's|^HOST_CONFIG_PATH=.*|HOST_CONFIG_PATH=/home/ubuntu/configs|' .env || echo 'HOST_CONFIG_PATH=/home/ubuntu/configs' >> .env
+          
           mkdir -p /home/ubuntu/configs
-          # যদি ফাইলটি অলরেডি থাকে তবে ওভাররাইট করবে
-          cp ~/service_account.json /home/ubuntu/service_account.json || echo "Service account already exists"
+          
+          # service_account.json কপি করুন এবং সেট করুন
+          if [ -d "$HOME/service_account.json" ]; then
+            echo "🚨 Error: $HOME/service_account.json is a directory, expected a JSON file"
+            exit 1
+          fi
+
+          if [ -f "$HOME/service_account.json" ]; then
+            cp "$HOME/service_account.json" /home/ubuntu/configs/service_account.json
+            echo "✅ Service account prepared for deployment at /home/ubuntu/configs/"
+          else
+            echo "⚠️  Warning: $HOME/service_account.json not found"
+          fi
+
+          # HOST_CONFIG_PATH এনভায়রনমেন্টে এক্সপোর্ট করুন
+          export HOST_CONFIG_PATH=/home/ubuntu/configs
+          
+          # gdrive_key.json ডিরেক্টরি ফাইনাল চেক - যদি ডিরেক্টরি থাকে সরিয়ে দিন
+          if [ -d "jwtauth/gdrive_key.json" ]; then
+            echo "🔍 Final check: Removing gdrive_key.json directory before docker compose up..."
+            rm -rf jwtauth/gdrive_key.json
+          fi
+
+          # নিশ্চিত করুন ফাইল সিস্টেম ঠিক আছে
+          echo "🔍 Pre-deployment validation:"
+          if [ -e /home/ubuntu/configs/service_account.json ]; then
+            if [ -d /home/ubuntu/configs/service_account.json ]; then
+              echo "🚨 Error: /home/ubuntu/configs/service_account.json is a directory, expected a file"
+              exit 1
+            fi
+            echo "✅ Service account file exists at /home/ubuntu/configs/"
+            if file /home/ubuntu/configs/service_account.json | grep -q "JSON"; then
+              echo "✅ Service account is valid JSON"
+            else
+              echo "⚠️  Warning: service_account.json is not valid JSON"
+            fi
+          else
+            echo "🚨 Error: service_account.json missing at /home/ubuntu/configs/"
+            exit 1
+          fi
 
           echo "🔄 Deploying with Zero Downtime..."
           
