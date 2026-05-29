@@ -8,7 +8,8 @@ const fs = require('fs');
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3001;
-const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || '';
+const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || process.env.N8N_WHATSAPP_WEBHOOK_URL || '';
+const N8N_WEBHOOK_INTERNAL_URL = process.env.N8N_WEBHOOK_INTERNAL_URL || 'http://n8n:5678';
 const SYNC_AGENT_URL = process.env.SYNC_AGENT_URL || 'http://newsmartagent-django:8000/api/whatsapp/sync-agent/';
 const API_SECRET = process.env.BAILEYS_API_SECRET || 'nsa-baileys-secret-2024';
 const AUTH_BASE_FOLDER = './auth_info_baileys';
@@ -51,19 +52,50 @@ async function processQueue(sessionId) {
             return;
         }
 
-        const { jid, message, buttons, listMessage, resolve, reject } = queueData.messages.shift();
+        const { jid, message, buttons, listMessage, type, media_url, resolve, reject } = queueData.messages.shift();
         try {
+            // Resolve LID to actual phone number if necessary
+            let resolvedJid = jid;
+            if (jid.includes('@lid')) {
+                const lidMapping = jidMap.get(jid);
+                if (lidMapping && lidMapping.phone) {
+                    resolvedJid = `${lidMapping.phone}@s.whatsapp.net`;
+                    logger.info(`🔍 [Baileys] Resolved LID ${jid} to phone: ${resolvedJid}`);
+                } else {
+                    logger.warn(`⚠️ [Baileys] LID ${jid} not resolved, trying to send anyway`);
+                }
+            }
+
             // "Fake Typing" behavior: send presence update first
-            await session.sock.sendPresenceUpdate('composing', jid);
+            await session.sock.sendPresenceUpdate('composing', resolvedJid);
 
             // Random delay between 2-5 seconds
             const randomDelay = Math.floor(Math.random() * (5000 - 2000 + 1)) + 2000;
-            logger.info(`⏳ [Baileys] Typing for ${randomDelay}ms before sending to ${jid}`);
+            logger.info(`⏳ [Baileys] Typing for ${randomDelay}ms before sending to ${resolvedJid}`);
             await delay(randomDelay);
 
             let msgObj = { text: message };
 
-            if (listMessage) {
+            if (type === 'audio' && media_url) {
+                // Audio message - download from URL and convert to buffer
+                logger.info(`📻 [Baileys] Preparing audio message. Downloading from: ${media_url.substring(0, 80)}`);
+                try {
+                    const audioResponse = await axios.get(media_url, { responseType: 'arraybuffer', timeout: 15000 });
+                    const audioBuffer = Buffer.from(audioResponse.data);
+                    logger.info(`📻 [Baileys] Audio downloaded. Buffer size: ${audioBuffer.length} bytes`);
+                    
+                    msgObj = {
+                        audio: audioBuffer,
+                        mimetype: 'audio/ogg; codecs=opus',
+                        ptt: true,
+                        caption: message || undefined
+                    };
+                    logger.info(`📻 [Baileys] Audio buffer prepared for sending. mimetype=audio/ogg; codecs=opus, ptt=true, size=${audioBuffer.length}`);
+                } catch (downloadErr) {
+                    logger.error(`❌ [Baileys] Failed to download audio from ${media_url}: ${downloadErr.message}`);
+                    msgObj = { text: `[Audio failed to download: ${downloadErr.message}]` };
+                }
+            } else if (listMessage) {
                 // Baileys-এ লিস্ট মেসেজ পাঠানোর সঠিক পদ্ধতি (To avoid .match() crash)
                 msgObj = {
                     text: listMessage.description || message || "Please select an option",
@@ -83,7 +115,9 @@ async function processQueue(sessionId) {
             }
 
             const sent = await session.sock.sendMessage(jid, msgObj);
-            logger.info(`✅ [Baileys] Sent successfully to ${jid}`);
+            logger.info(`✅ [Baileys] Sent successfully to ${jid}. MessageId: ${sent?.key?.id}`);
+            logger.debug(`📝 [Baileys] Full message object sent: ${JSON.stringify(msgObj).substring(0, 300)}`);
+            logger.debug(`📝 [Baileys] Send response: ${JSON.stringify(sent).substring(0, 300)}`);
             resolve({ success: true, messageId: sent?.key?.id });
         } catch (err) {
             logger.error(`❌ [Baileys] Send FAILED to ${jid}: ${err.message}`);
@@ -94,11 +128,45 @@ async function processQueue(sessionId) {
 }
 
 async function forwardToN8n(payload) {
-    if (!N8N_WEBHOOK_URL) return;
+    const webhookUrl = N8N_WEBHOOK_URL || `${N8N_WEBHOOK_INTERNAL_URL}/webhook/whatsapp-incoming`;
+    if (!webhookUrl) {
+        logger.warn(`⚠️ [Baileys→N8N] No N8N webhook configured, skipping forward`);
+        return;
+    }
+
+    const tryPost = async (url) => {
+        logger.info(`📤 [Baileys→N8N] Forwarding message from ${payload.phone} to ${url}: "${payload.message.substring(0, 50)}..."`);
+        logger.debug(`📦 [Baileys→N8N] Payload: ${JSON.stringify(payload)}`);
+        return axios.post(url, payload, { timeout: 10000 });
+    };
+
     try {
-        await axios.post(N8N_WEBHOOK_URL, payload);
+        const response = await tryPost(webhookUrl);
+        logger.info(`✅ [Baileys→N8N] Message forwarded successfully. Status: ${response.status}`);
+        logger.debug(`📄 [Baileys→N8N] Response: ${JSON.stringify(response.data).substring(0, 200)}`);
+        return;
     } catch (err) {
-        logger.error(`n8n forward failed: ${err.message}`);
+        logger.error(`❌ [Baileys→N8N] Primary webhook forward failed: ${err.message}`);
+        logger.error(`   URL: ${webhookUrl}`);
+        logger.error(`   Error Code: ${err.code || err.response?.status}`);
+        logger.error(`   Detail: ${err.response?.data ? JSON.stringify(err.response.data) : err.stack}`);
+
+        // Fallback to internal Docker n8n if the external URL is unreachable or not matching
+        const internalUrl = `${N8N_WEBHOOK_INTERNAL_URL}/webhook/whatsapp-incoming`;
+        if (internalUrl !== webhookUrl) {
+            try {
+                logger.info(`🔁 [Baileys→N8N] Trying internal fallback URL: ${internalUrl}`);
+                const response = await tryPost(internalUrl);
+                logger.info(`✅ [Baileys→N8N] Internal fallback forwarded successfully. Status: ${response.status}`);
+                logger.debug(`📄 [Baileys→N8N] Internal response: ${JSON.stringify(response.data).substring(0, 200)}`);
+                return;
+            } catch (fallbackErr) {
+                logger.error(`❌ [Baileys→N8N] Internal webhook fallback failed: ${fallbackErr.message}`);
+                logger.error(`   URL: ${internalUrl}`);
+                logger.error(`   Error Code: ${fallbackErr.code || fallbackErr.response?.status}`);
+                logger.error(`   Detail: ${fallbackErr.response?.data ? JSON.stringify(fallbackErr.response.data) : fallbackErr.stack}`);
+            }
+        }
     }
 }
 
@@ -236,20 +304,34 @@ async function initSession(sessionId, phoneNumber = null) {
         sock.ev.on('messages.upsert', async ({ messages, type }) => {
             if (type !== 'notify') return;
             for (const msg of messages) {
-                if (msg.key.fromMe || msg.key.remoteJid === 'status@broadcast') continue;
+                logger.info(`📨 [Baileys] Message event received. From: ${msg.key.remoteJid}, fromMe: ${msg.key.fromMe}`);
+                
+                if (msg.key.fromMe || msg.key.remoteJid === 'status@broadcast') {
+                    logger.debug(`↩️  [Baileys] Skipping own message or status broadcast`);
+                    continue;
+                }
 
                 const from = msg.key.remoteJid;
                 const messageContent = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
-                if (!messageContent) continue;
+                
+                if (!messageContent) {
+                    logger.warn(`⚠️  [Baileys] Message has no text content. Type: ${Object.keys(msg.message || {})[0]}`);
+                    continue;
+                }
+
+                logger.info(`💬 [Baileys] Text message from ${from}: "${messageContent.substring(0, 60)}..."`);
 
                 // LID হ্যান্ডলিং লজিক
                 let resolvedPhone = from.split('@')[0];
                 if (from.includes('@lid')) {
+                    logger.info(`🔍 [Baileys] LID detected: ${from}, attempting resolution...`);
                     const mapped = jidMap.get(from);
                     if (mapped && mapped.phone) {
                         resolvedPhone = mapped.phone;
+                        logger.info(`✅ [Baileys] LID resolved from cache to: ${resolvedPhone}`);
                     } else if (msg.key.participant) {
                         resolvedPhone = msg.key.participant.split('@')[0];
+                        logger.info(`✅ [Baileys] LID resolved from participant to: ${resolvedPhone}`);
                     } else {
                         // Fallback: Use onWhatsApp to try and resolve the number
                         try {
@@ -257,10 +339,10 @@ async function initSession(sessionId, phoneNumber = null) {
                             if (result && result.exists) {
                                 resolvedPhone = jidNormalizedUser(result.jid).split('@')[0];
                                 jidMap.set(from, { ...mapped, phone: resolvedPhone });
-                                logger.info(`🔍 [Baileys] Fallback resolved LID ${from} to phone ${resolvedPhone}`);
+                                logger.info(`✅ [Baileys] LID resolved via onWhatsApp to: ${resolvedPhone}`);
                             }
                         } catch (err) {
-                            logger.warn(`⚠️ [Baileys] Failed to resolve LID ${from}: ${err.message}`);
+                            logger.warn(`⚠️  [Baileys] Failed to resolve LID ${from}: ${err.message}`);
                         }
                     }
                 }
@@ -275,6 +357,8 @@ async function initSession(sessionId, phoneNumber = null) {
                     message_id: msg.key.id,
                     pushName: msg.pushName || ''
                 };
+                
+                logger.info(`📤 [Baileys] Attempting to forward message from ${resolvedPhone}...`);
                 await forwardToN8n(payload);
             }
         });
@@ -339,12 +423,25 @@ app.get('/qr/:sessionId', (req, res) => {
 });
 
 app.post('/send-message', async (req, res) => {
-    const { sessionId, to, message, text, buttons, interactiveButtons, listMessage } = req.body;
+    const { sessionId, to, message, text, buttons, interactiveButtons, listMessage, type, media_url } = req.body;
     const secret = req.headers['x-api-secret'];
-    if (secret !== API_SECRET) return res.status(401).send('Unauthorized');
+    if (secret !== API_SECRET) {
+        logger.warn(`🔑 [HTTP] Unauthorized /send-message attempt. sessionId=${sessionId}, to=${to}`);
+        return res.status(401).send('Unauthorized');
+    }
+
+    const finalMessage = message || text || "";
+    const finalButtons = buttons || interactiveButtons || [];
+    const msgType = type || 'text';
+    logger.info(`📥 [HTTP] /send-message request. sessionId=${sessionId}, to=${to}, type=${msgType}, message="${finalMessage.substring(0,120)}", media_url=${media_url ? media_url.substring(0,80) : 'none'}, buttons=${finalButtons.length}, listMessage=${listMessage ? 'yes' : 'no'}`);
+    logger.debug(`📦 [HTTP] Full body: ${JSON.stringify(req.body)}`);
 
     const session = sessions.get(sessionId);
+    const sessionState = session ? session.state : 'missing';
+    logger.info(`📍 [Session] sessionId=${sessionId}, currentState=${sessionState}`);
+
     if (!session || session.state !== 'open') {
+        logger.warn(`⭕ [Session] send-message blocked. sessionId=${sessionId}, state=${sessionState}`);
         return res.status(503).json({ error: 'WhatsApp session not connected' });
     }
 
@@ -355,30 +452,32 @@ app.post('/send-message', async (req, res) => {
     const jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
     const queueData = messageQueues.get(sessionId);
 
-    // Final merge of aliases
-    const finalMessage = message || text || "";
-    const finalButtons = buttons || interactiveButtons || [];
-
-    // Return promise after queuing
     const sendPromise = new Promise((resolve, reject) => {
-        queueData.messages.push({ jid, message: finalMessage, buttons: finalButtons, listMessage, resolve, reject });
+        queueData.messages.push({ 
+            jid, 
+            message: finalMessage, 
+            buttons: finalButtons, 
+            listMessage,
+            type: msgType,
+            media_url: media_url,
+            resolve, 
+            reject 
+        });
     });
 
-    processQueue(sessionId).catch(err => logger.error(`Queue error: ${err.message}`));
+    logger.info(`📬 [Queue] enqueue message for sessionId=${sessionId}, to=${jid}, type=${msgType}, media_url=${media_url ? media_url.substring(0,60) : 'none'}, queueLength=${queueData.messages.length}`);
 
-    // Option: Return immediately to acknowledge receipt, or wait for the promise.
-    // Given the request for rate limiting, it's better to return immediately to the caller
-    // but here we wait for the result to keep the API response consistent for now.
-    // However, if the queue gets long, this might timeout.
-    // Let's return the message as "Queued" if the queue is not empty.
+    processQueue(sessionId).catch(err => logger.error(`Queue error: ${err.message}`));
 
     if (queueData.messages.length > 1) {
         res.json({ success: true, status: 'queued', queueLength: queueData.messages.length });
     } else {
         try {
             const result = await sendPromise;
+            logger.info(`✅ [HTTP] /send-message delivered for sessionId=${sessionId}, to=${jid}`);
             res.json(result);
         } catch (err) {
+            logger.error(`❌ [HTTP] /send-message failed for sessionId=${sessionId}, to=${jid}: ${err.message}`);
             res.status(500).json({ error: err.message });
         }
     }

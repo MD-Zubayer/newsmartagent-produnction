@@ -1,12 +1,21 @@
 # webhooks/utils.py
+import os
 import requests
 import logging
 import hashlib
 import redis
 import json
-logger = logging.getLogger(__name__)
-r = redis.Redis(host='production-redis', port=6379, db=1)
 
+logger = logging.getLogger(__name__)
+REDIS_URL = os.environ.get('REDIS_URL')
+REDIS_HOST = os.environ.get('REDIS_HOST', 'production-redis')
+REDIS_PORT = int(os.environ.get('REDIS_PORT', 6379))
+REDIS_DB = int(os.environ.get('REDIS_DB', 1))
+
+if REDIS_URL:
+    r = redis.from_url(REDIS_URL, db=REDIS_DB)
+else:
+    r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB)
 
 
 def fetch_facebook_post_text(post_id, access_token):

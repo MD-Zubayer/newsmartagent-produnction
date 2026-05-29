@@ -945,6 +945,35 @@ def send_voice_notification(sender_id, platform, voice_file, agent_data=None, pa
         return False
 
 
+def get_voice_media_url(voice_file, platform=None):
+    """Return an environment-aware URL for voice files."""
+    import os
+
+    voice_file = str(voice_file)
+    selected_file = voice_file
+    if platform and platform.lower() == 'whatsapp' and voice_file.lower().endswith('.wav'):
+        selected_file = voice_file[:-4] + '.ogg'
+        logger.debug(f"🎤 WhatsApp target detected; using OGG voice file {selected_file}")
+
+    explicit_voice_url = os.getenv('VOICE_MEDIA_URL')
+    if explicit_voice_url:
+        url = explicit_voice_url.rstrip('/') + '/' + selected_file
+        logger.debug(f"🎤 Voice media resolved via VOICE_MEDIA_URL: {url}")
+        return url
+
+    minio_ext_endpoint = os.getenv('MINIO_EXTERNAL_ENDPOINT', '').rstrip('/')
+    bucket = os.getenv('MINIO_STORAGE_BUCKET_NAME', 'newsmartagent-media')
+    if minio_ext_endpoint:
+        url = f"{minio_ext_endpoint}/{bucket}/{selected_file}"
+        logger.debug(f"🎤 Voice media resolved via MINIO_EXTERNAL_ENDPOINT: {url}")
+        return url
+
+    media_url = os.getenv('MEDIA_URL', '/media/')
+    url = f"{media_url.rstrip('/')}/voice/{selected_file}"
+    logger.debug(f"🎤 Voice media resolved via MEDIA_URL fallback: {url}")
+    return url
+
+
 def _send_whatsapp_voice(sender_id, voice_file, data):
     """Send voice file via WhatsApp through n8n webhook"""
     import os
@@ -957,16 +986,15 @@ def _send_whatsapp_voice(sender_id, voice_file, data):
         "delivery_jid": str(data.get('delivery_jid', final_target)),
         "phone": str(sender_id),
         "sender_id": str(sender_id),
+        "sessionId": str(data.get('sessionId', '')),
         "type": "whatsapp",
         "message_type": "audio",  # Important: Tell n8n this is audio
-        "voice_file": str(voice_file),  # e.g., 'on-human-mode.wav'
-        "media_url": f"/media/voice/{voice_file}",  # Voice file path
-        "sessionId": str(data.get('sessionId', '')),
-        "message_id": str(data.get('message_id', '')),
+        "voice_file": str(voice_file),
+        "media_url": get_voice_media_url(voice_file, platform='whatsapp'),
     }
-    
+
     try:
-        logger.info(f'🎤 [Logic] Sending WhatsApp voice: {voice_file} to {final_target}')
+        logger.info(f'🎤 [Logic] Sending WhatsApp voice: {voice_file} to {sender_id}')
         response = requests.post(webhook_url, json=payload, timeout=15)
         if response.status_code == 200:
             logger.info(f'🎤 [Logic] WhatsApp voice delivery success: {voice_file}')
@@ -995,7 +1023,7 @@ def _send_messenger_voice(sender_id, voice_file, page_id, access_token):
         "type": "messenger",
         "message_type": "audio",  # Important: Tell n8n this is audio
         "voice_file": str(voice_file),
-        "media_url": f"/media/voice/{voice_file}",  # Voice file path
+        "media_url": get_voice_media_url(voice_file, platform='messenger'),
     }
     
     try:
@@ -1028,7 +1056,7 @@ def _send_instagram_voice(sender_id, voice_file, page_id, access_token):
         "type": "instagram",
         "message_type": "audio",  # Important: Tell n8n this is audio
         "voice_file": str(voice_file),
-        "media_url": f"/media/voice/{voice_file}",  # Voice file path
+        "media_url": get_voice_media_url(voice_file, platform='instagram'),
     }
     
     try:
@@ -1063,7 +1091,7 @@ def _send_telegram_voice(sender_id, voice_file, token, data):
         "platform": "telegram",
         "message_type": "audio",  # Important: Tell n8n this is audio
         "voice_file": str(voice_file),
-        "media_url": f"/media/voice/{voice_file}",  # Voice file path
+        "media_url": get_voice_media_url(voice_file, platform='telegram'),
     }
     
     try:
