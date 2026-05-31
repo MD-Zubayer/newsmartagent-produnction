@@ -59,6 +59,68 @@ r = get_redis_client(db=0)
 BUTTON_VOICE_PLATFORMS = {'whatsapp', 'messenger', 'facebook_comment', 'instagram', 'telegram'}
 
 
+def clean_ai_response(raw_reply):
+    """
+    💥 FIX: Extracts valid JSON from AI response and fixes type mismatches.
+    
+    Problems solved:
+    1. AI sometimes returns text + JSON instead of just JSON
+    2. AI sends int/bool instead of string for fields like phone_number, address, etc.
+    3. Prevents "expected string or bytes-like object, got 'int'" errors
+    
+    Returns: Cleaned parsed dict or fallback dict on error
+    """
+    import json
+    import re
+    
+    if not isinstance(raw_reply, str):
+        raw_reply = str(raw_reply) if raw_reply else ''
+    
+    # ১. Try to extract JSON from within mixed text
+    try:
+        json_match = re.search(r'\{.*\}', raw_reply, re.DOTALL)
+        if json_match:
+            raw_reply = json_match.group(0)
+    except Exception:
+        pass
+    
+    # ২. Parse JSON
+    try:
+        data = json.loads(raw_reply)
+    except json.JSONDecodeError:
+        logger.warning(f"⚠️ Failed to parse AI response as JSON: {raw_reply[:100]}...")
+        return {
+            "reply": str(raw_reply),
+            "cache_type": "no_cache",
+            "human_handoff": False
+        }
+    
+    # ৩. 💥 Force-convert all order_data fields to proper types (CRITICAL FIX)
+    if "order_data" in data and isinstance(data["order_data"], dict):
+        order_data = data["order_data"]
+        
+        # String fields: FORCE convert to string (fixes 'got int' error)
+        string_fields = ["phone_number", "customer_name", "address", "product_name", "extra_info", "item_description"]
+        for field in string_fields:
+            if field in order_data and order_data[field] is not None:
+                order_data[field] = str(order_data[field]).strip()
+        
+        # Quantity/Price must be numeric
+        if "quantity" in order_data and order_data["quantity"] is not None:
+            try:
+                order_data["quantity"] = int(str(order_data["quantity"]).strip())
+            except (ValueError, TypeError):
+                order_data["quantity"] = 1
+        
+        if "price" in order_data and order_data["price"] is not None:
+            try:
+                order_data["price"] = float(str(order_data["price"]).strip())
+            except (ValueError, TypeError):
+                order_data["price"] = 0
+    
+    return data
+
+
 def _get_or_create_user_memory(agent_config, sender_id):
     sender_id_norm = str(sender_id).lower() if sender_id else sender_id
     memory, _ = UserMemory.objects.get_or_create(ai_agent=agent_config, sender_id=sender_id_norm)
@@ -2305,13 +2367,14 @@ def process_ai_reply_task(self, data):
                 '\nIf the user has already provided a field earlier in the conversation, do not ask for that field again. '
                 'If the user gives multiple fields in one message, extract them and proceed. '
                 '\nSTRICT: No markdown blocks, no preamble, and ensure JSON syntax is perfect.'
+                '\nCRITICAL: Do NOT include any conversational text, descriptions, or introductions outside of the JSON object. Your entire output MUST start with "{" and end with "}". If you output any text before or after the JSON structure, the system will crash.'
             )
             system_instruction = system_instruction + classify_instruction
 
             # --- AI Call ---
             ai_data = get_ai_response(agent_config, system_instruction, history, current_msg)
 
-            # ---- Parse JSON from AI reply ----
+            # ---- Parse JSON from AI reply (Using clean_ai_response to fix broken JSON & type mismatches) ----
             raw_ai_reply = ai_data.get('reply', '')
             cache_type = 'agent_specific'  # ডিফাল্ট
             parsed_reply = raw_ai_reply    # ডিফাল্ট: raw reply
@@ -2319,33 +2382,34 @@ def process_ai_reply_task(self, data):
             is_handoff = False
             is_json_handoff_override = False
 
-            json_match = re.search(r'\{.*\}', raw_ai_reply, re.DOTALL)
-            if json_match:
-                try:
-                    parsed = json.loads(json_match.group())
-                    extracted_reply = parsed.get('reply', '').strip()
-                    if extracted_reply:  # শুধু non-empty reply গ্রহণ করা হবে
-                        parsed_reply = extracted_reply
-                        cache_type = parsed.get('cache_type', 'agent_specific').strip().lower()
-                        json_parse_success = True
-                        
-                        # --- Human Handoff Check ---
-                        if parsed.get('human_handoff') is True or str(parsed.get('human_handoff')).lower() == 'true':
-                            is_handoff = True
-                            is_json_handoff_override = True
-                        
-                        logger.info(f"📋 AI cache_type classified as: '{cache_type}' for '{text[:30]}'")
-                        order_intent = parsed.get('order_intent')
-                        order_data = parsed.get('order_data')
-                        if order_intent == 'create' and isinstance(order_data, dict):
-                            confirmation = _queue_order_for_confirmation(agent_config, sender_id, request_type, data, order_data, msg_id=msg_id, source='ai_extraction')
-                            if confirmation:
-                                parsed_reply = confirmation
-                                cache_type = 'no_cache'
-                    else:
-                        logger.warning(f"⚠️ JSON parsed but reply field is empty. Using raw.")
-                except (json.JSONDecodeError, AttributeError) as e:
-                    logger.warning(f"⚠️ JSON parse failed from AI reply, using raw. Error: {e}")
+            # 💥 Apply defensive JSON cleaning (extracts JSON from mixed text + fixes 'got int' errors)
+            cleaned_data = clean_ai_response(raw_ai_reply)
+            parsed = cleaned_data
+            
+            try:
+                extracted_reply = parsed.get('reply', '').strip()
+                if extracted_reply:  # শুধু non-empty reply গ্রহণ করা হবে
+                    parsed_reply = extracted_reply
+                    cache_type = parsed.get('cache_type', 'agent_specific').strip().lower()
+                    json_parse_success = True
+                    
+                    # --- Human Handoff Check ---
+                    if parsed.get('human_handoff') is True or str(parsed.get('human_handoff')).lower() == 'true':
+                        is_handoff = True
+                        is_json_handoff_override = True
+                    
+                    logger.info(f"📋 AI cache_type classified as: '{cache_type}' for '{text[:30]}'")
+                    order_intent = parsed.get('order_intent')
+                    order_data = parsed.get('order_data')
+                    if order_intent == 'create' and isinstance(order_data, dict):
+                        confirmation = _queue_order_for_confirmation(agent_config, sender_id, request_type, data, order_data, msg_id=msg_id, source='ai_extraction')
+                        if confirmation:
+                            parsed_reply = confirmation
+                            cache_type = 'no_cache'
+                else:
+                    logger.warning(f"⚠️ JSON parsed but reply field is empty. Using raw.")
+            except (KeyError, TypeError, ValueError) as e:
+                logger.warning(f"⚠️ Error processing cleaned AI response: {e}. Using raw reply.")
 
 
             if is_handoff:
