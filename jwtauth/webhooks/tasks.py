@@ -661,7 +661,15 @@ def _get_missing_order_fields_prompt(user_memory):
 def _is_confirmation_text(text):
     if not text:
         return False
-    return bool(re.search(r'\b(confirm|confirm order|yes|হ্যাঁ|হ্যা|ঠিক|ঠিক আছে|sure|ok)\b', text, re.IGNORECASE))
+    # 💬 Bengali + English confirmation patterns
+    # Handles: yes, confirm, complete, submit, place order, etc.
+    confirmation_patterns = (
+        r'\b(confirm|confirm order|yes|sure|ok|proceed|complete|submit|place order|go|চলুন)\b'  # English
+        r'|(হ্যাঁ|হ্যা|ঠিক|ঠিক আছে|সঠিক|জি|জি স্যার|জি ম্যাডাম)'  # Bengali yes/okay
+        r'|(পূর্ণ|পূর্ণ করুন|পূর্ণ করেন|সম্পন্ন|সম্পন্ন করুন|অর্ডার.*পূর্ণ|অর্ডার.*সম্পন্ন)'  # Bengali complete/fulfill
+        r'|(জমা|জমা করুন|জমা দিন|অর্ডার.*জমা)'  # Bengali submit
+    )
+    return bool(re.search(confirmation_patterns, text, re.IGNORECASE))
 
 
 def _is_rejection_text(text):
@@ -715,19 +723,38 @@ def create_customer_order_from_memory(agent_config, sender_id, request_type, msg
         return None
 
     input_fields = _get_plain_order_values(user_memory)
-    customer_name = str(input_fields.get('customer_name') or sender_id).strip()
-    product_name = str(input_fields.get('product_name') or 'Product').strip()
-    address = str(input_fields.get('address') or '').strip()
-    phone_number = str(input_fields.get('phone_number') or sender_id).strip()
-    extra_info = str(input_fields.get('extra_info') or '').strip()
+    
+    # 💥 FIX: Seed missing product_name from recent_order_interest (from AI response context)
+    seeded_fields = _seed_order_data_from_recent_interest(user_memory, input_fields)
+    
+    customer_name = str(seeded_fields.get('customer_name') or input_fields.get('customer_name') or sender_id).strip()
+    product_name = str(seeded_fields.get('product_name') or input_fields.get('product_name') or 'Product').strip()
+    address = str(seeded_fields.get('address') or input_fields.get('address') or '').strip()
+    phone_number = str(seeded_fields.get('phone_number') or input_fields.get('phone_number') or sender_id).strip()
+    extra_info = str(seeded_fields.get('extra_info') or input_fields.get('extra_info') or '').strip()
 
-    quantity = input_fields.get('quantity')
+    quantity = seeded_fields.get('quantity') or input_fields.get('quantity')
     try:
         quantity_value = int(str(quantity).strip()) if quantity is not None else 1
     except (ValueError, TypeError):
         quantity_value = 1
 
     product = _resolve_catalog_product_for_user(agent_config.user, product_name, quantity_value)
+    
+    # 💥 FALLBACK: If product still not found, search conversation history for product mentions
+    if not product and product_name == 'Product':
+        try:
+            history = get_last_message(agent_config, sender_id, limit=10, platform=request_type)
+            conversation_text = " ".join([msg.get('content', '') for msg in history])
+            
+            inferred_product = _infer_catalog_product_from_text(agent_config.user, conversation_text)
+            if inferred_product:
+                logger.info(f"💡 Product inferred from conversation history: {inferred_product}")
+                product_name = inferred_product
+                product = _resolve_catalog_product_for_user(agent_config.user, product_name, quantity_value)
+        except Exception as hist_err:
+            logger.warning(f"Failed to search conversation history for product: {hist_err}")
+    
     if not product:
         logger.warning(f"Catalog validation failed for product '{product_name}' and quantity {quantity_value} for user {agent_config.user.email}")
         return None
@@ -754,7 +781,7 @@ def create_customer_order_from_memory(agent_config, sender_id, request_type, msg
             r.setex(f'order_created:{msg_id}', 86400, '1')
         _clear_order_fields(user_memory)
         _set_order_state(user_memory, 'idle')
-        logger.info(f"Created CustomerOrder #{order.id} from memory-confirmed order")
+        logger.info(f"Created CustomerOrder #{order.id} from memory-confirmed order with inferred product: {product_name}")
         return order
     except Exception as e:
         logger.error(f"Memory-based AI order creation failed: {e}", exc_info=True)
@@ -1181,7 +1208,6 @@ def _has_order_intent_in_conversation(agent_config, sender_id, request_type, cur
         history = []
 
     user_memory = _get_or_create_user_memory(agent_config, sender_id)
-    
     # 1. If there was recent order interest AND user confirms with yes/confirm -> return True
     if _get_recent_order_interest(user_memory) and re.search(
         r'\b(yes|yeah|yep|ok|okay|confirm|হ্যা|হ্যাঁ|জি|ঠিক আছে|নেব|নিতে চাই|করব)\b',
@@ -1190,25 +1216,43 @@ def _has_order_intent_in_conversation(agent_config, sender_id, request_type, cur
     ):
         return True
 
-    # 2. ONLY explicit "order now" or "place order" phrases (not just "order" or keywords)
-    # This avoids false positives from casual conversation
+    # 2. Soft inference based on memory confidence + short user reply:
+    #    If we've already extracted several high-confidence order fields from AI/memory,
+    #    a short reply (including a numeric quantity) should be treated as an order intent.
+    try:
+        order_fields = _get_order_fields(user_memory)
+        filled = [k for k in ORDER_FIELDS if order_fields.get(k, {}).get('value') and order_fields.get(k, {}).get('confidence', 0) >= 0.75]
+        if _get_recent_order_interest(user_memory) and len(filled) >= 2:
+            txt = (current_text or '').strip()
+            # numeric reply (e.g., '1') typically indicates quantity confirmation
+            if re.match(r'^\s*\d+\s*$', txt):
+                return True
+            # short non-question replies likely mean confirmation in a conversational flow
+            if txt and len(txt) <= 40 and not txt.endswith('?'):
+                # avoid false positives for clearly negative words
+                if not re.search(r'\b(no|not|না|নাহ|cancel|বাতিল)\b', txt, re.IGNORECASE):
+                    return True
+    except Exception:
+        pass
+
+    # 3. ONLY explicit "order now" or "place order" phrases (not just "order" or keywords)
     explicit_order_phrases = [
         r'\b(place order|order now|আমি অর্ডার করতে চাই|order করবো)\b',
         r'\b(order|অর্ডার)\b.*\b(করতে|করব|করছি|দিন|দিতে|দরকার)\b'
     ]
-    
     combined_text = current_text + '\n' + '\n'.join([msg.get('content', '') for msg in history[-3:] if msg.get('role') == 'user'])
     for pattern in explicit_order_phrases:
         if re.search(pattern, combined_text, re.IGNORECASE):
             return True
-    
+
     return False
 
 
 def _is_complete_order_data(order_data):
     if not isinstance(order_data, dict):
         return False
-    required = ['customer_name', 'phone_number', 'address', 'product_name', 'quantity', 'price']
+    # Note: `price` is not required; price is authoritative from merchant catalog
+    required = ['customer_name', 'phone_number', 'address', 'product_name', 'quantity']
     for key in required:
         value = order_data.get(key)
         if value is None or str(value).strip() == '':
@@ -2392,20 +2436,60 @@ def process_ai_reply_task(self, data):
                     parsed_reply = extracted_reply
                     cache_type = parsed.get('cache_type', 'agent_specific').strip().lower()
                     json_parse_success = True
-                    
+
                     # --- Human Handoff Check ---
                     if parsed.get('human_handoff') is True or str(parsed.get('human_handoff')).lower() == 'true':
                         is_handoff = True
                         is_json_handoff_override = True
-                    
+
                     logger.info(f"📋 AI cache_type classified as: '{cache_type}' for '{text[:30]}'")
                     order_intent = parsed.get('order_intent')
                     order_data = parsed.get('order_data')
+
+                    # If AI provided an order_intent, seed memory and optionally auto-confirm
                     if order_intent == 'create' and isinstance(order_data, dict):
-                        confirmation = _queue_order_for_confirmation(agent_config, sender_id, request_type, data, order_data, msg_id=msg_id, source='ai_extraction')
-                        if confirmation:
-                            parsed_reply = confirmation
-                            cache_type = 'no_cache'
+                        try:
+                            # Seed parsed order fields into user memory (normalize + save)
+                            user_memory = _get_or_create_user_memory(agent_config, sender_id)
+                            normalized_order, field_metadata = normalize_order_entities(agent_config.user, order_data)
+                            normalized_order = _seed_order_data_from_recent_interest(user_memory, normalized_order)
+                            normalized_order = _hydrate_order_from_catalog(agent_config.user, normalized_order)
+                            _save_order_fields_to_memory(user_memory, normalized_order, source='ai_extraction', field_metadata=field_metadata)
+
+                            # Determine intent confidence (fallbacks)
+                            intent_conf = None
+                            if parsed.get('order_intent_confidence') is not None:
+                                intent_conf = float(parsed.get('order_intent_confidence') or 0)
+                            elif parsed.get('confidence') is not None:
+                                try:
+                                    intent_conf = float(parsed.get('confidence') or 0)
+                                except Exception:
+                                    intent_conf = None
+                            if intent_conf is None:
+                                intent_conf = 1.0
+
+                            # If memory now has complete order fields, consider auto confirm
+                            if _has_complete_order_fields(user_memory):
+                                # High confidence -> auto-create order
+                                if intent_conf >= 0.9:
+                                    order_obj = create_customer_order_from_memory(agent_config, sender_id, request_type, msg_id=msg_id)
+                                    if order_obj:
+                                        parsed_reply = f"✅ আপনার অর্ডার #{order_obj.id} নিশ্চিত করা হয়েছে। ইনভয়েস শীঘ্রই পাঠানো হবে।"
+                                        cache_type = 'no_cache'
+                                        # deliver immediate reply and return
+                                        _deliver_reply_with_buttons(request_type, data, parsed_reply, sender_id, page_id, effective_access_token, agent_config)
+                                        if msg_id:
+                                            r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                                            r.delete(f'processing_msg:{msg_id}')
+                                        return parsed_reply
+                                # Medium confidence -> prompt for explicit confirmation
+                                else:
+                                    confirmation = _get_confirmation_prompt(user_memory)
+                                    if confirmation:
+                                        parsed_reply = confirmation
+                                        cache_type = 'no_cache'
+                        except Exception as seed_err:
+                            logger.error(f"Failed to seed AI order into memory: {seed_err}", exc_info=True)
                 else:
                     logger.warning(f"⚠️ JSON parsed but reply field is empty. Using raw.")
             except (KeyError, TypeError, ValueError) as e:
