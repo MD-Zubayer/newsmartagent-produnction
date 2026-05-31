@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Q
 from django.contrib.auth.models import AbstractUser
 from .managers import UserManager
 from django.utils.translation import gettext_lazy as _
@@ -14,6 +15,8 @@ from phonenumbers import geocoder
 from .validators import validate_international_phone
 from aiAgent.models import AIProviderModel
 from minio_management.storages import ProfileStorage
+from decimal import Decimal
+import re
 # Create your models here.
 
 
@@ -94,6 +97,84 @@ class User(AbstractUser):
             except Exception as e:
                  print(f"Phone processing error: {e}")
         super().save(*args, **kwargs)
+
+    def get_catalog_product(self, product_name, quantity=1):
+        """Return product info from spreadsheet/document knowledge for a product_name."""
+        if not product_name:
+            return None
+
+        normalized_name = str(product_name).strip()
+        if not normalized_name:
+            return None
+
+        try:
+            from embedding.models import SpreadsheetKnowledge, DocumentKnowledge
+        except Exception:
+            return None
+
+        def parse_product_info(content):
+            if not content:
+                return None
+
+            content_text = str(content).strip()
+            lower_text = content_text.lower()
+            if normalized_name.lower() not in lower_text:
+                return None
+
+            # Extract product name from content when available
+            name_match = re.search(r'\b(?:product|item|brand|name)\s*[:=]\s*([^,;\n]+)', content_text, re.IGNORECASE)
+            price_match = re.search(r'\b(?:price|amount|total|rate|unit price)\s*[:=]\s*([0-9]+(?:\.[0-9]+)?)', content_text, re.IGNORECASE)
+            stock_match = re.search(r'\b(?:stock|available|quantity|qty|units|available quantity|instock|in stock)\s*[:=]\s*([0-9]+)', content_text, re.IGNORECASE)
+
+            if not price_match:
+                return None
+
+            try:
+                price_value = Decimal(price_match.group(1).replace(',', '').strip())
+            except Exception:
+                return None
+
+            stock_value = None
+            if stock_match:
+                try:
+                    stock_value = int(stock_match.group(1).strip())
+                except Exception:
+                    stock_value = None
+
+            parsed_name = name_match.group(1).strip() if name_match else normalized_name
+            return {
+                'name': parsed_name,
+                'price': price_value,
+                'stock': stock_value,
+                'content': content_text,
+            }
+
+        def score_candidate(item):
+            score = 0
+            if normalized_name.lower() == item['name'].lower():
+                score += 2
+            if item['stock'] is not None and item['stock'] >= quantity:
+                score += 1
+            return score
+
+        spreadsheet_hits = SpreadsheetKnowledge.objects.filter(user=self).filter(content__icontains=normalized_name)[:12]
+        document_hits = DocumentKnowledge.objects.filter(user=self).filter(content__icontains=normalized_name)[:12]
+
+        candidates = []
+        for hit in list(spreadsheet_hits) + list(document_hits):
+            parsed = parse_product_info(hit.content)
+            if parsed and parsed.get('price') is not None:
+                candidates.append(parsed)
+
+        if not candidates:
+            return None
+
+        candidates = [c for c in candidates if c.get('stock') is None or c.get('stock') >= quantity]
+        if not candidates:
+            return None
+
+        candidates.sort(key=score_candidate, reverse=True)
+        return candidates[0]
 
 #  python3 manage.py generate_ids   after connect postgressql!!!!
 class UniqueIDPool(models.Model):
@@ -330,6 +411,16 @@ class CustomerOrder(models.Model):
         ('shipped', 'Shipped'),
         ('delivered', 'Delivered')
     )
+    PLATFORM_CHOICES = (
+        ('whatsapp', 'WhatsApp'),
+        ('messenger', 'Messenger'),
+        ('instagram', 'Instagram'),
+        ('telegram', 'Telegram'),
+        ('web', 'Web Form'),
+        ('facebook_comment', 'Facebook Comment'),
+        ('other', 'Other')
+    )
+    
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='order')
     customer_name = models.CharField(max_length=255)
     phone_number = models.CharField(max_length=20)
@@ -339,7 +430,14 @@ class CustomerOrder(models.Model):
     product_name = models.CharField(max_length=255, null=True, blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     extra_info = models.TextField(blank=True, null=True)
-    status = models.CharField(max_length=20,choices=STATUS_CHOICES, default='pending')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    
+    # Source Platform - কোন প্ল্যাটফর্ম থেকে order এসেছে
+    source_platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES, default='web', db_index=True)
+    source_contact_id = models.CharField(max_length=100, blank=True, null=True, help_text="Platform-specific contact ID (sender_id)")
+    invoice_task_dispatched = models.BooleanField(default=False, db_index=True)
+    invoice_sent = models.BooleanField(default=False, db_index=True)
+    invoice_sent_at = models.DateTimeField(null=True, blank=True)
     
     # Pathao Booking Fields
     city_id = models.CharField(max_length=20, null=True, blank=True)
@@ -354,7 +452,6 @@ class CustomerOrder(models.Model):
 
     def __str__(self):
         return f"{self.customer_name} -> {self.user.email}"
-
 
 
 class EmailVerificationToken(models.Model):

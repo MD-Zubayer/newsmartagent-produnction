@@ -10,6 +10,7 @@ import {
     Title, Tooltip, Legend, ArcElement, PointElement, LineElement, Filler
 } from 'chart.js';
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
+import { motion } from 'framer-motion';
 
 ChartJS.register(
     CategoryScale, LinearScale, BarElement, ArcElement, 
@@ -107,10 +108,24 @@ export default function AgentDashboard() {
 
             {/* Main Stats Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-                <StatCard title="Commission Earned" value={`৳${stats?.commission_balance}`} icon={<DollarSign/>} color="text-orange-600" bg="bg-orange-100" />
-                <StatCard title="Available Balance" value={`৳${stats?.acount_balance}`} icon={<Wallet/>} color="text-blue-600" bg="bg-blue-100" />
-                <StatCard title="Total Referrals" value={stats?.total_referrals} icon={<Users/>} color="text-indigo-600" bg="bg-indigo-100" />
-                <StatCard title="Active Subs" value={stats?.active_subscriptions} icon={<CheckCircle/>} color="text-emerald-600" bg="bg-emerald-100" />
+                {[
+                  { title: "Commission Earned", value: `৳${stats?.commission_balance}`, icon: <DollarSign/>, color: "orange", index: 0 },
+                  { title: "Available Balance", value: `৳${stats?.acount_balance}`, icon: <Wallet/>, color: "blue", index: 1 },
+                  { title: "Total Referrals", value: stats?.total_referrals, icon: <Users/>, color: "indigo", index: 2 },
+                  { title: "Active Subs", value: stats?.active_subscriptions, icon: <CheckCircle/>, color: "green", index: 3 },
+                ].map((card) => (
+                  <motion.div
+                    key={card.title}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    transition={{ delay: card.index * 0.06, duration: 0.45, ease: "easeOut" }}
+                    viewport={{ once: true }}
+                    whileHover={{ y: -6 }}
+                    className="group cursor-default"
+                  >
+                    <StatCard {...card} />
+                  </motion.div>
+                ))}
             </div>
 
             {/* Subscription Detail Cards */}
@@ -167,16 +182,44 @@ export default function AgentDashboard() {
     );
 }
 
-function StatCard({ title, value, icon, color, bg }) {
-    return (
-        <div className="bg-white p-5 md:p-8 rounded-2xl md:rounded-[2rem] shadow-sm border border-slate-100 flex items-center gap-4 md:gap-6 hover:shadow-md transition-all duration-300">
-            <div className={`p-3 md:p-4 rounded-xl md:rounded-2xl ${bg} ${color}`}>
-                {React.cloneElement(icon, { size: 24 })}
-            </div>
-            <div>
-                <p className="text-[10px] md:text-[11px] font-bold text-slate-400 uppercase tracking-widest">{title}</p>
-                <p className="text-xl md:text-3xl font-black text-slate-900 leading-none mt-1">{value}</p>
-            </div>
+function StatCard({ title, value, icon, color, index }) {
+  const colorPalettes = {
+    orange: { color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.08)', border: 'rgba(245, 158, 11, 0.12)', glow: '#f59e0b' },
+    blue: { color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.08)', border: 'rgba(59, 130, 246, 0.12)', glow: '#3b82f6' },
+    indigo: { color: '#6366f1', bg: 'rgba(99, 102, 241, 0.08)', border: 'rgba(99, 102, 241, 0.12)', glow: '#6366f1' },
+    green: { color: '#10b981', bg: 'rgba(16, 185, 129, 0.08)', border: 'rgba(16, 185, 129, 0.12)', glow: '#10b981' },
+  };
+
+  const palette = colorPalettes[color] || colorPalettes.indigo;
+
+  return (
+    <div
+      className="relative p-2 rounded-[2rem] h-full transition-all duration-500"
+      style={{
+        background: `linear-gradient(145deg, ${palette.bg}, #ffffff)`,
+        boxShadow: `0 20px 40px -15px ${palette.glow}30, 0 0 0 1px ${palette.border}`,
+      }}
+    >
+      <div className="relative bg-white/90 backdrop-blur-2xl h-full rounded-[1.75rem] p-5 md:p-6 flex items-center gap-4 md:gap-6 border border-white overflow-hidden shadow-sm transition-all duration-300 group-hover:bg-white group-hover:shadow-lg">
+        <div className="absolute -top-8 -right-8 w-24 h-24 rounded-full opacity-20 blur-2xl transition-opacity duration-500 group-hover:opacity-40" style={{ background: palette.color }} />
+
+        <div
+          className="w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center text-xl md:text-2xl shrink-0 transition-transform duration-500 group-hover:scale-105 relative z-10"
+          style={{
+            background: `linear-gradient(135deg, ${palette.bg}, #ffffff)`,
+            border: `1px solid ${palette.border}`,
+            boxShadow: `inset 0 4px 8px rgba(255,255,255,0.8), 0 8px 16px ${palette.glow}25`,
+            color: palette.color,
+          }}
+        >
+          {icon}
         </div>
-    );
+
+        <div className="relative z-10 flex-1 min-w-0">
+          <p className="text-[9px] md:text-[10px] font-black uppercase tracking-widest mb-1 text-gray-400">{title}</p>
+          <p className="text-lg md:text-2xl font-black text-gray-900 tracking-tighter leading-tight">{value}</p>
+        </div>
+      </div>
+    </div>
+  );
 }

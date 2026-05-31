@@ -249,12 +249,18 @@ export default function UserDashboard() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 md:gap-6">
-          <StatCard title="Total Tokens" value={summary.total_tokens.toLocaleString()} icon={<Zap />} color="blue" subValue={`In: ${summary.input_tokens.toLocaleString()} | Out: ${summary.output_tokens.toLocaleString()}`} />
-          <StatCard title="Total Requests" value={summary.total_messages} icon={<MessageSquare />} color="purple" />
-          <StatCard title="Memory Costs" value={summary.memory_extraction_tokens?.toLocaleString() || '0'} icon={<Activity />} color="orange" subValue="Background Sync" />
-          <StatCard title="Avg Latency" value={`${summary.avg_response_ms || 0}ms`} icon={<Activity />} color="orange" />
-          <StatCard title="Total Failed" value={summary.failed_count} icon={<Info />} color="red" />
-          <StatCard title="Schedule Contacts" value={(remainingSchedules || 0).toLocaleString()} icon={<Calendar />} color="green" subValue={`Used: ${usedSchedules.toLocaleString()} / ${totalScheduleSlots.toLocaleString() || '0'}`} />
+          {[
+            { title: "Total Tokens", value: summary.total_tokens.toLocaleString(), icon: <Zap />, color: "blue", subValue: `In: ${summary.input_tokens.toLocaleString()} | Out: ${summary.output_tokens.toLocaleString()}`, index: 0 },
+            { title: "Total Requests", value: summary.total_messages, icon: <MessageSquare />, color: "purple", index: 1 },
+            { title: "Memory Costs", value: summary.memory_extraction_tokens?.toLocaleString() || '0', icon: <Activity />, color: "orange", subValue: "Background Sync", index: 2 },
+            { title: "Avg Latency", value: `${summary.avg_response_ms || 0}ms`, icon: <Activity />, color: "orange", index: 3 },
+            { title: "Total Failed", value: summary.failed_count, icon: <Info />, color: "red", index: 4 },
+            { title: "Schedule Contacts", value: (remainingSchedules || 0).toLocaleString(), icon: <Calendar />, color: "green", subValue: `Used: ${usedSchedules.toLocaleString()} / ${totalScheduleSlots.toLocaleString() || '0'}`, index: 5 },
+          ].map((card) => (
+            <motion.div key={card.title} initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} transition={{ delay: card.index * 0.06, duration: 0.45, ease: "easeOut" }} viewport={{ once: true }} whileHover={{ y: -6 }} className="group cursor-default">
+              <StatCard {...card} />
+            </motion.div>
+          ))}
         </div>
 
         {/* Chart & Engine Usage */}
@@ -521,27 +527,49 @@ export default function UserDashboard() {
   );
 }
 
-function StatCard({ title, value, icon, color, subValue }) {
-  const colorMap = {
-    blue: "text-blue-600 bg-blue-50",
-    purple: "text-purple-600 bg-purple-50",
-    orange: "text-orange-600 bg-orange-50",
-    red: "text-red-600 bg-red-50",
-    green: "text-emerald-600 bg-emerald-50"
+function StatCard({ title, value, icon, color, subValue, index }) {
+  const colorPalettes = {
+    blue: { color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.08)', border: 'rgba(59, 130, 246, 0.12)', glow: '#3b82f6' },
+    purple: { color: '#a855f7', bg: 'rgba(168, 85, 247, 0.08)', border: 'rgba(168, 85, 247, 0.12)', glow: '#a855f7' },
+    orange: { color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.08)', border: 'rgba(245, 158, 11, 0.12)', glow: '#f59e0b' },
+    red: { color: '#ef4444', bg: 'rgba(239, 68, 68, 0.08)', border: 'rgba(239, 68, 68, 0.12)', glow: '#ef4444' },
+    green: { color: '#10b981', bg: 'rgba(16, 185, 129, 0.08)', border: 'rgba(16, 185, 129, 0.12)', glow: '#10b981' },
   };
+
+  const palette = colorPalettes[color] || colorPalettes.blue;
+
   return (
-    <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 flex flex-col gap-4 group hover:-translate-y-1 transition-all">
-      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${colorMap[color]}`}>
-        {icon}
-      </div>
-      <div>
-        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{title}</p>
-        <p className="text-3xl font-black text-gray-900 tracking-tighter">{value}</p>
-        {subValue && (
-          <p className="text-[9px] font-black text-gray-400 mt-2 p-1 bg-gray-50 rounded-lg text-center border border-dashed border-gray-200">
-            {subValue}
-          </p>
-        )}
+    <div
+      className="relative p-2 rounded-[2rem] h-full transition-all duration-500"
+      style={{
+        background: `linear-gradient(145deg, ${palette.bg}, #ffffff)`,
+        boxShadow: `0 20px 40px -15px ${palette.glow}30, 0 0 0 1px ${palette.border}`,
+      }}
+    >
+      <div className="relative bg-white/90 backdrop-blur-2xl h-full rounded-[1.75rem] p-5 md:p-6 flex flex-col gap-4 border border-white overflow-hidden shadow-sm transition-all duration-300 group-hover:bg-white group-hover:shadow-lg">
+        <div className="absolute -top-8 -right-8 w-24 h-24 rounded-full opacity-20 blur-2xl transition-opacity duration-500 group-hover:opacity-40" style={{ background: palette.color }} />
+
+        <div
+          className="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl flex items-center justify-center text-xl md:text-2xl shrink-0 transition-transform duration-500 group-hover:scale-105 relative z-10"
+          style={{
+            background: `linear-gradient(135deg, ${palette.bg}, #ffffff)`,
+            border: `1px solid ${palette.border}`,
+            boxShadow: `inset 0 4px 8px rgba(255,255,255,0.8), 0 8px 16px ${palette.glow}25`,
+            color: palette.color,
+          }}
+        >
+          {icon}
+        </div>
+
+        <div className="relative z-10 flex-1">
+          <p className="text-[9px] md:text-[10px] font-black uppercase tracking-widest mb-1 text-gray-400">{title}</p>
+          <p className="text-xl md:text-2xl font-black text-gray-900 tracking-tighter leading-tight">{value}</p>
+          {subValue && (
+            <p className="text-[8px] md:text-[9px] font-black text-gray-400 mt-2 p-2 bg-gray-50 rounded-lg text-center border border-dashed border-gray-200">
+              {subValue}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

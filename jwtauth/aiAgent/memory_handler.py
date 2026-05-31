@@ -54,6 +54,61 @@ def get_keywords_by_category(category):
             
     return keywords
 
+
+def detect_rejection_intent(text):
+    if not text:
+        return {"rejected": False, "fields_to_clear": [], "confidence": 0.0}
+
+    lower = str(text).lower()
+    rejection_keywords = [
+        "না", "নয়", "ভুল", "পরিবর্তন", "সাফ", "সাফ করো",
+        "cancel", "wrong", "not correct", "change", "update",
+    ]
+    field_map = {
+        "customer_name": ["name", "নাম"],
+        "phone_number": ["phone", "mobile", "মোবাইল", "ফোন", "number", "নম্বর", "নাম্বার"],
+        "address": ["address", "ঠিকানা", "location", "এড্রেস"],
+        "product_name": ["product", "পণ্য", "item", "ব্র্যান্ড"],
+        "quantity": ["quantity", "qty", "পরিমাণ", "unit", "পিস"],
+        "price": ["price", "টাকা", "amount", "দাম"],
+    }
+
+    has_rejection = any(keyword in lower for keyword in rejection_keywords)
+    fields_to_clear = [
+        field for field, keywords in field_map.items()
+        if any(keyword in lower for keyword in keywords)
+    ]
+
+    if not has_rejection:
+        return {"rejected": False, "fields_to_clear": [], "confidence": 0.0}
+
+    return {
+        "rejected": True,
+        "fields_to_clear": fields_to_clear,
+        "confidence": 0.9 if fields_to_clear else 0.78,
+    }
+
+
+def detect_interruption_intent(text, order_state=None):
+    if not text or order_state != "ordering":
+        return {"interrupted": False, "confidence": 0.0}
+
+    lower = str(text).lower()
+    question_words = ["?", "কত", "কি", "কী", "কখন", "কেন", "how", "when", "why", "what", "where"]
+    policy_words = [
+        "delivery", "ডেলিভারি", "charge", "চার্জ", "warranty", "ওয়ারেন্টি",
+        "return", "রিটার্ন", "refund", "রিফান্ড", "office", "অফিস", "খোলা",
+    ]
+    order_words = ["order", "অর্ডার", "buy", "purchase", "করব", "চাই", "নেব", "নিতে"]
+
+    has_question = any(word in lower for word in question_words)
+    has_policy = any(word in lower for word in policy_words)
+    continues_order = any(word in lower for word in order_words)
+
+    if (has_question or has_policy) and not continues_order:
+        return {"interrupted": True, "confidence": 0.9 if has_policy else 0.76}
+    return {"interrupted": False, "confidence": 0.0}
+
 def calculate_context_score(text):
     """
     Calculates a 'context score' (0-15+) based on DB-backed keywords.

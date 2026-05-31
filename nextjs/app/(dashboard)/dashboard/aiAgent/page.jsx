@@ -16,6 +16,7 @@ import {
 import api from "@/lib/api";
 import { toast } from 'react-hot-toast';
 import { useAuth } from "@/context/AuthContext";
+import { motion } from "framer-motion";
 
 export default function AIAgentPage() {
   const { user: authUser } = useAuth();
@@ -240,44 +241,79 @@ const openModal = (agent = null) => {
         </div>
 
         {/* Agents List */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {agents.map((agent) => (
-            <div key={agent.id} className="group bg-white/80 backdrop-blur-md py-7 px-4 md:p-8 rounded-[2.5rem] shadow-sm border border-gray-100 hover:border-indigo-200 transition-all hover:shadow-2xl relative overflow-hidden">
-              <div className="flex justify-between items-start mb-6">
-                <div className="w-14 h-14 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 group-hover:rotate-12 transition-transform duration-500">
-                  <CpuChipIcon className="h-8 w-8" />
-                </div>
-                <div className="flex gap-1">
-                  <button onClick={() => openModal(agent)} className="p-2 text-gray-400 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition-all">
-                    <PencilIcon className="h-5 w-5" />
-                  </button>
-                  <button onClick={() => handleDelete(agent.id)} className="p-2 text-gray-400 hover:bg-rose-50 hover:text-rose-600 rounded-xl transition-all">
-                    <TrashIcon className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {agents.map((agent, index) => {
+            const colorPalettes = [
+              { color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.08)', border: 'rgba(59, 130, 246, 0.12)' },
+              { color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.08)', border: 'rgba(139, 92, 246, 0.12)' },
+              { color: '#ec4899', bg: 'rgba(236, 72, 153, 0.08)', border: 'rgba(236, 72, 153, 0.12)' },
+            ];
+            const palette = colorPalettes[index % colorPalettes.length];
 
-              <h2 className="text-2xl font-black text-gray-900 mb-2 truncate">{agent.name}</h2>
-              <div className="flex flex-col md:flex-row items-center gap-2 mb-6">
-                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500 bg-indigo-50 px-2.5 py-1 rounded-lg italic">
-                  {agent.ai_model}
-                </span>
-                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 bg-gray-50 px-2.5 py-1 rounded-lg">
-                  {agent.platform}
-                </span>
-              </div>
-              
-              <div className="flex items-center justify-between pt-6 border-t border-gray-100">
-'                <div className="flex items-center gap'-2">
-                    <div className={`w-2 h-2 rounded-full ${agent.is_active ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'}`}></div>
-                    <span className={`text-[11px] font-black uppercase tracking-widest ${agent.is_active ? 'text-emerald-600' : 'text-gray-400'}`}>
-                        {agent.is_active ? "Live" : "Disabled"}
+            return (
+              <motion.div
+                key={agent.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.06, duration: 0.45, ease: "easeOut" }}
+                whileHover={{ y: -6 }}
+                className="group relative p-2 rounded-[2rem] transition-all duration-500 cursor-default"
+                style={{
+                  background: `linear-gradient(145deg, ${palette.bg}, #ffffff)`,
+                  boxShadow: `0 20px 40px -15px ${palette.color}30, 0 0 0 1px ${palette.border}`,
+                }}
+              >
+                <div className="relative bg-white/90 backdrop-blur-2xl rounded-[1.75rem] p-6 h-full border border-white overflow-hidden shadow-sm transition-all duration-300 group-hover:bg-white group-hover:shadow-lg flex flex-col">
+                  <div className="absolute -top-8 -right-8 w-28 h-28 rounded-full opacity-20 blur-2xl transition-opacity duration-500 group-hover:opacity-40" style={{ background: palette.color }} />
+
+                  <div className="flex justify-between items-start mb-6 relative z-10">
+                    <div
+                      className="w-12 h-12 rounded-2xl flex items-center justify-center text-xl shrink-0 transition-transform duration-500 group-hover:scale-105"
+                      style={{
+                        background: `linear-gradient(135deg, ${palette.bg}, #ffffff)`,
+                        border: `1px solid ${palette.border}`,
+                        boxShadow: `inset 0 4px 8px rgba(255,255,255,0.8), 0 8px 16px ${palette.color}25`,
+                        color: palette.color,
+                      }}
+                    >
+                      <CpuChipIcon className="h-6 w-6" />
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => openModal(agent)} className="p-2 text-gray-400 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition-all opacity-0 group-hover:opacity-100 duration-300">
+                        <PencilIcon className="h-4 w-4" />
+                      </button>
+                      <button onClick={() => handleDelete(agent.id)} className="p-2 text-gray-400 hover:bg-rose-50 hover:text-rose-600 rounded-xl transition-all opacity-0 group-hover:opacity-100 duration-300">
+                        <TrashIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <h2 className="text-lg md:text-xl font-black text-slate-900 mb-3 truncate relative z-10">{agent.name}</h2>
+                  
+                  <div className="flex flex-wrap items-center gap-2 mb-4 relative z-10">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-white bg-indigo-600 px-2.5 py-1 rounded-lg">
+                      {agent.ai_model}
                     </span>
+                    <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: palette.color, backgroundColor: palette.bg, border: `1px solid ${palette.border}`, padding: '0.25rem 0.625rem', borderRadius: '0.5rem' }}>
+                      {agent.platform}
+                    </span>
+                  </div>
+
+                  <div className="pt-4 border-t border-gray-100 mt-auto relative z-10">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${agent.is_active ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'}`}></div>
+                        <span className={`text-[10px] font-black uppercase tracking-widest ${agent.is_active ? 'text-emerald-600' : 'text-gray-400'}`}>
+                          {agent.is_active ? "Live" : "Disabled"}
+                        </span>
+                      </div>
+                      <span className="text-[8px] font-mono text-gray-300 uppercase">ID: {String(agent.id).slice(0, 8)}</span>
+                    </div>
+                  </div>
                 </div>
-                <span className="text-[10px] font-mono text-gray-300 uppercase">ID: {agent.id}</span>
-              </div>
-            </div>
-          ))}
+              </motion.div>
+            );
+          })}
         </div>
       </div>
 

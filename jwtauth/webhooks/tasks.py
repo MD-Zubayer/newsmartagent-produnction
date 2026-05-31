@@ -3,10 +3,18 @@
 from celery import shared_task
 import os, re, json, time, uuid, logging, hashlib, redis, requests
 from datetime import timedelta
-from aiAgent.models import AgentAI
+from decimal import Decimal, InvalidOperation
+from users.models import CustomerOrder
+from aiAgent.models import AgentAI, UserMemory
+from aiAgent.validators.field_validators import validate_phone_number_bd, validate_quantity, validate_price
 from django.db.models import Q
-from chat.services import save_message
-from aiAgent.memory_handler import handle_smart_memory_update
+from chat.services import save_message, get_last_message
+from aiAgent.memory_handler import (
+    handle_smart_memory_update,
+    detect_rejection_intent,
+    detect_interruption_intent,
+)
+from aiAgent.utils import normalize_order_entities
 from aiAgent.cache.hybrid_similarity import (
     get_cached_reply, set_cached_reply, fuzzy_match,
     get_global_cached_reply, set_global_cached_reply, global_fuzzy_match,
@@ -49,6 +57,698 @@ logger = logging.getLogger(__name__)
 r = get_redis_client(db=0)
 
 BUTTON_VOICE_PLATFORMS = {'whatsapp', 'messenger', 'facebook_comment', 'instagram', 'telegram'}
+
+
+def _get_or_create_user_memory(agent_config, sender_id):
+    sender_id_norm = str(sender_id).lower() if sender_id else sender_id
+    memory, _ = UserMemory.objects.get_or_create(ai_agent=agent_config, sender_id=sender_id_norm)
+    data = memory.data or {}
+    internal = data.get('_internal', {})
+    internal.setdefault('order_state', 'idle')
+    internal.setdefault('order_fields', {})
+    internal.setdefault('failed_attempts', {})
+    internal.setdefault('interruption_buffer', {'active': False})
+    internal.setdefault('recent_order_interest', {})
+    data['_internal'] = internal
+    if memory.data != data:
+        memory.data = data
+        memory.save(update_fields=['data'])
+    return memory
+
+
+def _increment_field_failure(user_memory, field_name, attempted_value=None):
+    data = user_memory.data or {}
+    internal = data.get('_internal', {})
+    failed_attempts = internal.get('failed_attempts', {})
+    stats = failed_attempts.get(field_name, {
+        'count': 0,
+        'last_values': [],
+        'strike_context': 0,
+        'last_attempt_at': None,
+        'escalated': False
+    })
+    stats['count'] = stats.get('count', 0) + 1
+    stats['strike_context'] = min(3, stats['count'])
+    last_values = stats.get('last_values', []) or []
+    if attempted_value is not None:
+        last_values.append(str(attempted_value))
+        stats['last_values'] = last_values[-3:]
+    stats['last_attempt_at'] = timezone.now().isoformat()
+    failed_attempts[field_name] = stats
+    internal['failed_attempts'] = failed_attempts
+    data['_internal'] = internal
+    user_memory.data = data
+    user_memory.save(update_fields=['data'])
+    return stats
+
+
+def _get_first_escalation_field(user_memory):
+    if not user_memory or not user_memory.data:
+        return None
+    failed_attempts = user_memory.data.get('_internal', {}).get('failed_attempts', {})
+    for field_name, stats in failed_attempts.items():
+        if stats.get('count', 0) >= 3 and not stats.get('escalated', False):
+            return field_name, stats
+    return None
+
+
+def _mark_field_escalated(user_memory, field_name):
+    if not user_memory or not user_memory.data:
+        return
+    data = user_memory.data or {}
+    internal = data.get('_internal', {})
+    failed_attempts = internal.get('failed_attempts', {})
+    stats = failed_attempts.get(field_name)
+    if stats:
+        stats['escalated'] = True
+        failed_attempts[field_name] = stats
+        internal['failed_attempts'] = failed_attempts
+        data['_internal'] = internal
+        user_memory.data = data
+        user_memory.save(update_fields=['data'])
+
+
+def _trigger_order_fallback_escalation(agent_config, sender_id, failed_field, last_values, contact_name=None):
+    from aiAgent.models import Contact
+    from chat.models import Notification
+    from users.services.email_service import send_order_fallback_alert_email
+
+    contact_obj = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
+    if contact_obj:
+        contact_obj.is_human_needed = True
+        contact_obj.save(update_fields=['is_human_needed'])
+        contact_name = contact_obj.name or contact_obj.push_name or sender_id
+    else:
+        contact_name = contact_name or sender_id
+
+    try:
+        Notification.objects.create(
+            user=agent_config.user,
+            message=(
+                f"Order parsing failed after 3 attempts for sender {sender_id}. "
+                f"Problematic field: {failed_field}. Last attempts: {', '.join(last_values or [])}. "
+                "The conversation has been flagged for human review."),
+            type='order_fallback_alert'
+        )
+    except Exception as e:
+        logger.error(f"Failed to create fallback notification: {e}", exc_info=True)
+
+    try:
+        if agent_config.user.email:
+            send_order_fallback_alert_email(
+                merchant_email=agent_config.user.email,
+                sender_id=sender_id,
+                failed_field=failed_field,
+                last_values=last_values or [],
+                contact_name=contact_name,
+                agent_name=agent_config.user.get_full_name() or agent_config.user.email
+            )
+    except Exception as e:
+        logger.error(f"Failed to send human fallback email: {e}", exc_info=True)
+
+    # Persist fallback state in memory for this contact
+    try:
+        user_memory = _get_or_create_user_memory(agent_config, sender_id)
+        _set_order_state(user_memory, 'human_fallback')
+    except Exception as e:
+        logger.error(f"Failed to persist human fallback memory state: {e}", exc_info=True)
+
+    return contact_obj
+
+
+ORDER_FIELDS = ['customer_name', 'phone_number', 'address', 'product_name', 'quantity', 'price', 'extra_info']
+
+
+def _set_order_state(user_memory, state):
+    if not user_memory or not user_memory.data:
+        return
+    data = user_memory.data or {}
+    internal = data.get('_internal', {})
+    internal['order_state'] = state
+    data['_internal'] = internal
+    user_memory.data = data
+    user_memory.save(update_fields=['data'])
+
+
+def _clear_order_fields(user_memory):
+    if not user_memory or not user_memory.data:
+        return
+    data = user_memory.data or {}
+    internal = data.get('_internal', {})
+    internal['order_fields'] = {}
+    internal['failed_attempts'] = {}
+    internal['interruption_buffer'] = {'active': False}
+    internal['order_state'] = 'idle'
+    data['_internal'] = internal
+    user_memory.data = data
+    user_memory.save(update_fields=['data'])
+
+
+def _get_order_fields(user_memory):
+    if not user_memory or not user_memory.data:
+        return {}
+    return user_memory.data.get('_internal', {}).get('order_fields', {})
+
+
+def _get_plain_order_values(user_memory):
+    fields = _get_order_fields(user_memory)
+    return {
+        field: fields.get(field, {}).get('value')
+        for field in ORDER_FIELDS
+        if fields.get(field, {}).get('value') and fields.get(field, {}).get('confidence', 1.0) >= 0.75
+    }
+
+
+def _hydrate_order_from_catalog(user, order_data):
+    hydrated = dict(order_data or {})
+    product_name = hydrated.get('product_name')
+    if not product_name:
+        return hydrated
+
+    quantity = hydrated.get('quantity') or 1
+    product = _resolve_catalog_product_for_user(user, product_name, quantity)
+    if not product:
+        return hydrated
+
+    hydrated['product_name'] = product.get('name', product_name)
+    if product.get('price') is not None:
+        hydrated['price'] = str(product.get('price'))
+    return hydrated
+
+
+def _save_recent_order_interest(user_memory, product_name=None, price=None, source_text=None):
+    if not user_memory or not product_name:
+        return
+    data = user_memory.data or {}
+    internal = data.get('_internal', {})
+    recent_interest = {
+        'product_name': str(product_name).strip(),
+        'updated_at': timezone.now().isoformat(),
+        'source': 'recent_chat',
+    }
+    if price is not None:
+        recent_interest['price'] = str(price)
+    if source_text:
+        recent_interest['source_text'] = str(source_text)[:300]
+    internal['recent_order_interest'] = recent_interest
+    data['_internal'] = internal
+    user_memory.data = data
+    user_memory.save(update_fields=['data'])
+
+
+def _get_recent_order_interest(user_memory):
+    if not user_memory or not user_memory.data:
+        return {}
+    recent_interest = user_memory.data.get('_internal', {}).get('recent_order_interest') or {}
+    if not recent_interest.get('product_name'):
+        return {}
+    return recent_interest
+
+
+def _seed_order_data_from_recent_interest(user_memory, order_data=None):
+    seeded = dict(order_data or {})
+    recent_interest = _get_recent_order_interest(user_memory)
+    if recent_interest and not seeded.get('product_name'):
+        seeded['product_name'] = recent_interest.get('product_name')
+    if recent_interest.get('price') and not seeded.get('price'):
+        seeded['price'] = recent_interest.get('price')
+    return seeded
+
+
+def _infer_catalog_product_from_text(user, text):
+    if not text:
+        return None
+    normalized, metadata = normalize_order_entities(user, {'product_name': text})
+    if metadata.get('product_name'):
+        # Ensure the inferred product actually exists in the merchant's catalog
+        inferred_name = normalized.get('product_name')
+        try:
+            product = _validate_product_in_catalog(user, inferred_name, 1)
+            if product:
+                # Return the canonical product name from catalog to reduce mismatches
+                return product.get('name') or inferred_name
+        except Exception:
+            # On any error during validation, don't return an inferred product
+            return None
+    return None
+
+
+def _has_complete_order_fields(user_memory):
+    fields = _get_order_fields(user_memory)
+    for key in ORDER_FIELDS:
+        if key in ['extra_info', 'price']:
+            continue
+        field_data = fields.get(key, {})
+        if not field_data.get('value') or field_data.get('confidence', 1.0) < 0.75:
+            return False
+    return True
+
+
+def _validate_product_in_catalog(user, product_name, quantity=1):
+    """
+    Check if product exists in user's catalog.
+    Returns product dict if valid, None if invalid.
+    """
+    if not product_name:
+        return None
+    product = user.get_catalog_product(product_name, quantity)
+    return product
+
+
+def _is_product_valid_in_memory(user_memory, user):
+    """
+    Validate if the product saved in order memory exists in catalog.
+    Returns True if valid, False if invalid.
+    """
+    fields = _get_order_fields(user_memory)
+    product_name = fields.get('product_name', {}).get('value')
+    quantity = fields.get('quantity', {}).get('value') or 1
+    
+    if not product_name:
+        return False
+    
+    try:
+        qty = int(str(quantity).strip())
+    except (ValueError, TypeError):
+        qty = 1
+    
+    product = _validate_product_in_catalog(user, product_name, qty)
+    return product is not None
+
+
+def _get_confirmation_prompt(user_memory):
+    order_fields = _get_order_fields(user_memory)
+    lines = ["আপনার অর্ডারের খসড়া নিচে দেখুন:"]
+    for key in ORDER_FIELDS:
+        label = key.replace('_', ' ').title()
+        field_data = order_fields.get(key, {})
+        value = field_data.get('value') or 'মৌলিক তথ্য প্রয়োজন'
+        status = '✅' if field_data.get('value') and field_data.get('confidence', 1.0) >= 0.75 else '❌'
+        lines.append(f"{status} {label}: {value}")
+
+    lines.append("\nএই তথ্য ঠিক থাকলে CONFIRM_ORDER চাপুন। পরিবর্তন করতে EDIT_ORDER চাপুন।")
+    lines.append("যদি বাতিল করতে চান, CANCEL_ORDER চাপুন।")
+    return "\n".join(lines)
+
+
+def _save_order_fields_to_memory(user_memory, order_data, source='ai_extraction', field_metadata=None):
+    if not user_memory or not order_data:
+        return
+    data = user_memory.data or {}
+    internal = data.get('_internal', {})
+    order_fields = internal.get('order_fields', {})
+
+    field_metadata = field_metadata or {}
+    for key, value in (order_data or {}).items():
+        if key not in ORDER_FIELDS or value is None:
+            continue
+        existing = order_fields.get(key, {})
+        metadata = field_metadata.get(key, {})
+        order_fields[key] = {
+            'value': str(value).strip(),
+            'confidence': metadata.get('confidence', existing.get('confidence', 0.95 if source == 'regex_validated' else 0.85)),
+            'source': metadata.get('source', source),
+            'updated_at': timezone.now().isoformat()
+        }
+        if metadata.get('matched_from'):
+            order_fields[key]['matched_from'] = metadata.get('matched_from')
+
+    internal['order_fields'] = order_fields
+    if internal.get('order_state') == 'idle' and order_fields:
+        internal['order_state'] = 'ordering'
+    data['_internal'] = internal
+    user_memory.data = data
+    user_memory.save(update_fields=['data'])
+
+
+def _get_next_missing_field(user_memory):
+    if not user_memory or not user_memory.data:
+        return None
+    order_fields = _get_order_fields(user_memory)
+    for key in ORDER_FIELDS:
+        if key in ['extra_info', 'price']:
+            continue
+        field_data = order_fields.get(key, {})
+        if not field_data.get('value') or field_data.get('confidence', 1.0) < 0.75:
+            return key
+    return None
+
+
+def _is_simple_greeting(text):
+    if not text:
+        return False
+    normalized = re.sub(r'[^\w\s\u0980-\u09FF]', ' ', str(text).lower()).strip()
+    normalized = re.sub(r'\s+', ' ', normalized)
+    greetings = {
+        'hi', 'hello', 'hey', 'salam', 'assalamualaikum', 'assalamu alaikum',
+        'আসসালামু আলাইকুম', 'সালাম', 'হাই', 'হ্যালো'
+    }
+    return normalized in greetings
+
+
+def _get_field_prompt(field_name, strike_level=1):
+    examples = {
+        'customer_name': 'উদাহরণ: আমার নাম জাহিদ',
+        'phone_number': 'উদাহরণ: 01712345678',
+        'address': 'উদাহরণ: ১৪/ক, ধানমন্ডি, ঢাকা',
+        'product_name': 'উদাহরণ: রেডমি নোট ১৩',
+        'quantity': 'উদাহরণ: ২',
+        'price': 'উদাহরণ: ১৫০০'
+    }
+    labels = {
+        'customer_name': 'আপনার নাম',
+        'phone_number': 'আপনার মোবাইল নম্বর',
+        'address': 'ডেলিভারি ঠিকানা',
+        'product_name': 'পণ্যের নাম',
+        'quantity': 'পরিমাণ',
+        'price': 'দাম'
+    }
+    label = labels.get(field_name, field_name.replace('_', ' '))
+    if strike_level == 1:
+        return f"{label} কি?"
+    if strike_level == 2:
+        example = examples.get(field_name, '')
+        return f"দয়া করে {label} দিন, যেমন: {example}."
+    return f"আমি {label} পরিষ্কারভাবে বুঝতে পারিনি। এইবার দয়া করে সঠিকভাবে দিন।"
+
+
+def _get_order_prompt_instruction(agent_config, sender_id, text, existing_extra=None):
+    try:
+        if _is_simple_greeting(text):
+            return existing_extra or ''
+        user_memory = _get_or_create_user_memory(agent_config, sender_id)
+        internal = user_memory.data.get('_internal', {})
+        state = internal.get('order_state', 'idle')
+        failed_attempts = internal.get('failed_attempts', {})
+        missing_field = _get_next_missing_field(user_memory)
+
+        if state not in ['ordering', 'editing'] or not missing_field:
+            return existing_extra or ''
+
+        strike = failed_attempts.get(missing_field, {}).get('strike_context', 0)
+        if strike == 0:
+            prompt = _get_field_prompt(missing_field, 1)
+        elif strike == 1:
+            prompt = _get_field_prompt(missing_field, 2)
+        else:
+            prompt = (
+                f"If you still cannot extract the customer's {missing_field}, do not guess it. "
+                "Instead, ask them to provide it again in a clear format, and if the issue persists, prepare to escalate to a human."
+            )
+        return f"{existing_extra or ''}\n\nOrder collection context: You are collecting order details from the user. Ask for only the missing field: {prompt}"
+    except Exception:
+        return existing_extra or ''
+
+
+def _is_order_rejection_text(text):
+    return detect_rejection_intent(text).get('rejected', False)
+
+
+def _get_rejected_fields(text):
+    return detect_rejection_intent(text).get('fields_to_clear', [])
+
+
+def _clear_rejected_order_fields(user_memory, rejected_fields):
+    if not user_memory or not rejected_fields:
+        return
+    data = user_memory.data or {}
+    internal = data.get('_internal', {})
+    order_fields = internal.get('order_fields', {})
+    for field in rejected_fields:
+        if field in order_fields:
+            order_fields.pop(field, None)
+    internal['order_fields'] = order_fields
+    data['_internal'] = internal
+    user_memory.data = data
+    user_memory.save(update_fields=['data'])
+
+
+def _is_order_interruption(text, user_memory=None):
+    return detect_interruption_intent(text, _get_order_state(user_memory)).get('interrupted', False)
+
+
+def _set_interruption_buffer(user_memory, suspended_field):
+    if not user_memory or not user_memory.data:
+        return
+    data = user_memory.data or {}
+    internal = data.get('_internal', {})
+    internal['interruption_buffer'] = {
+        'active': True,
+        'suspended_field': suspended_field,
+        'suspended_state': internal.get('order_state', 'ordering'),
+        'resumed': False,
+        'created_at': timezone.now().isoformat()
+    }
+    data['_internal'] = internal
+    user_memory.data = data
+    user_memory.save(update_fields=['data'])
+
+
+def _clear_interruption_buffer(user_memory):
+    if not user_memory or not user_memory.data:
+        return
+    data = user_memory.data or {}
+    internal = data.get('_internal', {})
+    internal['interruption_buffer'] = {'active': False}
+    data['_internal'] = internal
+    user_memory.data = data
+    user_memory.save(update_fields=['data'])
+
+
+def _get_interruption_resume_prompt(user_memory):
+    if not user_memory or not user_memory.data:
+        return None
+    data = user_memory.data
+    internal = data.get('_internal', {})
+    buffer = internal.get('interruption_buffer', {})
+    if not buffer.get('active') or buffer.get('resumed'):
+        return None
+    field = buffer.get('suspended_field') or _get_next_missing_field(user_memory)
+    
+    # Mark it as resumed so it isn't repeatedly prompted
+    buffer['resumed'] = True
+    internal['interruption_buffer'] = buffer
+    data['_internal'] = internal
+    user_memory.data = data
+    user_memory.save(update_fields=['data'])
+
+    if field:
+        label = field.replace('_', ' ')
+        return f"আবার ফিরে আসছি — আপনার অর্ডারের পরবর্তী ধাপ হল: {label} দিন।"
+    return "আবার ফিরে আসছি — আপনার অর্ডার পুনরায় শুরু করছি।"
+
+
+def _is_active_unresumed_interruption(user_memory):
+    if not user_memory or not user_memory.data:
+        return False
+    buffer = user_memory.data.get('_internal', {}).get('interruption_buffer', {})
+    return bool(buffer.get('active') and not buffer.get('resumed'))
+
+
+def _extract_plain_reply(ai_data):
+    raw_reply = (ai_data or {}).get('reply', '') or ''
+    json_match = re.search(r'\{.*\}', raw_reply, re.DOTALL)
+    if json_match:
+        try:
+            parsed = json.loads(json_match.group())
+            reply = str(parsed.get('reply') or '').strip()
+            if reply:
+                return reply
+        except (json.JSONDecodeError, AttributeError, TypeError):
+            pass
+    return raw_reply.strip()
+
+
+def _get_order_state(user_memory):
+    if not user_memory or not user_memory.data:
+        return 'idle'
+    return user_memory.data.get('_internal', {}).get('order_state', 'idle')
+
+
+def _order_confirmation_pending(user_memory):
+    if not user_memory:
+        return False
+    return _get_order_state(user_memory) in ['awaiting_confirmation', 'editing']
+
+
+def _get_missing_order_fields_prompt(user_memory):
+    if not user_memory or not user_memory.data:
+        return None
+    order_fields = _get_order_fields(user_memory)
+    missing = [
+        field.replace('_', ' ')
+        for field in ORDER_FIELDS
+        if field not in ['extra_info', 'price'] and not order_fields.get(field, {}).get('value')
+    ]
+    if not missing:
+        return None
+
+    if _get_order_state(user_memory) == 'editing':
+        return (
+            "আপনার অর্ডার আপডেটের জন্য নিম্নলিখিত তথ্য দিন: "
+            + ", ".join(missing)
+            + "."
+        )
+    return (
+        "আপনার অর্ডার সম্পূর্ণ করতে প্রয়োজন: "
+        + ", ".join(missing)
+        + "."
+    )
+
+
+def _is_confirmation_text(text):
+    if not text:
+        return False
+    return bool(re.search(r'\b(confirm|confirm order|yes|হ্যাঁ|হ্যা|ঠিক|ঠিক আছে|sure|ok)\b', text, re.IGNORECASE))
+
+
+def _is_rejection_text(text):
+    return detect_rejection_intent(text).get('rejected', False)
+
+
+def _queue_order_for_confirmation(agent_config, sender_id, request_type, data, order_data, msg_id=None, source='ai_extraction'):
+    user_memory = _get_or_create_user_memory(agent_config, sender_id)
+    current_text = str(data.get('message_text') or data.get('message') or '')
+    merged_order = _merge_order_data_with_conversation(agent_config, sender_id, request_type, current_text, order_data)
+    normalized_order, field_metadata = normalize_order_entities(agent_config.user, merged_order)
+    normalized_order = _hydrate_order_from_catalog(agent_config.user, normalized_order)
+    _save_order_fields_to_memory(user_memory, normalized_order, source=source, field_metadata=field_metadata)
+
+    if user_memory and user_memory.data:
+        internal = user_memory.data.get('_internal', {})
+        if internal.get('interruption_buffer', {}).get('active'):
+            _clear_interruption_buffer(user_memory)
+            logger.info(f"🔁 Resumed interrupted order flow for {sender_id}.")
+
+    if _has_complete_order_fields(user_memory):
+        _set_order_state(user_memory, 'awaiting_confirmation')
+        return _get_confirmation_prompt(user_memory)
+    return None
+
+
+def _resolve_catalog_product_for_user(user, product_name, quantity=1):
+    if not product_name:
+        return None
+
+    try:
+        quantity_value = int(quantity)
+    except (ValueError, TypeError):
+        quantity_value = 1
+
+    product = user.get_catalog_product(product_name, quantity_value)
+    if not product:
+        return None
+
+    stock = product.get('stock')
+    if stock is not None and stock < quantity_value:
+        return None
+
+    return product
+
+
+def create_customer_order_from_memory(agent_config, sender_id, request_type, msg_id=None):
+    user_memory = _get_or_create_user_memory(agent_config, sender_id)
+    if not _has_complete_order_fields(user_memory):
+        logger.warning(f"Cannot create order: incomplete memory fields for {sender_id}")
+        return None
+
+    input_fields = _get_plain_order_values(user_memory)
+    customer_name = str(input_fields.get('customer_name') or sender_id).strip()
+    product_name = str(input_fields.get('product_name') or 'Product').strip()
+    address = str(input_fields.get('address') or '').strip()
+    phone_number = str(input_fields.get('phone_number') or sender_id).strip()
+    extra_info = str(input_fields.get('extra_info') or '').strip()
+
+    quantity = input_fields.get('quantity')
+    try:
+        quantity_value = int(str(quantity).strip()) if quantity is not None else 1
+    except (ValueError, TypeError):
+        quantity_value = 1
+
+    product = _resolve_catalog_product_for_user(agent_config.user, product_name, quantity_value)
+    if not product:
+        logger.warning(f"Catalog validation failed for product '{product_name}' and quantity {quantity_value} for user {agent_config.user.email}")
+        return None
+
+    price_value = product.get('price')
+    product_name = product.get('name', product_name)
+
+    source_platform = request_type if request_type != 'web_widget' else 'web'
+
+    try:
+        order = CustomerOrder.objects.create(
+            user=agent_config.user,
+            customer_name=customer_name,
+            phone_number=phone_number,
+            address=address,
+            product_name=product_name,
+            price=price_value,
+            item_quantity=quantity_value,
+            extra_info=extra_info,
+            source_platform=source_platform,
+            source_contact_id=sender_id
+        )
+        if msg_id:
+            r.setex(f'order_created:{msg_id}', 86400, '1')
+        _clear_order_fields(user_memory)
+        _set_order_state(user_memory, 'idle')
+        logger.info(f"Created CustomerOrder #{order.id} from memory-confirmed order")
+        return order
+    except Exception as e:
+        logger.error(f"Memory-based AI order creation failed: {e}", exc_info=True)
+        return None
+
+
+def handle_order_button_action(agent_config, contact, action, page_id, platform):
+    from aiAgent.business_logic.logic_handler import deliver_whatsapp_reply, deliver_instagram_reply, deliver_facebook_reply, deliver_telegram_reply
+
+    sender_id = contact.identifier
+    user_memory = _get_or_create_user_memory(agent_config, sender_id)
+    response_text = None
+    reply_data = {'sender_id': sender_id, 'message_id': '', 'sessionId': ''}
+
+    if platform == 'whatsapp':
+        reply_data['delivery_jid'] = sender_id
+    elif platform == 'telegram':
+        reply_data['chat_id'] = sender_id
+    elif platform in ['messenger', 'facebook_comment', 'instagram']:
+        reply_data['page_id'] = page_id
+        reply_data['page_access_token'] = agent_config.access_token
+
+    if action == 'CONFIRM_ORDER':
+        order = create_customer_order_from_memory(agent_config, sender_id, platform)
+        if order:
+            response_text = f"✅ আপনার অর্ডার #{order.id} নিশ্চিত করা হয়েছে। ইনভয়েস শীঘ্রই পাঠানো হবে।"
+        else:
+            response_text = "দুঃখিত, আপনার অর্ডার নিশ্চিত করা যায়নি। দয়া করে আবার চেষ্টা করুন বা তথ্য বদলান।"
+    elif action == 'EDIT_ORDER':
+        _set_order_state(user_memory, 'editing')
+        current_summary = _get_confirmation_prompt(user_memory)
+        response_text = (
+            "ঠিক আছে! আপনি কোন তথ্য আপডেট করতে চান? নিচে আপনার বর্তমান অর্ডার খসড়া দেখুন:\n\n"
+            + current_summary
+            + "\n\nআপডেট করতে চান এমন ক্ষেত্রটি লিখুন অথবা নির্দিষ্ট প্রয়োজনীয় তথ্য দিন।"
+        )
+    elif action == 'CANCEL_ORDER':
+        _clear_order_fields(user_memory)
+        response_text = "আপনার অর্ডারটি বাতিল করা হয়েছে। প্রয়োজনে আবার নতুন করে শুরু করতে পারেন।"
+    else:
+        return False
+
+    if not response_text:
+        return False
+
+    delivered = False
+    if platform == 'whatsapp':
+        delivered = deliver_whatsapp_reply(reply_data, response_text)
+    elif platform == 'instagram':
+        delivered = deliver_instagram_reply(reply_data, response_text, page_id, agent_config.access_token)
+    elif platform == 'telegram':
+        delivered = deliver_telegram_reply(reply_data, response_text, agent_config.access_token)
+    else:
+        delivered = deliver_facebook_reply(reply_data, response_text, page_id, agent_config.access_token)
+
+    return delivered
 
 
 def _maybe_send_button_voice_hint(request_type, data, sender_id, page_id, effective_access_token, contact_obj):
@@ -175,6 +875,298 @@ def send_human_handoff_ws(user_id, agent_id, sender_id, contact_id, contact_name
         logger.info(f"🔊 Human handoff WebSocket notification sent for user_{user_id}")
     except Exception as e:
         logger.error(f"Human handoff WebSocket error: {e}")
+
+
+def create_customer_order_from_ai(agent_config, sender_id, request_type, data, order_data, msg_id=None):
+    if msg_id and r.get(f'order_created:{msg_id}'):
+        logger.info(f"Duplicate AI order creation skipped for msg_id {msg_id}")
+        return None
+
+    if not isinstance(order_data, dict):
+        logger.warning("Invalid order_data for AI order creation.")
+        return None
+
+    current_text = str(data.get('message_text') or '')
+    order_data = _merge_order_data_with_conversation(agent_config, sender_id, request_type, current_text, order_data)
+
+    customer_name = str(order_data.get('customer_name') or data.get('sender_name') or sender_id or '').strip()
+    product_name = str(order_data.get('product_name') or order_data.get('item') or 'Product').strip()
+    address = str(order_data.get('address') or order_data.get('delivery_address') or '').strip()
+    phone_number = str(order_data.get('phone_number') or sender_id or '').strip()
+    district = str(order_data.get('district') or '').strip()
+    upazila = str(order_data.get('upazila') or '').strip()
+    extra_info = str(order_data.get('extra_info') or order_data.get('notes') or data.get('message_text') or '').strip()
+
+    if not customer_name or not product_name or not address:
+        logger.warning("Incomplete AI order_data: missing required fields.")
+        return None
+
+    quantity = order_data.get('quantity')
+    item_quantity = 1
+    try:
+        item_quantity = int(quantity) if quantity else 1
+    except (ValueError, TypeError):
+        item_quantity = 1
+
+    product = _resolve_catalog_product_for_user(agent_config.user, product_name, item_quantity)
+    if not product:
+        logger.warning(f"Catalog validation failed for product '{product_name}' and quantity {item_quantity} for user {agent_config.user.email}")
+        return None
+
+    price = product.get('price')
+    product_name = product.get('name', product_name)
+
+    if quantity:
+        try:
+            quantity_value = int(quantity)
+            extra_info = f"{extra_info} Quantity: {quantity_value}".strip()
+        except (ValueError, TypeError):
+            pass
+
+    source_platform = request_type if request_type != 'web_widget' else 'web'
+    source_contact_id = str(order_data.get('source_contact_id') or sender_id or '')
+
+    try:
+        order = CustomerOrder.objects.create(
+            user=agent_config.user,
+            customer_name=customer_name,
+            phone_number=phone_number,
+            address=address,
+            district=district,
+            upazila=upazila,
+            product_name=product_name,
+            price=price,
+            item_quantity=item_quantity,
+            extra_info=extra_info,
+            source_platform=source_platform,
+            source_contact_id=source_contact_id
+        )
+        if msg_id:
+            r.setex(f'order_created:{msg_id}', 86400, '1')
+        logger.info(f"Created CustomerOrder #{order.id} from AI order intent")
+        return order
+    except Exception as e:
+        logger.error(f"AI order creation failed: {e}", exc_info=True)
+        return None
+
+
+def _merge_order_data_with_conversation(agent_config, sender_id, request_type, current_text, order_data):
+    user_memory = _get_or_create_user_memory(agent_config, sender_id)
+    merged = _seed_order_data_from_recent_interest(user_memory, order_data)
+    merged = extract_order_data_from_text(current_text, merged, user_memory)
+    if not merged.get('product_name'):
+        inferred_product = _infer_catalog_product_from_text(agent_config.user, current_text)
+        if inferred_product:
+            merged['product_name'] = inferred_product
+
+    try:
+        history = get_last_message(agent_config, sender_id, limit=10, platform=request_type)
+        for msg in history:
+            if msg.get('role') != 'user':
+                continue
+            history_text = str(msg.get('content') or '')
+            merged = extract_order_data_from_text(history_text, merged, user_memory)
+            if not merged.get('product_name'):
+                inferred_product = _infer_catalog_product_from_text(agent_config.user, history_text)
+                if inferred_product:
+                    merged['product_name'] = inferred_product
+    except Exception as e:
+        logger.error(f"Order data merge error: {e}", exc_info=True)
+
+    normalized, _ = normalize_order_entities(agent_config.user, merged)
+    return _hydrate_order_from_catalog(agent_config.user, normalized)
+
+
+def extract_order_data_from_text(text, order_data=None, user_memory=None):
+    if not text:
+        return dict(order_data or {})
+
+    merged = dict(order_data or {})
+    text = text.strip()
+
+    def _search(patterns):
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match and match.group(1):
+                return match.group(1).strip()
+        return None
+
+    if not merged.get('customer_name'):
+        merged['customer_name'] = _search([
+            r'\b(?:name|customer_name|customer)\s*[:\-]\s*([^,;\n]+)',
+            r'\b(?:my name is|I am|আমি)\s+([^,;\n]+)'
+        ])
+        # 🧠 Context-aware: if asking for customer_name and user just typed a word/phrase, treat it as name
+        if not merged.get('customer_name') and user_memory is not None and _get_next_missing_field(user_memory) == 'customer_name':
+            # Check if text looks like a name (not a phone, address, or number)
+            if not re.search(r'(\d{10,}|@|\.com|,|\bta\b|\bpcs\b)', text, re.IGNORECASE):
+                # Clean up and use text as name
+                name_candidate = re.sub(r'[^\w\s\u0980-\u09FF]', ' ', text).strip()
+                if name_candidate and len(name_candidate.split()) <= 4 and len(name_candidate) < 50:
+                    merged['customer_name'] = name_candidate
+
+    if not merged.get('phone_number'):
+        merged['phone_number'] = _search([
+            r'\b(?:phone|phone_number|number|mobile)\s*[:\-]\s*(\+?\d[\d\s\-]{7,}\d)',
+        ])
+        if not merged['phone_number']:
+            phone_match = re.search(r'(\+?88)?0\d{10}', text)
+            if phone_match:
+                merged['phone_number'] = phone_match.group(0)
+        # 🧠 Context-aware: if asking for phone and user types only digits, treat as phone
+        if not merged.get('phone_number') and user_memory is not None and _get_next_missing_field(user_memory) == 'phone_number':
+            digit_only = re.sub(r'\D', '', text)
+            if 10 <= len(digit_only) <= 15:  # Bangladesh phone is 10-11 digits
+                merged['phone_number'] = digit_only
+
+    if not merged.get('customer_name') and merged.get('phone_number'):
+        name_candidate = text.split(str(merged.get('phone_number')))[0]
+        name_candidate = re.sub(r'[\d,+\-:;]+', ' ', name_candidate).strip(' ,।')
+        if name_candidate and len(name_candidate.split()) <= 4:
+            merged['customer_name'] = name_candidate
+
+    if user_memory is not None and not merged.get('address') and not merged.get('quantity'):
+        address_qty_match = re.match(r'^\s*(.+?)\s*[,،]\s*([1-9]\d{0,3})\s*(?:ta|টা|টি|pcs|pieces|unit|units)?\s*$', text, re.IGNORECASE)
+        if address_qty_match and _get_next_missing_field(user_memory) in ['address', 'quantity']:
+            possible_address = address_qty_match.group(1).strip(' ,।')
+            if possible_address and not _infer_catalog_product_from_text(user_memory.ai_agent.user, possible_address):
+                merged['address'] = possible_address
+                merged['quantity'] = address_qty_match.group(2)
+
+    if not merged.get('address'):
+        merged['address'] = _search([
+            r'\b(?:address|address is|located at|ঠিকানা)\s*[:\-]\s*([^,;\n]+)',
+        ])
+        if not merged.get('address') and user_memory is not None and _get_next_missing_field(user_memory) == 'address':
+            if not merged.get('phone_number') and not _infer_catalog_product_from_text(user_memory.ai_agent.user, text):
+                merged['address'] = text
+
+    if not merged.get('product_name'):
+        merged['product_name'] = _search([
+            r'\b(?:product name|product|item|ব্র্যান্ড|পণ্যের নাম)\s*[:\-]\s*([^,;\n]+)',
+        ])
+        # 🧠 Context-aware: if asking for product_name and user provided text, treat as product
+        if not merged.get('product_name') and user_memory is not None and _get_next_missing_field(user_memory) == 'product_name':
+            # Only if text isn't a phone, address, or obvious quantity
+            if not re.search(r'(\d{10,}|,|\bta\b|\btata\b|\bpcs\b|quantity)', text, re.IGNORECASE):
+                product_candidate = text.strip()
+                if product_candidate and len(product_candidate) < 100:
+                    merged['product_name'] = product_candidate
+
+    if not merged.get('quantity'):
+        quantity = _search([
+            r'\b(?:quantity|qty|poriman|পরিমাণ)\s*[:\-]\s*(\d+)',
+            r'\b(\d+)\s*(?:ta|pcs|pieces|unit|units|qty|পিস|টি|টা|খানা|টি পণ্য|টা পণ্য)\b',
+        ])
+        if quantity:
+            merged['quantity'] = quantity
+        elif user_memory is not None and _get_next_missing_field(user_memory) == 'quantity':
+            quantity_match = re.fullmatch(r'\s*([1-9]\d{0,3})\s*', text, re.IGNORECASE)
+            if quantity_match:
+                merged['quantity'] = quantity_match.group(1)
+
+    if not merged.get('price'):
+        merged['price'] = _search([
+            r'\b(?:price|amount|total|টাকা)\s*[:\-]\s*([0-9]+(?:\.[0-9]+)?)',
+        ])
+        if not merged.get('price'):
+            # Fallback: plain numeric message likely means the price when other order fields exist
+            plain_number = re.fullmatch(r'\s*([0-9]{3,}(?:\.[0-9]+)?)\s*', text)
+            if plain_number:
+                merged['price'] = plain_number.group(1)
+
+    if not merged.get('extra_info'):
+        merged['extra_info'] = _search([
+            r'\b(?:extra_info|notes|note|special instructions|special instruction|বিশেষ নির্দেশনা)\s*[:\-]\s*([^,;\n]+)',
+        ])
+
+    if user_memory is not None:
+        if merged.get('phone_number'):
+            valid_phone = validate_phone_number_bd(merged['phone_number'])
+            if valid_phone:
+                merged['phone_number'] = valid_phone
+            else:
+                _increment_field_failure(user_memory, 'phone_number', merged.get('phone_number'))
+                merged.pop('phone_number', None)
+
+        if merged.get('quantity'):
+            valid_qty = validate_quantity(merged['quantity'], text)
+            if valid_qty is not None:
+                merged['quantity'] = str(valid_qty)
+            else:
+                _increment_field_failure(user_memory, 'quantity', merged.get('quantity'))
+                merged.pop('quantity', None)
+
+        if merged.get('price'):
+            valid_price = validate_price(merged['price'])
+            if valid_price is not None:
+                merged['price'] = str(valid_price)
+            else:
+                _increment_field_failure(user_memory, 'price', merged.get('price'))
+                merged.pop('price', None)
+
+    return merged
+
+
+def _has_order_intent_in_conversation(agent_config, sender_id, request_type, current_text):
+    """
+    ONLY return True if user explicitly confirmed they want to order.
+    Don't use keyword matching - let AI decide intent naturally.
+    """
+    try:
+        history = get_last_message(agent_config, sender_id, limit=10, platform=request_type)
+    except Exception:
+        history = []
+
+    user_memory = _get_or_create_user_memory(agent_config, sender_id)
+    
+    # 1. If there was recent order interest AND user confirms with yes/confirm -> return True
+    if _get_recent_order_interest(user_memory) and re.search(
+        r'\b(yes|yeah|yep|ok|okay|confirm|হ্যা|হ্যাঁ|জি|ঠিক আছে|নেব|নিতে চাই|করব)\b',
+        current_text,
+        re.IGNORECASE,
+    ):
+        return True
+
+    # 2. ONLY explicit "order now" or "place order" phrases (not just "order" or keywords)
+    # This avoids false positives from casual conversation
+    explicit_order_phrases = [
+        r'\b(place order|order now|আমি অর্ডার করতে চাই|order করবো)\b',
+        r'\b(order|অর্ডার)\b.*\b(করতে|করব|করছি|দিন|দিতে|দরকার)\b'
+    ]
+    
+    combined_text = current_text + '\n' + '\n'.join([msg.get('content', '') for msg in history[-3:] if msg.get('role') == 'user'])
+    for pattern in explicit_order_phrases:
+        if re.search(pattern, combined_text, re.IGNORECASE):
+            return True
+    
+    return False
+
+
+def _is_complete_order_data(order_data):
+    if not isinstance(order_data, dict):
+        return False
+    required = ['customer_name', 'phone_number', 'address', 'product_name', 'quantity', 'price']
+    for key in required:
+        value = order_data.get(key)
+        if value is None or str(value).strip() == '':
+            return False
+    return True
+
+
+def _has_partial_order_data(order_data):
+    if not isinstance(order_data, dict):
+        return False
+    present = {
+        key for key in ['customer_name', 'phone_number', 'address', 'product_name', 'quantity', 'price']
+        if order_data.get(key) is not None and str(order_data.get(key)).strip()
+    }
+    if {'customer_name', 'phone_number'} <= present:
+        return True
+    if {'phone_number', 'address'} <= present:
+        return True
+    return len(present) >= 3
+
 
 @shared_task(bind=True, queue='chat_queue', max_retries=3)
 def sync_contact_profile_picture(self, contact_id, platform, sender_id, page_id, token, data=None):
@@ -315,12 +1307,12 @@ def _send_platform_buttons_alone(request_type, data, sender_id, page_id, effecti
     except Exception as e:
         logger.error(f"Failed to send standalone buttons: {e}")
 
-def _deliver_reply_with_buttons(request_type, data, clean_reply, sender_id, page_id, effective_access_token, agent_config):
+def _deliver_reply_with_buttons(request_type, data, clean_reply, sender_id, page_id, effective_access_token, agent_config, send_buttons=True):
     from aiAgent.models import Contact
     contact_obj = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
     
     if request_type == 'whatsapp':
-        if contact_obj:
+        if send_buttons and contact_obj:
             try:
                 from aiAgent.business_logic.logic_handler import send_whatsapp_buttons
                 delivered = send_whatsapp_buttons(data, contact_obj, reply_text=clean_reply)
@@ -330,7 +1322,7 @@ def _deliver_reply_with_buttons(request_type, data, clean_reply, sender_id, page
             except Exception as e:
                 logger.warning(f"Combined buttons failed: {e}")
         delivered = deliver_whatsapp_reply(data, clean_reply)
-        if delivered and contact_obj:
+        if delivered and send_buttons and contact_obj:
             from aiAgent.business_logic.logic_handler import send_whatsapp_buttons
             buttons_sent = send_whatsapp_buttons(data, contact_obj)
             if buttons_sent:
@@ -338,7 +1330,7 @@ def _deliver_reply_with_buttons(request_type, data, clean_reply, sender_id, page
         return delivered
 
     elif request_type == 'instagram':
-        if contact_obj:
+        if send_buttons and contact_obj:
             try:
                 from aiAgent.business_logic.logic_handler import send_instagram_buttons
                 delivered = send_instagram_buttons(sender_id, page_id, effective_access_token, contact_obj, reply_text=clean_reply)
@@ -348,7 +1340,7 @@ def _deliver_reply_with_buttons(request_type, data, clean_reply, sender_id, page
             except Exception as e:
                 logger.warning(f"Combined buttons failed: {e}")
         delivered = deliver_instagram_reply(data, clean_reply, page_id, effective_access_token)
-        if delivered and contact_obj:
+        if delivered and send_buttons and contact_obj:
             from aiAgent.business_logic.logic_handler import send_instagram_buttons
             buttons_sent = send_instagram_buttons(sender_id, page_id, effective_access_token, contact_obj)
             if buttons_sent:
@@ -356,7 +1348,7 @@ def _deliver_reply_with_buttons(request_type, data, clean_reply, sender_id, page
         return delivered
 
     elif request_type == 'telegram':
-        if contact_obj:
+        if send_buttons and contact_obj:
             try:
                 from aiAgent.business_logic.logic_handler import send_telegram_buttons
                 delivered = send_telegram_buttons(data.get('chat_id') or sender_id, effective_access_token, contact_obj, reply_text=clean_reply)
@@ -366,7 +1358,7 @@ def _deliver_reply_with_buttons(request_type, data, clean_reply, sender_id, page
             except Exception as e:
                 logger.warning(f"Combined buttons failed: {e}")
         delivered = deliver_telegram_reply(data, clean_reply, effective_access_token)
-        if delivered and contact_obj:
+        if delivered and send_buttons and contact_obj:
             from aiAgent.business_logic.logic_handler import send_telegram_buttons
             buttons_sent = send_telegram_buttons(data.get('chat_id') or sender_id, effective_access_token, contact_obj)
             if buttons_sent:
@@ -392,7 +1384,7 @@ def _deliver_reply_with_buttons(request_type, data, clean_reply, sender_id, page
     else: # This covers messenger and facebook_comment
         # Skip combined delivery for Facebook as the n8n workflow silently drops the text when quick_replies are present
         delivered = deliver_facebook_reply(data, clean_reply, page_id, effective_access_token)
-        if delivered and contact_obj:
+        if delivered and send_buttons and contact_obj:
             from aiAgent.business_logic.logic_handler import send_messenger_buttons
             buttons_sent = send_messenger_buttons(sender_id, page_id, effective_access_token, contact_obj)
             if buttons_sent:
@@ -764,6 +1756,200 @@ def process_ai_reply_task(self, data):
         save_message(agent_config, sender_id.lower(), text, 'user', platform=agent_config.platform)
         send_cache_update_ws(agent_config.user.id, page_id, sender_id=sender_id, contact_id=contact_obj.id)
         handle_smart_memory_update(agent_config, sender_id, text)
+
+        user_memory = _get_or_create_user_memory(agent_config, sender_id)
+        current_state = _get_order_state(user_memory)
+        skip_order_resume_this_turn = _is_simple_greeting(text)
+        inferred_interest = _infer_catalog_product_from_text(agent_config.user, text)
+        if inferred_interest and current_state == 'idle':
+            interest_data = _hydrate_order_from_catalog(agent_config.user, {'product_name': inferred_interest})
+            _save_recent_order_interest(
+                user_memory,
+                product_name=interest_data.get('product_name') or inferred_interest,
+                price=interest_data.get('price'),
+                source_text=text
+            )
+
+        if not skip_order_resume_this_turn and current_state == 'ordering' and _is_order_interruption(text, user_memory):
+            _set_interruption_buffer(user_memory, _get_next_missing_field(user_memory) or 'order')
+            logger.info(f"🧠 Order interruption detected for {sender_id}, suspending order flow.")
+
+        if not skip_order_resume_this_turn and _order_confirmation_pending(user_memory):
+            if True:
+                order_updates = extract_order_data_from_text(text, {}, None)
+                if _is_confirmation_text(text):
+                    order_obj = create_customer_order_from_memory(agent_config, sender_id, request_type, msg_id=msg_id)
+                    if order_obj:
+                        confirmation = f"✅ আপনার অর্ডার #{order_obj.id} নিশ্চিত করা হয়েছে। ইনভয়েস শীঘ্রই পাঠানো হবে।"
+                    else:
+                        confirmation = "দুঃখিত, আপনার অর্ডার নিশ্চিত করা যায়নি। অনুগ্রহ করে আবার চেষ্টা করুন।"
+                    _deliver_reply_with_buttons(request_type, data, confirmation, sender_id, page_id, effective_access_token, agent_config)
+                    if msg_id:
+                        r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                        r.delete(f'processing_msg:{msg_id}')
+                    return confirmation
+                if _is_rejection_text(text) and not any(order_updates.get(field) for field in ORDER_FIELDS):
+                    rejected_fields = _get_rejected_fields(text)
+                    _clear_rejected_order_fields(user_memory, rejected_fields)
+                    _set_order_state(user_memory, 'editing')
+                    edit_prompt = (
+                        "ঠিক আছে, আপনি কোন তথ্য আপডেট করতে চান?\n"
+                        "customer_name, phone_number, address, product_name, quantity, বা extra_info।"
+                    )
+                    _deliver_reply_with_buttons(request_type, data, edit_prompt, sender_id, page_id, effective_access_token, agent_config)
+                    if msg_id:
+                        r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                        r.delete(f'processing_msg:{msg_id}')
+                    return edit_prompt
+
+                if _get_order_state(user_memory) == 'editing':
+                    order_updates = extract_order_data_from_text(text, {}, None)
+                    if not any(order_updates.get(field) for field in ORDER_FIELDS):
+                        guidance = (
+                            "আপনি কোন তথ্য পরিবর্তন করতে চান তা সরাসরি লিখুন, উদাহরণ: 'quantity 2', 'address Dhanmondi'."
+                        )
+                        _deliver_reply_with_buttons(request_type, data, guidance, sender_id, page_id, effective_access_token, agent_config)
+                        if msg_id:
+                            r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                            r.delete(f'processing_msg:{msg_id}')
+                        return guidance
+
+                # If the user is in confirmation or editing mode, attempt to absorb updates
+                try:
+                    extracted_order = _merge_order_data_with_conversation(agent_config, sender_id, request_type, text, {})
+                    confirmation = _queue_order_for_confirmation(agent_config, sender_id, request_type, data, extracted_order, msg_id=msg_id, source='extraction')
+                    if confirmation:
+                        _deliver_reply_with_buttons(request_type, data, confirmation, sender_id, page_id, effective_access_token, agent_config)
+                        if msg_id:
+                            r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                            r.delete(f'processing_msg:{msg_id}')
+                        return confirmation
+                    missing_prompt = _get_missing_order_fields_prompt(user_memory)
+                    if missing_prompt:
+                        _deliver_reply_with_buttons(request_type, data, missing_prompt, sender_id, page_id, effective_access_token, agent_config)
+                        if msg_id:
+                            r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                            r.delete(f'processing_msg:{msg_id}')
+                        return missing_prompt
+                    reminder = (
+                        "আপনার অর্ডারটি সম্পূর্ণ হয়েছে। CONFIRM_ORDER চাপুন, EDIT_ORDER চাপুন অথবা CANCEL_ORDER চাপুন।"
+                    )
+                    _deliver_reply_with_buttons(request_type, data, reminder, sender_id, page_id, effective_access_token, agent_config)
+                    if msg_id:
+                        r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                        r.delete(f'processing_msg:{msg_id}')
+                    return reminder
+                except Exception as pending_err:
+                    logger.error(f"Pending order handling failed: {pending_err}", exc_info=True)
+# ── Order Completion Fallback ──
+        try:
+            extracted_order = _merge_order_data_with_conversation(agent_config, sender_id, request_type, text, {})
+            has_order_intent = _has_order_intent_in_conversation(agent_config, sender_id, request_type, text)
+            if has_order_intent and _is_complete_order_data(extracted_order):
+                confirmation = _queue_order_for_confirmation(agent_config, sender_id, request_type, data, extracted_order, msg_id=msg_id, source='extraction')
+                if confirmation:
+                    _deliver_reply_with_buttons(request_type, data, confirmation, sender_id, page_id, effective_access_token, agent_config)
+                    if msg_id:
+                        r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                        r.delete(f'processing_msg:{msg_id}')
+                    return confirmation
+            
+            # 🧠 Check if there's an active interruption - if so, skip order field prompts
+            interruption_buffer = user_memory.data.get('_internal', {}).get('interruption_buffer', {}) if user_memory and user_memory.data else {}
+            if not interruption_buffer.get('active'):
+                if not skip_order_resume_this_turn and (current_state in ['ordering', 'editing'] or (has_order_intent and _has_partial_order_data(extracted_order))):
+                    normalized_order, field_metadata = normalize_order_entities(agent_config.user, extracted_order)
+                    normalized_order = _hydrate_order_from_catalog(agent_config.user, normalized_order)
+                    _save_order_fields_to_memory(user_memory, normalized_order, source='extraction', field_metadata=field_metadata)
+                    if _has_complete_order_fields(user_memory):
+                        # Try to resolve product via catalog before asking the user to pick another
+                        fields = _get_order_fields(user_memory)
+                        product_name = fields.get('product_name', {}).get('value')
+                        quantity_raw = fields.get('quantity', {}).get('value') or 1
+                        try:
+                            quantity_val = int(str(quantity_raw).strip()) if quantity_raw is not None else 1
+                        except Exception:
+                            quantity_val = 1
+
+                        product = None
+                        try:
+                            product = _validate_product_in_catalog(agent_config.user, product_name, quantity_val)
+                        except Exception:
+                            product = None
+
+                        # If direct catalog lookup failed, try inference from text/product name
+                        if not product and product_name:
+                            try:
+                                inferred = _infer_catalog_product_from_text(agent_config.user, product_name)
+                                if inferred:
+                                    hydrated = _hydrate_order_from_catalog(agent_config.user, {'product_name': inferred, 'quantity': quantity_val})
+                                    if hydrated.get('product_name'):
+                                        normalized_order, field_metadata = normalize_order_entities(agent_config.user, hydrated)
+                                        _save_order_fields_to_memory(user_memory, normalized_order, source='catalog_hydration', field_metadata=field_metadata)
+                                        product = _validate_product_in_catalog(agent_config.user, hydrated.get('product_name'), quantity_val)
+                            except Exception:
+                                product = None
+
+                        # If still not found, ask user to pick from catalog or clarify
+                        if not product:
+                            invalid_product = product_name or 'অজানা'
+                            _increment_field_failure(user_memory, 'product_name', invalid_product)
+                            # remove product_name so user can re-provide
+                            fields.pop('product_name', None)
+                            internal = user_memory.data.get('_internal', {})
+                            internal['order_fields'] = fields
+                            user_memory.data['_internal'] = internal
+                            user_memory.save(update_fields=['data'])
+
+                            invalid_prompt = (
+                                f"দুঃখিত, '{invalid_product}' আমাদের ক্যাটালগে নেই। "
+                                "আপনি কি ক্যাটালগ দেখতে চান, না কি পণ্যের সঠিক নামটি আবার বলবেন?"
+                            )
+                            _deliver_reply_with_buttons(request_type, data, invalid_prompt, sender_id, page_id, effective_access_token, agent_config)
+                            if msg_id:
+                                r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                                r.delete(f'processing_msg:{msg_id}')
+                            return invalid_prompt
+
+                        # Product resolved successfully — proceed to confirmation
+                        _set_order_state(user_memory, 'awaiting_confirmation')
+                        confirmation = _get_confirmation_prompt(user_memory)
+                        _deliver_reply_with_buttons(request_type, data, confirmation, sender_id, page_id, effective_access_token, agent_config)
+                        if msg_id:
+                            r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                            r.delete(f'processing_msg:{msg_id}')
+                        return confirmation
+                    missing_prompt = _get_missing_order_fields_prompt(user_memory)
+                    if missing_prompt:
+                        _deliver_reply_with_buttons(request_type, data, missing_prompt, sender_id, page_id, effective_access_token, agent_config)
+                        if msg_id:
+                            r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                            r.delete(f'processing_msg:{msg_id}')
+                        return missing_prompt
+        except Exception as fallback_err:
+            logger.error(f"Order fallback error: {fallback_err}", exc_info=True)
+
+        try:
+            user_memory = _get_or_create_user_memory(agent_config, sender_id)
+            escalation = _get_first_escalation_field(user_memory)
+            if escalation:
+                field_name, stats = escalation
+                _mark_field_escalated(user_memory, field_name)
+                contact_obj = _trigger_order_fallback_escalation(
+                    agent_config=agent_config,
+                    sender_id=sender_id,
+                    failed_field=field_name,
+                    last_values=stats.get('last_values', []),
+                    contact_name=None
+                )
+                if contact_obj:
+                    _send_platform_buttons_alone(request_type, data, sender_id, page_id, effective_access_token, contact_obj)
+                if msg_id:
+                    r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                    r.delete(f'processing_msg:{msg_id}')
+                return "আমাদের সিস্টেম এই ফিল্ডটি বুঝতে পারছে না। একজন human agent শীঘ্রই আপনার সাথে যোগাযোগ করবেন।"
+        except Exception as escalation_err:
+            logger.error(f"Order escalation error: {escalation_err}", exc_info=True)
         
         # ── Auto-Reply Enable/Disable Check ──
         contact = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
@@ -938,10 +2124,60 @@ def process_ai_reply_task(self, data):
                     vector_hits = search_similar_vectors(page_id, query_vector, top_k=1)
                     if vector_hits and vector_hits[0]['score'] < 0.12:
                         similar_text = vector_hits[0]['text']
-                        cached_res = get_cached_reply(page_id, msg_text=similar_text)
-                        if cached_res:
-                            cache_hit_scope = "vector"
-                            logger.info(f"🔮 VECTOR CACHE HIT! '{text[:20]}' matched with '{similar_text[:20]}'")
+                        
+                        # 🧪 COMPREHENSIVE RAG VALIDATION: Validate all extracted fields from vector result
+                        # RAG results মাঝে মাঝে inaccurate থাকে, তাই strict validation করতে হবে
+                        vector_order_data = extract_order_data_from_text(similar_text, {}, None)
+                        validation_passed = True
+                        validation_reason = ""
+                        
+                        # 1. Product validation - most critical
+                        vector_product = vector_order_data.get('product_name')
+                        if not vector_product:
+                            vector_product = _infer_catalog_product_from_text(agent_config.user, similar_text)
+                        
+                        if vector_product:
+                            # Strict: Product must exist in catalog with valid stock
+                            product_in_catalog = _validate_product_in_catalog(agent_config.user, vector_product, quantity=1)
+                            if not product_in_catalog:
+                                validation_passed = False
+                                validation_reason = f"Product '{vector_product}' not found in catalog"
+                        else:
+                            # If no product info, this is non-order knowledge - can proceed
+                            validation_passed = True
+                        
+                        # 2. Price validation (if present) - should be numeric and reasonable
+                        if validation_passed and vector_order_data.get('price'):
+                            try:
+                                price_val = float(str(vector_order_data['price']).strip())
+                                if price_val <= 0:
+                                    validation_passed = False
+                                    validation_reason = f"Invalid price: {price_val}"
+                            except (ValueError, TypeError):
+                                validation_passed = False
+                                validation_reason = "Price not numeric"
+                        
+                        # 3. Quantity validation (if present)
+                        if validation_passed and vector_order_data.get('quantity'):
+                            try:
+                                qty_val = int(str(vector_order_data['quantity']).strip())
+                                if qty_val <= 0:
+                                    validation_passed = False
+                                    validation_reason = f"Invalid quantity: {qty_val}"
+                            except (ValueError, TypeError):
+                                validation_passed = False
+                                validation_reason = "Quantity not numeric"
+                        
+                        if validation_passed:
+                            # All RAG validations passed - use cached reply if available
+                            cached_res = get_cached_reply(page_id, msg_text=similar_text)
+                            if cached_res:
+                                cache_hit_scope = "vector"
+                                product_info = f"(Product: {vector_product})" if vector_product else ""
+                                logger.info(f"🔮 VECTOR CACHE HIT! '{text[:20]}' matched with '{similar_text[:20]}' {product_info}")
+                        else:
+                            # RAG validation failed - skip this vector hit and proceed to AI
+                            logger.warning(f"⚠️ Vector search result failed validation: {validation_reason}. Skipping vector hit.")
             else:
                 logger.info(f"⏭️ Skipping Gemini Embedding for User {agent_config.user.email} (No knowledge or skip kw)")
 
@@ -1002,7 +2238,52 @@ def process_ai_reply_task(self, data):
                 if request_type == 'web_widget': return "Sorry, token limit reached for this agent."
                 return
 
+            if _is_active_unresumed_interruption(user_memory) and _is_order_interruption(text, user_memory):
+                interruption_instruction = (
+                    "The user asked a side-track policy/product/business question during an order. "
+                    "Answer only that question using [KNOWLEDGE BASE DATA] when relevant. "
+                    "Do not show order progress, do not ask for missing order fields, and do not include order buttons or summaries. "
+                    "Keep the answer short and natural."
+                )
+                sheet_ctx, extra_instr, query_vector = perform_rag_search(
+                    agent_config, text, post_context, interruption_instruction, existing_vector=query_vector
+                )
+                system_instruction, history, current_msg = build_ai_context(
+                    agent_config, sender_id, text, extra_instr, sheet_ctx, platform=request_type
+                )
+                system_instruction = (
+                    system_instruction
+                    + '\n\nReturn ONLY a valid JSON object: {"reply": "...", "cache_type": "no_cache", "human_handoff": false}. '
+                    + 'Do not include order collection, order summary, or order confirmation text in this reply.'
+                )
+                ai_data = get_ai_response(agent_config, system_instruction, history, current_msg)
+                reply = _extract_plain_reply(ai_data) or "দুঃখিত, এই তথ্যটি এখন পরিষ্কারভাবে দিতে পারছি না।"
+
+                if ai_data.get('success'):
+                    deduct_user_tokens(user_profile, ai_data.get('total_tokens', 0), effective_model)
+
+                if request_type == 'web_widget':
+                    if msg_id:
+                        r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                        r.delete(f'processing_msg:{msg_id}')
+                    return reply
+                elif request_type == 'dashboard':
+                    delivered = deliver_dashboard_reply(agent_config.user.id, reply, msg_id)
+                else:
+                    delivered = _deliver_reply_with_buttons(
+                        request_type, data, reply, sender_id, page_id, effective_access_token, agent_config, send_buttons=False
+                    )
+
+                if delivered and msg_id:
+                    r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                    r.delete(f'processing_msg:{msg_id}')
+                return reply
+
             order_instr = get_order_instructions(agent_config.user)
+            resume_prompt = _get_interruption_resume_prompt(user_memory)
+            if resume_prompt:
+                order_instr = f"{order_instr or ''}\n\n{resume_prompt}"
+            order_instr = _get_order_prompt_instruction(agent_config, sender_id, text, order_instr)
             sheet_ctx, extra_instr, query_vector = perform_rag_search(
                 agent_config, text, post_context, order_instr, existing_vector=query_vector
             )
@@ -1018,6 +2299,11 @@ def process_ai_reply_task(self, data):
                 '\nCRITICAL: If you cannot answer a question based on provided data, DO NOT trigger human handoff. Instead, politely ask clarifying questions to the user.'
                 '\nHowever, ONLY if the user EXPLICITLY and CLEARLY asks to talk to a human, admin, representative, or support team via text, you MUST set "human_handoff": true.'
                 '\nWARNING: Do NOT trigger human_handoff just because the message contains the word "agent", "support", or the name of a bot (e.g., "newsmartagent?"). It must be an explicit intent to speak to a live person.'
+                '\nIf the user wants to place an order, also include "order_intent": "create" and "order_data": {...} in the same JSON object. '
+                'Order_data should include customer_name, phone_number, address, product_name, quantity, and extra_info when available. '
+                'Do not ask for price and do not invent price. Price is authoritative from merchant catalog/database and backend will merge it.'
+                '\nIf the user has already provided a field earlier in the conversation, do not ask for that field again. '
+                'If the user gives multiple fields in one message, extract them and proceed. '
                 '\nSTRICT: No markdown blocks, no preamble, and ensure JSON syntax is perfect.'
             )
             system_instruction = system_instruction + classify_instruction
@@ -1049,6 +2335,13 @@ def process_ai_reply_task(self, data):
                             is_json_handoff_override = True
                         
                         logger.info(f"📋 AI cache_type classified as: '{cache_type}' for '{text[:30]}'")
+                        order_intent = parsed.get('order_intent')
+                        order_data = parsed.get('order_data')
+                        if order_intent == 'create' and isinstance(order_data, dict):
+                            confirmation = _queue_order_for_confirmation(agent_config, sender_id, request_type, data, order_data, msg_id=msg_id, source='ai_extraction')
+                            if confirmation:
+                                parsed_reply = confirmation
+                                cache_type = 'no_cache'
                     else:
                         logger.warning(f"⚠️ JSON parsed but reply field is empty. Using raw.")
                 except (json.JSONDecodeError, AttributeError) as e:

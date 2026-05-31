@@ -89,3 +89,4 @@ django-ckeditor
 pillow
 django-storages
 boto3
+playwright

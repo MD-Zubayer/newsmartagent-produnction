@@ -160,3 +160,10 @@ class Command(BaseCommand):
             
         except Exception as e:
             self.stdout.write(self.style.ERROR(f"\n[CRITICAL ERROR]: {str(e)}"))
+            
+            
+            
+            
+            
+            
+ 

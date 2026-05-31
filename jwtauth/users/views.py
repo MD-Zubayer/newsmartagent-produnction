@@ -611,6 +611,65 @@ class OrderSubmitView(viewsets.ModelViewSet):
         serializer = self.get_serializer(orders, many=True)
         return Response(serializer.data)
 
+    @action(detail=True, methods=['post'], permission_classes=[permissions.IsAuthenticatedOrReadOnly])
+    def send_invoice(self, request, pk=None):
+        """
+        Send invoice image via WhatsApp for a specific order.
+        POST /api/orders/{order_id}/send_invoice/
+        """
+        try:
+            order = self.get_object()
+            
+            # Check permission
+            if order.user != request.user and not request.user.is_staff:
+                return Response(
+                    {'error': 'You do not have permission to send invoice for this order'},
+                    status=403
+                )
+            
+            # Trigger invoice generation via signal
+            # Order invoice is automatically generated and sent via N8N when order is created
+            # This endpoint just returns status
+            
+            return Response({
+                'status': 'processing',
+                'message': f'Invoice is being generated and sent to {order.customer_name}',
+                'platform': order.source_platform,
+                'order_id': order.id
+            })
+                
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=500
+            )
+
+    @action(detail=True, methods=['get'], permission_classes=[permissions.IsAuthenticatedOrReadOnly])
+    def get_invoice_image(self, request, pk=None):
+        """
+        Get invoice image status.
+        Invoice is auto-generated via Celery tasks when order is created.
+        GET /api/orders/{order_id}/get_invoice_image/
+        """
+        try:
+            order = self.get_object()
+            
+            return Response({
+                'status': 'pending',
+                'message': 'Invoice is being generated',
+                'order_id': order.id,
+                'platform': order.source_platform,
+                'note': 'Invoice will be sent via N8N to the customer platform'
+            })
+            response['Content-Disposition'] = f'attachment; filename="invoice_{order.id}.png"'
+            return response
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=500
+            )
+
 
 
 

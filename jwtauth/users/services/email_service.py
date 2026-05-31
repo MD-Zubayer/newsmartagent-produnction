@@ -131,6 +131,49 @@ def send_reset_email(to_email, web_reset_link, mobile_reset_link=None):
 
 
 
+def send_order_fallback_alert_email(merchant_email: str, sender_id: str, failed_field: str, last_values: list, contact_name: str, agent_name: str):
+    subject = f"Order Escalation Alert - {contact_name} / {sender_id}"
+    attempted_values = ', '.join(last_values) if last_values else 'No value captured.'
+    message = (
+        f"Order field parsing failed after 3 attempts.\n"
+        f"Field: {failed_field}\n"
+        f"Contact: {contact_name} ({sender_id})\n"
+        f"Merchant: {agent_name}\n"
+        f"Attempted Values: {attempted_values}\n"
+        "\n"
+        "The conversation has been flagged for human review. Please open the dashboard and resolve this order manually.\n"
+    )
+    dashboard_link = getattr(settings, 'DASHBOARD_URL', None) or 'https://newsmartagent.com/dashboard'
+    html_message = f"""
+    <!DOCTYPE html>
+    <html>
+    <body style="font-family: Arial, sans-serif; background:#f6f8fb; padding:20px;">
+      <div style="max-width:620px; margin: auto; background:#ffffff; border-radius:16px; padding:28px; box-shadow:0 12px 40px rgba(15,23,42,0.08);">
+        <h2 style="color:#111827;">Order Escalation Alert</h2>
+        <p style="color:#475569; font-size:16px; line-height:26px;">A customer order field failed validation after 3 attempts and has been escalated for human review.</p>
+        <ul style="color:#475569; font-size:15px; line-height:24px;">
+          <li><strong>Contact:</strong> {contact_name} ({sender_id})</li>
+          <li><strong>Field:</strong> {failed_field}</li>
+          <li><strong>Attempted Values:</strong> {attempted_values}</li>
+          <li><strong>Merchant:</strong> {agent_name}</li>
+        </ul>
+        <p style="margin-top:24px;">Please review the conversation and process this order manually.</p>
+        <a href="{dashboard_link}" style="display:inline-block; padding:14px 26px; background:#2563eb; color:#ffffff; border-radius:12px; text-decoration:none; font-weight:600;">Open Dashboard</a>
+        <p style="margin-top:24px; font-size:13px; color:#6b7280;">If you need help, contact support or review the fallback notification in the dashboard.</p>
+      </div>
+    </body>
+    </html>
+    """
+    send_mail(
+        subject,
+        message,
+        settings.DEFAULT_FROM_EMAIL,
+        [merchant_email],
+        fail_silently=False,
+        html_message=html_message
+    )
+
+
 # --- Verification Email Function ---
 def send_verification_email(to_email, verify_link):
     subject = "🚀 Verify Your New Smart Agent Account"
