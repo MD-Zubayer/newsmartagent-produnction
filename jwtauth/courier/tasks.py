@@ -1,4 +1,5 @@
 import logging
+import time
 from celery import shared_task
 from django.db import transaction
 from .models import PathaoCourierConfig, PathaoCity, PathaoZone, PathaoArea
@@ -143,5 +144,115 @@ def sync_cached_pathao_prices():
                 time.sleep(0.5) # Prevent rate limiting
             except Exception as e:
                 logger.error(f"Failed to sync cached price for store {record.store_id}, zone {record.zone_id}: {e}")
+                
+    return f"Successfully updated {total_updated} price caches."
+
+
+# --- STEADFAST CELERY TASKS ---
+
+@shared_task
+def sync_steadfast_locations():
+    """
+    Syncs Cities and Areas from SteadFast API to local database.
+    Requires at least one active SteadFastCourierConfig to get the API credentials.
+    """
+    from .models import SteadFastCourierConfig, SteadFastCity, SteadFastArea
+    from .views import SteadFastCourierClient
+    
+    config = SteadFastCourierConfig.objects.filter(is_active=True).first()
+    if not config:
+        logger.warning("No active SteadFastCourierConfig found. Cannot sync SteadFast locations.")
+        return "No active config found"
+
+    try:
+        client = SteadFastCourierClient(config)
+        
+        # Fetch cities
+        cities_data = client.get_cities()
+        if not cities_data:
+            logger.warning("No cities found from SteadFast API.")
+            return "No cities found"
+
+        with transaction.atomic():
+            for city_item in cities_data:
+                city_id = city_item.get("city_id")
+                city_name = city_item.get("city_name")
+                
+                if not city_id or not city_name:
+                    continue
+                    
+                city_obj, _ = SteadFastCity.objects.update_or_create(
+                    city_id=city_id,
+                    defaults={"city_name": city_name}
+                )
+                
+                # Fetch areas for this city
+                try:
+                    areas_data = client.get_areas(city_id)
+                except Exception as e:
+                    logger.error(f"Failed to fetch areas for city {city_id}: {e}")
+                    continue
+                    
+                for area_item in areas_data:
+                    area_id = area_item.get("area_id")
+                    area_name = area_item.get("area_name")
+                    
+                    if not area_id or not area_name:
+                        continue
+                        
+                    SteadFastArea.objects.update_or_create(
+                        area_id=area_id,
+                        defaults={
+                            "area_name": area_name,
+                            "city": city_obj
+                        }
+                    )
+                
+                # Rate limiting
+                time.sleep(0.5)
+                        
+        logger.info("SteadFast locations synced successfully.")
+        return "SteadFast locations synced successfully"
+    except Exception as e:
+        logger.error(f"Error syncing SteadFast locations: {e}")
+        return f"Error: {e}"
+
+
+@shared_task
+def sync_cached_steadfast_prices():
+    """
+    Auto syncs all cached SteadFast price records from the SteadFast API to keep database local pricing accurate.
+    """
+    from .models import SteadFastAreaPrice, SteadFastCourierConfig
+    from .views import SteadFastCourierClient
+    
+    configs = SteadFastCourierConfig.objects.filter(is_active=True)
+    if not configs.exists():
+        return "No active courier configurations to sync prices."
+
+    total_updated = 0
+    
+    for config in configs:
+        client = SteadFastCourierClient(config)
+        # Find all local cache records
+        cached_records = SteadFastAreaPrice.objects.all()
+        
+        for record in cached_records:
+            payload = {
+                "city_id": record.city_id,
+                "area_id": record.area_id,
+                "weight": float(record.weight)
+            }
+            
+            try:
+                price_details = client.calculate_price(payload)
+                record.delivery_fee = price_details.get("delivery_charge", record.delivery_fee)
+                record.cod_charge = price_details.get("cod_charge", record.cod_charge)
+                record.total_amount = price_details.get("total_charge", record.total_amount)
+                record.save()
+                total_updated += 1
+                time.sleep(0.5) # Prevent rate limiting
+            except Exception as e:
+                logger.error(f"Failed to sync cached price for area {record.area_id}, city {record.city_id}: {e}")
                 
     return f"Successfully updated {total_updated} price caches."

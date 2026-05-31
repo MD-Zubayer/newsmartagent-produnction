@@ -1,0 +1,5 @@
+# Invoice & N8N Integration Dependencies
+# এই packages গুলি requirements.txt এ যোগ করুন
+
+playwright>=1.40.0          # HTML to image conversion
+pillow>=10.0.0              # Image processing (optional)

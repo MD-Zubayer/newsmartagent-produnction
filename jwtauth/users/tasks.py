@@ -1,3 +1,16 @@
+"""
+Compatibility shim so Celery autodiscovery registers tasks
+
+Celery only autodiscovers `tasks.py` modules by default. Our
+task `generate_and_send_invoice_async_task` lives in
+`users/signals_tasks.py`. Importing it here ensures the worker
+imports the module at startup and the `@shared_task` gets
+registered.
+"""
+
+from .signals_tasks import generate_and_send_invoice_async_task
+
+__all__ = ["generate_and_send_invoice_async_task"]
 """Background tasks for the users app."""
 
 import logging
@@ -32,3 +45,5 @@ def delete_unverified_accounts():
     if count:
         logger.info("Deleted %s unverified account(s) older than 1 hour", count)
     return {"deleted": count, "cutoff": cutoff.isoformat()}
+
+

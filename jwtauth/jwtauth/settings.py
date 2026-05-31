@@ -42,6 +42,15 @@ MAIN_DOMAIN = os.environ.get('MAIN_DOMAIN', 'newsmartagent.com')
 N8N_DOMAIN = os.environ.get('N8N_DOMAIN', 'n8n.newsmartagent.com')
 PROJECT_NAME = os.environ.get('PROJECT_NAME', 'newsmartagent')
 
+# N8N webhook URLs for invoice delivery
+N8N_WHATSAPP_WEBHOOK_URL = os.environ.get('N8N_WHATSAPP_WEBHOOK_URL', '')
+N8N_WHATSAPP_DELIVERY_URL = os.environ.get('N8N_WHATSAPP_DELIVERY_URL', '')
+N8N_MESSENGER_WEBHOOK_URL = os.environ.get('N8N_MESSENGER_WEBHOOK_URL', '')
+N8N_INSTAGRAM_WEBHOOK_URL = os.environ.get('N8N_INSTAGRAM_WEBHOOK_URL', '')
+N8N_TELEGRAM_WEBHOOK_URL = os.environ.get('N8N_TELEGRAM_WEBHOOK_URL', '')
+N8N_TELEGRAM_DELIVERY_URL = os.environ.get('N8N_TELEGRAM_DELIVERY_URL', '')
+N8N_FACEBOOK_WEBHOOK_URL = os.environ.get('N8N_FACEBOOK_WEBHOOK_URL', '')
+
 ALLOWED_HOSTS = [
     MAIN_DOMAIN,
     f'api.{MAIN_DOMAIN}',
@@ -457,6 +466,14 @@ CELERY_BEAT_SCHEDULE = {
     },
     'sync-cached-pathao-prices-every-3-days': {
         'task': 'courier.tasks.sync_cached_pathao_prices',
+        'schedule': timedelta(days=3),
+    },
+    'sync-steadfast-locations-every-3-days': {
+        'task': 'courier.tasks.sync_steadfast_locations',
+        'schedule': timedelta(days=3),
+    },
+    'sync-cached-steadfast-prices-every-3-days': {
+        'task': 'courier.tasks.sync_cached_steadfast_prices',
         'schedule': timedelta(days=3),
     },
 }

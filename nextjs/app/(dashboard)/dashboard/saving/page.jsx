@@ -5,6 +5,7 @@ import React, { useEffect, useState } from "react";
 import { Table, Search, AlertTriangle, Zap, BarChart3, Loader2, PiggyBank, Trash2, Clock, Share2, Unlock, Lock } from "lucide-react";
 import api from "@/lib/api";
 import { toast } from "react-hot-toast";
+import { motion } from "framer-motion";
 
 export default function RankingReportPage() {
   const [agents, setAgents] = useState([]);
@@ -395,34 +396,55 @@ export default function RankingReportPage() {
         {/* Performance Metrics Cards */}
         {metrics && (
           <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-            <div className="bg-white p-4 md:p-6 rounded-[2rem] shadow-sm border border-gray-100 group hover:shadow-md transition-all">
-              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Cache Hit Rate</p>
-              <h3 className="text-2xl md:text-3xl font-black text-pink-500 italic leading-none">{metrics.hit_rate}%</h3>
-              <div className="mt-3 h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full bg-pink-500 group-hover:scale-x-110 transition-transform origin-left duration-500" style={{ width: `${metrics.hit_rate}%` }}></div>
-              </div>
-            </div>
-            <div className="bg-white p-4 md:p-6 rounded-[2rem] shadow-sm border border-gray-100 group hover:shadow-md transition-all">
-              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Total Hits</p>
-              <div className="flex items-center gap-2">
-                <Zap className="text-yellow-500 fill-yellow-500 group-hover:scale-110 transition-transform" size={20} />
-                <h3 className="text-2xl md:text-3xl font-black text-gray-800 tabular-nums">{metrics.metrics.cache_hit || 0}</h3>
-              </div>
-            </div>
-            <div className="bg-white p-4 md:p-6 rounded-[2rem] shadow-sm border border-gray-100 group hover:shadow-md transition-all">
-              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Cache Miss</p>
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="text-rose-500 group-hover:animate-bounce" size={20} />
-                <h3 className="text-2xl md:text-3xl font-black text-gray-800 tabular-nums">{metrics.metrics.cache_miss || 0}</h3>
-              </div>
-            </div>
-            <div className="bg-white p-4 md:p-6 rounded-[2rem] shadow-sm border border-gray-100 group hover:shadow-md transition-all">
-              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-2">Total Queries</p>
-              <div className="flex items-center gap-2">
-                <BarChart3 className="text-blue-500 group-hover:scale-110 transition-transform" size={20} />
-                <h3 className="text-2xl md:text-3xl font-black text-gray-800 tabular-nums">{metrics.total_queries}</h3>
-              </div>
-            </div>
+            {[
+              { label: "Cache Hit Rate", value: `${metrics.hit_rate}%`, icon: <BarChart3 />, color: "pink", index: 0 },
+              { label: "Total Hits", value: metrics.metrics.cache_hit || 0, icon: <Zap />, color: "yellow", index: 1 },
+              { label: "Cache Miss", value: metrics.metrics.cache_miss || 0, icon: <AlertTriangle />, color: "rose", index: 2 },
+              { label: "Total Queries", value: metrics.total_queries, icon: <BarChart3 />, color: "blue", index: 3 },
+            ].map((metric) => {
+              const colorPalettes = {
+                pink: { color: '#ec4899', bg: 'rgba(236, 72, 153, 0.08)', border: 'rgba(236, 72, 153, 0.12)' },
+                yellow: { color: '#eab308', bg: 'rgba(234, 179, 8, 0.08)', border: 'rgba(234, 179, 8, 0.12)' },
+                rose: { color: '#f43f5e', bg: 'rgba(244, 63, 94, 0.08)', border: 'rgba(244, 63, 94, 0.12)' },
+                blue: { color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.08)', border: 'rgba(59, 130, 246, 0.12)' },
+              };
+              const palette = colorPalettes[metric.color];
+
+              return (
+                <motion.div
+                  key={metric.label}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ delay: metric.index * 0.06, duration: 0.45, ease: "easeOut" }}
+                  viewport={{ once: true }}
+                  whileHover={{ y: -6 }}
+                  className="group relative p-2 rounded-[2rem] transition-all duration-500 cursor-default"
+                  style={{
+                    background: `linear-gradient(145deg, ${palette.bg}, #ffffff)`,
+                    boxShadow: `0 20px 40px -15px ${palette.color}30, 0 0 0 1px ${palette.border}`,
+                  }}
+                >
+                  <div className="relative bg-white/90 backdrop-blur-2xl rounded-[1.75rem] p-4 md:p-5 h-full border border-white overflow-hidden shadow-sm transition-all duration-300 group-hover:bg-white group-hover:shadow-lg flex flex-col">
+                    <div className="absolute -top-8 -right-8 w-20 h-20 rounded-full opacity-20 blur-2xl transition-opacity duration-500 group-hover:opacity-40" style={{ background: palette.color }} />
+
+                    <div
+                      className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0 transition-transform duration-500 group-hover:scale-105 relative z-10 mb-3"
+                      style={{
+                        background: `linear-gradient(135deg, ${palette.bg}, #ffffff)`,
+                        border: `1px solid ${palette.border}`,
+                        boxShadow: `inset 0 4px 8px rgba(255,255,255,0.8), 0 6px 12px ${palette.color}25`,
+                        color: palette.color,
+                      }}
+                    >
+                      {metric.icon}
+                    </div>
+
+                    <p className="text-[8px] md:text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 relative z-10">{metric.label}</p>
+                    <h3 className="text-lg md:text-2xl font-black relative z-10" style={{ color: palette.color }}>{metric.value}</h3>
+                  </div>
+                </motion.div>
+              );
+            })}
           </div>
         )}
 

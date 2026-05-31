@@ -27,7 +27,7 @@ const translations = {
     heroTitle1: "Automate Your",
     heroTitle2: "Social Media",
     heroTitle3: "& Grow Faster",
-    heroDesc: " brings an all-in-one platform. Connect your Facebook, WhatsApp & YouTube and save time with our smart AI tools.",
+    heroDesc: " brings an all-in-one platform. Connect your Facebook, WhatsApp, Instagram, Telegram, YouTube, and TikTok and save time with our smart AI tools.",
     getStarted: "Get Started Free",
     learnMore: "Learn More",
     noCard: "No Card Required",
@@ -112,7 +112,7 @@ const translations = {
     heroTitle1: "Automate Your",
     heroTitle2: "Social Media",
     heroTitle3: "& Grow Faster",
-    heroDesc: " নিয়ে এসেছে একটি অল-ইন-ওয়ান প্লাটফর্ম। আপনার ফেসবুক, হোয়াটসঅ্যাপ ও ইউটিউব সংযোগ করুন এবং সময় বাঁচান আমাদের স্মার্ট এআই টুলস দিয়ে।",
+    heroDesc: " নিয়ে এসেছে একটি অল-ইন-ওয়ান প্লাটফর্ম। আপনার ফেসবুক, হোয়াটসঅ্যাপ, ইনস্টাগ্রাম, টেলিগ্রাম, ইউটিউব ও টিকটক সংযোগ করুন এবং সময় বাঁচান আমাদের স্মার্ট এআই টুলস দিয়ে।",
     getStarted: "বিনামূল্যে শুরু করুন",
     learnMore: "আরও জানুন",
     noCard: "কার্ড লাগবে না",
@@ -308,7 +308,10 @@ export default function HomePage() {
             <div className="flex flex-wrap justify-center items-center gap-6 md:gap-12 lg:gap-16 opacity-40 grayscale hover:grayscale-0 hover:opacity-100 transition-all duration-700">
               <div className="flex items-center gap-2 text-gray-800 font-black text-xl"><FaFacebook className="text-[#1877F2]" /> <span className="text-sm">Facebook</span></div>
               <div className="flex items-center gap-2 text-gray-800 font-black text-xl"><FaWhatsapp className="text-[#25D366]" /> <span className="text-sm">WhatsApp</span></div>
+              <div className="flex items-center gap-2 text-gray-800 font-black text-xl"><FaInstagram className="text-[#E4405F]" /> <span className="text-sm">Instagram</span></div>
+              <div className="flex items-center gap-2 text-gray-800 font-black text-xl"><FaTelegram className="text-[#0088cc]" /> <span className="text-sm">Telegram</span></div>
               <div className="flex items-center gap-2 text-gray-800 font-black text-xl"><FaYoutube className="text-[#FF0000]" /> <span className="text-sm">YouTube</span></div>
+              <div className="flex items-center gap-2 text-gray-800 font-black text-xl"><FaTiktok className="text-[#000000]" /> <span className="text-sm">TikTok</span></div>
             </div>
             <div className="flex items-center gap-6 text-[10px] md:text-xs font-black text-gray-400 uppercase tracking-widest">
               <span className="flex items-center gap-1"><FaCheckCircle className="text-green-500" /> {t.noCard}</span>

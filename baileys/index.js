@@ -52,7 +52,7 @@ async function processQueue(sessionId) {
             return;
         }
 
-        const { jid, message, buttons, listMessage, type, media_url, resolve, reject } = queueData.messages.shift();
+        const { jid, message, buttons, listMessage, type, media_url, image_base64, resolve, reject } = queueData.messages.shift();
         try {
             // Resolve LID to actual phone number if necessary
             let resolvedJid = jid;
@@ -76,7 +76,21 @@ async function processQueue(sessionId) {
 
             let msgObj = { text: message };
 
-            if (type === 'audio' && media_url) {
+            if (type === 'image_base64' && image_base64) {
+                // Handle base64 image (for invoice delivery)
+                logger.info(`🖼️ [Baileys] Preparing base64 image message. Size: ${image_base64.length / 1024 / 1024}MB`);
+                try {
+                    const imageBuffer = Buffer.from(image_base64, 'base64');
+                    msgObj = {
+                        image: imageBuffer,
+                        caption: message || 'Invoice'
+                    };
+                    logger.info(`🖼️ [Baileys] Base64 image converted to buffer (${imageBuffer.length} bytes) for sending`);
+                } catch (convertErr) {
+                    logger.error(`❌ [Baileys] Failed to convert base64 image: ${convertErr.message}`);
+                    msgObj = { text: `[Image failed to process: ${convertErr.message}]` };
+                }
+            } else if (type === 'audio' && media_url) {
                 // Audio message - download from URL and convert to buffer
                 logger.info(`📻 [Baileys] Preparing audio message. Downloading from: ${media_url.substring(0, 80)}`);
                 try {
@@ -478,6 +492,61 @@ app.post('/send-message', async (req, res) => {
             res.json(result);
         } catch (err) {
             logger.error(`❌ [HTTP] /send-message failed for sessionId=${sessionId}, to=${jid}: ${err.message}`);
+            res.status(500).json({ error: err.message });
+        }
+    }
+});
+
+// ─── SEND BASE64 IMAGE MESSAGE (for invoice delivery) ──────────────────────
+app.post('/send-message-base64', async (req, res) => {
+    const { sessionId, to, image_base64, caption } = req.body;
+    const secret = req.headers['x-api-secret'];
+    if (secret !== API_SECRET) {
+        logger.warn(`🔑 [HTTP] Unauthorized /send-message-base64 attempt. sessionId=${sessionId}, to=${to}`);
+        return res.status(401).send('Unauthorized');
+    }
+
+    logger.info(`📥 [HTTP] /send-message-base64 request. sessionId=${sessionId}, to=${to}, caption="${(caption || '').substring(0, 60)}"`);
+
+    const session = sessions.get(sessionId);
+    const sessionState = session ? session.state : 'missing';
+
+    if (!session || session.state !== 'open') {
+        logger.warn(`⭕ [Session] send-message-base64 blocked. sessionId=${sessionId}, state=${sessionState}`);
+        return res.status(503).json({ error: 'WhatsApp session not connected' });
+    }
+
+    if (!messageQueues.has(sessionId)) {
+        messageQueues.set(sessionId, { messages: [], processing: false });
+    }
+
+    const jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
+    const queueData = messageQueues.get(sessionId);
+
+    const sendPromise = new Promise((resolve, reject) => {
+        queueData.messages.push({
+            jid,
+            message: caption || 'Invoice',
+            type: 'image_base64',
+            image_base64: image_base64,
+            resolve,
+            reject
+        });
+    });
+
+    logger.info(`📬 [Queue] enqueue base64 image for sessionId=${sessionId}, to=${jid}, size=${image_base64.length} bytes`);
+
+    processQueue(sessionId).catch(err => logger.error(`Queue error: ${err.message}`));
+
+    if (queueData.messages.length > 1) {
+        res.json({ success: true, status: 'queued', queueLength: queueData.messages.length });
+    } else {
+        try {
+            const result = await sendPromise;
+            logger.info(`✅ [HTTP] /send-message-base64 delivered for sessionId=${sessionId}, to=${jid}`);
+            res.json(result);
+        } catch (err) {
+            logger.error(`❌ [HTTP] /send-message-base64 failed for sessionId=${sessionId}, to=${jid}: ${err.message}`);
             res.status(500).json({ error: err.message });
         }
     }
