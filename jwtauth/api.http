@@ -85,3 +85,30 @@ curl -X POST http://localhost:8000/api/AgentAI/schedule/ \
       "end_date": null
     }
   }'
+
+
+
+
+### ১. সরাসরি SteadFast সার্ভারে পার্সেল বুকিং টেস্ট
+POST https://portal.packzy.com/api/v1/create_order
+Api-Key: 8qe0m2tp4u8m5jutco7yzbvhdshnxb6k
+Secret-Key: erleubawp4ransa39xfitv8a
+Content-Type: application/json
+
+{
+    "invoice": "ORD-TEST-999",
+    "recipient_name": "John Smith",
+    "recipient_phone": "01234567890",
+    "recipient_address": "House 12, Road 5, Dhanmondi, Dhaka",
+    "cod_amount": 1060,
+    "note": "Deliver within 3 PM",
+    "item_description": "Cloth Item"
+}
+
+
+### ২. আপনার কারেন্ট ব্যালেন্স চেক করার টেস্ট (সবচেয়ে সহজ টেস্ট)
+GET https://portal.packzy.com/api/v1/get_balance
+Api-Key: "zzlkaylvphfchtolqijdvqhlbvmet6aw"
+Secret-Key: "7badtd3jru59kio7xetvokff"
+Content-Type: application/json
+

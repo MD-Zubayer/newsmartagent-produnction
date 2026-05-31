@@ -55,9 +55,14 @@ export default function OrderDashboard() {
   const [pathaoCities, setPathaoCities] = useState([]);
   const [pathaoZones, setPathaoZones] = useState([]);
   const [pathaoAreas, setPathaoAreas] = useState([]);
+  const [steadfastCities, setSteadFastCities] = useState([]);
+  const [steadfastAreas, setSteadFastAreas] = useState([]);
 
-  // Pathao Booking States
+  // Courier Selection and Booking States
+  const [selectedCourier, setSelectedCourier] = useState("pathao"); // pathao or steadfast
   const [courierActive, setCourierActive] = useState(false);
+  const [steadfastActive, setSteadFastActive] = useState(false);
+  const [courierProviderModalOpen, setCourierProviderModalOpen] = useState(false);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [bookingOrder, setBookingOrder] = useState(null);
   const [bookingInProgress, setBookingInProgress] = useState(false);
@@ -82,12 +87,24 @@ export default function OrderDashboard() {
   
   // Courier Config Modal States
   const [courierConfigModalOpen, setCourierConfigModalOpen] = useState(false);
+  const [courierConfigTab, setCourierConfigTab] = useState("pathao"); // pathao or steadfast
+  const [pathaoConfigs, setPathaoConfigs] = useState([]);
+  const [editingPathaoConfigId, setEditingPathaoConfigId] = useState(null);
   const [pathaoConfig, setPathaoConfig] = useState({
+    name: "",
     client_id: "",
     client_secret: "",
     username: "",
     password: "",
     store_id: "",
+    is_sandbox: true
+  });
+  const [steadfastConfigs, setSteadFastConfigs] = useState([]);
+  const [editingSteadFastConfigId, setEditingSteadFastConfigId] = useState(null);
+  const [steadfastConfig, setSteadFastConfig] = useState({
+    name: "",
+    api_key: "",
+    api_secret: "",
     is_sandbox: true
   });
   const [isSavingConfig, setIsSavingConfig] = useState(false);
@@ -166,33 +183,65 @@ export default function OrderDashboard() {
     fetchOrders();
     fetchFormId();
     checkCourierConfig();
+    checkSteadFastConfig();
   }, []);
 
   const checkCourierConfig = async () => {
+    setCourierActive(false);
     try {
       const res = await api.get("/courier/config/");
-      if (res.data.client_id) {
-        setPathaoConfig({
-          client_id: res.data.client_id,
-          client_secret: res.data.client_secret,
-          username: res.data.username,
-          password: "", 
-          store_id: res.data.store_id || "",
-          is_sandbox: res.data.is_sandbox
-        });
-      }
-      if (res.data.is_active && res.data.client_id) {
-        setCourierActive(true);
-        // Pre-fetch stores to improve UX speed
-        try {
-          const storesRes = await api.get("/courier/stores/");
-          setStores(storesRes.data || []);
-        } catch (e) {
-          console.error("Failed to load courier stores:", e);
+      if (Array.isArray(res.data)) {
+        setPathaoConfigs(res.data);
+        const activeConfig = res.data.find(config => config.is_active) || res.data[0];
+        if (activeConfig) {
+          setPathaoConfig({
+            name: activeConfig.name || "",
+            client_id: activeConfig.client_id,
+            client_secret: "",
+            username: activeConfig.username,
+            password: "",
+            store_id: activeConfig.store_id || "",
+            is_sandbox: activeConfig.is_sandbox
+          });
+          setCourierActive(true);
+          try {
+            const storesRes = await api.get(`/courier/stores/?config_id=${activeConfig.id}`);
+            setStores(storesRes.data || []);
+          } catch (e) {
+            console.error("Failed to load courier stores:", e);
+          }
         }
       }
     } catch (e) {
-      console.log("Courier integration not configured.");
+      console.log("Pathao courier integration not configured.");
+    }
+  };
+
+  const checkSteadFastConfig = async () => {
+    setSteadFastActive(false);
+    try {
+      const res = await api.get("/courier/steadfast/config/");
+      if (Array.isArray(res.data)) {
+        setSteadFastConfigs(res.data);
+        const activeConfig = res.data.find(config => config.is_active) || res.data[0];
+        if (activeConfig) {
+          setSteadFastConfig({
+            name: activeConfig.name || "",
+            api_key: activeConfig.api_key,
+            api_secret: "",
+            is_sandbox: activeConfig.is_sandbox
+          });
+          setSteadFastActive(true);
+          try {
+            const citiesRes = await api.get("/courier/steadfast/cities/");
+            setSteadFastCities(citiesRes.data || []);
+          } catch (e) {
+            console.error("Failed to load SteadFast cities:", e);
+          }
+        }
+      }
+    } catch (e) {
+      console.log("SteadFast courier integration not configured.");
     }
   };
 
@@ -201,10 +250,12 @@ export default function OrderDashboard() {
     try {
       const payload = { ...pathaoConfig };
       if (!payload.password) delete payload.password;
+      if (editingPathaoConfigId) payload.config_id = editingPathaoConfigId;
       
       await api.post("/courier/config/", payload);
       toast.success("Pathao credentials verified & saved successfully!", { icon: "🚚" });
       setCourierFormMode("list");
+      setEditingPathaoConfigId(null);
       checkCourierConfig(); // Re-check to enable courier functionality
     } catch (err) {
       toast.error(err.response?.data?.error || "Failed to verify or save Pathao credentials.");
@@ -213,13 +264,17 @@ export default function OrderDashboard() {
     }
   };
 
-  const handleDeletePathaoConfig = async () => {
+  const handleDeletePathaoConfig = async (configId) => {
     if (!window.confirm("Are you sure you want to delete this courier configuration?")) return;
     setIsDeletingConfig(true);
     try {
-      await api.delete("/courier/config/");
-      toast.success("Courier configuration deleted successfully!", { icon: "🗑️" });
+      await api.delete(`/courier/config/?config_id=${configId}`);
+      toast.success("Pathao configuration deleted successfully!", { icon: "🗑️" });
+      if (editingPathaoConfigId === configId) {
+        setEditingPathaoConfigId(null);
+      }
       setPathaoConfig({
+        name: "",
         client_id: "",
         client_secret: "",
         username: "",
@@ -227,9 +282,55 @@ export default function OrderDashboard() {
         store_id: "",
         is_sandbox: true
       });
-      setCourierActive(false);
+      checkCourierConfig();
     } catch (err) {
-      toast.error(err.response?.data?.error || "Failed to delete courier configuration.");
+      toast.error(err.response?.data?.error || "Failed to delete Pathao configuration.");
+    } finally {
+      setIsDeletingConfig(false);
+    }
+  };
+
+  const handleSaveSteadFastConfig = async () => {
+    setIsSavingConfig(true);
+    try {
+      const payload = { 
+        name: steadfastConfig.name,
+        api_key: steadfastConfig.api_key,
+        api_secret: steadfastConfig.api_secret,
+        is_sandbox: steadfastConfig.is_sandbox
+      };
+      if (editingSteadFastConfigId) payload.config_id = editingSteadFastConfigId;
+      await api.post("/courier/steadfast/config/", payload);
+      toast.success("SteadFast credentials verified & saved successfully!", { icon: "🚚" });
+      setCourierConfigTab("list");
+      setCourierFormMode("list");
+      setEditingSteadFastConfigId(null);
+      checkSteadFastConfig();
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to verify or save SteadFast credentials.");
+    } finally {
+      setIsSavingConfig(false);
+    }
+  };
+
+  const handleDeleteSteadFastConfig = async (configId) => {
+    if (!window.confirm("Are you sure you want to delete this SteadFast configuration?")) return;
+    setIsDeletingConfig(true);
+    try {
+      await api.delete(`/courier/steadfast/config/?config_id=${configId}`);
+      toast.success("SteadFast configuration deleted successfully!", { icon: "🗑️" });
+      if (editingSteadFastConfigId === configId) {
+        setEditingSteadFastConfigId(null);
+      }
+      setSteadFastConfig({
+        name: "",
+        api_key: "",
+        api_secret: "",
+        is_sandbox: true
+      });
+      checkSteadFastConfig();
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to delete SteadFast configuration.");
     } finally {
       setIsDeletingConfig(false);
     }
@@ -264,22 +365,26 @@ export default function OrderDashboard() {
 
   const openBookingModal = (order) => {
     setBookingOrder(order);
-    
+    setSelectedCourier("pathao"); // Default to Pathao
+    setCourierProviderModalOpen(true);
+  };
+
+  const startCourierBooking = () => {
     setBookingDetails({
-      recipient_name: order.customer_name || "",
-      recipient_phone: order.phone_number || "",
-      recipient_address: order.address || "",
-      item_quantity: order.item_quantity || 1,
-      item_weight: order.item_weight || 0.5,
-      amount_to_collect: order.price || 0,
-      item_description: order.product_name || "Order Parcel",
+      recipient_name: bookingOrder.customer_name || "",
+      recipient_phone: bookingOrder.phone_number || "",
+      recipient_address: bookingOrder.address || "",
+      item_quantity: bookingOrder.item_quantity || 1,
+      item_weight: bookingOrder.item_weight || 0.5,
+      amount_to_collect: bookingOrder.price || 0,
+      item_description: bookingOrder.product_name || "Order Parcel",
       store_id: stores[0]?.store_id || "",
-      recipient_city: order.city_id || "",
-      recipient_zone: order.zone_id || "",
-      recipient_area: order.area_id || "",
-      special_instruction: order.special_instruction || ""
+      recipient_city: bookingOrder.city_id || "",
+      recipient_zone: bookingOrder.zone_id || "",
+      recipient_area: bookingOrder.area_id || "",
+      special_instruction: bookingOrder.special_instruction || ""
     });
-    
+    setCourierProviderModalOpen(false);
     setBookingModalOpen(true);
   };
 
@@ -289,32 +394,57 @@ export default function OrderDashboard() {
     }
     
     setBookingInProgress(true);
-    const loadingToast = toast.loading("Booking parcel in Pathao Courier...");
+    const courierName = selectedCourier === "pathao" ? "Pathao" : "SteadFast";
+    const loadingToast = toast.loading(`Booking parcel in ${courierName} Courier...`);
     
     try {
-      const payload = {
-        order_id: bookingOrder.id,
-        recipient_name: bookingDetails.recipient_name,
-        recipient_phone: bookingDetails.recipient_phone,
-        recipient_address: bookingDetails.recipient_address,
-        item_quantity: bookingDetails.item_quantity,
-        item_weight: bookingDetails.item_weight,
-        amount_to_collect: bookingDetails.amount_to_collect,
-        item_description: bookingDetails.item_description,
-        store_id: bookingDetails.store_id || null,
-        recipient_city: bookingDetails.recipient_city || null,
-        recipient_zone: bookingDetails.recipient_zone || null,
-        recipient_area: bookingDetails.recipient_area || null,
-        special_instruction: bookingDetails.special_instruction || null
-      };
+      let endpoint = "";
+      let payload = {};
       
-      const res = await api.post("/courier/book-order/", payload);
+      if (selectedCourier === "pathao") {
+        endpoint = "/courier/book-order/";
+        payload = {
+          order_id: bookingOrder.id,
+          recipient_name: bookingDetails.recipient_name,
+          recipient_phone: bookingDetails.recipient_phone,
+          recipient_address: bookingDetails.recipient_address,
+          item_quantity: bookingDetails.item_quantity,
+          item_weight: bookingDetails.item_weight,
+          amount_to_collect: bookingDetails.amount_to_collect,
+          item_description: bookingDetails.item_description,
+          store_id: bookingDetails.store_id || null,
+          recipient_city: bookingDetails.recipient_city || null,
+          recipient_zone: bookingDetails.recipient_zone || null,
+          recipient_area: bookingDetails.recipient_area || null,
+          special_instruction: bookingDetails.special_instruction || null
+        };
+      } else if (selectedCourier === "steadfast") {
+        endpoint = "/courier/steadfast/book-order/";
+        const selectedCity = bookingCities.find(city => String(city.city_id) === String(bookingDetails.recipient_city));
+        const selectedArea = bookingAreas.find(area => String(area.area_id) === String(bookingDetails.recipient_area));
+        payload = {
+          order_id: bookingOrder.id,
+          recipient_name: bookingDetails.recipient_name,
+          recipient_phone: bookingDetails.recipient_phone,
+          recipient_address: bookingDetails.recipient_address,
+          recipient_city_name: selectedCity?.city_name || bookingDetails.recipient_city || null,
+          recipient_area_name: selectedArea?.area_name || bookingDetails.recipient_area || null,
+          item_quantity: bookingDetails.item_quantity,
+          item_weight: bookingDetails.item_weight,
+          amount_to_collect: bookingDetails.amount_to_collect,
+          item_description: bookingDetails.item_description,
+          special_instruction: bookingDetails.special_instruction || null
+        };
+      }
+      
+      const res = await api.post(endpoint, payload);
       toast.success(res.data.message || "Parcel successfully booked!", { id: loadingToast, icon: "🚚" });
       
       // Update order status and details locally
+      const trackingPrefix = selectedCourier === "pathao" ? "Pathao Courier" : "SteadFast Courier";
       setOrders(prev => prev.map(o => {
         if (o.id === bookingOrder.id) {
-          const tracking = `\nPathao Courier Tracking ID: ${res.data.consignment_id}`;
+          const tracking = `\n${trackingPrefix} Tracking ID: ${res.data.consignment_id}`;
           return {
             ...o,
             status: "shipped",
@@ -341,9 +471,13 @@ export default function OrderDashboard() {
 
   useEffect(() => {
     if (bookingModalOpen) {
-      api.get("/courier/cities/").then(res => setBookingCities(res.data || [])).catch(console.error);
+      if (selectedCourier === "pathao") {
+        api.get("/courier/cities/").then(res => setBookingCities(res.data || [])).catch(console.error);
+      } else if (selectedCourier === "steadfast") {
+        api.get("/courier/steadfast/cities/").then(res => setBookingCities(res.data || [])).catch(console.error);
+      }
     }
-  }, [bookingModalOpen]);
+  }, [bookingModalOpen, selectedCourier]);
 
   useEffect(() => {
     if (newStoreData.city_id) {
@@ -354,14 +488,6 @@ export default function OrderDashboard() {
   }, [newStoreData.city_id]);
 
   useEffect(() => {
-    if (bookingDetails.recipient_city) {
-      api.get(`/courier/zones/?city_id=${bookingDetails.recipient_city}`).then(res => setBookingZones(res.data || [])).catch(console.error);
-    } else {
-      setBookingZones([]);
-    }
-  }, [bookingDetails.recipient_city]);
-
-  useEffect(() => {
     if (newStoreData.zone_id) {
       api.get(`/courier/areas/?zone_id=${newStoreData.zone_id}`).then(res => setPathaoAreas(res.data || [])).catch(console.error);
     } else {
@@ -370,12 +496,30 @@ export default function OrderDashboard() {
   }, [newStoreData.zone_id]);
 
   useEffect(() => {
-    if (bookingDetails.recipient_zone) {
-      api.get(`/courier/areas/?zone_id=${bookingDetails.recipient_zone}`).then(res => setBookingAreas(res.data || [])).catch(console.error);
-    } else {
-      setBookingAreas([]);
+    if (selectedCourier === "pathao") {
+      if (bookingDetails.recipient_city) {
+        api.get(`/courier/zones/?city_id=${bookingDetails.recipient_city}`).then(res => setBookingZones(res.data || [])).catch(console.error);
+      } else {
+        setBookingZones([]);
+      }
     }
-  }, [bookingDetails.recipient_zone]);
+  }, [bookingDetails.recipient_city, selectedCourier]);
+
+  useEffect(() => {
+    if (selectedCourier === "pathao") {
+      if (bookingDetails.recipient_zone) {
+        api.get(`/courier/areas/?zone_id=${bookingDetails.recipient_zone}`).then(res => setBookingAreas(res.data || [])).catch(console.error);
+      } else {
+        setBookingAreas([]);
+      }
+    } else if (selectedCourier === "steadfast") {
+      if (bookingDetails.recipient_city) {
+        api.get(`/courier/steadfast/areas/?city_id=${bookingDetails.recipient_city}`).then(res => setBookingAreas(res.data || [])).catch(console.error);
+      } else {
+        setBookingAreas([]);
+      }
+    }
+  }, [bookingDetails.recipient_city, bookingDetails.recipient_zone, selectedCourier]);
 
   useEffect(() => {
     if (addOrderModalOpen) {
@@ -411,40 +555,46 @@ export default function OrderDashboard() {
 
   useEffect(() => {
     const calculateDeliveryCharge = async () => {
-      if (
-        bookingDetails.store_id &&
-        bookingDetails.recipient_city &&
-        bookingDetails.recipient_zone &&
-        bookingDetails.item_weight
-      ) {
-        setCalculatingPrice(true);
-        try {
-          const payload = {
-            store_id: bookingDetails.store_id,
-            recipient_city: bookingDetails.recipient_city,
-            recipient_zone: bookingDetails.recipient_zone,
-            item_weight: bookingDetails.item_weight,
-            item_type: 2, // Default: Parcel
-            delivery_type: 48 // Default: Normal (48 hours)
-          };
-          const res = await api.post("/courier/price-calculator/", payload);
-          setCalculatedPrice(res.data);
-        } catch (err) {
-          console.error("Price calculation failed", err);
+      setCalculatingPrice(true);
+      try {
+        if (selectedCourier === "pathao") {
+          if (
+            bookingDetails.store_id &&
+            bookingDetails.recipient_city &&
+            bookingDetails.recipient_zone &&
+            bookingDetails.item_weight
+          ) {
+            const payload = {
+              store_id: bookingDetails.store_id,
+              recipient_city: bookingDetails.recipient_city,
+              recipient_zone: bookingDetails.recipient_zone,
+              item_weight: bookingDetails.item_weight,
+              item_type: 2,
+              delivery_type: 48
+            };
+            const res = await api.post("/courier/price-calculator/", payload);
+            setCalculatedPrice(res.data);
+          } else {
+            setCalculatedPrice(null);
+          }
+        } else {
           setCalculatedPrice(null);
-        } finally {
-          setCalculatingPrice(false);
         }
-      } else {
+      } catch (err) {
+        console.error("Price calculation failed", err);
         setCalculatedPrice(null);
+      } finally {
+        setCalculatingPrice(false);
       }
     };
 
     calculateDeliveryCharge();
   }, [
+    selectedCourier,
     bookingDetails.store_id,
     bookingDetails.recipient_city,
     bookingDetails.recipient_zone,
+    bookingDetails.recipient_area,
     bookingDetails.item_weight
   ]);
 
@@ -1332,6 +1482,93 @@ export default function OrderDashboard() {
           <p className="text-gray-400 font-bold text-xs uppercase tracking-widest">No orders</p>
         </div>
       )}
+
+      {/* ── Courier Provider Selection Modal ── */}
+      {courierProviderModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setCourierProviderModalOpen(false)} />
+          
+          <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 sm:p-8 animate-in zoom-in-95 duration-200 border border-slate-100 z-10">
+            <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+              <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">
+                <Truck className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900 tracking-tight">Select Courier</h3>
+                <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Choose preferred delivery partner</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              {courierActive && (
+                <button
+                  onClick={() => { setSelectedCourier("pathao"); startCourierBooking(); }}
+                  className={`w-full p-4 rounded-2xl border-2 transition-all text-left ${ selectedCourier === "pathao" ? "border-indigo-500 bg-indigo-50" : "border-slate-200 bg-slate-50 hover:border-indigo-300" }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-indigo-600 text-white rounded-lg flex items-center justify-center font-bold text-sm">P</div>
+                      <div>
+                        <p className="font-bold text-slate-900">Pathao Courier</p>
+                        <p className="text-xs text-slate-500">Fast & Reliable Delivery</p>
+                      </div>
+                    </div>
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedCourier === "pathao" ? "border-indigo-600 bg-indigo-600" : "border-slate-300"}`}>
+                      {selectedCourier === "pathao" && <div className="w-2 h-2 bg-white rounded-full" />}
+                    </div>
+                  </div>
+                </button>
+              )}
+              
+              {steadfastActive && (
+                <button
+                  onClick={() => { setSelectedCourier("steadfast"); startCourierBooking(); }}
+                  className={`w-full p-4 rounded-2xl border-2 transition-all text-left ${selectedCourier === "steadfast" ? "border-green-500 bg-green-50" : "border-slate-200 bg-slate-50 hover:border-green-300"}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-green-600 text-white rounded-lg flex items-center justify-center font-bold text-sm">S</div>
+                      <div>
+                        <p className="font-bold text-slate-900">SteadFast Courier</p>
+                        <p className="text-xs text-slate-500">Quick & Affordable Shipping</p>
+                      </div>
+                    </div>
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedCourier === "steadfast" ? "border-green-600 bg-green-600" : "border-slate-300"}`}>
+                      {selectedCourier === "steadfast" && <div className="w-2 h-2 bg-white rounded-full" />}
+                    </div>
+                  </div>
+                </button>
+              )}
+            </div>
+
+            {!courierActive && !steadfastActive && (
+              <div className="text-center py-8">
+                <Truck className="w-12 h-12 text-slate-200 mx-auto mb-3" />
+                <p className="text-slate-500 font-medium mb-4">No courier services configured.</p>
+                <button
+                  onClick={() => {
+                    setCourierProviderModalOpen(false);
+                    setCourierConfigModalOpen(true);
+                  }}
+                  className="px-4 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all"
+                >
+                  Configure Couriers
+                </button>
+              </div>
+            )}
+
+            <div className="flex gap-3 mt-6 pt-4 border-t border-slate-100">
+              <button
+                onClick={() => setCourierProviderModalOpen(false)}
+                className="w-full px-4 py-3 text-sm font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all active:scale-95"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Pathao Booking Modal ── */}
       {bookingModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
@@ -1346,14 +1583,15 @@ export default function OrderDashboard() {
                 <Truck className="w-6 h-6 animate-bounce" />
               </div>
               <div>
-                <h3 className="text-lg font-black text-slate-900 tracking-tight">Book Pathao Courier</h3>
+                <h3 className="text-lg font-black text-slate-900 tracking-tight">Book {selectedCourier === "pathao" ? "Pathao" : "SteadFast"} Courier</h3>
                 <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Order #{bookingOrder?.id} • {bookingOrder?.customer_name}</p>
               </div>
             </div>
 
             {/* Form */}
             <div className="space-y-5">
-              {/* Pickup Store */}
+              {/* Pickup Store (Pathao Only) */}
+              {selectedCourier === "pathao" && (
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Pickup Store Address</label>
@@ -1372,6 +1610,7 @@ export default function OrderDashboard() {
                   ))}
                 </select>
               </div>
+              )}
 
               {/* Recipient Details */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1406,6 +1645,7 @@ export default function OrderDashboard() {
               </div>
 
               {/* City, Zone, Area Selector for Booking */}
+              {selectedCourier === "pathao" && (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">City</label>
@@ -1443,6 +1683,35 @@ export default function OrderDashboard() {
                   </select>
                 </div>
               </div>
+              )}
+
+              {selectedCourier === "steadfast" && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">City</label>
+                  <select
+                    value={bookingDetails.recipient_city}
+                    onChange={(e) => setBookingDetails(prev => ({ ...prev, recipient_city: e.target.value, recipient_area: "" }))}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
+                  >
+                    <option value="">Select City</option>
+                    {bookingCities.map(city => <option key={city.city_id} value={city.city_id}>{city.city_name}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Area</label>
+                  <select
+                    value={bookingDetails.recipient_area}
+                    onChange={(e) => setBookingDetails(prev => ({ ...prev, recipient_area: e.target.value }))}
+                    disabled={!bookingDetails.recipient_city}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 disabled:opacity-50 cursor-pointer"
+                  >
+                    <option value="">Select Area</option>
+                    {bookingAreas.map(area => <option key={area.area_id} value={area.area_id}>{area.area_name}</option>)}
+                  </select>
+                </div>
+              </div>
+              )}
 
               {/* Delivery Details */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100">
@@ -1545,81 +1814,104 @@ export default function OrderDashboard() {
             
             {courierFormMode === "list" ? (
               <>
-                <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
-                  <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
-                    <Truck className="w-6 h-6" />
+                <div className="flex items-center justify-between gap-3 mb-6 pb-4 border-b border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
+                      <Truck className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-black text-slate-900 tracking-tight">Manage Couriers</h3>
+                      <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Your connected courier services</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-black text-slate-900 tracking-tight">Manage Couriers</h3>
-                    <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Your connected courier services</p>
-                  </div>
+                  <button
+                    onClick={() => {
+                      setCourierConfigTab("pathao");
+                      setCourierFormMode("form");
+                      setEditingPathaoConfigId(null);
+                      setEditingSteadFastConfigId(null);
+                      setPathaoConfig({
+                        name: "",
+                        client_id: "",
+                        client_secret: "",
+                        username: "",
+                        password: "",
+                        store_id: "",
+                        is_sandbox: true
+                      });
+                      setSteadFastConfig({
+                        name: "",
+                        api_key: "",
+                        api_secret: "",
+                        is_sandbox: true
+                      });
+                    }}
+                    className="px-4 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-md"
+                  >
+                    Add Courier
+                  </button>
                 </div>
                 
-                {courierActive ? (
+                {(pathaoConfigs.length > 0 || steadfastConfigs.length > 0) ? (
                   <div className="space-y-4">
-                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center">
-                          <Truck className="w-5 h-5" />
+                    {pathaoConfigs.length > 0 && pathaoConfigs.map((config) => (
+                      <div key={config.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-xl flex items-center justify-center">
+                            <Truck className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-800">{config.name || `Pathao ${config.id}`}</p>
+                            <span className={`text-[10px] font-bold ${config.is_active ? 'text-emerald-600 bg-emerald-100' : 'text-amber-600 bg-amber-100'} px-2 py-0.5 rounded-full uppercase`}>
+                              {config.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-bold text-slate-800">Pathao Courier</p>
-                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full uppercase">Active</span>
+                        <div className="flex gap-2">
+                          <button onClick={() => { setCourierConfigTab("pathao"); setCourierFormMode("form"); setEditingPathaoConfigId(config.id); setPathaoConfig({
+                            name: config.name || "",
+                            client_id: config.client_id,
+                            client_secret: "",
+                            username: config.username,
+                            password: "",
+                            store_id: config.store_id || "",
+                            is_sandbox: config.is_sandbox
+                          }); }} className="px-3 py-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors">Edit</button>
+                          <button onClick={() => handleDeletePathaoConfig(config.id)} disabled={isDeletingConfig} className="px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">{isDeletingConfig ? "..." : "Delete"}</button>
                         </div>
                       </div>
-                      <div className="flex gap-2">
-                        <button onClick={() => setCourierFormMode("form")} className="px-3 py-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors">Edit</button>
-                        <button onClick={handleDeletePathaoConfig} disabled={isDeletingConfig} className="px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">{isDeletingConfig ? "..." : "Delete"}</button>
-                      </div>
-                    </div>
+                    ))}
 
-                    {/* Stores List */}
-                    <div className="border border-slate-100 rounded-2xl p-4 bg-white space-y-3">
-                      <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                        <p className="text-xs font-black uppercase tracking-wider text-slate-500">Merchant Stores ({stores.length})</p>
-                        <button type="button" onClick={() => setCreateStoreModalOpen(true)} className="text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg transition-colors flex items-center gap-0.5 border border-indigo-100">
-                          <Plus className="w-3.5 h-3.5" /> New Store
-                        </button>
-                      </div>
-                      {stores.length > 0 ? (
-                        <div className="divide-y divide-slate-100 max-h-60 overflow-y-auto custom-scrollbar space-y-2">
-                          {stores.map(store => (
-                            <div key={store.store_id} className="py-2.5 flex items-start justify-between gap-3 text-xs">
-                              <div className="space-y-0.5 min-w-0">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <p className="font-bold text-slate-800 truncate">{store.store_name}</p>
-                                  {String(store.store_id) === String(pathaoConfig.store_id) && (
-                                    <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.2 rounded uppercase">Default</span>
-                                  )}
-                                  {(store.store_status || store.status) && (
-                                    <span className={`text-[8px] font-extrabold px-1.5 py-0.2 rounded uppercase border ${
-                                      String(store.store_status || store.status).toLowerCase() === 'active' || String(store.store_status || store.status).toLowerCase() === 'approved'
-                                        ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                                        : String(store.store_status || store.status).toLowerCase() === 'pending'
-                                          ? 'bg-amber-50 text-amber-600 border-amber-100'
-                                          : 'bg-slate-50 text-slate-500 border-slate-200'
-                                    }`}>
-                                      {store.store_status || store.status}
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-slate-400 font-medium">Store ID: <span className="font-mono text-slate-700 bg-slate-100 px-1 rounded">{store.store_id}</span></p>
-                                <p className="text-slate-500 line-clamp-1">{store.store_address}</p>
-                                <p className="text-slate-400">Phone: {store.contact_number || store.contact_phone || "N/A"}</p>
-                              </div>
-                            </div>
-                          ))}
+                    {steadfastConfigs.length > 0 && steadfastConfigs.map((config) => (
+                      <div key={config.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center">
+                            <Truck className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-800">{config.name || `SteadFast ${config.id}`}</p>
+                            <span className={`text-[10px] font-bold ${config.is_active ? 'text-emerald-600 bg-emerald-100' : 'text-amber-600 bg-amber-100'} px-2 py-0.5 rounded-full uppercase`}>
+                              {config.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                          </div>
                         </div>
-                      ) : (
-                        <p className="text-center py-4 text-xs text-slate-400 font-medium">No stores retrieved. Try clicking "Edit" and verifying config.</p>
-                      )}
-                    </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => { setCourierConfigTab("steadfast"); setCourierFormMode("form"); setEditingSteadFastConfigId(config.id); setSteadFastConfig({
+                            name: config.name || "",
+                            api_key: config.api_key,
+                            api_secret: "",
+                            is_sandbox: config.is_sandbox
+                          }); }} className="px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors">Edit</button>
+                          <button onClick={() => handleDeleteSteadFastConfig(config.id)} disabled={isDeletingConfig} className="px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">{isDeletingConfig ? "..." : "Delete"}</button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <div className="text-center py-8">
                     <Truck className="w-12 h-12 text-slate-200 mx-auto mb-3" />
                     <p className="text-slate-500 font-medium mb-4">No courier services configured yet.</p>
-                    <button onClick={() => setCourierFormMode("form")} className="px-4 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-md">Add Pathao Courier</button>
+                    <button onClick={() => { setCourierConfigTab("pathao"); setCourierFormMode("form"); }} className="px-4 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-md">Add Courier</button>
                   </div>
                 )}
                 
@@ -1635,98 +1927,185 @@ export default function OrderDashboard() {
             ) : (
               <>
                 <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
-                  <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
+                  <div className={`p-3 rounded-2xl ${courierConfigTab === "pathao" ? "bg-indigo-50 text-indigo-600" : "bg-emerald-50 text-emerald-600"}`}>
                     <Truck className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-black text-slate-900 tracking-tight">Configure Pathao Courier</h3>
+                    <h3 className="text-lg font-black text-slate-900 tracking-tight">Configure {courierConfigTab === "pathao" ? "Pathao" : "SteadFast"} Courier</h3>
                     <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Set API credentials to book parcels</p>
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Client ID</label>
-                    <input
-                      type="text"
-                      value={pathaoConfig.client_id}
-                      onChange={(e) => setPathaoConfig(prev => ({ ...prev, client_id: e.target.value }))}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Client Secret</label>
-                    <input
-                      type="password"
-                      value={pathaoConfig.client_secret}
-                      onChange={(e) => setPathaoConfig(prev => ({ ...prev, client_secret: e.target.value }))}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Username (Email)</label>
-                    <input
-                      type="email"
-                      value={pathaoConfig.username}
-                      onChange={(e) => setPathaoConfig(prev => ({ ...prev, username: e.target.value }))}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Password</label>
-                    <input
-                      type="password"
-                      placeholder="Leave empty if unchanged"
-                      value={pathaoConfig.password}
-                      onChange={(e) => setPathaoConfig(prev => ({ ...prev, password: e.target.value }))}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Store ID</label>
-                      <button type="button" onClick={() => setCreateStoreModalOpen(true)} className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-lg transition-colors border border-indigo-100"><Plus className="w-3 h-3" /> New Store</button>
-                    </div>
-                    <input
-                      type="text"
-                      placeholder="e.g. 12345"
-                      value={pathaoConfig.store_id || ""}
-                      onChange={(e) => setPathaoConfig(prev => ({ ...prev, store_id: e.target.value }))}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-3 pt-2">
-                    <div className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${pathaoConfig.is_sandbox ? 'bg-amber-400' : 'bg-slate-300'}`} onClick={() => setPathaoConfig(prev => ({ ...prev, is_sandbox: !prev.is_sandbox }))}>
-                      <div className={`w-4 h-4 bg-white rounded-full transition-transform ${pathaoConfig.is_sandbox ? 'translate-x-6' : 'translate-x-0'}`} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-slate-700">Sandbox Mode</p>
-                      <p className="text-[10px] font-bold text-slate-400">Use test API endpoints</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex gap-3 mt-8 pt-4 border-t border-slate-100">
-                  <button
-                    disabled={isSavingConfig}
-                    onClick={() => setCourierFormMode("list")}
-                    className="flex-1 px-4 py-3 text-sm font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all active:scale-95 disabled:opacity-50"
-                  >
-                    Back to List
+                <div className="inline-flex rounded-full bg-slate-100 p-1 gap-1 mb-6">
+                  <button type="button" onClick={() => setCourierConfigTab("pathao")} className={`px-4 py-2 text-xs font-bold rounded-full transition ${courierConfigTab === "pathao" ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-900"}`}>
+                    Pathao
                   </button>
-                  <button
-                    disabled={isSavingConfig || !pathaoConfig.client_id || !pathaoConfig.client_secret || !pathaoConfig.username}
-                    onClick={handleSavePathaoConfig}
-                    className="flex-1 px-4 py-3 text-sm font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-50"
-                  >
-                    {isSavingConfig ? "Saving..." : "Save & Verify"}
+                  <button type="button" onClick={() => setCourierConfigTab("steadfast")} className={`px-4 py-2 text-xs font-bold rounded-full transition ${courierConfigTab === "steadfast" ? "bg-white shadow text-slate-900" : "text-slate-500 hover:text-slate-900"}`}>
+                    SteadFast
                   </button>
                 </div>
+
+                {courierConfigTab === "pathao" ? (
+                  <>
+                    <div className="space-y-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Client ID</label>
+                        <input
+                          type="text"
+                          value={pathaoConfig.client_id}
+                          onChange={(e) => setPathaoConfig(prev => ({ ...prev, client_id: e.target.value }))}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Client Secret</label>
+                        <input
+                          type="password"
+                          value={pathaoConfig.client_secret}
+                          onChange={(e) => setPathaoConfig(prev => ({ ...prev, client_secret: e.target.value }))}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Configuration Name</label>
+                        <input
+                          type="text"
+                          value={pathaoConfig.name}
+                          onChange={(e) => setPathaoConfig(prev => ({ ...prev, name: e.target.value }))}
+                          placeholder="Optional label for this config"
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Username (Email)</label>
+                        <input
+                          type="email"
+                          value={pathaoConfig.username}
+                          onChange={(e) => setPathaoConfig(prev => ({ ...prev, username: e.target.value }))}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Password</label>
+                        <input
+                          type="password"
+                          placeholder="Leave empty if unchanged"
+                          value={pathaoConfig.password}
+                          onChange={(e) => setPathaoConfig(prev => ({ ...prev, password: e.target.value }))}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Store ID</label>
+                          <button type="button" onClick={() => setCreateStoreModalOpen(true)} className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-lg transition-colors border border-indigo-100"><Plus className="w-3 h-3" /> New Store</button>
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="e.g. 12345"
+                          value={pathaoConfig.store_id || ""}
+                          onChange={(e) => setPathaoConfig(prev => ({ ...prev, store_id: e.target.value }))}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-3 pt-2">
+                        <div className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${pathaoConfig.is_sandbox ? 'bg-amber-400' : 'bg-slate-300'}`} onClick={() => setPathaoConfig(prev => ({ ...prev, is_sandbox: !prev.is_sandbox }))}>
+                          <div className={`w-4 h-4 bg-white rounded-full transition-transform ${pathaoConfig.is_sandbox ? 'translate-x-6' : 'translate-x-0'}`} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-700">Sandbox Mode</p>
+                          <p className="text-[10px] font-bold text-slate-400">Use test API endpoints</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 mt-8 pt-4 border-t border-slate-100">
+                      <button
+                        disabled={isSavingConfig}
+                        onClick={() => setCourierFormMode("list")}
+                        className="flex-1 px-4 py-3 text-sm font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all active:scale-95 disabled:opacity-50"
+                      >
+                        Back to List
+                      </button>
+                      <button
+                        disabled={isSavingConfig || !pathaoConfig.client_id || !pathaoConfig.client_secret || !pathaoConfig.username}
+                        onClick={handleSavePathaoConfig}
+                        className="flex-1 px-4 py-3 text-sm font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-50"
+                      >
+                        {isSavingConfig ? "Saving..." : "Save & Verify"}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="space-y-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">SteadFast API Key</label>
+                        <input
+                          type="text"
+                          value={steadfastConfig.api_key}
+                          onChange={(e) => setSteadFastConfig(prev => ({ ...prev, api_key: e.target.value }))}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-emerald-500/10"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">SteadFast API Secret</label>
+                        <input
+                          type="password"
+                          placeholder="Leave empty if unchanged"
+                          value={steadfastConfig.api_secret}
+                          onChange={(e) => setSteadFastConfig(prev => ({ ...prev, api_secret: e.target.value }))}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-emerald-500/10"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Configuration Name</label>
+                        <input
+                          type="text"
+                          value={steadfastConfig.name}
+                          onChange={(e) => setSteadFastConfig(prev => ({ ...prev, name: e.target.value }))}
+                          placeholder="Optional label for this config"
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-emerald-500/10"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-3 pt-2">
+                        <div className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${steadfastConfig.is_sandbox ? 'bg-amber-400' : 'bg-slate-300'}`} onClick={() => setSteadFastConfig(prev => ({ ...prev, is_sandbox: !prev.is_sandbox }))}>
+                          <div className={`w-4 h-4 bg-white rounded-full transition-transform ${steadfastConfig.is_sandbox ? 'translate-x-6' : 'translate-x-0'}`} />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-700">Sandbox Mode</p>
+                          <p className="text-[10px] font-bold text-slate-400">Use test API endpoints</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3 mt-8 pt-4 border-t border-slate-100">
+                      <button
+                        disabled={isSavingConfig}
+                        onClick={() => setCourierFormMode("list")}
+                        className="flex-1 px-4 py-3 text-sm font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all active:scale-95 disabled:opacity-50"
+                      >
+                        Back to List
+                      </button>
+                      <button
+                        disabled={isSavingConfig || !steadfastConfig.api_key || !steadfastConfig.api_secret}
+                        onClick={handleSaveSteadFastConfig}
+                        className="flex-1 px-4 py-3 text-sm font-black text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-50"
+                      >
+                        {isSavingConfig ? "Saving..." : "Save & Verify"}
+                      </button>
+                    </div>
+                  </>
+                )}
               </>
             )}
           </div>

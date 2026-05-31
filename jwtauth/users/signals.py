@@ -1,10 +1,13 @@
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from users.models import Profile, OrderForm, FacebookPage
+from users.models import Profile, OrderForm, FacebookPage, CustomerOrder
 from users.utils import assign_unique_id
 from django.contrib.auth import get_user_model
 from datasheet.models import Spreadsheet
 from aiAgent.models import AgentAI
+import logging
+
+logger = logging.getLogger(__name__)
 
 User = get_user_model()
 @receiver(post_save, sender=User)
@@ -75,6 +78,60 @@ def ensure_user_order_form(sender, instance, **kwargs):
         print(f">>> New OrderForm generated for user: {instance.username}")
     else:
         print(f">>> OrderForm already exists for user: {instance.username}")
+
+
+# ─── INVOICE GENERATION & N8N DELIVERY ────────────────────────────────────
+
+@receiver(post_save, sender=CustomerOrder)
+def handle_order_created_invoice_n8n(sender, instance, created, **kwargs):
+    """
+    Signal handler triggered when a CustomerOrder is created.
+    Generates invoice image using Playwright and sends via N8N to customer's platform.
+    
+    Args:
+        sender: Model class (CustomerOrder)
+        instance: The order instance
+        created: Boolean indicating if this is a new creation
+        **kwargs: Additional arguments from signal
+    """
+    
+    # Only process on creation, not updates
+    if not created:
+        return
+
+    if instance.invoice_sent:
+        logger.info(f"⏹️ Invoice already marked sent for order #{instance.id}, skipping task dispatch")
+        return
+
+    if instance.invoice_task_dispatched:
+        logger.info(f"⏹️ Invoice task already dispatched for order #{instance.id}, skipping duplicate enqueue")
+        return
+
+    try:
+        logger.info(f"📦 New order created: {instance.id} for customer {instance.customer_name}")
+        logger.info(f"   Platform: {instance.source_platform} | Contact: {instance.source_contact_id}")
+
+        dispatched = CustomerOrder.objects.filter(id=instance.id, invoice_task_dispatched=False).update(invoice_task_dispatched=True)
+        if not dispatched:
+            logger.info(f"⏹️ Another process already marked order #{instance.id} as dispatched")
+            return
         
+        # Trigger async invoice generation
+        from users.signals_tasks import generate_and_send_invoice_async_task
+        generate_and_send_invoice_async_task.delay(instance.id)
+        
+    except Exception as e:
+        logger.error(f"❌ Error triggering invoice generation task: {e}", exc_info=True)
+
+
+@receiver(post_save, sender=CustomerOrder)
+def log_order_status(sender, instance, created, **kwargs):
+    """
+    Signal handler to log order status changes.
+    """
+    if created:
+        logger.info(f"🆕 Order #{instance.id} created with status: {instance.status}")
+    else:
+        logger.info(f"♻️ Order #{instance.id} updated - Status: {instance.status}")
         
         

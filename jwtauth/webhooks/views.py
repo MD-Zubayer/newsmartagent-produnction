@@ -38,6 +38,46 @@ def _is_duplicate_webhook(sender_id, text, page_id):
         return False  # Redis error হলে proceed করতে দিন
 
 
+def _should_treat_numeric_as_order_text(agent, contact, text):
+    if not agent or not contact or not text or not str(text).strip().isdigit():
+        return False
+    if getattr(contact, 'is_human_needed', False):
+        return False
+    try:
+        from aiAgent.models import UserMemory
+        memory = UserMemory.objects.filter(ai_agent=agent, sender_id=contact.identifier).first()
+        if not memory or not isinstance(memory.data, dict):
+            return False
+        internal = memory.data.get('_internal', {})
+        if internal.get('order_state') not in ['ordering', 'editing']:
+            return False
+        order_fields = internal.get('order_fields', {})
+        for field_name in ['customer_name', 'phone_number', 'address', 'product_name', 'quantity']:
+            field_data = order_fields.get(field_name, {})
+            if not field_data.get('value') or field_data.get('confidence', 1.0) < 0.75:
+                return field_name == 'quantity'
+    except Exception as e:
+        logger.warning(f"⚠️ Numeric order text guard failed: {e}")
+    return False
+
+
+def _map_whatsapp_numeric_button_to_action(agent, contact, numeric_value):
+    if not numeric_value or not str(numeric_value).strip().isdigit():
+        return None
+    try:
+        idx = int(str(numeric_value).strip()) - 1
+        if idx < 0:
+            return None
+        from aiAgent.business_logic.logic_handler import get_button_payload
+        buttons = get_button_payload(contact) if contact else []
+        if 0 <= idx < len(buttons):
+            return buttons[idx].get('action')
+    except Exception as e:
+        logger.warning(f"⚠️ WhatsApp numeric button map failed: {e}")
+    return None
+    return False
+
+
 
 
 @api_view(['POST', 'GET'])
@@ -57,7 +97,7 @@ def handle_button_action(action, sender_id, page_id, platform):
     Handle button clicks from users across all platforms.
     Returns True if an action was handled, False otherwise.
     """
-    valid_actions = ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN"]
+    valid_actions = ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN", "CONFIRM_ORDER", "EDIT_ORDER", "CANCEL_ORDER"]
     if action not in valid_actions:
         return False
         
@@ -96,6 +136,16 @@ def handle_button_action(action, sender_id, page_id, platform):
         
         # Apply the action
         voice_file = None
+        if action in ["CONFIRM_ORDER", "EDIT_ORDER", "CANCEL_ORDER"]:
+            try:
+                from webhooks.tasks import handle_order_button_action
+                handled = handle_order_button_action(agent, contact, action, page_id, platform)
+                logger.info(f"✅ Handled order button action {action} for contact {contact.id} ({sender_id}) | success={handled}")
+                return True
+            except Exception as order_action_err:
+                logger.error(f"Order button action {action} failed: {order_action_err}")
+                return True
+
         if action == "HUMAN_HELP":
             contact.is_human_needed = True
             contact.is_auto_reply_enabled = False
@@ -272,36 +322,44 @@ def ai_webhook(request):
     if request_type == 'messenger':
         # If payload was mapped to 'message' by n8n or exists directly
         payload = data.get('payload') 
-        if not payload and text in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN"]:
+        if not payload and text in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN", "CONFIRM_ORDER", "EDIT_ORDER", "CANCEL_ORDER"]:
             payload = text
-        if payload in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN"]:
+        if payload in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN", "CONFIRM_ORDER", "EDIT_ORDER", "CANCEL_ORDER"]:
             button_action = payload
             
     # WhatsApp Button Response (from Baileys/Evolution API)
     elif request_type == 'whatsapp':
         # Depending on n8n mapping, the buttonId might be in a specific field
         button_id = data.get('buttonId') or data.get('listResponseId')
-        
-        # Numeric Text Fallback (map to current menu order)
         text_cmd = text.strip() if text else ""
+
+        # Numeric button payload may arrive directly as buttonId or plain text.
+        if button_id and str(button_id).strip().isdigit():
+            from aiAgent.models import Contact, AgentAI
+            agent = AgentAI.objects.filter(page_id=page_id, platform='whatsapp', is_active=True).first()
+            contact = Contact.objects.filter(identifier=sender_id, agent=agent).first() if agent else None
+            mapped_action = _map_whatsapp_numeric_button_to_action(agent, contact, button_id)
+            if mapped_action:
+                button_id = mapped_action
+
         if not button_id and text_cmd.isdigit():
             from aiAgent.models import Contact, AgentAI
             agent = AgentAI.objects.filter(page_id=page_id, platform='whatsapp', is_active=True).first()
             contact = Contact.objects.filter(identifier=sender_id, agent=agent).first() if agent else None
-            if agent:
-                from aiAgent.business_logic.logic_handler import get_button_payload
-                buttons = get_button_payload(contact) if contact else [
-                    {"action": "HUMAN_HELP"}, {"action": "STOP_AI_REPLY"}
-                ]
-                idx = int(text_cmd) - 1
-                if 0 <= idx < len(buttons):
-                    button_id = buttons[idx]['action']
-            # fallback old mapping
-            if not button_id and text_cmd in ["1", "2"]:
+            numeric_is_order_text = _should_treat_numeric_as_order_text(agent, contact, text_cmd)
+            if agent and not numeric_is_order_text:
+                mapped_action = _map_whatsapp_numeric_button_to_action(agent, contact, text_cmd)
+                if mapped_action:
+                    button_id = mapped_action
+            # fallback old mapping for back-compat and simple menu cases
+            if not button_id and not numeric_is_order_text and text_cmd in ["1", "2", "3"]:
                 if text_cmd == "1":
                     button_id = "HUMAN_HELP"
                 elif text_cmd == "2":
                     button_id = "STOP_AI_REPLY"
+                elif text_cmd == "3":
+                    button_id = "RESOLVE_HUMAN"
+
         # Word-based fallback (strict keywords with length guard to avoid false triggers)
         if not button_id and text_cmd:
             t = text_cmd.lower()
@@ -310,6 +368,9 @@ def ai_webhook(request):
                 "RESOLVE_HUMAN": ["resolve", "done", "close human"],
                 "STOP_AI_REPLY": ["stop", "pause", "stop ai", "pause ai", "ai off"],
                 "ON_AI_REPLY": ["on ai", "resume ai", "ai on", "resume"],
+                "CONFIRM_ORDER": ["confirm", "confirm order", "yes", "sure", "ঠিক আছে", "ঠিক"],
+                "EDIT_ORDER": ["edit", "change", "update", "modify", "edit order", "পরিবর্তন"],
+                "CANCEL_ORDER": ["cancel", "cancel order", "stop order", "abort order", "বাতিল", "কিনবো না"],
             }
             for action, kws in keyword_map.items():
                 for kw in kws:
@@ -321,10 +382,10 @@ def ai_webhook(request):
                     break
 
         # Sometimes the button text itself is the action if poorly mapped
-        if not button_id and text in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN"]:
+        if not button_id and text in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN", "CONFIRM_ORDER", "EDIT_ORDER", "CANCEL_ORDER"]:
             button_id = text
             
-        if button_id in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN"]:
+        if button_id in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN", "CONFIRM_ORDER", "EDIT_ORDER", "CANCEL_ORDER"]:
             button_action = button_id
             
     if button_action:
@@ -392,10 +453,10 @@ def instagram_webhook(request):
     # Instagram quick replies usually come through as regular messages with a payload field
     # depending on your n8n setup, it might just be the text itself
     payload = data.get('payload') or data.get('quick_reply', {}).get('payload')
-    if not payload and text in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN"]:
+    if not payload and text in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN", "CONFIRM_ORDER", "EDIT_ORDER", "CANCEL_ORDER"]:
         payload = text
         
-    if payload in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN"]:
+    if payload in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN", "CONFIRM_ORDER", "EDIT_ORDER", "CANCEL_ORDER"]:
         button_action = payload
         
     if button_action:
@@ -564,13 +625,13 @@ def telegram_webhook(request):
         # Override sender and text with callback data
         sender_id = str(callback_query.get('from', {}).get('id', sender_id))
         callback_data = callback_query.get('data')
-        if callback_data in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN"]:
+        if callback_data in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN", "CONFIRM_ORDER", "EDIT_ORDER", "CANCEL_ORDER"]:
             button_action = callback_data
             # We don't need text for button actions, but want to record deduplication
             text = callback_data
             
     # Also allow standard text to act as button if poorly formatted
-    if not button_action and text in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN"]:
+    if not button_action and text in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN", "CONFIRM_ORDER", "EDIT_ORDER", "CANCEL_ORDER"]:
         button_action = text
         
     if button_action:

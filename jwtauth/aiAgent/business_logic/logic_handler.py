@@ -1,6 +1,7 @@
 # aiAgent/business_logic/logic_handler.py
 from celery import shared_task
 import requests
+import re
 
 from aiAgent.models import AgentAI
 from chat.services import save_message
@@ -57,10 +58,36 @@ def get_order_instructions(user):
             if settings_obj and getattr(settings_obj, 'order_instruction', None):
                 order_instruction = settings_obj.order_instruction
 
-        return order_instruction or "Handle orders politely."
+        if order_instruction:
+            order_instruction = f"{order_instruction}\n\n{_default_direct_order_instructions()}"
+        else:
+            order_instruction = _default_direct_order_instructions()
+
+        return order_instruction
     except Exception as e:
         logger.error(f"Settings Error while fetching order instructions: {e}")
-        return "Handle orders politely."
+        return _default_direct_order_instructions()
+
+
+def _default_direct_order_instructions():
+    return (
+        "You are a conversational sales assistant for the merchant. "
+        "Do not tell customers to use any order form or external link. "
+        "If the customer wants to buy, take their order directly in chat. "
+        "Collect required customer details in a friendly way: customer_name, phone_number, address, product_name, quantity, and any special instructions. "
+        "Do not ask the customer for product price and do not invent price; price must come from the merchant catalog or knowledge base. "
+        "Never ask for the same field twice. Always remember details already collected from earlier messages in this conversation. "
+        "If the user gives multiple details in one message, use them immediately. "
+        "If any required detail is missing, ask only for that missing detail. "
+        "When you have enough information for a complete order, return a valid JSON object with keys: "
+        "\"reply\", \"cache_type\", \"human_handoff\", \"order_intent\", and \"order_data\". "
+        "\"order_intent\" should be \"create\". "
+        "\"order_data\" should be an object containing customer_name, phone_number, address, product_name, quantity, and extra_info when available. Do not include price unless the user explicitly provided it; backend will merge catalog price. "
+        "If the user is confirming details or answering follow-up questions, do not repeat earlier questions. "
+        "Keep the reply natural, polite, and simple. "
+        "If the user is not placing an order, answer normally."
+    )
+
 
 def perform_rag_search(agent_config, text, post_context_text, order_instruction, existing_vector=None):
     sheet_context = ""
@@ -370,10 +397,18 @@ def restore_schedule_quota(user_profile, subscription, count=1):
 def build_ai_context(agent_config, sender_id, text, extra_instruction=None, sheet_context=None, platform='messenger'):
     from aiAgent.utils import get_memory_context
     from chat.services import get_last_message
-    from aiAgent.memory_handler import calculate_context_score, check_keyword_match
+    from aiAgent.memory_handler import calculate_context_score, check_keyword_match, detect_interruption_intent
 
     lower_text = text.lower()
     memory_context = ""
+    order_context = ""
+    first_message_context = ""
+    greeting_only = re.sub(r'[^\w\s\u0980-\u09FF]', ' ', lower_text).strip()
+    greeting_only = re.sub(r'\s+', ' ', greeting_only)
+    is_simple_greeting = greeting_only in {
+        'hi', 'hello', 'hey', 'salam', 'assalamualaikum', 'assalamu alaikum',
+        'আসসালামু আলাইকুম', 'সালাম', 'হাই', 'হ্যালো'
+    }
     
     # 1. Fallback Static Triggers
     static_triggers = ['আমার অর্ডার', 'আমার নাম', 'নাম', 'অর্ডার', 'আগের', 'my', 'name', 'order', 'status']
@@ -393,11 +428,96 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
     elif c_score >= 3:
         is_memory_needed = True
 
-    if is_memory_needed:
+    mem_data = ""
+    try:
         mem_data = get_memory_context(agent_config, sender_id)
+    except Exception:
+        mem_data = ""
+
+    if is_memory_needed:
         if mem_data:
             memory_context = f"\nUser Database Memory [Very Important]:\n{mem_data}"
             logger.info(f"🧠 Injecting Memory Context for {sender_id}. Score: {c_score} | DB Triggers: {matched_intents or matched_targets}")
+
+    try:
+        recent_history = get_last_message(agent_config, sender_id, limit=3, platform=platform)
+        user_message_count = len([
+            msg for msg in recent_history
+            if msg.get("role") == "user" and msg.get("content")
+        ])
+        if mem_data and user_message_count <= 1:
+            first_message_context = (
+                "\n[KNOWN CUSTOMER MEMORY]:\n"
+                f"{mem_data}\n"
+                "Directive: This appears to be the customer's first message in this new conversation/session. "
+                "If the memory suggests they are a returning or known customer, greet them warmly and naturally using known details when appropriate. "
+                "Do not expose raw memory keys; keep the greeting short and helpful."
+            )
+            logger.info(f"👋 Injecting known-customer first-message memory for {sender_id}")
+    except Exception as e:
+        logger.error(f"Error building first-message memory context: {e}")
+
+    try:
+        from aiAgent.models import UserMemory
+
+        memory = UserMemory.objects.filter(ai_agent=agent_config, sender_id=str(sender_id).lower()).first()
+        if memory and isinstance(memory.data, dict):
+            internal = memory.data.get('_internal', {})
+            order_state = internal.get('order_state', 'idle')
+            order_fields = internal.get('order_fields', {})
+            failed_attempts = internal.get('failed_attempts', {})
+            interruption_buffer = internal.get('interruption_buffer', {})
+            recent_interest = internal.get('recent_order_interest') or {}
+
+            if recent_interest.get('product_name') and order_state == 'idle':
+                order_context = (
+                    "\n[RECENT ORDER INTEREST]:\n"
+                    f"product_name={recent_interest.get('product_name')}\n"
+                    f"price={recent_interest.get('price') or 'catalog/database'}\n"
+                    "Directive: The customer recently discussed this product. If they now say yes/confirm/order, reuse this product instead of asking product_name again. "
+                    "Still ask for missing customer details and wait for final confirmation before creating an order."
+                )
+
+            if order_state in ['ordering', 'editing', 'awaiting_confirmation']:
+                collected = []
+                missing = []
+                for field_name in ['customer_name', 'phone_number', 'address', 'product_name', 'quantity']:
+                    field_data = order_fields.get(field_name, {})
+                    if field_data.get('value') and field_data.get('confidence', 1.0) >= 0.75:
+                        collected.append(f"{field_name}={field_data.get('value')}")
+                    else:
+                        missing.append(field_name)
+
+                strike_lines = []
+                for field_name, stats in failed_attempts.items():
+                    strike = stats.get('strike_context') or stats.get('count')
+                    if strike:
+                        strike_lines.append(f"{field_name}: strike {strike}")
+
+                order_context = (
+                    "\n[ORDER MEMORY STATE]:\n"
+                    f"state={order_state}\n"
+                    f"collected={'; '.join(collected) if collected else 'none'}\n"
+                    f"missing={', '.join(missing) if missing else 'none'}\n"
+                    f"failed_attempts={'; '.join(strike_lines) if strike_lines else 'none'}\n"
+                    "Directive: Use collected order fields as truth. Do not fill missing order fields from knowledge-base text. "
+                    "Do not ask the customer for price; backend/catalog validation supplies product price. "
+                    "Ask only for the next missing field, unless the user asks a separate policy/product question."
+                )
+                if is_simple_greeting:
+                    order_context += "\nDirective: The user only greeted. Reply with a warm greeting only; do not push order progress or ask missing order fields in this reply."
+
+                if order_state == 'awaiting_confirmation':
+                    order_context += "\nDirective: Wait for confirmation, edit, or cancellation. Do not create an order without confirmation."
+
+                interruption = detect_interruption_intent(text, order_state)
+                if interruption.get('interrupted') or interruption_buffer.get('active'):
+                    order_context += (
+                        "\nDirective: This is an order side-track. Answer the side question only. "
+                        "Suppress order ticks, summaries, and field prompts in this reply."
+                    )
+    except Exception as e:
+        logger.error(f"Error building order memory context: {e}")
 
     # 3.5 Visitor Tracking Context
     visitor_context = ""
@@ -442,6 +562,8 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
 
     if sheet_context: system_prompt_parts.append(sheet_context)
     if memory_context: system_prompt_parts.append(memory_context)
+    if first_message_context: system_prompt_parts.append(first_message_context)
+    if order_context: system_prompt_parts.append(order_context)
     if visitor_context: system_prompt_parts.append(visitor_context)
 
     system_instruction = "\n\n".join(system_prompt_parts)
@@ -724,6 +846,23 @@ def get_button_payload(contact):
     """Generate button text and payload based on current contact state"""
     buttons = []
     
+    # If this contact has a pending order confirmation, show order actions first
+    try:
+        from aiAgent.models import UserMemory
+        memory = UserMemory.objects.filter(ai_agent=contact.agent, sender_id=contact.identifier).first()
+        if memory and isinstance(memory.data, dict):
+            internal = memory.data.get('_internal', {})
+            order_state = internal.get('order_state')
+            if order_state in ['awaiting_confirmation', 'editing']:
+                buttons.append({"text": "✅ Confirm Order", "action": "CONFIRM_ORDER"})
+                buttons.append({"text": "✏️ Edit Order", "action": "EDIT_ORDER"})
+                buttons.append({"text": "❌ Cancel Order", "action": "CANCEL_ORDER"})
+                if not contact.is_human_needed:
+                    buttons.append({"text": "🙋 Human Help", "action": "HUMAN_HELP"})
+                return buttons
+    except Exception:
+        pass
+
     # Button 1: Human Help / Resolve Human Mode
     if contact.is_human_needed:
         buttons.append({"text": "✅ Resolve Human Mode", "action": "RESOLVE_HUMAN"})
@@ -780,8 +919,8 @@ def send_messenger_buttons(sender_id, page_id, access_token, contact, reply_text
     
     buttons = get_button_payload(contact)
     short_titles = {
-        "HUMAN_HELP": "🙋 Human",
-        "RESOLVE_HUMAN": "✅ Resolve",
+        "HUMAN_HELP": "🙋 Human Mode",
+        "RESOLVE_HUMAN": "✅ Resolve Human Mode",
         "STOP_AI_REPLY": "🔇 Stop AI",
         "ON_AI_REPLY": "🔊 On AI"
     }
@@ -859,7 +998,7 @@ def send_whatsapp_buttons(data, contact, reply_text="\u200e"):
     # ── Text Menu Fallback (no URLs) ──
     # Meta/LID sometimes blocks interactive buttons; we send a plain numbered menu without links.
     # Keep text compact so bubbles don't look big
-    menu_text = f"{reply_text}\n\n\n"
+    menu_text = f"{reply_text}\n\n"
     menu_text += "Choose: "
     
     labels = []

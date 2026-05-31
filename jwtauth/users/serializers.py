@@ -3,6 +3,7 @@ from users.models import User, Subscription, Offer, Profile, Payment, NSATransfe
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.exceptions import InvalidToken
 from users.models import CustomerOrder, OrderForm
+from django.db.models import Q
 from django.db import transaction
 from man_agent.models import ManAgentConfig, ReferralRelation
 from aiAgent.serializers import AIProviderModelSerializer
@@ -252,6 +253,26 @@ class CustomerOrderSerializer(serializers.ModelSerializer):
             user = order_form.user
         except OrderForm.DoesNotExist:
             raise serializers.ValidationError({"form_id": "Invalid Form ID."})
+
+        product_name = str(validated_data.get('product_name', '') or '').strip()
+        item_quantity = validated_data.get('item_quantity', 1) or 1
+        try:
+            quantity = int(item_quantity)
+        except (TypeError, ValueError):
+            quantity = 1
+
+        product = user.get_catalog_product(product_name, quantity)
+        if not product:
+            raise serializers.ValidationError({
+                "product_name": "Product not found in your catalog. Please add it first or use a valid catalog product name."
+            })
+        if product.get('stock') is not None and product.get('stock') < quantity:
+            raise serializers.ValidationError({
+                "item_quantity": "Requested quantity exceeds available stock."
+            })
+
+        validated_data['product_name'] = product.get('name', product_name)
+        validated_data['price'] = product.get('price')
 
         return CustomerOrder.objects.create(user=user, **validated_data)
 
