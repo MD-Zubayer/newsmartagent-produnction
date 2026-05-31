@@ -5,6 +5,11 @@ from rest_framework.permissions import IsAuthenticated
 from .models import Spreadsheet
 from .serializers import SpreadsheetSerializer
 from embedding.utils import sync_spreadsheet_to_knowledge
+from .tasks import run_auto_image_search_task, sync_spreadsheet_to_knowledge_task
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+from django.urls import reverse
+from embedding.utils import get_gemini_image_embedding
 class SpreadsheetListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -73,12 +78,19 @@ class SpreadsheetDetailView(APIView):
 
                 # ধাপ ৩: যদি কোনো ডেটা থাকে (হেডার বাদে), তবেই সিঙ্ক কল করা
                 if rows_with_content:
-                    updated_rows = sync_spreadsheet_to_knowledge(
-                    user=request.user, 
-                    grid_data=clean_data, # আপনার ফিল্টার করা ডাটা
-                    sheet_id=saved_sheet.id # এখানে ডিফল্ট আইডি পাস হচ্ছে
-                )
-                    print(f"Total {updated_rows} valid rows updated in Knowledge Base.")
+                    if len(rows_with_content) > 40:
+                        sync_spreadsheet_to_knowledge_task.delay(request.user.id, clean_data, saved_sheet.id)
+                        print(f"Large sheet detected. Scheduled background sync task for Sheet {saved_sheet.id}.")
+                    else:
+                        updated_rows = sync_spreadsheet_to_knowledge(
+                            user=request.user,
+                            grid_data=clean_data,
+                            sheet_id=saved_sheet.id
+                        )
+                        print(f"Total {updated_rows} valid rows updated in Knowledge Base.")
+                    if saved_sheet.auto_image_search:
+                        run_auto_image_search_task.delay(saved_sheet.id)
+                        print(f"Auto image search scheduled for Sheet {saved_sheet.id}.")
                 else:
                     # যদি কোনো ডেটা না থাকে, তবে নলেজ বেস থেকে ওই ইউজারের ডাটা ক্লিয়ার করে দেওয়া ভালো
                     from embedding.models import SpreadsheetKnowledge
@@ -98,3 +110,52 @@ class SpreadsheetDetailView(APIView):
         
         sheet.delete()
         return Response({'message': 'Deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+
+
+class RowImageUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        """Upload an image file for a specific row.
+
+        Expected form-data: file (image), row_index (string or int)
+        """
+        sheet = self.get_object(pk, request.user)
+        if not sheet:
+            return Response({'error': 'Sheet not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        file_obj = request.FILES.get('file')
+        row_index = request.data.get('row_index')
+        if not row_index:
+            return Response({'error': 'row_index is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not file_obj:
+            return Response({'error': 'file is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Save file to default storage under a predictable path
+        filename = f'user_{request.user.id}/sheet_{sheet.id}/row_{row_index}/{file_obj.name}'
+        saved_path = default_storage.save(filename, ContentFile(file_obj.read()))
+        try:
+            url = default_storage.url(saved_path)
+        except Exception:
+            url = saved_path
+
+        # Update SpreadsheetKnowledge for the row
+        from embedding.models import SpreadsheetKnowledge
+        row_unique_id = f"sheet_{sheet.id}_row_{row_index}"
+        obj, created = SpreadsheetKnowledge.objects.get_or_create(
+            user=request.user,
+            row_id=row_unique_id,
+            defaults={'column_hashes': {}, 'content': ''}
+        )
+        obj.image_url = url
+        image_vector = get_gemini_image_embedding(url)
+        if image_vector:
+            obj.image_embedding = image_vector
+            obj.image_source = 'manual'
+            from django.utils import timezone
+            obj.image_updated_at = timezone.now()
+        obj.save()
+
+        # Return the saved image URL so frontend can update column A
+        return Response({'image_url': url}, status=status.HTTP_201_CREATED)

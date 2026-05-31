@@ -1224,8 +1224,12 @@ def _has_order_intent_in_conversation(agent_config, sender_id, request_type, cur
         filled = [k for k in ORDER_FIELDS if order_fields.get(k, {}).get('value') and order_fields.get(k, {}).get('confidence', 0) >= 0.75]
         if _get_recent_order_interest(user_memory) and len(filled) >= 2:
             txt = (current_text or '').strip()
-            # numeric reply (e.g., '1') typically indicates quantity confirmation
+            # If we are currently asking for quantity, a numeric reply should fill quantity,
+            # not be treated as a confirmation (avoid confusing quantity '1' with menu '1').
+            next_missing = _get_next_missing_field(user_memory)
             if re.match(r'^\s*\d+\s*$', txt):
+                if next_missing == 'quantity':
+                    return False
                 return True
             # short non-question replies likely mean confirmation in a conversational flow
             if txt and len(txt) <= 40 and not txt.endswith('?'):

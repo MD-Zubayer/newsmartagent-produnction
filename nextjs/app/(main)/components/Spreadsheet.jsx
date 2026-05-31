@@ -123,6 +123,8 @@ const Cell = memo(({ columnIndex, rowIndex, style, data }) => {
   const isImportant = typeof rawValue === 'string' && rawValue.endsWith('*');
   const cleanValue = isImportant ? rawValue.slice(0, -1) : rawValue;
   const displayValue = isStartCell ? rawValue : evaluateFormula(cleanValue);
+  const isImageCell = columnIndex === 0 && rowIndex > 0;
+  const isImageUrl = typeof rawValue === 'string' && /^(https?:\/\/|\/)/.test(rawValue);
 
   return (
     <div
@@ -132,7 +134,7 @@ const Cell = memo(({ columnIndex, rowIndex, style, data }) => {
         fontSize: `${fontSize * (zoom / 100)}px`,
         fontWeight: isImportant ? 'bold' : formatting.bold ? 'bold' : 'normal'
       }}
-      className={`border-r border-b flex items-center transition-colors duration-100 px-1.5 relative group
+      className={`border-r border-b flex items-center transition-colors duration-100 px-1.5 relative group overflow-hidden
         ${dark ? "border-slate-800 bg-slate-900 text-slate-200 hover:bg-slate-800/80" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50/80"} 
         ${inRange && !isStartCell ? (dark ? "bg-indigo-900/30" : "bg-indigo-50/70") : ""}
         ${isStartCell ? "ring-2 ring-inset ring-indigo-500 z-20 shadow-[inset_0_0_8px_rgba(99,102,241,0.2)]" : ""} 
@@ -142,15 +144,43 @@ const Cell = memo(({ columnIndex, rowIndex, style, data }) => {
       onMouseDown={(e) => handleMouseDown(rowIndex, columnIndex, e)}
       onMouseEnter={() => handleMouseEnter(rowIndex, columnIndex)}
     >
-      <input
-        className={`w-full h-full bg-transparent outline-none px-1 ${!isStartCell ? 'pointer-events-none' : 'cursor-text'}`}
-        style={{ textAlign: 'left' }}
-        value={displayValue}
-        onChange={(e) => updateCell(rowIndex, columnIndex, e.target.value)}
-        readOnly={!isStartCell} 
-      />
+      {isImageCell && isImageUrl ? (
+        <div className="relative w-full h-full overflow-hidden rounded-sm">
+          <img
+            src={rawValue}
+            alt="Row image"
+            className="absolute inset-0 w-full h-full object-cover opacity-95"
+            loading="lazy"
+          />
+          <button
+            onClick={(ev) => { ev.stopPropagation(); setUploadRowTarget(rowIndex); rowImageInputRef.current && rowImageInputRef.current.click(); }}
+            title="Upload image"
+            className="absolute top-1 right-1 bg-white/80 dark:bg-black/60 p-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity">
+            <Upload size={14} />
+          </button>
+          <div className="absolute inset-0 bg-slate-950/30 dark:bg-slate-950/40" />
+          <input
+            className={`w-full h-full bg-transparent outline-none px-1 relative text-xs ${!isStartCell ? 'pointer-events-none' : 'cursor-text'}`}
+            style={{ textAlign: 'left' }}
+            value={displayValue}
+            onChange={(e) => updateCell(rowIndex, columnIndex, e.target.value)}
+            readOnly={!isStartCell}
+          />
+        </div>
+      ) : (
+        <input
+          className={`w-full h-full bg-transparent outline-none px-1 ${!isStartCell ? 'pointer-events-none' : 'cursor-text'}`}
+          style={{ textAlign: 'left' }}
+          value={displayValue}
+          onChange={(e) => updateCell(rowIndex, columnIndex, e.target.value)}
+          readOnly={!isStartCell}
+        />
+      )}
       {isImportant && !inRange && (
         <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-rose-500 rounded-full"></div>
+      )}
+      {isImageCell && !rawValue && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-[10px] text-slate-400">Image URL</div>
       )}
     </div>
   );
@@ -214,7 +244,7 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
   const [sheetId, setSheetId] = useState(initialSheetId);
   const [sheet, setSheet] = useState({ 
     rows: 100, cols: 26, data: {}, formatting: {}, title: "Untitled", is_dark_mode: false,
-    scope: 'global', agent: null
+    scope: 'global', agent: null, auto_image_search: false
   });
 
   const [agents, setAgents] = useState([]);
@@ -238,6 +268,8 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
   const colHeaderRef = useRef(null);
   const rowHeaderRef = useRef(null);
   const fileInputRef = useRef(null);
+  const rowImageInputRef = useRef(null);
+  const [uploadRowTarget, setUploadRowTarget] = useState(null);
   
   // Auto Save Ref
   const sheetRef = useRef(sheet);
@@ -454,6 +486,31 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
         
         setShowFileMenu(false);
      } catch (err) { console.error("Create failed", err); }
+  };
+
+  const handleRowImageFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !uploadRowTarget) return;
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('row_index', String(uploadRowTarget));
+      const res = await api.post(`/datasheet/spreadsheets/${sheetId}/row-image/`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (res?.data?.image_url) {
+        const key = `${uploadRowTarget}-0`;
+        setSheet(prev => ({ ...prev, data: { ...prev.data, [key]: res.data.image_url } }));
+        // Persist sheet change
+        await api.put(`/datasheet/spreadsheets/${sheetId}/`, { ...sheet, data: { ...sheet.data, [key]: res.data.image_url }, is_dark_mode: dark });
+      }
+    } catch (err) {
+      console.error('Row image upload failed', err);
+      alert('Image upload failed');
+    } finally {
+      e.target.value = null;
+      setUploadRowTarget(null);
+    }
   };
 
   const loadFile = (id) => {
@@ -683,6 +740,8 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
          currentId={sheetId}
       />
 
+      <input ref={rowImageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleRowImageFileChange} />
+
       {/* TOP HEADER */}
       <div className={`relative z-40 h-16 sm:h-[72px] flex items-center justify-between px-3 sm:px-6 border-b transition-all duration-300 
         ${dark ? "border-slate-800 bg-slate-900/80 backdrop-blur-lg" : "border-slate-200 bg-white/80 backdrop-blur-lg"}`}>
@@ -743,6 +802,15 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
             <button onClick={() => setDark(!dark)} className={`p-2 sm:p-2.5 rounded-full transition-all duration-300 ${dark ? "bg-slate-800 hover:bg-slate-700 text-yellow-400 shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)]" : "bg-slate-100 hover:bg-slate-200 text-slate-600 shadow-[inset_0_2px_4px_rgba(0,0,0,0.05)]"}`}>
                 {dark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
+            <label className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ${dark ? "bg-slate-800 text-slate-200 border border-slate-700" : "bg-slate-100 text-slate-700 border border-slate-200"}`}>
+                <input
+                  type="checkbox"
+                  checked={sheet.auto_image_search || false}
+                  onChange={(e) => setSheet({...sheet, auto_image_search: e.target.checked})}
+                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                Auto Image Search
+            </label>
             <button onClick={handleManualSave} disabled={saving} className={`flex items-center gap-2 px-3 sm:px-6 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 active:scale-95 ${dark ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-900/50" : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-500/30"} disabled:opacity-70 disabled:cursor-not-allowed`}>
                 {saving ? <div className="w-4 h-4 border-[2.5px] border-white/30 border-t-white rounded-full animate-spin"/> : <Save size={16} strokeWidth={2.5} />}
                 <span className="hidden sm:inline">Save</span>
