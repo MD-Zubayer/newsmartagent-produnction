@@ -40,30 +40,50 @@
 from django.core.mail import send_mail
 from django.conf import settings
 from datetime import datetime
+import logging
+import smtplib
+
+logger = logging.getLogger(__name__)
+
+def safe_send_mail(subject, message, from_email, recipient_list, fail_silently=False, **kwargs):
+  """Send email safely — catch SMTP errors and log them instead of raising.
+
+  Always calls Django's send_mail with `fail_silently=True` to avoid
+  raising SMTP exceptions to the caller, then logs any exception.
+  Returns the number of messages sent on success, or None on failure.
+  """
+  try:
+    # Force fail_silently=True to avoid raising; callers can still check return value
+    return send_mail(subject, message, from_email, recipient_list, fail_silently=True, **kwargs)
+  except smtplib.SMTPException as e:
+    logger.exception("SMTP error while sending email to %s: %s", recipient_list, e)
+  except Exception as e:
+    logger.exception("Unexpected error while sending email to %s: %s", recipient_list, e)
+  return None
 
 year = datetime.now().year
 
 def send_reset_email(to_email, web_reset_link, mobile_reset_link=None):
 
-   subject = "🔒 Action Required: Reset Your New Smart Agent Password"
+    subject = "🔒 Action Required: Reset Your New Smart Agent Password"
 
-   if mobile_reset_link is None:
-       mobile_reset_link = web_reset_link
+    if mobile_reset_link is None:
+        mobile_reset_link = web_reset_link
 
-   intent_link = mobile_reset_link.replace("newsmartagentmobaile://", "intent://", 1) + "#Intent;scheme=newsmartagentmobaile;package=com.newsmartagent.mobile;end"
+    intent_link = mobile_reset_link.replace("newsmartagentmobaile://", "intent://", 1) + "#Intent;scheme=newsmartagentmobaile;package=com.newsmartagent.mobile;end"
 
-# টেক্সট ভার্সন (যদি ইমেইল ক্লায়েন্ট HTML সাপোর্ট না করে)
-   message = (
-    "Hello 👋\n\n"
-    "We received a request to reset the password for your New Smart Agent account.\n\n"
-    f"Reset Link: {web_reset_link}\n\n"
-    "⏳ This link expires in 1 hour.\n\n"
-    "If you didn’t request this, you can safely ignore this email.\n\n"
-    "— New Smart Agent Team"
-)
+    # টেক্সট ভার্সন (যদি ইমেইল ক্লায়েন্ট HTML সাপোর্ট না করে)
+    message = (
+        "Hello 👋\n\n"
+        "We received a request to reset the password for your New Smart Agent account.\n\n"
+        f"Reset Link: {web_reset_link}\n\n"
+        "⏳ This link expires in 1 hour.\n\n"
+        "If you didn’t request this, you can safely ignore this email.\n\n"
+        "— New Smart Agent Team"
+    )
 
-# প্রিমিয়াম HTML ভার্সন
-   html_message = f"""
+    # প্রিমিয়াম HTML ভার্সন
+    html_message = f"""
 <!DOCTYPE html>
 <html>
 <body style="margin:0; padding:0; background-color:#ffffff; font-family:'Segoe UI',Arial,sans-serif;">
@@ -120,7 +140,7 @@ def send_reset_email(to_email, web_reset_link, mobile_reset_link=None):
 </body>
 </html>
 """
-   send_mail(
+    safe_send_mail(
         subject,
         message,
         settings.DEFAULT_FROM_EMAIL,
@@ -164,13 +184,13 @@ def send_order_fallback_alert_email(merchant_email: str, sender_id: str, failed_
     </body>
     </html>
     """
-    send_mail(
-        subject,
-        message,
-        settings.DEFAULT_FROM_EMAIL,
-        [merchant_email],
-        fail_silently=False,
-        html_message=html_message
+    safe_send_mail(
+      subject,
+      message,
+      settings.DEFAULT_FROM_EMAIL,
+      [merchant_email],
+      fail_silently=False,
+      html_message=html_message
     )
 
 
@@ -213,13 +233,13 @@ def send_verification_email(to_email, verify_link):
     </html>
     """
     
-    send_mail(
-        subject,
-        message,
-        settings.DEFAULT_FROM_EMAIL,
-        [to_email],
-        fail_silently=False,
-        html_message=html_message
+    safe_send_mail(
+      subject,
+      message,
+      settings.DEFAULT_FROM_EMAIL,
+      [to_email],
+      fail_silently=False,
+      html_message=html_message
     )
 
 
@@ -373,13 +393,13 @@ def send_2fa_otp_email(to_email: str, otp_code: str):
     </body>
     </html>
     """
-    send_mail(
-        subject,
-        message,
-        settings.DEFAULT_FROM_EMAIL,
-        [to_email],
-        fail_silently=True,
-        html_message=html_message,
+    safe_send_mail(
+      subject,
+      message,
+      settings.DEFAULT_FROM_EMAIL,
+      [to_email],
+      fail_silently=True,
+      html_message=html_message,
     )
 
 def send_security_alert_email(to_email: str, device_name: str, ip_address: str, time_str: str):
@@ -409,8 +429,8 @@ def send_security_alert_email(to_email: str, device_name: str, ip_address: str, 
         </div>
     </div>
     """
-    send_mail(
-        subject, message, settings.DEFAULT_FROM_EMAIL, [to_email], fail_silently=True, html_message=html_message
+    safe_send_mail(
+      subject, message, settings.DEFAULT_FROM_EMAIL, [to_email], fail_silently=True, html_message=html_message
     )
 
 
@@ -438,8 +458,8 @@ def send_push_approval_email(to_email: str, approve_link: str, reject_link: str,
         </div>
     </div>
     """
-    send_mail(
-        subject, message, settings.DEFAULT_FROM_EMAIL, [to_email], fail_silently=True, html_message=html_message
+    safe_send_mail(
+      subject, message, settings.DEFAULT_FROM_EMAIL, [to_email], fail_silently=True, html_message=html_message
     )
 
 

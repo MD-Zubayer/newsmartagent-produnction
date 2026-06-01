@@ -371,9 +371,13 @@ EMAIL_HOST = "smtp.gmail.com"
 EMAIL_USE_TLS = True
 EMAIL_PORT = 587
 
-EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', "newsmartagentbd@gmail.com")
+# Gmail SMTP credentials should be a valid email and app password.
+# App passwords must be supplied without quotes or spaces.
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', "newsmartagentbd@gmail.com").strip()
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', "")
-DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
+if EMAIL_HOST_PASSWORD is not None:
+    EMAIL_HOST_PASSWORD = EMAIL_HOST_PASSWORD.strip().strip('"').strip("'").replace(" ", "")
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER).strip()
 
 
 
