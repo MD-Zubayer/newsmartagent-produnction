@@ -3,6 +3,14 @@ from django.conf import settings
 import hashlib
 from embedding.models import SpreadsheetKnowledge
 import logging
+import base64
+import requests
+from io import BytesIO
+import imghdr
+try:
+    from PIL import Image
+except Exception:
+    Image = None
 
 
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
@@ -130,6 +138,103 @@ def sync_spreadsheet_to_knowledge(user, grid_data, sheet_id):
             print(f"[DEBUG] Row {r_idx} No change. Skipping.")
 
     return updated_count
+
+
+def detect_image_format_from_bytes(image_data: bytes):
+    """Try to detect image MIME type from bytes using PIL -> imghdr -> magic bytes."""
+    if not image_data:
+        return 'application/octet-stream', 'none'
+
+    # 1) PIL
+    if Image:
+        try:
+            img = Image.open(BytesIO(image_data))
+            fmt = img.format
+            if fmt:
+                mime = f'image/{fmt.lower()}'
+                return mime, 'PIL'
+        except Exception:
+            pass
+
+    # 2) imghdr
+    try:
+        kind = imghdr.what(None, h=image_data)
+        if kind:
+            return f'image/{kind}', 'imghdr'
+    except Exception:
+        pass
+
+    # 3) magic bytes
+    hb = image_data[:12]
+    if hb.startswith(b'\xff\xd8'):
+        return 'image/jpeg', 'magic'
+    if hb.startswith(b'\x89PNG'):
+        return 'image/png', 'magic'
+    if hb[0:4] == b'RIFF' and hb[8:12] == b'WEBP':
+        return 'image/webp', 'magic'
+    if hb.startswith(b'GIF8'):
+        return 'image/gif', 'magic'
+
+    # fallback
+    return 'application/octet-stream', 'fallback'
+
+
+def _get_image_bytes_from_source(image_url: str):
+    """Accepts a data URL or HTTP(S) URL, returns bytes and mime if possible."""
+    if not image_url or not isinstance(image_url, str):
+        return None, None
+
+    if image_url.startswith('data:'):
+        try:
+            header, b64 = image_url.split(',', 1)
+            mime = header.split(';')[0].replace('data:', '')
+            data = base64.b64decode(b64)
+            return data, mime
+        except Exception:
+            return None, None
+
+    # normal URL
+    try:
+        r = requests.get(image_url, timeout=10)
+        r.raise_for_status()
+        data = r.content
+        mime = r.headers.get('content-type', '').split(';')[0].strip() or None
+        return data, mime
+    except Exception:
+        return None, None
+
+
+def get_gemini_image_caption(image_url: str):
+    """Simple image caption: detects format and returns brief description."""
+    image_data, mime = _get_image_bytes_from_source(image_url)
+    if not image_data:
+        logger.debug(f"get_gemini_image_caption: no image data from {image_url}")
+        return None
+
+    detected_mime, method = detect_image_format_from_bytes(image_data)
+    mime = mime or detected_mime
+
+    # Try PIL for size/mode
+    info = None
+    if Image:
+        try:
+            img = Image.open(BytesIO(image_data))
+            info = f"{img.format}, {img.width}x{img.height}, {img.mode}"
+        except Exception:
+            pass
+
+    if not info:
+        info = f"{mime} (unknown size)"
+
+    caption = f"Image ({info})"
+    logger.debug(f"get_gemini_image_caption: {caption} via {method}")
+    return caption
+
+
+def get_openai_image_caption(image_url: str):
+    """Alias to Gemini caption for now; accepts data URLs."""
+    # Reuse the simple caption logic to ensure media flow works
+    return get_gemini_image_caption(image_url)
 
 import re
 from embedding.models import DocumentKnowledge
