@@ -326,14 +326,82 @@ async function initSession(sessionId, phoneNumber = null) {
                 }
 
                 const from = msg.key.remoteJid;
-                const messageContent = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
-                
+                const messageType = Object.keys(msg.message || {})[0] || 'unknown';
+                let messageContent = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
+                let mediaPayload = {};
+
+                // Helper function to decrypt media using Baileys
+                const decryptMedia = async (messageObj, type) => {
+                    try {
+                        logger.info(`🔐 [Baileys] Decrypting ${type} media...`);
+                        const mediaBuffer = await sock.downloadMediaMessage(messageObj);
+                        if (!mediaBuffer || mediaBuffer.length === 0) {
+                            logger.warn(`⚠️  [Baileys] Media decryption returned empty buffer for ${type}`);
+                            return null;
+                        }
+                        const mediaBase64 = mediaBuffer.toString('base64');
+                        logger.info(`✅ [Baileys] ${type} decrypted successfully. Buffer size: ${mediaBuffer.length} bytes, Base64 length: ${mediaBase64.length}`);
+                        return mediaBase64;
+                    } catch (decryptErr) {
+                        logger.error(`❌ [Baileys] Media decryption failed for ${type}: ${decryptErr.message}`);
+                        return null;
+                    }
+                };
+
                 if (!messageContent) {
-                    logger.warn(`⚠️  [Baileys] Message has no text content. Type: ${Object.keys(msg.message || {})[0]}`);
+                    if (messageType === 'imageMessage') {
+                        const imageBase64 = await decryptMedia(msg.message.imageMessage, 'image');
+                        messageContent = msg.message.imageMessage?.caption || '[Image received]';
+                        mediaPayload = {
+                            message_type: 'image',
+                            mimetype: msg.message.imageMessage?.mimetype || 'image/jpeg',
+                            caption: msg.message.imageMessage?.caption || null,
+                            image_base64: imageBase64,  // Decrypted base64 instead of URL
+                            media_url: null,
+                            mediaUrl: null
+                        };
+                        logger.info(`📸 [Baileys] Image decrypted: ${imageBase64 ? imageBase64.substring(0, 50) : 'FAILED'}`);
+                    } else if (messageType === 'videoMessage') {
+                        const videoBase64 = await decryptMedia(msg.message.videoMessage, 'video');
+                        messageContent = msg.message.videoMessage?.caption || '[Video received]';
+                        mediaPayload = {
+                            message_type: 'video',
+                            mimetype: msg.message.videoMessage?.mimetype || 'video/mp4',
+                            caption: msg.message.videoMessage?.caption || null,
+                            video_base64: videoBase64,  // Decrypted base64
+                            media_url: null,
+                            mediaUrl: null
+                        };
+                    } else if (messageType === 'audioMessage') {
+                        const audioBase64 = await decryptMedia(msg.message.audioMessage, 'audio');
+                        messageContent = '[Audio received]';
+                        mediaPayload = {
+                            message_type: 'audio',
+                            mimetype: msg.message.audioMessage?.mimetype || 'audio/ogg',
+                            audio_base64: audioBase64,  // Decrypted base64
+                            media_url: null,
+                            mediaUrl: null
+                        };
+                    } else if (messageType === 'documentMessage') {
+                        const documentBase64 = await decryptMedia(msg.message.documentMessage, 'document');
+                        messageContent = msg.message.documentMessage?.fileName ? `[Document: ${msg.message.documentMessage.fileName}]` : '[Document received]';
+                        mediaPayload = {
+                            message_type: 'document',
+                            mimetype: msg.message.documentMessage?.mimetype || 'application/octet-stream',
+                            fileName: msg.message.documentMessage?.fileName || null,
+                            document_base64: documentBase64,  // Decrypted base64
+                            media_url: null,
+                            mediaUrl: null
+                        };
+                    }
+                }
+
+                if (!messageContent) {
+                    logger.warn(`⚠️  [Baileys] Unsupported non-text message. Type: ${messageType}`);
                     continue;
                 }
 
-                logger.info(`💬 [Baileys] Text message from ${from}: "${messageContent.substring(0, 60)}..."`);
+                logger.info(`💬 [Baileys] Incoming message from ${from}: "${messageContent.substring(0, 60)}..."`);
 
                 // LID হ্যান্ডলিং লজিক
                 let resolvedPhone = from.split('@')[0];
@@ -368,8 +436,10 @@ async function initSession(sessionId, phoneNumber = null) {
                     receiver: sessionData.phone || sock.user?.id?.split(':')[0]?.split('@')[0],
                     sessionId: sessionId,
                     message: messageContent,
+                    message_type: mediaPayload.message_type || messageType,
                     message_id: msg.key.id,
-                    pushName: msg.pushName || ''
+                    pushName: msg.pushName || '',
+                    ...mediaPayload
                 };
                 
                 logger.info(`📤 [Baileys] Attempting to forward message from ${resolvedPhone}...`);

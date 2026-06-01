@@ -54,6 +54,12 @@ class AgentAI(models.Model):
         null=True, 
         blank=True
     )
+    image_caption_provider = models.CharField(
+        max_length=20,
+        choices=[('gemini', 'Gemini'), ('openai', 'OpenAI')],
+        default='gemini',
+        help_text='Select which provider should generate image captions for this agent.'
+    )
     page_id = models.CharField(max_length=100, unique=True, db_index=True, blank=True, null=True)
     # Primary identifier for WhatsApp agents (phone number without country formatting assumptions)
     number = models.CharField(max_length=50, blank=True, null=True, db_index=True)
@@ -205,7 +211,10 @@ class ApiConfig(models.Model):
         return f"{self.user.email} - API Config"
 
 class WebsiteVisitor(models.Model):
+    # Keep the original UUID for website tracker, but also store external sender IDs (WhatsApp etc.)
     visitor_uuid = models.UUIDField(unique=True, editable=False, default=uuid.uuid4)
+    # External platform identifier (e.g., WhatsApp id like 258884203720757@lid)
+    sender_id = models.CharField(max_length=255, unique=True, null=True, blank=True, db_index=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.CharField(max_length=512, null=True, blank=True)
     device_type = models.CharField(max_length=50, null=True, blank=True)

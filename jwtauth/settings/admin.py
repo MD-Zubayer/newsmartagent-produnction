@@ -10,6 +10,9 @@ admin.site.register(AgentSettings)
 
 @admin.register(GlobalSettings)
 class GlobalSettingsAdmin(admin.ModelAdmin):
+    fields = ('image_caption_provider', 'dashboard_ai_model', 'youtube_check_interval')
+    list_display = ('image_caption_provider', 'dashboard_ai_model', 'youtube_check_interval')
+
     # Only allow one instance to be edited
     def has_add_permission(self, request):
         if self.model.objects.exists():

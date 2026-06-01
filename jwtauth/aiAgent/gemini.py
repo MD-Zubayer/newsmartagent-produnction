@@ -12,7 +12,7 @@ client = genai.Client(api_key=settings.GEMINI_API_KEY)
 
 def generate_gemini_reply(prompt, history, current_message, agent_config):
 
-    model_name = agent_config.ai_model if 'gemini' in agent_config.ai_model else 'models/gemini-1.5-flash'
+    model_name = agent_config.ai_model if 'gemini' in agent_config.ai_model else 'gemini-2.5-flash'
 
     formatted_history = []
 

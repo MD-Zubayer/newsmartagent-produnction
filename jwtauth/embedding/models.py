@@ -18,6 +18,7 @@ class SpreadsheetKnowledge(models.Model):
     column_hashes = models.JSONField(default=dict)
     embedding = VectorField(dimensions=768, null=True, blank=True)
     image_url = models.TextField(blank=True, null=True)
+    image_caption = models.TextField(blank=True, default='')
     image_embedding = VectorField(dimensions=768, null=True, blank=True)
     image_updated_at = models.DateTimeField(blank=True, null=True)
     image_source = models.CharField(max_length=20, choices=IMAGE_SOURCE_CHOICES, blank=True, null=True)

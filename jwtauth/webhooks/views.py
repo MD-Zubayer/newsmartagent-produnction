@@ -298,18 +298,26 @@ def ai_webhook(request):
     # comment or message
 
     if request_type == 'facebook_comment':
-        text = data.get('comment_text')
+        text = data.get('comment_text') or data.get('message') or data.get('text')
     else:
         # messenger or whatsapp
-        text = data.get('message')
+        text = data.get('message') or data.get('caption') or ''
 
     is_echo = data.get('is_echo', False)
     if isinstance(is_echo, str):
         is_echo = is_echo.lower() == 'true'
 
-    if is_echo or not text:
-        logger.info(f"⏭️ View Filter: Ignoring echo or missing text. sender={sender_id}, page={page_id}")
+    media_present = bool(
+        data.get('mediaUrl') or data.get('media_url') or data.get('attachments') or data.get('image_url') or data.get('image')
+    )
+
+    if is_echo or (not text and not media_present):
+        logger.info(f"⏭️ View Filter: Ignoring echo or missing text/media. sender={sender_id}, page={page_id}")
         return Response({'status': 'ignored'}, status=200)
+
+    if not text and media_present:
+        text = data.get('caption') or f"[{str(data.get('message_type') or data.get('type') or 'Media').capitalize()} received]"
+        data['message'] = text
 
     if not all([sender_id, page_id]):
         print(f"Missing data: sender={sender_id}, page={page_id}")
