@@ -198,14 +198,15 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [REDIS_URL],
+            "hosts": [os.environ.get("REDIS_URL", "redis://redis:6379/0")],
+            "capacity": 1500,
+            "expiry": 10,
         },
     },
 }
 
 CELERY_BROKER_TRANSPORT_OPTIONS = {
     'visibility_timeout': 3600,
-    'sep_timeout': 30,
 }
 CELERY_REDIS_RETRY_ON_TIMEOUT = True
 CELERY_WORKER_MAX_TASKS_PER_CHILD = 100  # ৫০টি কাজ শেষে ওয়ার্কার ফ্রেশ হবে
