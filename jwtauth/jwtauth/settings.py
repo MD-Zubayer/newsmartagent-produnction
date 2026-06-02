@@ -199,7 +199,6 @@ CHANNEL_LAYERS = {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
             "hosts": [REDIS_URL],
-            "client_class": "redis.asyncio.Redis",
         },
     },
 }
