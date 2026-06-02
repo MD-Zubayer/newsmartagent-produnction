@@ -70,24 +70,13 @@ jobs:
             echo "✅ HOST_CONFIG_PATH set in .env"
           fi
 
-      - name: "🧱 Cache Docker buildx layers"
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.buildx-cache
-          key: docker-buildx-${{ runner.os }}-${{ hashFiles('jwtauth/Dockerfile', 'jwtauth/requirements.txt', 'nextjs/Dockerfile') }}
-          restore-keys: |
-            docker-buildx-${{ runner.os }}-
-
       - name: "🏗️ Build New Image"
         run: |
           echo "🔨 Setting up Docker Buildx..."
           DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker buildx create --use || true
 
-          echo "🔨 Building new images with cached layers..."
-          DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker compose build \
-            --build-arg BUILDKIT_INLINE_CACHE=1 \
-            --cache-from=type=local,src=/tmp/.buildx-cache \
-            --cache-to=type=local,dest=/tmp/.buildx-cache,mode=max
+          echo "🔨 Building new images..."
+          DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker compose build --progress=plain --build-arg BUILDKIT_INLINE_CACHE=1
           
       - name: "🚢 Zero Downtime Deployment & Rollback"
         run: |
