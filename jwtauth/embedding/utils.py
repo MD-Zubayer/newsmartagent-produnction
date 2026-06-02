@@ -49,13 +49,19 @@ def get_gemini_embedding(text):
 
 def get_gemini_image_embedding(image_url):
     print(f"\n--- [DEBUG] Starting Image Embedding Process ---")
-    print(f"[DEBUG] Image URL: {image_url}")
+    print(f"[DEBUG] Image URL type: {type(image_url)}, length: {len(image_url) if image_url else 0}")
+    print(f"[DEBUG] URL starts with: {image_url[:80] if image_url else 'None'}")
 
     if not image_url or not isinstance(image_url, str):
-        print(f"[DEBUG] Error: Invalid image URL.")
+        print(f"❌ [DEBUG] Error: Invalid image URL.")
         return None
 
     try:
+        # Check if it's a data URL
+        if image_url.startswith('data:'):
+            print(f"✅ [DEBUG] Detected data URL format.")
+        
+        print(f"[DEBUG] Calling Gemini embedding API...")
         response = client.models.embed_content(
             model='models/gemini-embedding-2',
             contents=[image_url],
@@ -65,12 +71,13 @@ def get_gemini_image_embedding(image_url):
         )
 
         embedding_values = response.embeddings[0].values
-        print(f"[DEBUG] Success! Image Vector Length: {len(embedding_values)}")
-        print(f"[DEBUG] First 5 image values: {embedding_values[:5]}")
+        print(f"✅ [DEBUG] Image Embedding Success! Vector Length: {len(embedding_values)}")
         print(f"--- [DEBUG] Image Embedding Process Finished ---\n")
         return list(embedding_values)
     except Exception as e:
-        print(f"Image Embedding API Error: {e}")
+        print(f"❌ Image Embedding API Error: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -256,10 +263,11 @@ def detect_image_format_from_bytes(image_data):
 
 def get_gemini_image_caption(image_url):
     print(f"\n--- [DEBUG] Starting Image Caption Process ---")
-    print(f"[DEBUG] Image URL: {image_url}")
+    print(f"[DEBUG] Image URL type: {type(image_url)}, length: {len(image_url) if image_url else 0}")
+    print(f"[DEBUG] URL starts with: {image_url[:80] if image_url else 'None'}")
 
     if not image_url or not isinstance(image_url, str):
-        print(f"[DEBUG] Error: Invalid image URL for caption generation.")
+        print(f"❌ [DEBUG] Error: Invalid image URL for caption generation.")
         return None
 
     try:
@@ -269,15 +277,15 @@ def get_gemini_image_caption(image_url):
         
         if image_url.startswith('data:'):
             # Data URL from Baileys decrypted media
-            print(f"[DEBUG] Detected data URL (Baileys decrypted media). Extracting base64...")
+            print(f"✅ [DEBUG] Detected data URL (Baileys decrypted media). Extracting base64...")
             try:
                 # Parse: data:image/jpeg;base64,/9j/4AAQSkZJRgABA...
                 header, b64_data = image_url.split(',', 1)
                 mime_type = header.split(';')[0].replace('data:', '')
                 image_data = base64.b64decode(b64_data)
-                print(f"[DEBUG] Extracted from data URL. MIME: {mime_type}, Size: {len(image_data)} bytes")
+                print(f"✅ [DEBUG] Extracted from data URL. MIME: {mime_type}, Size: {len(image_data)} bytes")
             except Exception as e:
-                print(f"[DEBUG] Failed to parse data URL: {e}")
+                print(f"❌ [DEBUG] Failed to parse data URL: {e}")
                 return None
         else:
             # Regular URL - download normally
@@ -326,26 +334,32 @@ def get_gemini_image_caption(image_url):
             )
         )
 
+        print(f"[DEBUG] API Response object: {response}")
+        print(f"[DEBUG] Response type: {type(response)}")
+        
         caption = response.text.strip() if getattr(response, 'text', None) else None
         if caption:
-            print(f"[DEBUG] Generated Image Caption: {caption}")
+            print(f"✅ [DEBUG] Generated Image Caption: {caption[:120]}")
             print(f"--- [DEBUG] Image Caption Process Finished ---\n")
             return caption
         else:
-            print(f"[DEBUG] No caption generated (empty response)")
+            print(f"❌ [DEBUG] No caption generated (empty response). Response text attr: {getattr(response, 'text', 'NO TEXT ATTR')}")
             return None
             
     except requests.exceptions.RequestException as e:
-        print(f"Image Download Error: {e}")
+        import traceback
+        print(f"❌ Image Download Error: {e}")
+        print(f"Traceback:\n{traceback.format_exc()}")
         return None
     except Exception as e:
-        print(f"Image Caption API Error: {e}")
+        import traceback
+        print(f"❌ Image Caption API Error: {e}")
+        print(f"Traceback:\n{traceback.format_exc()}")
         return None
 
 
 def get_openai_image_caption(image_url):
-    print(f"
---- [DEBUG] Starting OpenAI Image Caption Process ---")
+    print(f"--- [DEBUG] Starting OpenAI Image Caption Process ---")
     print(f"[DEBUG] Image URL: {image_url}")
 
     if not image_url or not isinstance(image_url, str):
@@ -437,19 +451,22 @@ def get_openai_image_caption(image_url):
         caption = response.choices[0].message.content.strip() if response.choices else None
 
         if caption:
-            print(f"[DEBUG] Generated Image Caption: {caption}")
-            print(f"--- [DEBUG] Image Caption Process Finished ---
-")
+            print(f"✅ [DEBUG] Generated Image Caption: {caption[:120]}")
+            print(f"--- [DEBUG] Image Caption Process Finished ---\n")
             return caption
         else:
-            print(f"[DEBUG] No caption generated (empty response)")
+            print(f"❌ [DEBUG] No caption generated (empty response). Choices: {response.choices}")
             return None
             
     except requests.exceptions.RequestException as e:
-        print(f"Image Download Error: {e}")
+        import traceback
+        print(f"❌ Image Download Error: {e}")
+        print(f"Traceback:\n{traceback.format_exc()}")
         return None
     except Exception as e:
-        print(f"Image Caption API Error: {e}")
+        import traceback
+        print(f"❌ Image Caption API Error: {e}")
+        print(f"Traceback:\n{traceback.format_exc()}")
         return None
 
 

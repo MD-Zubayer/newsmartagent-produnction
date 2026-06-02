@@ -300,3 +300,24 @@ class WhatsAppQRView(APIView):
                 {'error': str(e)},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
+
+
+class WhatsAppPairingCodeView(APIView):
+    """
+    Retrieve the current Baileys pairing code for an initializing session.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        session_id = f"user_{request.user.id}"
+        try:
+            response = requests.get(
+                f'{settings.BAILEYS_API_URL}/pairing-code/{session_id}',
+                timeout=5,
+            )
+            return Response(response.json(), status=response.status_code)
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )

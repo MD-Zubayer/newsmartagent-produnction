@@ -2281,10 +2281,20 @@ def process_ai_reply_task(self, data):
                 image_hit = None
                 best_vector_type = None
                 
+                logger.info(f"[DEBUG] media_url in vector search scope: {media_url[:60] if media_url else 'NONE'}")
+                logger.info(f"[DEBUG] base64 fields: image_base64={bool(data.get('image_base64'))}, video_base64={bool(data.get('video_base64'))}")
+                
                 # Extract image from incoming message across platforms
                 if request_type == 'whatsapp':
-                    # WhatsApp media: mediaUrl or media_url
-                    image_url = data.get('mediaUrl') or data.get('media_url')
+                    # WhatsApp media: mediaUrl, media_url, or converted base64 data URL
+                    # Priority 1: Use media_url if it's a data URL (created from base64 earlier)
+                    if media_url and media_url.startswith('data:'):
+                        image_url = media_url
+                        logger.info(f"✅ [WhatsApp] Using converted base64 data URL for image embedding")
+                    else:
+                        # Priority 2: Direct mediaUrl/media_url
+                        image_url = data.get('mediaUrl') or data.get('media_url')
+                        logger.info(f"[WhatsApp] image_url from data: {image_url[:50] if image_url else 'None'}")
                 elif request_type in ['messenger', 'facebook_comment', 'instagram']:
                     # Facebook/Messenger/Instagram: attachments array
                     attachments = data.get('attachments') or []
@@ -2308,15 +2318,35 @@ def process_ai_reply_task(self, data):
                             except Exception as e:
                                 logger.warning(f"Telegram photo URL fetch failed: {e}")
                 
+                # FALLBACK: If still no image_url, check for base64 and convert
+                if not image_url:
+                    media_base64_fallback = (
+                        data.get('image_base64') or 
+                        data.get('video_base64') or 
+                        data.get('audio_base64') or 
+                        data.get('document_base64')
+                    )
+                    if media_base64_fallback:
+                        mime_type = data.get('mimetype') or 'application/octet-stream'
+                        image_url = f'data:{mime_type};base64,{media_base64_fallback}'
+                        logger.info(f"✅ [DEBUG] FALLBACK: Created data URL from {mime_type}. Size: {len(media_base64_fallback)} chars")
+                
                 # Generate image embedding and search if image found
                 if image_url:
                     try:
                         from settings.models import GlobalSettings
+                        logger.info(f"🖼️  [Image Processing] Starting. Image URL length: {len(image_url)}, starts with: {image_url[:50]}")
+                        
                         image_vector = get_gemini_image_embedding(image_url)
+                        logger.info(f"✅ [Image Embedding] Generated. Vector dims: {len(image_vector) if image_vector else 'None'}")
+                        
                         global_settings = GlobalSettings.get_settings()
                         selected_provider = getattr(global_settings, 'image_caption_provider', 'gemini') or 'gemini'
-                        print(f"[DEBUG] GlobalSettings.image_caption_provider = {repr(selected_provider)}")
+                        logger.info(f"📝 [Caption Provider] Selected: {selected_provider}")
+                        
                         image_caption = get_image_caption(image_url, provider=selected_provider)
+                        logger.info(f"📸 [Image Caption] Generated: {image_caption[:80] if image_caption else 'None'}")
+                        
                         if image_vector:
                             # Search image_embedding field in DB
                             image_matches = SpreadsheetKnowledge.objects.filter(

@@ -36,6 +36,7 @@ const sessions = new Map();
 const cleanupPromises = new Map();
 const jidMap = new Map(); // Store LID -> Phone mappings
 const messageQueues = new Map(); // Store message queues per session
+const qrRateLimiter = new Map(); // Track QR generation times per session to prevent rapid regeneration
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 const delay = ms => new Promise(res => setTimeout(res, ms));
@@ -215,10 +216,17 @@ async function notifyDjangoContactSync(sessionId, contacts) {
 async function initSession(sessionId, phoneNumber = null) {
     if (sessions.has(sessionId)) {
         const existing = sessions.get(sessionId);
-        if (existing.state === 'open') return existing;
+        if (existing.state === 'open' || existing.state === 'connecting') {
+            logger.info(`[Session: ${sessionId}] initSession called while already active (${existing.state}) - reusing existing session`);
+            return existing;
+        }
         if (existing.sock) {
             existing.sock.ev.removeAllListeners();
-            existing.sock.logout().catch(() => { });
+            try {
+                await existing.sock.logout();
+            } catch (err) {
+                logger.warn(`[Session: ${sessionId}] previous socket logout failed: ${err.message}`);
+            }
         }
     }
 
@@ -228,7 +236,8 @@ async function initSession(sessionId, phoneNumber = null) {
         qr: null,
         pairingCode: null,
         state: 'close',
-        phone: null
+        phone: null,
+        initializing: true
     };
     sessions.set(sessionId, sessionData);
 
@@ -265,6 +274,9 @@ async function initSession(sessionId, phoneNumber = null) {
 
         sock.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect, qr } = update;
+            const statusCode = lastDisconnect?.error ? (lastDisconnect.error.output?.statusCode || 0) : 0;
+            logger.info(`[Session: ${sessionId}] connection.update: connection=${connection}, statusCode=${statusCode}, qr=${qr ? 'yes' : 'no'}`);
+
             if (qr) {
                 sessionData.qr = qr;
                 sessionData.state = 'connecting';
@@ -274,20 +286,25 @@ async function initSession(sessionId, phoneNumber = null) {
             if (connection === 'close') {
                 sessionData.state = 'close';
                 sessionData.qr = null;
+                sessionData.pairingCode = null;
                 sessionData.phone = null;
-                const statusCode = lastDisconnect?.error ? new Boom(lastDisconnect.error)?.output?.statusCode : 0;
-                logger.info(`[Session: ${sessionId}] Closed (${statusCode})`);
+                const isLoggedOut = statusCode === DisconnectReason.loggedOut;
+                const isRestart = statusCode !== DisconnectReason.loggedOut;
 
-                if (statusCode !== DisconnectReason.loggedOut) {
-                    setTimeout(() => initSession(sessionId), 5000);
-                } else {
+                logger.info(`[Session: ${sessionId}] Closed (${statusCode}) loggedOut=${isLoggedOut}`);
+
+                if (isLoggedOut) {
                     await cleanupSession(sessionId, { removeFolder: true });
+                } else if (isRestart) {
+                    setTimeout(() => initSession(sessionId), 5000);
                 }
             }
 
             if (connection === 'open') {
                 sessionData.state = 'open';
                 sessionData.qr = null;
+                sessionData.pairingCode = null;
+                sessionData.initializing = false;
                 sessionData.phone = jidNormalizedUser(sock.user?.id)?.split('@')[0];
                 logger.info(`[Session: ${sessionId}] ✅ Connected as ${sessionData.phone}`);
                 await notifyDjangoSync(sessionId, sessionData.phone, sock.user?.name || '');
@@ -348,51 +365,57 @@ async function initSession(sessionId, phoneNumber = null) {
                     }
                 };
 
-                if (!messageContent) {
-                    if (messageType === 'imageMessage') {
-                        const imageBase64 = await decryptMedia(msg.message.imageMessage, 'image');
+                if (messageType === 'imageMessage') {
+                    const imageBase64 = await decryptMedia(msg.message.imageMessage, 'image');
+                    mediaPayload = {
+                        message_type: 'image',
+                        mimetype: msg.message.imageMessage?.mimetype || 'image/jpeg',
+                        caption: msg.message.imageMessage?.caption || null,
+                        image_base64: imageBase64,
+                        media_url: null,
+                        mediaUrl: null
+                    };
+                    if (!messageContent) {
                         messageContent = msg.message.imageMessage?.caption || '[Image received]';
-                        mediaPayload = {
-                            message_type: 'image',
-                            mimetype: msg.message.imageMessage?.mimetype || 'image/jpeg',
-                            caption: msg.message.imageMessage?.caption || null,
-                            image_base64: imageBase64,  // Decrypted base64 instead of URL
-                            media_url: null,
-                            mediaUrl: null
-                        };
-                        logger.info(`📸 [Baileys] Image decrypted: ${imageBase64 ? imageBase64.substring(0, 50) : 'FAILED'}`);
-                    } else if (messageType === 'videoMessage') {
-                        const videoBase64 = await decryptMedia(msg.message.videoMessage, 'video');
+                    }
+                    logger.info(`📸 [Baileys] Image decrypted: ${imageBase64 ? imageBase64.substring(0, 50) : 'FAILED'}`);
+                } else if (messageType === 'videoMessage') {
+                    const videoBase64 = await decryptMedia(msg.message.videoMessage, 'video');
+                    mediaPayload = {
+                        message_type: 'video',
+                        mimetype: msg.message.videoMessage?.mimetype || 'video/mp4',
+                        caption: msg.message.videoMessage?.caption || null,
+                        video_base64: videoBase64,
+                        media_url: null,
+                        mediaUrl: null
+                    };
+                    if (!messageContent) {
                         messageContent = msg.message.videoMessage?.caption || '[Video received]';
-                        mediaPayload = {
-                            message_type: 'video',
-                            mimetype: msg.message.videoMessage?.mimetype || 'video/mp4',
-                            caption: msg.message.videoMessage?.caption || null,
-                            video_base64: videoBase64,  // Decrypted base64
-                            media_url: null,
-                            mediaUrl: null
-                        };
-                    } else if (messageType === 'audioMessage') {
-                        const audioBase64 = await decryptMedia(msg.message.audioMessage, 'audio');
+                    }
+                } else if (messageType === 'audioMessage') {
+                    const audioBase64 = await decryptMedia(msg.message.audioMessage, 'audio');
+                    mediaPayload = {
+                        message_type: 'audio',
+                        mimetype: msg.message.audioMessage?.mimetype || 'audio/ogg',
+                        audio_base64: audioBase64,
+                        media_url: null,
+                        mediaUrl: null
+                    };
+                    if (!messageContent) {
                         messageContent = '[Audio received]';
-                        mediaPayload = {
-                            message_type: 'audio',
-                            mimetype: msg.message.audioMessage?.mimetype || 'audio/ogg',
-                            audio_base64: audioBase64,  // Decrypted base64
-                            media_url: null,
-                            mediaUrl: null
-                        };
-                    } else if (messageType === 'documentMessage') {
-                        const documentBase64 = await decryptMedia(msg.message.documentMessage, 'document');
+                    }
+                } else if (messageType === 'documentMessage') {
+                    const documentBase64 = await decryptMedia(msg.message.documentMessage, 'document');
+                    mediaPayload = {
+                        message_type: 'document',
+                        mimetype: msg.message.documentMessage?.mimetype || 'application/octet-stream',
+                        fileName: msg.message.documentMessage?.fileName || null,
+                        document_base64: documentBase64,
+                        media_url: null,
+                        mediaUrl: null
+                    };
+                    if (!messageContent) {
                         messageContent = msg.message.documentMessage?.fileName ? `[Document: ${msg.message.documentMessage.fileName}]` : '[Document received]';
-                        mediaPayload = {
-                            message_type: 'document',
-                            mimetype: msg.message.documentMessage?.mimetype || 'application/octet-stream',
-                            fileName: msg.message.documentMessage?.fileName || null,
-                            document_base64: documentBase64,  // Decrypted base64
-                            media_url: null,
-                            mediaUrl: null
-                        };
                     }
                 }
 
@@ -504,6 +527,13 @@ app.get('/qr/:sessionId', (req, res) => {
     const session = sessions.get(req.params.sessionId);
     if (!session) return res.status(404).json({ error: 'Session not found' });
     res.json({ qr: session.qr });
+});
+
+app.get('/pairing-code/:sessionId', (req, res) => {
+    const session = sessions.get(req.params.sessionId);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    if (!session.pairingCode) return res.status(404).json({ error: 'Pairing code not available' });
+    res.json({ pairingCode: session.pairingCode });
 });
 
 app.post('/send-message', async (req, res) => {
