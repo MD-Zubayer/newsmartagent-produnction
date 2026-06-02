@@ -275,7 +275,8 @@ async function initSession(sessionId, phoneNumber = null) {
         sock.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect, qr } = update;
             const statusCode = lastDisconnect?.error ? (lastDisconnect.error.output?.statusCode || 0) : 0;
-            logger.info(`[Session: ${sessionId}] connection.update: connection=${connection}, statusCode=${statusCode}, qr=${qr ? 'yes' : 'no'}`);
+            const payload = { connection, statusCode, qr: !!qr, update };
+            logger.info(`[Session: ${sessionId}] connection.update: ${JSON.stringify(payload)}`);
 
             if (qr) {
                 sessionData.qr = qr;
@@ -283,21 +284,9 @@ async function initSession(sessionId, phoneNumber = null) {
                 logger.info(`[Session: ${sessionId}] QR generated`);
             }
 
-            if (connection === 'close') {
-                sessionData.state = 'close';
-                sessionData.qr = null;
-                sessionData.pairingCode = null;
-                sessionData.phone = null;
-                const isLoggedOut = statusCode === DisconnectReason.loggedOut;
-                const isRestart = statusCode !== DisconnectReason.loggedOut;
-
-                logger.info(`[Session: ${sessionId}] Closed (${statusCode}) loggedOut=${isLoggedOut}`);
-
-                if (isLoggedOut) {
-                    await cleanupSession(sessionId, { removeFolder: true });
-                } else if (isRestart) {
-                    setTimeout(() => initSession(sessionId), 5000);
-                }
+            if (connection === 'connecting') {
+                sessionData.state = 'connecting';
+                logger.info(`[Session: ${sessionId}] connection is connecting`);
             }
 
             if (connection === 'open') {
@@ -308,6 +297,22 @@ async function initSession(sessionId, phoneNumber = null) {
                 sessionData.phone = jidNormalizedUser(sock.user?.id)?.split('@')[0];
                 logger.info(`[Session: ${sessionId}] ✅ Connected as ${sessionData.phone}`);
                 await notifyDjangoSync(sessionId, sessionData.phone, sock.user?.name || '');
+                return;
+            }
+
+            if (connection === 'close') {
+                sessionData.state = 'close';
+                sessionData.qr = null;
+                sessionData.pairingCode = null;
+                sessionData.phone = null;
+                const isLoggedOut = statusCode === DisconnectReason?.loggedOut;
+                logger.info(`[Session: ${sessionId}] Closed (${statusCode}) loggedOut=${isLoggedOut}`);
+
+                if (isLoggedOut) {
+                    await cleanupSession(sessionId, { removeFolder: true });
+                } else {
+                    setTimeout(() => initSession(sessionId), 5000);
+                }
             }
         });
 
