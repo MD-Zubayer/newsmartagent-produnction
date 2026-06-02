@@ -194,18 +194,11 @@ WSGI_APPLICATION = 'jwtauth.wsgi.application'
 ASGI_APPLICATION = 'jwtauth.asgi.application'
 
 
-parsed_redis_url = urlparse(REDIS_URL)
-redis_host = parsed_redis_url.hostname or REDIS_HOST
-redis_port = parsed_redis_url.port or REDIS_PORT
-
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [(redis_host, redis_port)],
-            "socket_timeout": 15,
-            "retry_on_timeout": True,
-            "health_check_interval": 10,
+            "hosts": [REDIS_URL],
             "client_class": "redis.asyncio.Redis",
         },
     },
