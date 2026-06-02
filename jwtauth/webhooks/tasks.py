@@ -1343,7 +1343,7 @@ def sync_contact_profile_picture(self, contact_id, platform, sender_id, page_id,
                         # NEW Baileys Profile Endpoint: GET /profile/:sessionId/:jid
                         api_url = f"{base_url}/profile/{baileys_session_id}/{sender_id}"
                         
-                        resp = requests.get(api_url, timeout=10)
+                        resp = requests.get(api_url, timeout=30)
                         if resp.status_code == 200:
                             resp_json = resp.json()
                             if resp_json.get('success') and resp_json.get('profilePictureUrl'):
@@ -2247,6 +2247,7 @@ def process_ai_reply_task(self, data):
             skip_margin = 6
             skip_embedding = False
             text_len = len(text)
+            image_caption = None
             
             db_skip_keywords = SmartKeyword.objects.filter(category='embedding_skip').values_list('text', flat=True)
             for kw in db_skip_keywords:
