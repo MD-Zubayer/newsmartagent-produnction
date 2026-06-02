@@ -1224,8 +1224,12 @@ def _has_order_intent_in_conversation(agent_config, sender_id, request_type, cur
         filled = [k for k in ORDER_FIELDS if order_fields.get(k, {}).get('value') and order_fields.get(k, {}).get('confidence', 0) >= 0.75]
         if _get_recent_order_interest(user_memory) and len(filled) >= 2:
             txt = (current_text or '').strip()
-            # numeric reply (e.g., '1') typically indicates quantity confirmation
+            # If we are currently asking for quantity, a numeric reply should fill quantity,
+            # not be treated as a confirmation (avoid confusing quantity '1' with menu '1').
+            next_missing = _get_next_missing_field(user_memory)
             if re.match(r'^\s*\d+\s*$', txt):
+                if next_missing == 'quantity':
+                    return False
                 return True
             # short non-question replies likely mean confirmation in a conversational flow
             if txt and len(txt) <= 40 and not txt.endswith('?'):
@@ -1619,11 +1623,34 @@ def process_ai_reply_task(self, data):
     else:
         # messenger or whatsapp
         text = data.get('message') or data.get('text') or data.get('body')
+
+    message_type = str(data.get('message_type') or data.get('media_type') or '').lower()
+    media_url = data.get('mediaUrl') or data.get('media_url') or data.get('image_url') or data.get('url')
+    
+    # Check for Baileys decrypted base64 media (from WhatsApp)
+    media_base64 = (
+        data.get('image_base64') or 
+        data.get('video_base64') or 
+        data.get('audio_base64') or 
+        data.get('document_base64')
+    )
+    
+    # If we have decrypted base64, convert it to a data URL for processing
+    if media_base64 and not media_url:
+        mime_type = data.get('mimetype') or 'application/octet-stream'
+        # Create a data URL from base64
+        media_url = f'data:{mime_type};base64,{media_base64}'
+        logger.info(f"💾 [Webhook] Converted base64 media to data URL. MIME: {mime_type}, size: {len(media_base64)} chars")
+    
+    if not text and media_url:
+        text = data.get('caption') or f"[{message_type.capitalize() or 'Media'} received]"
+        data['message'] = text
+
     msg_id = data.get('message_id')
     incoming_ts = data.get('timestamp')
 
-    if not all([sender_id, text, page_id]):
-        logger.error(f"Aborting: Missing core data in task. sender: {sender_id}, text: {text}, page: {page_id}")
+    if not all([sender_id, text, page_id]) and not media_url:
+        logger.error(f"Aborting: Missing core data in task. sender: {sender_id}, text: {text}, page: {page_id}, media_url: {media_url}")
         return
 
     # ২. এজেন্ট ও প্রোফাইল লোড
@@ -2093,6 +2120,7 @@ def process_ai_reply_task(self, data):
         reply, success, total_tokens = "System busy.", False, 0
         ai_data = {'success': False, 'total_tokens': 0}
         query_vector = None
+        query_vector_type = 'text'
 
         post_context = ""
         if request_type == 'facebook_comment':
@@ -2101,55 +2129,59 @@ def process_ai_reply_task(self, data):
         # ========================================================
         # ৭. ক্যাশ চেক — 7-Layer Grouped Lookup
         #
-        #   1. Global Exact    ──→ Hit? → Reply পাঠাও
-        #   2. Global Fuzzy    ──→ Hit? → Reply পাঠাও
-        #   3. Agent Exact     ──→ Hit? → Reply পাঠাও
-        #   4. Agent Fuzzy     ──→ Hit? → Reply পাঠাও
-        #   5. Sender Exact    ──→ Hit? → Reply পাঠাও
-        #   6. Cluster Hit     ──→ Hit? → Reply পাঠাও
-        #   7. Vector Hit      ──→ Hit? → Reply পাঠাও
-        #   8. AI Call         ──→ শুধু তখনই
+        #   NOTE: For media/image messages we bypass fuzzy caching because
+        #   system-injected notes (e.g. "(System Note: The user uploaded an image...)")
+        #   pollute the text and cause high false-positive fuzzy matches.
         # ========================================================
+
+        # Prepare a clean user message for cache key generation (strip injected system notes)
+        user_real_message = (text or '').split('(System Note:')[0].strip()
+
+        # Detect media messages; if present, bypass fuzzy/exact cache to force fresh RAG
+        is_media_message = bool(media_url) or (str(message_type or '').lower().startswith('image'))
 
         cached_res = None
         cache_hit_scope = None  # কোন layer থেকে hit এলো সেটা track করার জন্য
 
-        # --- Layer 1: Agent Exact ---
-        cached_res = get_cached_reply(page_id, msg_text=text)
-        if cached_res:
-            cache_hit_scope = "agent_exact"
-        
-        # --- Layer 1.5: Shared Agent Exact ---
-        if not cached_res:
-            shared_agents = agent_config.get_settings.shared_cache_agents.all()
-            for shared_agent in shared_agents:
-                # Correct identifier logic for shared agents (Web Widget support)
-                shared_redis_id = f"widget_{shared_agent.widget_key}" if shared_agent.platform == 'web_widget' and shared_agent.widget_key else shared_agent.page_id
-                
-                potential_res = get_cached_reply(shared_redis_id, msg_text=text, track_hit=False)
-                if potential_res:
-                    msg_hash = potential_res.get('msg_hash')
-                    if not msg_hash:
-                        # Fallback for old cache entries
-                        normalized = normalize_for_cache(text)
-                        msg_hash = hashlib.md5(normalized.encode()).hexdigest()
-
-                    # এক্সক্লুশন চেক (Redis Set)
-                    exclusion_key = f"agent:{shared_redis_id}:sharing_exclusion_set"
-                    r_db4 = get_redis_client(db=4)
-                    if not r_db4.sismember(exclusion_key, msg_hash):
-                        cached_res = potential_res
-                        cache_hit_scope = "shared_agent_exact"
-                        # Track this hit for the current agent's ranking
-                        incr_message_frequency(page_id, msg_hash)
-                        logger.info(f"🔗 SHARED CACHE HIT (Exact) from Agent {shared_agent.name} for '{text[:30]}'")
-                        break
-
-        # --- Layer 2: Agent Fuzzy ---
-        if not cached_res:
-            cached_res = fuzzy_match(page_id, text, threshold=80)
+        if is_media_message:
+            logger.info(f"🖼️ Media message detected for sender {sender_id}; bypassing fuzzy/global cache checks.")
+        else:
+            # --- Layer 1: Agent Exact ---
+            cached_res = get_cached_reply(page_id, msg_text=user_real_message)
             if cached_res:
-                cache_hit_scope = "agent_fuzzy"
+                cache_hit_scope = "agent_exact"
+        
+            # --- Layer 1.5: Shared Agent Exact ---
+            if not cached_res:
+                shared_agents = agent_config.get_settings.shared_cache_agents.all()
+                for shared_agent in shared_agents:
+                    # Correct identifier logic for shared agents (Web Widget support)
+                    shared_redis_id = f"widget_{shared_agent.widget_key}" if shared_agent.platform == 'web_widget' and shared_agent.widget_key else shared_agent.page_id
+                    
+                    potential_res = get_cached_reply(shared_redis_id, msg_text=user_real_message, track_hit=False)
+                    if potential_res:
+                        msg_hash = potential_res.get('msg_hash')
+                        if not msg_hash:
+                            # Fallback for old cache entries
+                            normalized = normalize_for_cache(user_real_message)
+                            msg_hash = hashlib.md5(normalized.encode()).hexdigest()
+
+                        # এক্সক্লুশন চেক (Redis Set)
+                        exclusion_key = f"agent:{shared_redis_id}:sharing_exclusion_set"
+                        r_db4 = get_redis_client(db=4)
+                        if not r_db4.sismember(exclusion_key, msg_hash):
+                            cached_res = potential_res
+                            cache_hit_scope = "shared_agent_exact"
+                            # Track this hit for the current agent's ranking
+                            incr_message_frequency(page_id, msg_hash)
+                            logger.info(f"🔗 SHARED CACHE HIT (Exact) from Agent {shared_agent.name} for '{user_real_message[:30]}'")
+                            break
+
+            # --- Layer 2: Agent Fuzzy ---
+            if not cached_res:
+                cached_res = fuzzy_match(page_id, user_real_message, threshold=80)
+                if cached_res:
+                    cache_hit_scope = "agent_fuzzy"
             
             # --- Layer 2.5: Shared Agent Fuzzy ---
             if not cached_res:
@@ -2157,11 +2189,11 @@ def process_ai_reply_task(self, data):
                 for shared_agent in shared_agents:
                     shared_redis_id = f"widget_{shared_agent.widget_key}" if shared_agent.platform == 'web_widget' and shared_agent.widget_key else shared_agent.page_id
                     
-                    potential_res = fuzzy_match(shared_redis_id, text, threshold=80, track_hit=False)
+                    potential_res = fuzzy_match(shared_redis_id, user_real_message, threshold=80, track_hit=False)
                     if potential_res:
                         msg_hash = potential_res.get('msg_hash')
                         if not msg_hash:
-                            stored_text = potential_res.get('original_normalized') or text
+                            stored_text = potential_res.get('original_normalized') or user_real_message
                             msg_hash = hashlib.md5(stored_text.encode()).hexdigest()
 
                         # এক্সক্লুশন চেক
@@ -2172,43 +2204,44 @@ def process_ai_reply_task(self, data):
                             cache_hit_scope = "shared_agent_fuzzy"
                             # Track this hit for the current agent too
                             incr_message_frequency(page_id, msg_hash)
-                            logger.info(f"🔗 SHARED CACHE HIT (Fuzzy) from Agent {shared_agent.name} for '{text[:20]}'")
+                            logger.info(f"🔗 SHARED CACHE HIT (Fuzzy) from Agent {shared_agent.name} for '{user_real_message[:20]}'")
                             break
 
         # --- Layer 3: Global Exact ---
-        if not cached_res:
-            cached_res = get_global_cached_reply(page_id, text)
+        if not cached_res and not is_media_message:
+            cached_res = get_global_cached_reply(page_id, user_real_message)
             if cached_res:
                 cache_hit_scope = "global_exact"
 
         # --- Layer 4: Global Fuzzy ---
-        if not cached_res:
-            cached_res = global_fuzzy_match(page_id, text, threshold=92)
+        if not cached_res and not is_media_message:
+            cached_res = global_fuzzy_match(page_id, user_real_message, threshold=92)
             if cached_res:
                 cache_hit_scope = "global_fuzzy"
 
         # --- Layer 5: Sender Exact ---
-        if not cached_res:
-            cached_res = get_sender_cached_reply(page_id, sender_id, text)
+        if not cached_res and not is_media_message:
+            cached_res = get_sender_cached_reply(page_id, sender_id, user_real_message)
             if cached_res:
                 cache_hit_scope = "sender_exact"
 
         # --- Layer 6: Cluster Match ---
-        if not cached_res:
+        if not cached_res and not is_media_message:
             cluster_map = get_cluster_map(page_id)
-            normalized = normalize_for_cache(text)
+            normalized = normalize_for_cache(user_real_message)
             msg_hash = hashlib.md5(normalized.encode()).hexdigest()
             cluster_id = cluster_map.get(msg_hash)
             if cluster_id:
                 cached_res = get_cached_reply(page_id, msg_hash=cluster_id)
                 if cached_res:
                     cache_hit_scope = "cluster"
-                    logger.info(f"🧬 CLUSTER MATCH FOUND for '{text[:30]}' -> Cluster: {cluster_id}")
+                    logger.info(f"🧬 CLUSTER MATCH FOUND for '{user_real_message[:30]}' -> Cluster: {cluster_id}")
 
-        # --- Layer 7: Vector Similarity ---
+        # --- Layer 7: Vector Similarity (Text + Image Embedding) ---
         if not cached_res:
             from aiAgent.models import SmartKeyword
             from embedding.models import SpreadsheetKnowledge
+            from pgvector.django import CosineDistance
 
             has_knowledge = SpreadsheetKnowledge.objects.filter(user=agent_config.user).exists()
             skip_margin = 6
@@ -2221,71 +2254,217 @@ def process_ai_reply_task(self, data):
                     skip_embedding = True
                     break
 
-            if has_knowledge and not skip_embedding and len(text) > 3:
-                from embedding.utils import get_gemini_embedding
-                rag_query = f"{post_context} {text}" if (request_type == 'facebook_comment' and post_context) else text
-                query_vector = get_gemini_embedding(rag_query)
+            if has_knowledge and not skip_embedding:
+                from embedding.utils import get_gemini_embedding, get_gemini_image_embedding, get_image_caption
+                
+                # ১. TEXT EMBEDDING SEARCH
+                text_vector = None
+                text_hit = None
+                media_message_placeholder = False
+                message_type = str(data.get('message_type') or data.get('media_type') or '').lower()
+                if message_type in ['image', 'video', 'audio', 'document'] and text and text.strip().lower().startswith('['):
+                    media_message_placeholder = True
 
-                if query_vector:
-                    vector_hits = search_similar_vectors(page_id, query_vector, top_k=1)
-                    if vector_hits and vector_hits[0]['score'] < 0.12:
-                        similar_text = vector_hits[0]['text']
+                if len(text) > 3 and not media_message_placeholder:
+                    rag_query = f"{post_context} {text}" if (request_type == 'facebook_comment' and post_context) else text
+                    text_vector = get_gemini_embedding(rag_query)
+                    if text_vector:
+                        vector_hits = search_similar_vectors(page_id, text_vector, top_k=1)
+                        if vector_hits and vector_hits[0]['score'] < 0.12:
+                            text_hit = vector_hits[0]
+                            logger.info(f"🔤 Text vector match: '{text_hit['text'][:30]}' (score: {text_hit['score']:.4f})")
+                
+                # ২. IMAGE EMBEDDING SEARCH
+                image_url = None
+                image_vector = None
+                image_caption = None
+                image_hit = None
+                best_vector_type = None
+                
+                logger.info(f"[DEBUG] media_url in vector search scope: {media_url[:60] if media_url else 'NONE'}")
+                logger.info(f"[DEBUG] base64 fields: image_base64={bool(data.get('image_base64'))}, video_base64={bool(data.get('video_base64'))}")
+                
+                # Extract image from incoming message across platforms
+                if request_type == 'whatsapp':
+                    # WhatsApp media: mediaUrl, media_url, or converted base64 data URL
+                    # Priority 1: Use media_url if it's a data URL (created from base64 earlier)
+                    if media_url and media_url.startswith('data:'):
+                        image_url = media_url
+                        logger.info(f"✅ [WhatsApp] Using converted base64 data URL for image embedding")
+                    else:
+                        # Priority 2: Direct mediaUrl/media_url
+                        image_url = data.get('mediaUrl') or data.get('media_url')
+                        logger.info(f"[WhatsApp] image_url from data: {image_url[:50] if image_url else 'None'}")
+                elif request_type in ['messenger', 'facebook_comment', 'instagram']:
+                    # Facebook/Messenger/Instagram: attachments array
+                    attachments = data.get('attachments') or []
+                    if isinstance(attachments, list) and len(attachments) > 0:
+                        for attach in attachments:
+                            if attach.get('type') in ['image', 'photo']:
+                                image_url = attach.get('url') or attach.get('media', {}).get('image', {}).get('src')
+                                if image_url:
+                                    break
+                elif request_type == 'telegram':
+                    # Telegram: photo or document with image
+                    if data.get('photo'):
+                        photo_id = data['photo'][-1].get('file_id')  # Get highest res
+                        if photo_id:
+                            try:
+                                api_url = f"https://api.telegram.org/bot{token}/getFile?file_id={photo_id}"
+                                resp = requests.get(api_url, timeout=5).json()
+                                file_path = resp.get('result', {}).get('file_path')
+                                if file_path:
+                                    image_url = f"https://api.telegram.org/file/bot{token}/{file_path}"
+                            except Exception as e:
+                                logger.warning(f"Telegram photo URL fetch failed: {e}")
+                
+                # FALLBACK: If still no image_url, check for base64 and convert
+                if not image_url:
+                    media_base64_fallback = (
+                        data.get('image_base64') or 
+                        data.get('video_base64') or 
+                        data.get('audio_base64') or 
+                        data.get('document_base64')
+                    )
+                    if media_base64_fallback:
+                        mime_type = data.get('mimetype') or 'application/octet-stream'
+                        image_url = f'data:{mime_type};base64,{media_base64_fallback}'
+                        logger.info(f"✅ [DEBUG] FALLBACK: Created data URL from {mime_type}. Size: {len(media_base64_fallback)} chars")
+                
+                # Generate image embedding and search if image found
+                if image_url:
+                    try:
+                        from settings.models import GlobalSettings
+                        logger.info(f"🖼️  [Image Processing] Starting. Image URL length: {len(image_url)}, starts with: {image_url[:50]}")
                         
-                        # 🧪 COMPREHENSIVE RAG VALIDATION: Validate all extracted fields from vector result
-                        # RAG results মাঝে মাঝে inaccurate থাকে, তাই strict validation করতে হবে
-                        vector_order_data = extract_order_data_from_text(similar_text, {}, None)
+                        image_vector = get_gemini_image_embedding(image_url)
+                        logger.info(f"✅ [Image Embedding] Generated. Vector dims: {len(image_vector) if image_vector else 'None'}")
+                        
+                        global_settings = GlobalSettings.get_settings()
+                        selected_provider = getattr(global_settings, 'image_caption_provider', 'gemini') or 'gemini'
+                        logger.info(f"📝 [Caption Provider] Selected: {selected_provider}")
+                        
+                        image_caption = get_image_caption(image_url, provider=selected_provider)
+                        logger.info(f"📸 [Image Caption] Generated: {image_caption[:80] if image_caption else 'None'}")
+                        
+                        if image_vector:
+                            # Search image_embedding field in DB
+                            image_matches = SpreadsheetKnowledge.objects.filter(
+                                user=agent_config.user,
+                                image_embedding__isnull=False
+                            ).annotate(
+                                distance=CosineDistance('image_embedding', image_vector)
+                            ).order_by('distance')[:1]
+                            
+                            if image_matches:
+                                match_obj = image_matches[0]
+                                if match_obj.distance < 0.25:  # Image similarity threshold (more lenient than text)
+                                    image_hit = {
+                                        'text': match_obj.content,
+                                        'row_id': match_obj.row_id,
+                                        'score': float(match_obj.distance)
+                                    }
+                                    logger.info(f"🖼️ Image vector match: Row {match_obj.row_id} (distance: {match_obj.distance:.4f})")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Image embedding search failed: {e}")
+                
+                # ३. COMBINE TEXT + IMAGE RESULTS
+                best_hit = None
+                hit_source = None
+                best_vector = None
+                best_vector_type = None
+
+                if text_hit and image_hit:
+                    # Both text and image matched - choose better one
+                    if text_hit['score'] < image_hit['score']:
+                        best_hit = text_hit
+                        hit_source = "text+image_text"
+                        best_vector = text_vector
+                        best_vector_type = 'text'
+                    else:
+                        best_hit = image_hit
+                        hit_source = "text+image_image"
+                        best_vector = image_vector
+                        best_vector_type = 'image'
+                    logger.info(f"📊 Both text and image matched. Selected {hit_source}")
+                elif text_hit:
+                    best_hit = text_hit
+                    hit_source = "text_only"
+                    best_vector = text_vector
+                    best_vector_type = 'text'
+                elif image_hit:
+                    best_hit = image_hit
+                    hit_source = "image_only"
+                    best_vector = image_vector
+                    best_vector_type = 'image'
+
+                # Validate and use best hit
+                if best_hit:
+                    similar_text = best_hit['text']
+                    
+                    # 🧪 COMPREHENSIVE RAG VALIDATION
+                    vector_order_data = extract_order_data_from_text(similar_text, {}, None)
+                    validation_passed = True
+                    validation_reason = ""
+                    
+                    # 1. Product validation
+                    vector_product = vector_order_data.get('product_name')
+                    if not vector_product:
+                        vector_product = _infer_catalog_product_from_text(agent_config.user, similar_text)
+                    
+                    if vector_product:
+                        product_in_catalog = _validate_product_in_catalog(agent_config.user, vector_product, quantity=1)
+                        if not product_in_catalog:
+                            validation_passed = False
+                            validation_reason = f"Product '{vector_product}' not found in catalog"
+                    else:
                         validation_passed = True
-                        validation_reason = ""
-                        
-                        # 1. Product validation - most critical
-                        vector_product = vector_order_data.get('product_name')
-                        if not vector_product:
-                            vector_product = _infer_catalog_product_from_text(agent_config.user, similar_text)
-                        
-                        if vector_product:
-                            # Strict: Product must exist in catalog with valid stock
-                            product_in_catalog = _validate_product_in_catalog(agent_config.user, vector_product, quantity=1)
-                            if not product_in_catalog:
+                    
+                    # 2. Price validation
+                    if validation_passed and vector_order_data.get('price'):
+                        try:
+                            price_val = float(str(vector_order_data['price']).strip())
+                            if price_val <= 0:
                                 validation_passed = False
-                                validation_reason = f"Product '{vector_product}' not found in catalog"
-                        else:
-                            # If no product info, this is non-order knowledge - can proceed
-                            validation_passed = True
-                        
-                        # 2. Price validation (if present) - should be numeric and reasonable
-                        if validation_passed and vector_order_data.get('price'):
-                            try:
-                                price_val = float(str(vector_order_data['price']).strip())
-                                if price_val <= 0:
-                                    validation_passed = False
-                                    validation_reason = f"Invalid price: {price_val}"
-                            except (ValueError, TypeError):
+                                validation_reason = f"Invalid price: {price_val}"
+                        except (ValueError, TypeError):
+                            validation_passed = False
+                            validation_reason = "Price not numeric"
+                    
+                    # 3. Quantity validation
+                    if validation_passed and vector_order_data.get('quantity'):
+                        try:
+                            qty_val = int(str(vector_order_data['quantity']).strip())
+                            if qty_val <= 0:
                                 validation_passed = False
-                                validation_reason = "Price not numeric"
-                        
-                        # 3. Quantity validation (if present)
-                        if validation_passed and vector_order_data.get('quantity'):
-                            try:
-                                qty_val = int(str(vector_order_data['quantity']).strip())
-                                if qty_val <= 0:
-                                    validation_passed = False
-                                    validation_reason = f"Invalid quantity: {qty_val}"
-                            except (ValueError, TypeError):
-                                validation_passed = False
-                                validation_reason = "Quantity not numeric"
-                        
-                        if validation_passed:
-                            # All RAG validations passed - use cached reply if available
-                            cached_res = get_cached_reply(page_id, msg_text=similar_text)
-                            if cached_res:
-                                cache_hit_scope = "vector"
-                                product_info = f"(Product: {vector_product})" if vector_product else ""
-                                logger.info(f"🔮 VECTOR CACHE HIT! '{text[:20]}' matched with '{similar_text[:20]}' {product_info}")
-                        else:
-                            # RAG validation failed - skip this vector hit and proceed to AI
-                            logger.warning(f"⚠️ Vector search result failed validation: {validation_reason}. Skipping vector hit.")
+                                validation_reason = f"Invalid quantity: {qty_val}"
+                        except (ValueError, TypeError):
+                            validation_passed = False
+                            validation_reason = "Quantity not numeric"
+                    
+                    if validation_passed:
+                        cached_res = get_cached_reply(page_id, msg_text=similar_text)
+                        if cached_res:
+                            cache_hit_scope = f"vector_{hit_source}"
+                            product_info = f"(Product: {vector_product})" if vector_product else ""
+                            logger.info(f"🔮 VECTOR CACHE HIT [{hit_source}]! Text: '{text[:20]}' → Product: {product_info}")
+                            # Preserve the best vector for perform_rag_search
+                            if best_vector:
+                                query_vector = best_vector
+                                query_vector_type = best_vector_type or 'text'
+                                logger.info(f"✅ [RAG] Using {query_vector_type} vector for perform_rag_search (skipping text embedding)")
+                    else:
+                        logger.warning(f"⚠️ Vector search result failed validation: {validation_reason}. Skipping vector hit.")
+                
+                # 🔥 CRITICAL FIX: If image vector exists but no vector-cache hit, still use image vector for RAG search
+                if not cached_res and not query_vector and image_vector:
+                    query_vector = image_vector
+                    query_vector_type = 'image'
+                    logger.info(f"✅ [RAG] Using image vector for perform_rag_search even without a direct image cache hit")
+
             else:
-                logger.info(f"⏭️ Skipping Gemini Embedding for User {agent_config.user.email} (No knowledge or skip kw)")
+                logger.info(f"⏭️ Skipping Vector Embedding for User {agent_config.user.email} (No knowledge or skip kw)")
+
 
         # ========================================================
         # ৮. Cache Hit হলে → সরাসরি reply পাঠাও
@@ -2352,10 +2531,17 @@ def process_ai_reply_task(self, data):
                     "Keep the answer short and natural."
                 )
                 sheet_ctx, extra_instr, query_vector = perform_rag_search(
-                    agent_config, text, post_context, interruption_instruction, existing_vector=query_vector
+                    agent_config,
+                    text,
+                    post_context,
+                    interruption_instruction,
+                    existing_vector=query_vector,
+                    vector_type=query_vector_type,
+                    image_caption=image_caption,
                 )
                 system_instruction, history, current_msg = build_ai_context(
-                    agent_config, sender_id, text, extra_instr, sheet_ctx, platform=request_type
+                    agent_config, sender_id, text, extra_instr, sheet_ctx,
+                    platform=request_type, message_type=message_type,
                 )
                 system_instruction = (
                     system_instruction
@@ -2391,9 +2577,18 @@ def process_ai_reply_task(self, data):
                 order_instr = f"{order_instr or ''}\n\n{resume_prompt}"
             order_instr = _get_order_prompt_instruction(agent_config, sender_id, text, order_instr)
             sheet_ctx, extra_instr, query_vector = perform_rag_search(
-                agent_config, text, post_context, order_instr, existing_vector=query_vector
+                agent_config,
+                text,
+                post_context,
+                order_instr,
+                existing_vector=query_vector,
+                vector_type=query_vector_type,
+                image_caption=image_caption,
             )
-            system_instruction, history, current_msg = build_ai_context(agent_config, sender_id, text, extra_instr, sheet_ctx, platform=request_type)
+            system_instruction, history, current_msg = build_ai_context(
+                agent_config, sender_id, text, extra_instr, sheet_ctx,
+                platform=request_type, message_type=message_type,
+            )
 
             # ---- Cache Classification Instruction (JSON suffix) ----
             classify_instruction = (

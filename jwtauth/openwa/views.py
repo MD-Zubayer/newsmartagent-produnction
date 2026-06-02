@@ -53,7 +53,7 @@ def whatsapp_sync_agent(request):
                 'platform': 'whatsapp',
                 'name': f"WhatsApp Agent ({phone})",
                 'system_prompt': "You are an AI assistant for WhatsApp. Help users with their queries.",
-                'ai_model': 'gemini-1.5-flash', # বর্তমান স্ট্যাবল ভার্সন
+                'ai_model': 'gemini-2.5-flash', # বর্তমান স্ট্যাবল ভার্সন
                 'is_active': True,
                 'number': phone,
                 # WhatsApp এজেন্টের জন্য dummy token রাখা হচ্ছে যাতে required field pass করে।
@@ -292,6 +292,27 @@ class WhatsAppQRView(APIView):
         try:
             response = requests.get(
                 f'{settings.BAILEYS_API_URL}/qr/{session_id}',
+                timeout=5,
+            )
+            return Response(response.json(), status=response.status_code)
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+
+class WhatsAppPairingCodeView(APIView):
+    """
+    Retrieve the current Baileys pairing code for an initializing session.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        session_id = f"user_{request.user.id}"
+        try:
+            response = requests.get(
+                f'{settings.BAILEYS_API_URL}/pairing-code/{session_id}',
                 timeout=5,
             )
             return Response(response.json(), status=response.status_code)

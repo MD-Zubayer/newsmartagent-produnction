@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { FixedSizeGrid as Grid, FixedSizeList as List, areEqual } from "react-window";
 import { useRouter } from "next/navigation"; // URL চেঞ্জ করার জন্য
-import * as XLSX from "xlsx"; 
+import * as XLSX from "xlsx";
+import toast from "react-hot-toast";
 import api from "@/lib/api";
 import {
   Save,
@@ -111,7 +112,7 @@ const RowHeader = ({ index, style, data }) => {
 
 /* ================= VIRTUAL CELL ================= */
 const Cell = memo(({ columnIndex, rowIndex, style, data }) => {
-  const { sheet, selection, handleMouseDown, handleMouseEnter, updateCell, dark, zoom, fontSize, fontFamily } = data;
+  const { sheet, selection, handleMouseDown, handleMouseEnter, updateCell, dark, zoom, fontSize, fontFamily, rowImageInputRef, setUploadRowTarget, handleRowImageDelete } = data;
   
   const cellKey = `${rowIndex}-${columnIndex}`;
   const rawValue = sheet?.data?.[cellKey] || "";
@@ -123,6 +124,9 @@ const Cell = memo(({ columnIndex, rowIndex, style, data }) => {
   const isImportant = typeof rawValue === 'string' && rawValue.endsWith('*');
   const cleanValue = isImportant ? rawValue.slice(0, -1) : rawValue;
   const displayValue = isStartCell ? rawValue : evaluateFormula(cleanValue);
+  const isImageCell = columnIndex === 0 && rowIndex > 0;
+  const isImageUrl = typeof rawValue === 'string' && /^(https?:\/\/|\/)/.test(rawValue);
+  const isMessageCard = rowIndex > 0 && !isStartCell && !isImageCell && typeof cleanValue === 'string' && cleanValue.trim().length > 0;
 
   return (
     <div
@@ -132,7 +136,7 @@ const Cell = memo(({ columnIndex, rowIndex, style, data }) => {
         fontSize: `${fontSize * (zoom / 100)}px`,
         fontWeight: isImportant ? 'bold' : formatting.bold ? 'bold' : 'normal'
       }}
-      className={`border-r border-b flex items-center transition-colors duration-100 px-1.5 relative group
+      className={`border-r border-b flex items-center transition-colors duration-100 px-1.5 relative group overflow-hidden
         ${dark ? "border-slate-800 bg-slate-900 text-slate-200 hover:bg-slate-800/80" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50/80"} 
         ${inRange && !isStartCell ? (dark ? "bg-indigo-900/30" : "bg-indigo-50/70") : ""}
         ${isStartCell ? "ring-2 ring-inset ring-indigo-500 z-20 shadow-[inset_0_0_8px_rgba(99,102,241,0.2)]" : ""} 
@@ -142,15 +146,74 @@ const Cell = memo(({ columnIndex, rowIndex, style, data }) => {
       onMouseDown={(e) => handleMouseDown(rowIndex, columnIndex, e)}
       onMouseEnter={() => handleMouseEnter(rowIndex, columnIndex)}
     >
-      <input
-        className={`w-full h-full bg-transparent outline-none px-1 ${!isStartCell ? 'pointer-events-none' : 'cursor-text'}`}
-        style={{ textAlign: 'left' }}
-        value={displayValue}
-        onChange={(e) => updateCell(rowIndex, columnIndex, e.target.value)}
-        readOnly={!isStartCell} 
-      />
+      {isImageCell ? (
+        <div className="relative w-full h-full overflow-hidden rounded-sm">
+          {isImageUrl ? (
+            <img
+              src={rawValue}
+              alt="Row image"
+              className="absolute inset-0 w-full h-full object-cover opacity-95"
+              loading="lazy"
+            />
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-slate-100 dark:bg-slate-900 text-slate-400 text-xs">
+              <span>No image</span>
+              <button
+                onClick={(ev) => { ev.stopPropagation(); setUploadRowTarget(rowIndex); rowImageInputRef.current && rowImageInputRef.current.click(); }}
+                title="Upload image from device"
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-100 text-[10px] font-semibold"
+              >
+                <Upload size={12} /> Upload
+              </button>
+            </div>
+          )}
+          {isImageUrl && (
+            <div className="absolute top-1 right-1 flex items-center gap-1">
+              <button
+                onClick={(ev) => { ev.stopPropagation(); setUploadRowTarget(rowIndex); rowImageInputRef.current && rowImageInputRef.current.click(); }}
+                title="Upload image from device"
+                className="bg-white/90 dark:bg-black/70 p-1 rounded-md shadow-sm"
+              >
+                <Upload size={14} />
+              </button>
+              <button
+                onClick={(ev) => { ev.stopPropagation(); handleRowImageDelete(rowIndex); }}
+                title="Delete image from row"
+                className="bg-white/90 dark:bg-black/70 p-1 rounded-md shadow-sm text-rose-600 hover:bg-rose-100 dark:hover:bg-rose-900/60"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+          <div className="absolute inset-0 bg-slate-950/20 dark:bg-slate-950/30" />
+          <input
+            className={`w-full h-full bg-transparent outline-none px-1 relative text-xs ${!isStartCell ? 'pointer-events-none' : 'cursor-text'}`}
+            style={{ textAlign: 'left' }}
+            value={displayValue}
+            onChange={(e) => updateCell(rowIndex, columnIndex, e.target.value)}
+            readOnly={!isStartCell}
+          />
+        </div>
+      ) : isMessageCard ? (
+        <div className="w-full h-full px-2 py-2">
+          <div className={`h-full w-full rounded-2xl border p-2 text-left shadow-sm transition-all ${dark ? 'border-slate-700 bg-slate-900/90 text-slate-200 shadow-black/10' : 'border-slate-200 bg-slate-50 text-slate-800 shadow-slate-200/80'}`}>
+            <p className="whitespace-pre-wrap text-sm leading-5 overflow-hidden" style={{ wordBreak: 'break-word' }}>{displayValue}</p>
+          </div>
+        </div>
+      ) : (
+        <input
+          className={`w-full h-full bg-transparent outline-none px-1 ${!isStartCell ? 'pointer-events-none' : 'cursor-text'}`}
+          style={{ textAlign: 'left' }}
+          value={displayValue}
+          onChange={(e) => updateCell(rowIndex, columnIndex, e.target.value)}
+          readOnly={!isStartCell}
+        />
+      )}
       {isImportant && !inRange && (
         <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-rose-500 rounded-full"></div>
+      )}
+      {isImageCell && !rawValue && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-[10px] text-slate-400">Image URL</div>
       )}
     </div>
   );
@@ -214,13 +277,16 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
   const [sheetId, setSheetId] = useState(initialSheetId);
   const [sheet, setSheet] = useState({ 
     rows: 100, cols: 26, data: {}, formatting: {}, title: "Untitled", is_dark_mode: false,
-    scope: 'global', agent: null
+    scope: 'global', agent: null, auto_image_search: false
   });
 
   const [agents, setAgents] = useState([]);
+  const [imageInputMode, setImageInputMode] = useState('url');
+  const [imageInputUrl, setImageInputUrl] = useState('');
+  const [uploadRowTarget, setUploadRowTarget] = useState(null);
 
   const [loading, setLoading] = useState(true);
-  const[saving, setSaving] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [dark, setDark] = useState(false);
   
   // Selection & UI
@@ -238,6 +304,7 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
   const colHeaderRef = useRef(null);
   const rowHeaderRef = useRef(null);
   const fileInputRef = useRef(null);
+  const rowImageInputRef = useRef(null);
   
   // Auto Save Ref
   const sheetRef = useRef(sheet);
@@ -456,6 +523,130 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
      } catch (err) { console.error("Create failed", err); }
   };
 
+  const uploadImageFileToRow = async (file, rowIndex) => {
+    if (!file || rowIndex == null) return null;
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('row_index', String(rowIndex));
+      const res = await api.post(`/datasheet/spreadsheets/${sheetId}/row-image/`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      return res?.data?.image_url || null;
+    } catch (err) {
+      console.error('Row image upload failed', err);
+      alert('Image upload failed');
+      return null;
+    }
+  };
+
+  const handleRowImageFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file || uploadRowTarget == null) return;
+
+    const imageUrl = await uploadImageFileToRow(file, uploadRowTarget);
+    if (imageUrl) {
+      const key = `${uploadRowTarget}-0`;
+      const updatedData = { ...sheet.data, [key]: imageUrl };
+      pushToHistory({ ...sheet, data: updatedData });
+      await api.put(`/datasheet/spreadsheets/${sheetId}/`, { ...sheet, data: updatedData, is_dark_mode: dark });
+    }
+
+    e.target.value = null;
+    setUploadRowTarget(null);
+  };
+
+  const handleToolbarUploadClick = (rowIndex) => {
+    setUploadRowTarget(rowIndex);
+    if (rowImageInputRef.current) rowImageInputRef.current.click();
+  };
+
+  const handleImageDrop = async (event, rowIndex) => {
+    event.preventDefault();
+    const file = event.dataTransfer.files?.[0];
+    if (!file || rowIndex == null) return;
+    const imageUrl = await uploadImageFileToRow(file, rowIndex);
+    if (imageUrl) {
+      const key = `${rowIndex}-0`;
+      const updatedData = { ...sheet.data, [key]: imageUrl };
+      pushToHistory({ ...sheet, data: updatedData });
+      await api.put(`/datasheet/spreadsheets/${sheetId}/`, { ...sheet, data: updatedData, is_dark_mode: dark });
+    }
+  };
+
+  const handleApplyImageUrl = async () => {
+    if (!imageInputUrl) return;
+    const rowIndex = Math.max(1, selection.start.row);
+    const key = `${rowIndex}-0`;
+    const updatedData = { ...sheet.data, [key]: imageInputUrl };
+    pushToHistory({ ...sheet, data: updatedData });
+    setImageInputUrl('');
+    try {
+      await api.put(`/datasheet/spreadsheets/${sheetId}/row-image/`, { row_index: rowIndex, image_url: imageInputUrl });
+      await api.put(`/datasheet/spreadsheets/${sheetId}/`, { ...sheet, data: updatedData, is_dark_mode: dark });
+    } catch (err) {
+      console.error('Failed to persist image URL', err);
+    }
+  };
+
+  const handleRowImageDelete = async (rowIndex) => {
+    if (rowIndex == null) return;
+    
+    toast((t) => (
+      <div className="flex flex-col gap-3 w-80">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center">
+            <Trash2 size={18} className="text-rose-600 dark:text-rose-400" />
+          </div>
+          <div className="flex-1">
+            <p className="font-bold text-sm text-slate-900 dark:text-white">Delete Image?</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Row A{rowIndex} image will be permanently removed</p>
+          </div>
+        </div>
+        <div className="flex gap-2 ml-auto pr-2">
+          <button
+            onClick={() => toast.dismiss(t.id)}
+            className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold hover:bg-slate-300 dark:hover:bg-slate-600 transition-all"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={async () => {
+              toast.dismiss(t.id);
+              const deleteToast = toast.loading('Deleting...', { 
+                style: { background: '#fee2e2', color: '#991b1b' }
+              });
+              try {
+                await api.delete(`/datasheet/spreadsheets/${sheetId}/row-image/`, { data: { row_index: rowIndex } });
+                const key = `${rowIndex}-0`;
+                const updatedData = { ...sheet.data };
+                delete updatedData[key];
+                pushToHistory({ ...sheet, data: updatedData });
+                await api.put(`/datasheet/spreadsheets/${sheetId}/`, { ...sheet, data: updatedData, is_dark_mode: dark });
+                toast.success('Image deleted successfully', { id: deleteToast });
+              } catch (err) {
+                console.error('Failed to delete row image', err);
+                toast.error('Unable to delete image', { id: deleteToast });
+              }
+            }}
+            className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold transition-all"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    ), {
+      duration: 10000,
+      style: {
+        background: '#fafafa',
+        color: '#000',
+        border: '1px solid #e5e7eb',
+        borderRadius: '12px',
+        boxShadow: '0 10px 25px rgba(0,0,0,0.1)'
+      }
+    });
+  };
+
   const loadFile = (id) => {
      // FIX: লোড করার সময়ও একই প্যাটার্ন ব্যবহার করা হলো
      router.push(`/dashboard/sheet/${id}`);
@@ -662,6 +853,10 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
     if (rowHeaderRef.current) rowHeaderRef.current.scrollTo(scrollTop);
   };
 
+  const selectedRowIndex = Math.max(1, selection.start.row);
+  const selectedRowImageUrl = sheet.data[`${selectedRowIndex}-0`] || "";
+  const selectedRowHasImage = typeof selectedRowImageUrl === 'string' && selectedRowImageUrl.trim() !== '';
+
   if (loading) return (
     <div className="h-full flex items-center justify-center bg-slate-50">
       <div className="animate-pulse flex flex-col items-center gap-2">
@@ -682,6 +877,8 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
          deleteFile={deleteFile}
          currentId={sheetId}
       />
+
+      <input ref={rowImageInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleRowImageFileChange} />
 
       {/* TOP HEADER */}
       <div className={`relative z-40 h-16 sm:h-[72px] flex items-center justify-between px-3 sm:px-6 border-b transition-all duration-300 
@@ -743,6 +940,15 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
             <button onClick={() => setDark(!dark)} className={`p-2 sm:p-2.5 rounded-full transition-all duration-300 ${dark ? "bg-slate-800 hover:bg-slate-700 text-yellow-400 shadow-[inset_0_2px_4px_rgba(0,0,0,0.2)]" : "bg-slate-100 hover:bg-slate-200 text-slate-600 shadow-[inset_0_2px_4px_rgba(0,0,0,0.05)]"}`}>
                 {dark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
+            <label className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 ${dark ? "bg-slate-800 text-slate-200 border border-slate-700" : "bg-slate-100 text-slate-700 border border-slate-200"}`}>
+                <input
+                  type="checkbox"
+                  checked={sheet.auto_image_search || false}
+                  onChange={(e) => setSheet({...sheet, auto_image_search: e.target.checked})}
+                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                Auto Image Search
+            </label>
             <button onClick={handleManualSave} disabled={saving} className={`flex items-center gap-2 px-3 sm:px-6 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 active:scale-95 ${dark ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-900/50" : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-500/30"} disabled:opacity-70 disabled:cursor-not-allowed`}>
                 {saving ? <div className="w-4 h-4 border-[2.5px] border-white/30 border-t-white rounded-full animate-spin"/> : <Save size={16} strokeWidth={2.5} />}
                 <span className="hidden sm:inline">Save</span>
@@ -751,96 +957,151 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
       </div>
 
       {/* TOOLBAR */}
-      <div className={`relative z-30 py-1.5 sm:py-2.5 px-2 sm:px-6 flex items-center gap-2 sm:gap-4 md:gap-6 border-b overflow-x-auto no-scrollbar whitespace-nowrap shadow-sm transition-colors ${dark ? "bg-slate-800/80 border-slate-700/80 backdrop-blur" : "bg-slate-50/80 border-slate-200/80 backdrop-blur"}`}>
-        <div className="flex items-center gap-0.5 bg-white/50 dark:bg-slate-900/50 p-0.5 sm:p-1 rounded-lg sm:rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-            <button onClick={undo} disabled={pointer <= 0} className="p-1.5 sm:p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md sm:rounded-lg text-slate-600 dark:text-slate-300 disabled:opacity-30 transition-all"><Undo2 size={16}/></button>
-            <button onClick={redo} disabled={pointer >= history.length - 1} className="p-1.5 sm:p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md sm:rounded-lg text-slate-600 dark:text-slate-300 disabled:opacity-30 transition-all"><Redo2 size={16}/></button>
+      <div className={`relative z-30 py-1 sm:py-2 px-2 sm:px-4 md:px-6 flex items-center gap-1 sm:gap-2 md:gap-4 border-b overflow-x-auto no-scrollbar whitespace-nowrap shadow-sm transition-colors ${dark ? "bg-slate-800/80 border-slate-700/80 backdrop-blur" : "bg-slate-50/80 border-slate-200/80 backdrop-blur"}`}>
+        {/* Undo/Redo */}
+        <div className="flex items-center gap-0.5 bg-white/50 dark:bg-slate-900/50 p-0.5 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 shrink-0">
+            <button onClick={undo} disabled={pointer <= 0} className="p-1 sm:p-1.5 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-600 dark:text-slate-300 disabled:opacity-30 transition-all"><Undo2 size={14}/></button>
+            <button onClick={redo} disabled={pointer >= history.length - 1} className="p-1 sm:p-1.5 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-600 dark:text-slate-300 disabled:opacity-30 transition-all"><Redo2 size={14}/></button>
         </div>
-        <div className="h-6 sm:h-8 w-[1px] bg-slate-300 dark:bg-slate-600 shrink-0"></div>
-        <div className="flex items-center gap-1 sm:gap-2">
-            <button onClick={toggleBold} className={`p-1.5 sm:p-2 rounded-lg sm:rounded-xl transition-all ${sheet.formatting?.[`${selection.start.row}-${selection.start.col}`]?.bold ? "bg-indigo-100 text-indigo-700 shadow-inner dark:bg-indigo-900/50 dark:text-indigo-300" : "hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"}`}>
-                <Bold size={16}/>
+
+        {/* Format - Hidden on mobile */}
+        <div className="hidden sm:flex items-center gap-1">
+            <div className="w-px h-4 bg-slate-300 dark:bg-slate-600 shrink-0"></div>
+            <button onClick={toggleBold} className={`p-1 sm:p-1.5 rounded-lg transition-all ${sheet.formatting?.[`${selection.start.row}-${selection.start.col}`]?.bold ? "bg-indigo-100 text-indigo-700 shadow-inner dark:bg-indigo-900/50 dark:text-indigo-300" : "hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"}`}>
+                <Bold size={14}/>
             </button>
-            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-white shadow-sm dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl">
-                <Type size={16} className="text-slate-400"/>
-                <select value={fontFamily} onChange={(e) => setFontFamily(e.target.value)} className="bg-transparent text-sm font-medium outline-none cursor-pointer text-slate-700 dark:text-slate-200 w-24">
-                    <option value="Inter, sans-serif">Inter</option>
-                    <option value="serif">Serif</option>
-                    <option value="monospace">Mono</option>
-                </select>
-            </div>
-            <div className="flex items-center bg-white shadow-sm dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl p-0.5 sm:p-1">
-                <button onClick={() => setFontSize(s => Math.max(10, s-1))} className="w-6 h-6 sm:w-8 sm:h-7 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md sm:rounded-lg text-slate-600 dark:text-slate-300 font-medium transition-colors text-xs sm:text-sm">-</button>
-                <span className="w-6 sm:w-8 text-center text-[10px] sm:text-xs font-semibold text-slate-700 dark:text-slate-200">{fontSize}</span>
-                <button onClick={() => setFontSize(s => Math.min(30, s+1))} className="w-6 h-6 sm:w-8 sm:h-7 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md sm:rounded-lg text-slate-600 dark:text-slate-300 font-medium transition-colors text-xs sm:text-sm">+</button>
-            </div>
         </div>
-        <div className="h-6 sm:h-8 w-[1px] bg-slate-300 dark:bg-slate-600 shrink-0 hidden sm:block"></div>
-        <div className="hidden sm:flex items-center gap-1.5 bg-white shadow-sm dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-xl p-1">
-             <button onClick={() => setZoom(z => Math.max(40, z - 10))} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-500 transition-colors"><ZoomOut size={16}/></button>
-             <span className="text-xs font-semibold w-11 text-center text-slate-600 dark:text-slate-300">{zoom}%</span>
-             <button onClick={() => setZoom(z => Math.min(200, z + 10))} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-500 transition-colors"><ZoomIn size={16}/></button>
+
+        {/* Font Size - Compact on mobile */}
+        <div className="flex items-center bg-white shadow-sm dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 shrink-0">
+            <button onClick={() => setFontSize(s => Math.max(10, s-1))} className="w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md text-slate-600 dark:text-slate-300 font-medium transition-colors text-xs">-</button>
+            <span className="w-4 sm:w-6 text-center text-[9px] sm:text-xs font-semibold text-slate-700 dark:text-slate-200">{fontSize}</span>
+            <button onClick={() => setFontSize(s => Math.min(30, s+1))} className="w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md text-slate-600 dark:text-slate-300 font-medium transition-colors text-xs">+</button>
         </div>
-        <div className="h-6 sm:h-8 w-[1px] bg-slate-300 dark:bg-slate-600 shrink-0 hidden sm:block"></div>
-        <div className="flex items-center gap-1 sm:gap-2">
-            <button onClick={addRow} className="flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium transition-all shadow-sm border border-transparent hover:border-slate-200 dark:hover:border-slate-600"><Plus size={14} /> <span className="text-xs sm:text-sm">Row</span></button>
-            <button onClick={addCol} className="flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg sm:rounded-xl hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium transition-all shadow-sm border border-transparent hover:border-slate-200 dark:hover:border-slate-600"><Plus size={14} /> <span className="text-xs sm:text-sm">Col</span></button>
+
+        {/* Row/Col - Hidden on small mobile */}
+        <div className="hidden sm:flex items-center gap-0.5">
+            <button onClick={addRow} className="flex items-center gap-0.5 px-1.5 sm:px-2 py-1 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium transition-all text-xs"><Plus size={13} /></button>
+            <button onClick={addCol} className="flex items-center gap-0.5 px-1.5 sm:px-2 py-1 rounded-lg hover:bg-white dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-medium transition-all text-xs"><Plus size={13} /></button>
         </div>
+
+        {/* Flex spacer */}
         <div className="flex-1"></div>
-        <div className="flex items-center gap-1.5 sm:gap-3">
-            <button onClick={toggleImportant} className={`hidden sm:flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl border transition-all duration-300 text-xs sm:text-sm font-semibold shadow-sm ${dark ? "bg-slate-800 border-slate-700 text-slate-300 hover:text-yellow-400 hover:border-slate-600" : "bg-white border-slate-200 text-slate-600 hover:border-rose-300 hover:text-rose-600 hover:shadow-rose-100"}`}>
-                <Star size={16} className={sheet.data[`${selection.start.row}-${selection.start.col}`]?.endsWith('*') ? "fill-rose-500 text-rose-500 transform scale-110 transition-transform" : "transition-transform"} /> <span className="hidden lg:inline">Important</span>
-            </button>
-            <div className="h-6 sm:h-8 w-[1px] bg-slate-300 dark:bg-slate-600 shrink-0 hidden sm:block"></div>
+
+        {/* Image Input - Mobile optimized */}
+        <div className="hidden md:flex items-center gap-2 bg-white dark:bg-slate-900/75 px-2 py-1 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm shrink-0">
+            <div className="text-[8px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Image</div>
+            <div className="flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-0.5">
+                <button onClick={() => setImageInputMode('device')} className={`px-2 py-0.5 rounded-md text-xs font-semibold transition ${imageInputMode === 'device' ? 'bg-indigo-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}`}>Device</button>
+                <button onClick={() => setImageInputMode('url')} className={`px-2 py-0.5 rounded-md text-xs font-semibold transition ${imageInputMode === 'url' ? 'bg-indigo-600 text-white' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'}`}>URL</button>
+            </div>
+            {imageInputMode === 'url' ? (
+                <input value={imageInputUrl} onChange={(e) => setImageInputUrl(e.target.value)} placeholder="Image URL" className="w-32 px-2 py-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-100 outline-none" />
+            ) : (
+                <button onClick={() => handleToolbarUploadClick(selectedRowIndex)} className="px-2 py-1 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700">Upload</button>
+            )}
+        </div>
+
+        {/* Zoom - Hidden on small screens */}
+        <div className="hidden md:flex items-center gap-1 bg-white shadow-sm dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 shrink-0">
+             <button onClick={() => setZoom(z => Math.max(40, z - 10))} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-500 transition-colors"><ZoomOut size={14}/></button>
+             <span className="text-xs font-semibold w-8 text-center text-slate-600 dark:text-slate-300">{zoom}%</span>
+             <button onClick={() => setZoom(z => Math.min(200, z + 10))} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-500 transition-colors"><ZoomIn size={14}/></button>
+        </div>
+
+        {/* Import/Export */}
+        <div className="flex items-center gap-1 shrink-0">
             <input type="file" accept=".xlsx,.xls,.csv,.pdf,.docx" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
-            <button onClick={() => fileInputRef.current.click()} className="p-2 sm:p-2.5 bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-lg sm:rounded-xl border border-slate-200 dark:border-slate-700 transition-all shadow-sm group relative" title="Import File">
-              <Upload size={16} className="group-hover:-translate-y-0.5 transition-transform" />
+            <button onClick={() => fileInputRef.current.click()} className="p-1.5 sm:p-2 bg-white dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 rounded-lg border border-slate-200 dark:border-slate-700 transition-all shadow-sm" title="Import">
+              <Upload size={14} />
             </button>
-            <button onClick={exportCSV} className="p-2 sm:p-2.5 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 rounded-lg sm:rounded-xl border border-slate-200 dark:border-slate-700 transition-all shadow-sm group relative" title="Export CSV">
-              <Download size={16} className="group-hover:translate-y-0.5 transition-transform" />
+            <button onClick={exportCSV} className="p-1.5 sm:p-2 bg-white dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 rounded-lg border border-slate-200 dark:border-slate-700 transition-all shadow-sm" title="Export">
+              <Download size={14} />
             </button>
         </div>
       </div>
 
-      {/* FORMULA BAR */}
-      <div className={`relative z-20 py-1.5 sm:py-2 px-2 sm:px-6 flex items-center gap-2 sm:gap-3 text-sm shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05)] ${dark ? "bg-slate-800/95" : "bg-white"}`}>
-         <div className="w-10 sm:w-12 h-8 sm:h-9 flex items-center justify-center bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-bold text-indigo-600 dark:text-indigo-400 shadow-inner tracking-wider shrink-0">
+      {/* FORMULA BAR - Mobile Optimized */}
+      <div className={`relative z-20 py-1 sm:py-1.5 px-2 sm:px-4 flex items-center gap-1.5 sm:gap-2 text-sm shadow-[0_2px_4px_-1px_rgba(0,0,0,0.05)] transition-colors ${dark ? "bg-slate-800/95" : "bg-white"}`}>
+         <div className="w-9 sm:w-11 h-7 sm:h-8 flex items-center justify-center flex-shrink-0 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-[9px] sm:text-xs font-bold text-indigo-600 dark:text-indigo-400 shadow-inner tracking-widest">
             {getColumnLabel(selection.start.col)}{selection.start.row + 1}
          </div>
-         <div className="h-5 sm:h-6 w-[1px] bg-slate-200 dark:bg-slate-700 shrink-0"></div>
-         <div className="flex flex-1 items-center bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg sm:rounded-xl px-2 sm:px-3 transition-colors focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-400 dark:focus-within:border-indigo-500 shadow-inner">
-           <div className="text-slate-400 font-mono font-bold mr-1.5 sm:mr-2 saturate-50 select-none text-xs sm:text-sm">fx</div>
+         <div className="hidden sm:block h-4 w-px bg-slate-200 dark:bg-slate-700 shrink-0"></div>
+         <div className="flex flex-1 items-center min-w-0 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 sm:px-3 py-1 transition-colors focus-within:ring-2 focus-within:ring-indigo-500/30 focus-within:border-indigo-400 dark:focus-within:border-indigo-500">
+           <div className="hidden sm:block text-slate-400 font-mono font-bold mr-2 saturate-50 select-none text-xs">fx</div>
            <input 
-              className={`w-full h-8 sm:h-10 bg-transparent outline-none text-xs sm:text-sm transition-all text-slate-700 dark:text-slate-200 placeholder-slate-400 font-medium`}
+              className="w-full bg-transparent outline-none text-xs sm:text-sm transition-all text-slate-700 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 font-medium min-w-0"
               value={sheet.data[`${selection.start.row}-${selection.start.col}`] || ""}
               onChange={(e) => updateCell(selection.start.row, selection.start.col, e.target.value)}
               onBlur={() => pushToHistory(sheet)}
-              placeholder="Type value or formula..."
+              placeholder="Type value..."
            />
          </div>
       </div>
 
       {/* GRID */}
-      <div className={`flex-1 w-full overflow-hidden relative flex flex-col ${dark ? "bg-slate-900" : "bg-white"}`}>
+      <div className={`flex-1 w-full overflow-hidden relative flex ${dark ? "bg-slate-900" : "bg-white"}`}>
+        <div className="hidden lg:flex flex-col w-72 min-w-[280px] border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950/95 p-4 gap-4">
+            <div className="flex items-center justify-between gap-2">
+                <div>
+                    <div className="text-xs uppercase tracking-[0.2em] font-semibold text-slate-500 dark:text-slate-400">Image preview</div>
+                    <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Row A{selectedRowIndex}</div>
+                </div>
+                <div className={`text-[10px] px-2 py-1 rounded-full ${selectedRowHasImage ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300'}`}>
+                    {selectedRowHasImage ? 'Loaded' : 'Empty'}
+                </div>
+            </div>
+            <div className="relative h-52 rounded-3xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex items-center justify-center text-slate-500 dark:text-slate-400" onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleImageDrop(e, selectedRowIndex)}>
+                {selectedRowHasImage ? (
+                    <img src={selectedRowImageUrl} alt={`Row ${selectedRowIndex} image`} className="object-cover w-full h-full" />
+                ) : (
+                    <div className="flex flex-col items-center justify-center gap-2 px-4 text-center text-sm">
+                        <div className="text-lg">📷</div>
+                        <div>Drop an image here or upload to row A{selectedRowIndex}.</div>
+                    </div>
+                )}
+            </div>
+            <div className="space-y-2">
+                <button onClick={() => handleToolbarUploadClick(selectedRowIndex)} className="w-full px-4 py-2 rounded-2xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">Upload from device</button>
+                {imageInputMode === 'url' ? (
+                    <button onClick={handleApplyImageUrl} className="w-full px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-100 text-sm font-semibold hover:bg-slate-100 dark:hover:bg-slate-800">Apply URL to A{selectedRowIndex}</button>
+                ) : null}
+                {selectedRowHasImage ? (
+                    <button onClick={() => handleRowImageDelete(selectedRowIndex)} className="w-full px-4 py-2 rounded-2xl border border-rose-200 dark:border-rose-700 bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 text-sm font-semibold hover:bg-rose-100 dark:hover:bg-rose-900">Delete row image</button>
+                ) : null}
+                <div className="text-xs text-slate-500 dark:text-slate-400 leading-5">
+                    Drag image files here or use the top toolbar to choose device upload or URL input.
+                </div>
+            </div>
+        </div>
         <div className="flex-1 relative">
             <AutoSizer>
                 {({ height, width }) => {
-                    const scaledCellWidth = Math.floor(CELL_WIDTH * (zoom / 100));
-                    const scaledCellHeight = Math.floor(CELL_HEIGHT * (zoom / 100));
+                    // Mobile-responsive cell sizing
+                    const isMobile = width < 768;
+                    const isSmallMobile = width < 480;
+                    const responsiveRowHeaderWidth = isMobile ? 40 : 50;
+                    // Adjust cell width based on available space to minimize scrolling on mobile
+                    const responsiveCellWidth = isSmallMobile ? 100 : (isMobile ? 140 : CELL_WIDTH);
+                    const responsiveCellHeight = isMobile ? 32 : CELL_HEIGHT;
+                    
+                    const scaledCellWidth = Math.floor(responsiveCellWidth * (zoom / 100));
+                    const scaledCellHeight = Math.floor(responsiveCellHeight * (zoom / 100));
+                    
                     return (
-                        <div style={{ height, width, display: 'grid', gridTemplateColumns: `${ROW_HEADER_WIDTH}px 1fr`, gridTemplateRows: `${COL_HEADER_HEIGHT}px 1fr` }}>
+                        <div style={{ height, width, display: 'grid', gridTemplateColumns: `${responsiveRowHeaderWidth}px 1fr`, gridTemplateRows: `${COL_HEADER_HEIGHT}px 1fr` }}>
                             <div className={`border-r border-b z-30 ${dark ? "bg-slate-800 border-slate-700" : "bg-slate-100 border-slate-300"}`} />
                             <div className="overflow-hidden">
-                                <List ref={colHeaderRef} layout="horizontal" height={COL_HEADER_HEIGHT} itemCount={sheet.cols} itemSize={scaledCellWidth} width={width - ROW_HEADER_WIDTH} className="no-scrollbar !overflow-hidden" itemData={{ dark, zoom, fontSize }}>
+                                <List ref={colHeaderRef} layout="horizontal" height={COL_HEADER_HEIGHT} itemCount={sheet.cols} itemSize={scaledCellWidth} width={width - responsiveRowHeaderWidth} className="no-scrollbar !overflow-hidden" itemData={{ dark, zoom, fontSize }}>
                                     {ColumnHeader}
                                 </List>
                             </div>
                             <div className="overflow-hidden">
-                                <List ref={rowHeaderRef} layout="vertical" height={height - COL_HEADER_HEIGHT} itemCount={sheet.rows} itemSize={scaledCellHeight} width={ROW_HEADER_WIDTH} className="no-scrollbar !overflow-hidden" itemData={{ dark, zoom, fontSize }}>
+                                <List ref={rowHeaderRef} layout="vertical" height={height - COL_HEADER_HEIGHT} itemCount={sheet.rows} itemSize={scaledCellHeight} width={responsiveRowHeaderWidth} className="no-scrollbar !overflow-hidden" itemData={{ dark, zoom, fontSize }}>
                                     {RowHeader}
                                 </List>
                             </div>
-                            <Grid ref={gridRef} className="outline-none custom-scrollbar" columnCount={sheet.cols} columnWidth={scaledCellWidth} height={height - COL_HEADER_HEIGHT} rowCount={sheet.rows} rowHeight={scaledCellHeight} width={width - ROW_HEADER_WIDTH} itemData={{ sheet, selection, handleMouseDown, handleMouseEnter, updateCell, dark, zoom, fontSize, fontFamily }} onScroll={onGridScroll}>
+                            <Grid ref={gridRef} className="outline-none custom-scrollbar" columnCount={sheet.cols} columnWidth={scaledCellWidth} height={height - COL_HEADER_HEIGHT} rowCount={sheet.rows} rowHeight={scaledCellHeight} width={width - responsiveRowHeaderWidth} itemData={{ sheet, selection, handleMouseDown, handleMouseEnter, updateCell, dark, zoom, fontSize, fontFamily, rowImageInputRef, setUploadRowTarget, handleRowImageDelete }} onScroll={onGridScroll}>
                                 {Cell}
                             </Grid>
                         </div>
@@ -850,15 +1111,15 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
         </div>
       </div>
 
-      {/* FOOTER */}
-      <div className={`h-7 sm:h-8 border-t flex items-center justify-between px-2 sm:px-6 text-[9px] sm:text-[11px] font-bold uppercase select-none tracking-wider z-20 ${dark ? "bg-slate-900 border-slate-800 text-slate-400" : "bg-white border-slate-200 text-slate-500 shadow-[0_-2px_10px_rgba(0,0,0,0.02)]"}`}>
-         <div className="flex gap-3 sm:gap-6 items-center">
-            <span className="flex items-center gap-1"><div className="w-1.5 h-1.5 bg-slate-300 dark:bg-slate-600 rounded-full"></div>{sheet.rows}×{sheet.cols}</span>
+      {/* FOOTER - Mobile Optimized */}
+      <div className={`h-7 sm:h-8 border-t flex items-center justify-between px-2 sm:px-6 text-[8px] sm:text-[11px] font-bold uppercase select-none tracking-wider z-20 ${dark ? "bg-slate-900 border-slate-800 text-slate-400" : "bg-white border-slate-200 text-slate-500 shadow-[0_-2px_10px_rgba(0,0,0,0.02)]"}`}>
+         <div className="flex gap-2 sm:gap-6 items-center min-w-0 overflow-hidden">
+            <span className="flex items-center gap-1 shrink-0"><div className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-slate-300 dark:bg-slate-600 rounded-full"></div><span className="hidden sm:inline">{sheet.rows}×{sheet.cols}</span><span className="sm:hidden">{sheet.rows}R</span></span>
             <span className="hidden sm:flex items-center gap-1.5"><div className="w-1.5 h-1.5 bg-indigo-400 rounded-full"></div>Selection: {getColumnLabel(selection.start.col)}{selection.start.row + 1}</span>
          </div>
-         <div className="hidden sm:flex gap-2.5 items-center bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">
-            <span className={`w-2 h-2 rounded-full ${saving ? "bg-yellow-400 animate-pulse shadow-[0_0_8px_rgba(250,204,21,0.6)]" : "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]"}`}></span>
-            <span className={saving ? "text-yellow-600 dark:text-yellow-400" : "text-emerald-600 dark:text-emerald-400"}>{saving ? "Saving..." : "Saved"}</span>
+         <div className="flex gap-1.5 sm:gap-2.5 items-center shrink-0 bg-slate-100 dark:bg-slate-800 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full">
+            <span className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${saving ? "bg-yellow-400 animate-pulse shadow-[0_0_8px_rgba(250,204,21,0.6)]" : "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]"}`}></span>
+            <span className={`text-[7px] sm:text-xs ${saving ? "text-yellow-600 dark:text-yellow-400" : "text-emerald-600 dark:text-emerald-400"}`}><span className="hidden sm:inline">{saving ? "Saving..." : "Saved"}</span><span className="sm:hidden">{saving ? "..." : "✓"}</span></span>
          </div>
       </div>
     </div>
