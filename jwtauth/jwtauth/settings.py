@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 from datetime import timedelta
+from urllib.parse import urlparse
 import os
 from dotenv import load_dotenv
 import dj_database_url
@@ -38,9 +39,13 @@ SECRET_KEY = os.environ.get('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
+
 MAIN_DOMAIN = os.environ.get('MAIN_DOMAIN', 'newsmartagent.com')
 N8N_DOMAIN = os.environ.get('N8N_DOMAIN', 'n8n.newsmartagent.com')
 PROJECT_NAME = os.environ.get('PROJECT_NAME', 'newsmartagent')
+REDIS_URL = os.environ.get('REDIS_URL', f"redis://{os.environ.get('REDIS_HOST', f'{PROJECT_NAME}-redis')}:{os.environ.get('REDIS_PORT', 6379)}/0")
+REDIS_HOST = os.environ.get('REDIS_HOST', f'{PROJECT_NAME}-redis')
+REDIS_PORT = int(os.environ.get('REDIS_PORT', 6379))
 
 # N8N webhook URLs for invoice delivery
 N8N_WHATSAPP_WEBHOOK_URL = os.environ.get('N8N_WHATSAPP_WEBHOOK_URL', '')
@@ -189,11 +194,19 @@ WSGI_APPLICATION = 'jwtauth.wsgi.application'
 ASGI_APPLICATION = 'jwtauth.asgi.application'
 
 
+parsed_redis_url = urlparse(REDIS_URL)
+redis_host = parsed_redis_url.hostname or REDIS_HOST
+redis_port = parsed_redis_url.port or REDIS_PORT
+
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [(os.environ.get('REDIS_HOST', f'{PROJECT_NAME}-redis'), 6379)],
+            "hosts": [(redis_host, redis_port)],
+            "socket_timeout": 15,
+            "retry_on_timeout": True,
+            "health_check_interval": 10,
+            "client_class": "redis.asyncio.Redis",
         },
     },
 }

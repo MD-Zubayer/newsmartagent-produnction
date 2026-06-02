@@ -9,7 +9,7 @@ import requests
 from io import BytesIO
 from settings.models import GlobalSettings
 import base64
-import mimetypes
+import imghdr
 
 
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
@@ -477,6 +477,65 @@ def get_image_caption(image_url, provider='gemini'):
         print(f"[DEBUG] Using OpenAI provider for caption generation")
         return get_openai_image_caption(image_url)
     print(f"[DEBUG] Using Gemini provider for caption generation (default or explicit)")
+    return get_gemini_image_caption(image_url)
+
+import re
+from embedding.models import DocumentKnowledge
+def _get_image_bytes_from_source(image_url: str):
+    """Accepts a data URL or HTTP(S) URL, returns bytes and mime if possible."""
+    if not image_url or not isinstance(image_url, str):
+        return None, None
+
+    if image_url.startswith('data:'):
+        try:
+            header, b64 = image_url.split(',', 1)
+            mime = header.split(';')[0].replace('data:', '')
+            data = base64.b64decode(b64)
+            return data, mime
+        except Exception:
+            return None, None
+
+    # normal URL
+    try:
+        r = requests.get(image_url, timeout=10)
+        r.raise_for_status()
+        data = r.content
+        mime = r.headers.get('content-type', '').split(';')[0].strip() or None
+        return data, mime
+    except Exception:
+        return None, None
+
+
+def get_gemini_image_caption(image_url: str):
+    """Simple image caption: detects format and returns brief description."""
+    image_data, mime = _get_image_bytes_from_source(image_url)
+    if not image_data:
+        logger.debug(f"get_gemini_image_caption: no image data from {image_url}")
+        return None
+
+    detected_mime, method = detect_image_format_from_bytes(image_data)
+    mime = mime or detected_mime
+
+    # Try PIL for size/mode
+    info = None
+    if Image:
+        try:
+            img = Image.open(BytesIO(image_data))
+            info = f"{img.format}, {img.width}x{img.height}, {img.mode}"
+        except Exception:
+            pass
+
+    if not info:
+        info = f"{mime} (unknown size)"
+
+    caption = f"Image ({info})"
+    logger.debug(f"get_gemini_image_caption: {caption} via {method}")
+    return caption
+
+
+def get_openai_image_caption(image_url: str):
+    """Alias to Gemini caption for now; accepts data URLs."""
+    # Reuse the simple caption logic to ensure media flow works
     return get_gemini_image_caption(image_url)
 
 import re
