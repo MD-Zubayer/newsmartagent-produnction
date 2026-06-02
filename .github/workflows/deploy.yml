@@ -70,15 +70,24 @@ jobs:
             echo "✅ HOST_CONFIG_PATH set in .env"
           fi
 
+      - name: "🧱 Cache Docker buildx layers"
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: docker-buildx-${{ runner.os }}-${{ hashFiles('jwtauth/Dockerfile', 'jwtauth/requirements.txt', 'nextjs/Dockerfile') }}
+          restore-keys: |
+            docker-buildx-${{ runner.os }}-
+
       - name: "🏗️ Build New Image"
         run: |
           echo "🔨 Setting up Docker Buildx..."
-          # ডকারের নতুন বিল্ড ইঞ্জিন অ্যাক্টিভেট করা যা নেটওয়ার্ক এরর হ্যান্ডেল করতে পারে
-          docker buildx create --use || true
+          DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker buildx create --use || true
 
-          echo "🔨 Building new images with local cache fallback..."
-          # --pull এর বদলে আমরা লোকাল ক্যাশ প্রাধান্য দিচ্ছি যেন টোকেন/নেটওয়ার্ক এরর এড়ানো যায়
-          docker compose build --build-arg BUILDKIT_INLINE_CACHE=1
+          echo "🔨 Building new images with cached layers..."
+          DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker compose build \
+            --build-arg BUILDKIT_INLINE_CACHE=1 \
+            --cache-from=type=local,src=/tmp/.buildx-cache \
+            --cache-to=type=local,dest=/tmp/.buildx-cache,mode=max
           
       - name: "🚢 Zero Downtime Deployment & Rollback"
         run: |
