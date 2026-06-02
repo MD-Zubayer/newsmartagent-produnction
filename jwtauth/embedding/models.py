@@ -6,19 +6,36 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 class SpreadsheetKnowledge(models.Model):
+    IMAGE_SOURCE_CHOICES = [
+        ('manual', 'Manual'),
+        ('auto_search', 'Auto Search'),
+        ('playwright', 'Playwright'),
+    ]
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='knowledge_base')
     row_id = models.CharField(max_length=50)
-    content = models.TextField()
+    content = models.TextField(blank=True, default='')
     column_hashes = models.JSONField(default=dict)
     embedding = VectorField(dimensions=768, null=True, blank=True)
+    image_url = models.TextField(blank=True, null=True)
+    image_caption = models.TextField(blank=True, default='')
+    image_embedding = VectorField(dimensions=768, null=True, blank=True)
+    image_updated_at = models.DateTimeField(blank=True, null=True)
+    image_source = models.CharField(max_length=20, choices=IMAGE_SOURCE_CHOICES, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
-
 
     class Meta:
         indexes = [
             HnswIndex(
                 name='vector_hnsw_idx',
                 fields=['embedding'],
+                m=16,
+                ef_construction=64,
+                opclasses=['vector_cosine_ops']
+            ),
+            HnswIndex(
+                name='image_vector_hnsw_idx',
+                fields=['image_embedding'],
                 m=16,
                 ef_construction=64,
                 opclasses=['vector_cosine_ops']

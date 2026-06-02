@@ -35,13 +35,25 @@ def generate_openai_reply(system_promt, messages, current_message, agent_config,
             "messages": formatted_messages,
         }
 
+        system_lower = system_promt.lower() if isinstance(system_promt, str) else ''
+        force_json_output = (
+            'return only a valid json object' in system_lower
+            or 'your entire output must start with' in system_lower
+            or 'your entire output must start with "{" and end with "}"' in system_lower
+            or 'ensure json syntax is perfect' in system_lower
+            or 'do not include any conversational text' in system_lower
+        )
+
+        if force_json_output:
+            payload["response_format"] = {"type": "json_object"}
+            logger.info("OpenAI JSON enforcement enabled: response_format=json_object")
+
         model_lower = agent_config.ai_model.lower()
         new_models = ["gpt-5", "o1", "o3", "gpt-4.1"]
         is_new_model = any(m_name in model_lower for m_name in new_models)
         
-        # নতুন মডেল এবং 'mini', 'nano' মডেলের জন্য টেম্পারেচার ১ রাখতে হবে
+        # নতুন মডেল এবং 'mini', 'nano' মডেলের জন্য টেমাপারেচার ১ রাখতে হবে
         force_temp_one = any(x in model_lower for x in ["mini", "nano", "o1", "o3"])
-
         # ১. Temperature সেট করা
         ai_settings = agent_config.get_settings
         if force_temp_one:

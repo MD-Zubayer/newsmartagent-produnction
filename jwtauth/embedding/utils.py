@@ -1,16 +1,15 @@
 from google import genai
+from google.genai import types
 from django.conf import settings
+from django.utils import timezone
 import hashlib
 from embedding.models import SpreadsheetKnowledge
 import logging
-import base64
 import requests
 from io import BytesIO
+from settings.models import GlobalSettings
+import base64
 import imghdr
-try:
-    from PIL import Image
-except Exception:
-    Image = None
 
 
 client = genai.Client(api_key=settings.GEMINI_API_KEY)
@@ -22,7 +21,7 @@ logger = logging.getLogger('aiAgent')
 
 def get_gemini_embedding(text):
 
-    print(f"\n--- [DEBUG] Starting Embedding Process ---")
+    print(f"\n--- [DEBUG] Starting Text Embedding Process ---")
     print(f"[DEBUG] Input Text: {text[:100]}...")
 
     if not text or not isinstance(text, str):
@@ -31,36 +30,65 @@ def get_gemini_embedding(text):
 
     try:
         response = client.models.embed_content(
-            model='models/gemini-embedding-001', 
-            contents=text,
+            model='models/gemini-embedding-2',
+            contents=[text],
             config={
                 'output_dimensionality': 768
             }
         )
 
         embedding_values = response.embeddings[0].values
-        print(f"[DEBUG] Success! Vector Length: {len(embedding_values)}")
+        print(f"[DEBUG] Success! Text Vector Length: {len(embedding_values)}")
         print(f"[DEBUG] First 5 values: {embedding_values[:5]}")
-        print(f"--- [DEBUG] Embedding Process Finished ---\n")
-        return embedding_values
+        print(f"--- [DEBUG] Text Embedding Process Finished ---\n")
+        return list(embedding_values)
     except Exception as e:
-        print(f"Embedding API Error: {e}")
+        print(f"Text Embedding API Error: {e}")
         return None
-    
 
 
-import hashlib
+def get_gemini_image_embedding(image_url):
+    print(f"\n--- [DEBUG] Starting Image Embedding Process ---")
+    print(f"[DEBUG] Image URL type: {type(image_url)}, length: {len(image_url) if image_url else 0}")
+    print(f"[DEBUG] URL starts with: {image_url[:80] if image_url else 'None'}")
+
+    if not image_url or not isinstance(image_url, str):
+        print(f"❌ [DEBUG] Error: Invalid image URL.")
+        return None
+
+    try:
+        # Check if it's a data URL
+        if image_url.startswith('data:'):
+            print(f"✅ [DEBUG] Detected data URL format.")
+        
+        print(f"[DEBUG] Calling Gemini embedding API...")
+        response = client.models.embed_content(
+            model='models/gemini-embedding-2',
+            contents=[image_url],
+            config={
+                'output_dimensionality': 768
+            }
+        )
+
+        embedding_values = response.embeddings[0].values
+        print(f"✅ [DEBUG] Image Embedding Success! Vector Length: {len(embedding_values)}")
+        print(f"--- [DEBUG] Image Embedding Process Finished ---\n")
+        return list(embedding_values)
+    except Exception as e:
+        print(f"❌ Image Embedding API Error: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 
 def sync_spreadsheet_to_knowledge(user, grid_data, sheet_id):
-    
     # ১. হেডারগুলো নিয়ে একটি সর্টেড ডিকশনারি তৈরি (অর্ডার ফিক্সড করার জন্য)
     header_keys = sorted([k for k in grid_data.keys() if k.startswith('0-')])
     headers = {
-        k.split('-')[1]: str(grid_data[k]).strip() 
+        k.split('-')[1]: str(grid_data[k]).strip()
         for k in header_keys
     }
-    
+
     # হেডার হ্যাশ (সবসময় একই অর্ডারে স্ট্রিং তৈরি হবে)
     header_content = "|".join([f"{c}:{headers[c]}" for c in sorted(headers.keys())])
     header_hash = hashlib.md5(header_content.encode()).hexdigest()
@@ -68,117 +96,391 @@ def sync_spreadsheet_to_knowledge(user, grid_data, sheet_id):
     # ২. ডাটা রো প্রসেস করা
     rows = {}
     current_row_ids = []
-    
-    
+
     for k, v in grid_data.items():
         if '-' not in k or k.startswith('0-'): continue
         r_idx, c_idx = k.split('-')
-        
-        # ইউনিক রো আইডি (যেমন: sheet_1_row_1)
+
         row_unique_id = f"sheet_{sheet_id}_row_{r_idx}"
-        
-        if r_idx not in rows: 
+        if r_idx not in rows:
             rows[r_idx] = {}
             current_row_ids.append(row_unique_id)
-            
+
         rows[r_idx][c_idx] = str(v).strip() if v is not None else ""
-        
+
     SpreadsheetKnowledge.objects.filter(
-        user=user, 
-        row_id__startswith=f"sheet_{sheet_id}_", 
+        user=user,
+        row_id__startswith=f"sheet_{sheet_id}_",
     ).exclude(row_id__in=current_row_ids).delete()
 
     updated_count = 0
 
     for r_idx, cols in rows.items():
-        # ৪. ডাটা স্ট্রিং এবং কম্বাইন্ড হ্যাশ
-        sorted_cols = sorted(cols.keys())
-        data_content = "|".join([f"{c}:{cols[c]}" for c in sorted_cols])
-        combined_hash = hashlib.md5((data_content + header_hash).encode()).hexdigest()
-        
         row_unique_id = f"sheet_{sheet_id}_row_{r_idx}"
+        image_url = cols.get('0', '').strip()
+
+        # সাধারণ টেক্সট কন্টেন্ট গঠনের জন্য A কলাম বাদ
+        text_cols = {k: v for k, v in cols.items() if k != '0'}
+        sorted_text_cols = sorted(text_cols.keys())
+        text_content = "|".join([f"{c}:{text_cols[c]}" for c in sorted_text_cols])
+        combined_hash = hashlib.md5((text_content + header_hash).encode()).hexdigest()
+        image_hash = hashlib.md5(image_url.encode()).hexdigest() if image_url else ''
+
         obj, created = SpreadsheetKnowledge.objects.get_or_create(
-            user=user, 
+            user=user,
             row_id=row_unique_id,
             defaults={'column_hashes': {}, 'content': ''}
         )
-        
-        # ৪. ডাটাবেসের হ্যাশ চেক
-        old_hash = obj.column_hashes.get('combined_hash')
 
-        # ৫. শুধু পরিবর্তন হলেই আপডেট হবে (Saving API Costs)
-        if created or old_hash != combined_hash:
-            # 🔥 পরিবর্তন এখানে: শুধু যেসব কলামে ডাটা আছে (Empty নয়) সেগুলো ফিল্টার করা
+        old_hash = obj.column_hashes.get('combined_hash')
+        old_image_url = obj.image_url or ''
+        old_image_hash = obj.column_hashes.get('image_hash', '')
+
+        should_update_text = created or old_hash != combined_hash
+        should_update_image = image_url and (created or old_image_url != image_url or obj.image_embedding is None)
+
+        if not text_content and not image_url:
+            obj.delete()
+            continue
+
+        if should_update_text:
             row_text_parts = []
-            for c in sorted_cols:
-                col_val = cols[c].strip()
-                if col_val and col_val.lower() != 'none': # খালি বা 'none' হলে বাদ
+            for c in sorted_text_cols:
+                col_val = text_cols[c].strip()
+                if col_val and col_val.lower() != 'none':
                     header_name = headers.get(c, f'col_{c}')
                     row_text_parts.append(f"{header_name}: {col_val}")
-            
-            # সব পার্টস জোড়া দিয়ে ফাইনাল টেক্সট
+
             row_text = ", ".join(row_text_parts)
-            
-            # যদি কন্টেন্ট থাকে তবেই সেভ হবে, নাহলে ডিলিট/স্কিপ
-            if row_text.strip():
-                try:
-                    vector = get_gemini_embedding(row_text)
-                    if vector:
-                        obj.content = row_text
-                        obj.column_hashes = {'combined_hash': combined_hash}
-                        obj.embedding = vector
-                        obj.save()
-                        updated_count += 1
-                except Exception as e:
-                    print(f"Error: {e}")
+            obj.content = row_text
+            if row_text:
+                vector = get_gemini_embedding(row_text)
+                if vector:
+                    obj.embedding = vector
             else:
-                # যদি রো-তে কোনো কাজের তথ্যই না থাকে তবে ডাটাবেস থেকে মুছে ফেলুন
-                obj.delete()
-        else:
-            print(f"[DEBUG] Row {r_idx} No change. Skipping.")
+                obj.embedding = None
+
+        if should_update_image:
+            image_vector = get_gemini_image_embedding(image_url)
+            # Use provider from GlobalSettings
+            global_settings = GlobalSettings.get_settings()
+            selected_provider = getattr(global_settings, 'image_caption_provider', 'gemini') or 'gemini'
+            image_caption = get_image_caption(image_url, provider=selected_provider)
+            obj.image_url = image_url
+            obj.image_caption = image_caption or ''
+            if image_vector:
+                obj.image_embedding = image_vector
+                obj.image_source = 'manual'
+                obj.image_updated_at = timezone.now()
+        elif image_url and obj.image_url != image_url:
+            obj.image_url = image_url
+        elif not image_url and obj.image_url:
+            obj.image_url = ''
+            obj.image_caption = ''
+            obj.image_embedding = None
+            obj.image_source = None
+            obj.image_updated_at = None
+
+        obj.column_hashes = {
+            'combined_hash': combined_hash,
+            'image_hash': image_hash
+        }
+
+        obj.save()
+        updated_count += 1
 
     return updated_count
 
 
-def detect_image_format_from_bytes(image_data: bytes):
-    """Try to detect image MIME type from bytes using PIL -> imghdr -> magic bytes."""
-    if not image_data:
-        return 'application/octet-stream', 'none'
-
-    # 1) PIL
-    if Image:
-        try:
-            img = Image.open(BytesIO(image_data))
-            fmt = img.format
-            if fmt:
-                mime = f'image/{fmt.lower()}'
-                return mime, 'PIL'
-        except Exception:
-            pass
-
-    # 2) imghdr
+def detect_image_format_from_bytes(image_data):
+    """
+    Detect image format by examining magic bytes and using PIL/imghdr.
+    Returns: ('image/jpeg'|'image/png'|'image/webp'|'image/gif', detection_method)
+    """
+    if not image_data or len(image_data) < 4:
+        print(f"[DEBUG] Image data too small or empty, defaulting to image/jpeg")
+        return 'image/jpeg', 'default'
+    
+    # Try PIL/Pillow first (most robust)
     try:
-        kind = imghdr.what(None, h=image_data)
-        if kind:
-            return f'image/{kind}', 'imghdr'
-    except Exception:
-        pass
+        from PIL import Image
+        from io import BytesIO
+        img = Image.open(BytesIO(image_data))
+        img_format = img.format.lower() if img.format else None
+        if img_format:
+            mime_map = {
+                'jpeg': 'image/jpeg',
+                'jpg': 'image/jpeg',
+                'png': 'image/png',
+                'gif': 'image/gif',
+                'webp': 'image/webp',
+                'bmp': 'image/bmp',
+            }
+            mime = mime_map.get(img_format, 'image/jpeg')
+            print(f"[DEBUG] PIL detected format: {img_format} -> {mime}")
+            return mime, 'pil_detection'
+    except Exception as e:
+        print(f"[DEBUG] PIL detection skipped or failed: {type(e).__name__}")
+    
+    # Try imghdr as secondary
+    try:
+        import imghdr
+        detected_type = imghdr.what(None, h=image_data)
+        if detected_type:
+            mime_map = {
+                'jpeg': 'image/jpeg',
+                'png': 'image/png',
+                'gif': 'image/gif',
+                'bmp': 'image/bmp',
+                'webp': 'image/webp',
+            }
+            mime = mime_map.get(detected_type, 'image/jpeg')
+            print(f"[DEBUG] imghdr detected format: {detected_type} -> {mime}")
+            return mime, 'imghdr_detection'
+    except Exception as e:
+        print(f"[DEBUG] imghdr detection skipped or failed")
+    
+    # Manual magic byte detection as fallback
+    if image_data[:3] == b'\xff\xd8\xff':
+        print(f"[DEBUG] Detected JPEG from magic bytes")
+        return 'image/jpeg', 'magic_bytes_jpeg'
+    elif image_data[:8] == b'\x89PNG\r\n\x1a\n':
+        print(f"[DEBUG] Detected PNG from magic bytes")
+        return 'image/png', 'magic_bytes_png'
+    elif image_data[:4] == b'RIFF' and len(image_data) >= 12 and image_data[8:12] == b'WEBP':
+        print(f"[DEBUG] Detected WebP from magic bytes")
+        return 'image/webp', 'magic_bytes_webp'
+    elif image_data[:6] in [b'GIF87a', b'GIF89a']:
+        print(f"[DEBUG] Detected GIF from magic bytes")
+        return 'image/gif', 'magic_bytes_gif'
+    
+    # Last resort: log first bytes for debugging, default to JPEG
+    first_bytes_hex = image_data[:32].hex()
+    print(f"[DEBUG] No format detected. First 32 bytes (hex): {first_bytes_hex}")
+    print(f"[DEBUG] Image size: {len(image_data)} bytes")
+    return 'image/jpeg', 'fallback_default'
 
-    # 3) magic bytes
-    hb = image_data[:12]
-    if hb.startswith(b'\xff\xd8'):
-        return 'image/jpeg', 'magic'
-    if hb.startswith(b'\x89PNG'):
-        return 'image/png', 'magic'
-    if hb[0:4] == b'RIFF' and hb[8:12] == b'WEBP':
-        return 'image/webp', 'magic'
-    if hb.startswith(b'GIF8'):
-        return 'image/gif', 'magic'
 
-    # fallback
-    return 'application/octet-stream', 'fallback'
+def get_gemini_image_caption(image_url):
+    print(f"\n--- [DEBUG] Starting Image Caption Process ---")
+    print(f"[DEBUG] Image URL type: {type(image_url)}, length: {len(image_url) if image_url else 0}")
+    print(f"[DEBUG] URL starts with: {image_url[:80] if image_url else 'None'}")
+
+    if not image_url or not isinstance(image_url, str):
+        print(f"❌ [DEBUG] Error: Invalid image URL for caption generation.")
+        return None
+
+    try:
+        # ১. ইমেজ ডাউনলোড করা (বা ডেটা URL থেকে এক্সট্র্যাক্ট করা)
+        image_data = None
+        mime_type = None
+        
+        if image_url.startswith('data:'):
+            # Data URL from Baileys decrypted media
+            print(f"✅ [DEBUG] Detected data URL (Baileys decrypted media). Extracting base64...")
+            try:
+                # Parse: data:image/jpeg;base64,/9j/4AAQSkZJRgABA...
+                header, b64_data = image_url.split(',', 1)
+                mime_type = header.split(';')[0].replace('data:', '')
+                image_data = base64.b64decode(b64_data)
+                print(f"✅ [DEBUG] Extracted from data URL. MIME: {mime_type}, Size: {len(image_data)} bytes")
+            except Exception as e:
+                print(f"❌ [DEBUG] Failed to parse data URL: {e}")
+                return None
+        else:
+            # Regular URL - download normally
+            print(f"[DEBUG] Downloading image from URL...")
+            img_response = requests.get(image_url, timeout=10)
+            img_response.raise_for_status()
+            
+            image_data = BytesIO(img_response.content).read()
+            print(f"[DEBUG] Image downloaded successfully. Size: {len(image_data)} bytes")
+
+            # Get MIME type from response header
+            mime_type = img_response.headers.get('content-type', '').split(';')[0].strip()
+            print(f"[DEBUG] MIME type from response header: {mime_type}")
+        
+        # If MIME type is missing or generic, detect from magic bytes
+        if not mime_type or mime_type == 'application/octet-stream' or not mime_type.startswith('image/'):
+            detected_mime, detection_method = detect_image_format_from_bytes(image_data)
+            print(f"[DEBUG] MIME type detected from {detection_method}: {detected_mime}")
+            mime_type = detected_mime
+        else:
+            print(f"[DEBUG] Using MIME type: {mime_type}")
+
+        # ৪. প্রম্পট তৈরি করা (SMART structured prompt for DB-ready caption)
+        prompt = (
+            "Analyze this product image and extract key details for a search database. "
+            "Format the response in a short descriptive sentence including: "
+            "1. Product Category (e.g., Electronics, Clothing, Grocery), "
+            "2. Name or Title, "
+            "3. Brand/Model (if visible, otherwise skip), "
+            "4. Primary Color, "
+            "5. One unique visual identifier (e.g., texture, shape, pattern, or logo) "
+            "that makes it distinct from similar items."
+        )
+
+        # ৫. মডেল কল করা (ইমেজ বাইটস সহ - proper SDK types)
+        print(f"[DEBUG] Calling Gemini Vision API with image data...")
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=[
+                prompt,
+                types.Part.from_bytes(data=image_data, mime_type=mime_type)
+            ],
+            config=types.GenerateContentConfig(
+                temperature=0.4,
+                max_output_tokens=100
+            )
+        )
+
+        print(f"[DEBUG] API Response object: {response}")
+        print(f"[DEBUG] Response type: {type(response)}")
+        
+        caption = response.text.strip() if getattr(response, 'text', None) else None
+        if caption:
+            print(f"✅ [DEBUG] Generated Image Caption: {caption[:120]}")
+            print(f"--- [DEBUG] Image Caption Process Finished ---\n")
+            return caption
+        else:
+            print(f"❌ [DEBUG] No caption generated (empty response). Response text attr: {getattr(response, 'text', 'NO TEXT ATTR')}")
+            return None
+            
+    except requests.exceptions.RequestException as e:
+        import traceback
+        print(f"❌ Image Download Error: {e}")
+        print(f"Traceback:\n{traceback.format_exc()}")
+        return None
+    except Exception as e:
+        import traceback
+        print(f"❌ Image Caption API Error: {e}")
+        print(f"Traceback:\n{traceback.format_exc()}")
+        return None
 
 
+def get_openai_image_caption(image_url):
+    print(f"--- [DEBUG] Starting OpenAI Image Caption Process ---")
+    print(f"[DEBUG] Image URL: {image_url}")
+
+    if not image_url or not isinstance(image_url, str):
+        print(f"[DEBUG] Error: Invalid image URL for OpenAI caption generation.")
+        return None
+
+    try:
+        from openai import OpenAI
+    except ImportError as e:
+        print(f"OpenAI SDK not installed: {e}")
+        return None
+
+    try:
+        # ১. ইমেজ ডাউনলোড করা (বা ডেটা URL থেকে এক্সট্র্যাক্ট করা)
+        image_data = None
+        mime_type = None
+        data_url = None
+        
+        if image_url.startswith('data:'):
+            # Data URL from Baileys decrypted media
+            print(f"[DEBUG] Detected data URL (Baileys decrypted media). Using directly...")
+            data_url = image_url
+            # Extract MIME type for logging
+            try:
+                mime_type = image_url.split(';')[0].replace('data:', '')
+                print(f"[DEBUG] MIME type from data URL: {mime_type}")
+            except:
+                pass
+        else:
+            # Regular URL - download normally
+            print(f"[DEBUG] Downloading image from URL...")
+            img_response = requests.get(image_url, timeout=10)
+            img_response.raise_for_status()
+            
+            # २. ইমেজ ডেটা বাইটস হিসেবে লোড করা
+            image_data = BytesIO(img_response.content).read()
+            print(f"[DEBUG] Image downloaded successfully. Size: {len(image_data)} bytes")
+
+            # 3. MIME type detection: Try response header first, then magic bytes (most reliable)
+            mime_type = img_response.headers.get('content-type', '').split(';')[0].strip()
+            print(f"[DEBUG] MIME type from response header: {mime_type}")
+            
+            # If header is missing or generic, detect from magic bytes (most reliable)
+            if not mime_type or mime_type == 'application/octet-stream' or not mime_type.startswith('image/'):
+                mime_type, detection_method = detect_image_format_from_bytes(image_data)
+                print(f"[DEBUG] MIME type detected from {detection_method}: {mime_type}")
+            else:
+                print(f"[DEBUG] Using MIME type from header: {mime_type}")
+
+            # ४. बाइट्स कو base64 में कनवर्ट करा
+            image_base64 = base64.b64encode(image_data).decode('utf-8')
+            print(f"[DEBUG] Converted image to base64. Length: {len(image_base64)} characters")
+
+            # ५. डेटा URL बनाना (base64 एन्कोडेड)
+            data_url = f"data:{mime_type};base64,{image_base64}"
+            print(f"[DEBUG] Created data URL for OpenAI")
+
+        # ६. प्रॉम्प्ट बनाना (SMART structured prompt for DB-ready caption)
+        prompt = (
+            "Analyze this product image and extract key details for a search database. "
+            "Format the response in a short descriptive sentence including: "
+            "1. Product Category (e.g., Electronics, Clothing, Grocery), "
+            "2. Name or Title, "
+            "3. Brand/Model (if visible, otherwise skip), "
+            "4. Primary Color, "
+            "5. One unique visual identifier (e.g., texture, shape, pattern, or logo) "
+            "that makes it distinct from similar items."
+        )
+
+        # ७. OpenAI API कॉल करा (डेटा URL सह)
+        client = OpenAI(api_key=settings.OPENAI_API_KEY)
+        print(f"[DEBUG] Calling OpenAI Vision API with image data...")
+
+        response = client.chat.completions.create(
+            model='gpt-4o',
+            messages=[
+                {
+                    'role': 'user',
+                    'content': [
+                        {'type': 'text', 'text': prompt},
+                        {'type': 'image_url', 'image_url': {'url': data_url}}
+                    ]
+                }
+            ],
+            temperature=0.3,
+            max_tokens=100,
+        )
+
+        caption = response.choices[0].message.content.strip() if response.choices else None
+
+        if caption:
+            print(f"✅ [DEBUG] Generated Image Caption: {caption[:120]}")
+            print(f"--- [DEBUG] Image Caption Process Finished ---\n")
+            return caption
+        else:
+            print(f"❌ [DEBUG] No caption generated (empty response). Choices: {response.choices}")
+            return None
+            
+    except requests.exceptions.RequestException as e:
+        import traceback
+        print(f"❌ Image Download Error: {e}")
+        print(f"Traceback:\n{traceback.format_exc()}")
+        return None
+    except Exception as e:
+        import traceback
+        print(f"❌ Image Caption API Error: {e}")
+        print(f"Traceback:\n{traceback.format_exc()}")
+        return None
+
+
+
+def get_image_caption(image_url, provider='gemini'):
+    print(f"\n[DEBUG] get_image_caption() called with provider='{provider}'")
+    if provider and str(provider).lower() == 'openai':
+        print(f"[DEBUG] Using OpenAI provider for caption generation")
+        return get_openai_image_caption(image_url)
+    print(f"[DEBUG] Using Gemini provider for caption generation (default or explicit)")
+    return get_gemini_image_caption(image_url)
+
+import re
+from embedding.models import DocumentKnowledge
 def _get_image_bytes_from_source(image_url: str):
     """Accepts a data URL or HTTP(S) URL, returns bytes and mime if possible."""
     if not image_url or not isinstance(image_url, str):

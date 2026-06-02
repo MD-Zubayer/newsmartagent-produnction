@@ -89,14 +89,45 @@ def _default_direct_order_instructions():
     )
 
 
-def perform_rag_search(agent_config, text, post_context_text, order_instruction, existing_vector=None):
+def perform_rag_search(agent_config, text, post_context_text, order_instruction, existing_vector=None, vector_type='text', image_caption=None):
     sheet_context = ""
     extra_instruction = ""
     query_vector = existing_vector  # Initialize query_vector for later reuse
     rag_query = f"{post_context_text} {text}" if post_context_text else text
     
+    def _confidence_label(distance):
+        if distance is None:
+            return "Unknown"
+        score = max(0, min(100, int((1.0 - distance) * 100)))
+        if score >= 85:
+            return f"{score}% (Very High)"
+        if score >= 65:
+            return f"{score}% (High)"
+        if score >= 45:
+            return f"{score}% (Moderate)"
+        return f"{score}% (Low)"
+
+    def _blend_vectors(vec_a, vec_b, weight_a=0.6, weight_b=0.4):
+        if not vec_a or not vec_b or len(vec_a) != len(vec_b):
+            return vec_a
+        return [weight_a * a + weight_b * b for a, b in zip(vec_a, vec_b)]
+
     try:
-        if not query_vector:
+        caption_vector = None
+        if vector_type == 'image' and image_caption:
+            caption_vector = get_gemini_embedding(image_caption)
+            if caption_vector:
+                logger.info("📝 Generated caption vector for image caption hybrid search.")
+
+        if query_vector and vector_type == 'image' and caption_vector:
+            blended_vector = _blend_vectors(query_vector, caption_vector, weight_a=0.6, weight_b=0.4)
+            if blended_vector:
+                logger.info("🧪 Blended image and caption vectors for hybrid image search.")
+                query_vector = blended_vector
+
+        if query_vector and vector_type == 'image':
+            logger.info("✅ perform_rag_search received image vector; skipping text embedding generation.")
+        elif not query_vector:
             # OPTIMIZATION: Only generate embedding if user has knowledge base
             has_spread_knowledge = SpreadsheetKnowledge.objects.filter(user=agent_config.user).exists()
             has_doc_knowledge = DocumentKnowledge.objects.filter(user=agent_config.user).exists()
@@ -106,6 +137,14 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                 return "", "Answer naturally using your knowledge.", None
 
             skip_embedding = False
+
+            # 🔥 CRITICAL: Skip text embedding if message is media-only (placeholder like "[Image received]")
+            if text and text.strip().startswith('[') and text.strip().endswith(']'):
+                placeholder_types = ['image', 'video', 'audio', 'document', 'media']
+                text_lower = text.lower()
+                if any(ptype in text_lower for ptype in placeholder_types):
+                    skip_embedding = True
+                    logger.info(f"🖼️ Skipping text embedding for media placeholder: '{text}' (media-only message detected)")
 
             if len(text) < 3:
                 skip_embedding = True
@@ -126,7 +165,8 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                 query_vector = get_gemini_embedding(rag_query)
                 logger.info(f"DEBUG: Vector Generated: {True if query_vector else False}")
         else:
-            logger.info("Using existing query_vector passed to perform_rag_search")
+            logger.info(f"✅ Using existing query_vector passed to perform_rag_search (image embedding reuse, skipping text embedding)")
+
         
         if query_vector:
             # 🔍 Scope Filtering logic:
@@ -157,35 +197,122 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
             for s_id in valid_sheet_ids:
                 sheet_query |= Q(row_id__startswith=f"sheet_{s_id}_")
 
-            related_sheets = SpreadsheetKnowledge.objects.none()
+            search_hits = []
             if valid_sheet_ids:
-                related_sheets = SpreadsheetKnowledge.objects.filter(
-                    user=agent_config.user
-                ).filter(sheet_query).annotate(
-                    distance=CosineDistance('embedding', query_vector)
-                ).filter(distance__lt=0.65).order_by('distance')[:3]
+                if query_vector and vector_type == 'image':
+                    image_sheets = SpreadsheetKnowledge.objects.filter(
+                        user=agent_config.user
+                    ).filter(sheet_query).annotate(
+                        distance=CosineDistance('image_embedding', query_vector)
+                    ).filter(distance__lt=0.65).order_by('distance')[:3]
+                    for row in image_sheets:
+                        search_hits.append({
+                            'row_id': row.row_id,
+                            'content': row.content,
+                            'distance': float(row.distance),
+                            'source_label': 'Spreadsheet Image',
+                            'confidence': _confidence_label(float(row.distance))
+                        })
 
-            # Search Document Knowledge
-            related_docs = DocumentKnowledge.objects.filter(
-                user=agent_config.user,
-                document_id__in=valid_doc_ids
-            ).select_related('document').annotate(
-                distance=CosineDistance('embedding', query_vector)
-            ).filter(distance__lt=0.65).order_by('distance')[:3]
+                if caption_vector is not None:
+                    caption_sheets = SpreadsheetKnowledge.objects.filter(
+                        user=agent_config.user
+                    ).filter(sheet_query).annotate(
+                        distance=CosineDistance('embedding', caption_vector)
+                    ).filter(distance__lt=0.65).order_by('distance')[:3]
+                    for row in caption_sheets:
+                        search_hits.append({
+                            'row_id': row.row_id,
+                            'content': row.content,
+                            'distance': float(row.distance),
+                            'source_label': 'Spreadsheet Caption',
+                            'confidence': _confidence_label(float(row.distance))
+                        })
 
-            first_sheet = related_sheets.first()
-            first_doc = related_docs.first()
-            # 🔥 FIX: Safe float conversion and None check
-            best_sheet_distance = float(first_sheet.distance) if (first_sheet and first_sheet.distance is not None) else 1.0
-            best_doc_distance = float(first_doc.distance) if (first_doc and first_doc.distance is not None) else 1.0
-            overall_best_dist = min(best_sheet_distance, best_doc_distance)
-            
-            # Combine contents based on distance thresholds
+                if vector_type != 'image' and query_vector is not None:
+                    text_sheets = SpreadsheetKnowledge.objects.filter(
+                        user=agent_config.user
+                    ).filter(sheet_query).annotate(
+                        distance=CosineDistance('embedding', query_vector)
+                    ).filter(distance__lt=0.65).order_by('distance')[:3]
+                    for row in text_sheets:
+                        search_hits.append({
+                            'row_id': row.row_id,
+                            'content': row.content,
+                            'distance': float(row.distance),
+                            'source_label': 'Spreadsheet Text',
+                            'confidence': _confidence_label(float(row.distance))
+                        })
+
+                related_docs = DocumentKnowledge.objects.none()
+                if vector_type != 'image':
+                    related_docs = DocumentKnowledge.objects.filter(
+                        user=agent_config.user,
+                        document_id__in=valid_doc_ids
+                    ).select_related('document').annotate(
+                        distance=CosineDistance('embedding', query_vector)
+                    ).filter(distance__lt=0.65).order_by('distance')[:3]
+                elif caption_vector is not None:
+                    related_docs = DocumentKnowledge.objects.filter(
+                        user=agent_config.user,
+                        document_id__in=valid_doc_ids
+                    ).select_related('document').annotate(
+                        distance=CosineDistance('embedding', caption_vector)
+                    ).filter(distance__lt=0.65).order_by('distance')[:3]
+
+                for doc in related_docs:
+                    title = doc.document.title if doc.document else doc.doc_title
+                    search_hits.append({
+                        'row_id': f"doc_{doc.id}",
+                        'content': doc.content,
+                        'distance': float(doc.distance),
+                        'source_label': f"Document - {title}",
+                        'confidence': _confidence_label(float(doc.distance))
+                    })
+
+            unique_hits = {}
+            for hit in search_hits:
+                existing = unique_hits.get(hit['row_id'])
+                if not existing or hit['distance'] < existing['distance']:
+                    unique_hits[hit['row_id']] = hit
+
+            ordered_hits = sorted(unique_hits.values(), key=lambda x: x['distance'])
+            overall_best_dist = ordered_hits[0]['distance'] if ordered_hits else 1.0
+
+            MIN_MATCH_DISTANCE = 0.6
+            filtered_hits = []
+            for hit in ordered_hits[:4]:
+                if hit['distance'] >= MIN_MATCH_DISTANCE:
+                    logger.info(f"⚠️ Skipping low-confidence hit: {hit['row_id']} distance={hit['distance']:.4f}")
+                    continue
+                filtered_hits.append(hit)
+
+            # 🔍 AMBIGUITY DETECTION: Check if top 2 matches are too close (≤5% difference)
+            is_ambiguous_match = False
+            ambiguity_warning = ""
+            if len(filtered_hits) >= 2:
+                score1 = max(0, min(100, int((1.0 - filtered_hits[0]['distance']) * 100)))
+                score2 = max(0, min(100, int((1.0 - filtered_hits[1]['distance']) * 100)))
+                score_diff = abs(score1 - score2)
+                
+                if score_diff <= 5:
+                    is_ambiguous_match = True
+                    logger.warning(f"⚠️ AMBIGUOUS MATCH DETECTED! Top match: {score1}% | Second match: {score2}% | Difference: {score_diff}%")
+                    ambiguity_warning = (
+                        "[⚠️ CRITICAL SYSTEM NOTE - READ FIRST]:\n"
+                        "The image search engine returned EXTREMELY CLOSE scores for multiple products. "
+                        "The difference between them is only " + str(score_diff) + "%, which means the system CANNOT reliably determine which one the user is asking about. "
+                        "DO NOT GUESS or arbitrarily pick one. You MUST politely ask the user to clarify which product they are asking about by providing the product name or model number.\n"
+                    )
+
             matched_content = []
-            matched_content.extend([f"[Source: Spreadsheet] {doc.content}" for doc in related_sheets])
-            for doc in related_docs:
-                title = doc.document.title if doc.document else doc.doc_title
-                matched_content.append(f"[Source: Document - {title}] {doc.content}")
+            if ambiguity_warning:
+                matched_content.append(ambiguity_warning)
+            
+            for hit in filtered_hits:
+                matched_content.append(
+                    f"[Source: {hit['source_label']}] {hit['content']} | Match Confidence: {hit['confidence']}"
+                )
 
             if matched_content:
                 unique_content = list(dict.fromkeys(matched_content))
@@ -193,8 +320,17 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                 sheet_context = f"\n[KNOWLEDGE BASE DATA]:\n{clean_data}"
                 post_info = f"User commented on this post: '{post_context_text}'. " if post_context_text else ""
 
-
-                if overall_best_dist < 0.45:
+                # If ambiguous match detected, force the AI to ask for clarification
+                if is_ambiguous_match:
+                    extra_instruction = f"""
+                    ⚠️ INSTRUCTION: The knowledge base has returned ambiguous results (multiple products with almost identical match scores).
+                    You MUST NOT arbitrarily pick one product.
+                    Instead, you MUST politely ask the user to specify which product they are asking about by mentioning the product name or model number.
+                    Be friendly and natural in your question, like: "I can see your image matches a few of our products. Could you let me know which specific model you're interested in?"
+                    {order_instruction}
+                    """
+                    logger.info(f">>> AMBIGUOUS RAG MATCH! Forcing AI to ask for user clarification.")
+                elif overall_best_dist < 0.45:
                     extra_instruction = f"""
                             {post_info}  strictly using only the content inside [KNOWLEDGE BASE DATA].
                             Keep it short, clear, friendly, natural, conversational..
@@ -394,7 +530,7 @@ def restore_schedule_quota(user_profile, subscription, count=1):
         subscription.save(update_fields=['remaining_schedule_messages', 'is_active'])
     user_profile.sync_balances()
 
-def build_ai_context(agent_config, sender_id, text, extra_instruction=None, sheet_context=None, platform='messenger'):
+def build_ai_context(agent_config, sender_id, text, extra_instruction=None, sheet_context=None, platform='messenger', message_type=None):
     from aiAgent.utils import get_memory_context
     from chat.services import get_last_message
     from aiAgent.memory_handler import calculate_context_score, check_keyword_match, detect_interruption_intent
@@ -522,7 +658,24 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
     # 3.5 Visitor Tracking Context
     visitor_context = ""
     try:
-        visitor = WebsiteVisitor.objects.filter(visitor_uuid=sender_id).first()
+        # Try to find WebsiteVisitor by platform sender_id (WhatsApp style) first,
+        # fall back to visitor_uuid when sender_id is a valid UUID.
+        visitor = None
+        if sender_id:
+            try:
+                visitor = WebsiteVisitor.objects.filter(sender_id=sender_id).first()
+            except Exception:
+                visitor = None
+
+        if not visitor and sender_id:
+            # attempt to match UUID if sender_id looks like one
+            try:
+                import uuid as _uuid
+                _uuid.UUID(str(sender_id))
+                visitor = WebsiteVisitor.objects.filter(visitor_uuid=sender_id).first()
+            except Exception:
+                visitor = None
+
         if visitor:
             v_info = []
             if visitor.location: v_info.append(f"Location: {visitor.location}")
@@ -568,8 +721,17 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
 
     system_instruction = "\n\n".join(system_prompt_parts)
 
+    current_message = text
+    if message_type in ['image', 'video', 'audio', 'document'] and isinstance(text, str) and text.strip().startswith('['):
+        current_message = (
+            f"{text} "
+            "(System Note: The user uploaded an image. Our image-search engine matched this "
+            "image with the product in the KNOWLEDGE BASE DATA below. Treat that product as the core topic of this image.)"
+        )
+        logger.info("🖼️ Image placeholder detected; rewriting current user message so the model understands this is a media-driven RAG match.")
+
     logger.info(f"\n======= SYSTEM INSTRUCTION =======\n{system_instruction}\n=======================================")
-    logger.info(f"\n======= CURRENT USER MSG =======\n{text}\n=======================================")
+    logger.info(f"\n======= CURRENT USER MSG =======\n{current_message}\n=======================================")
 
     raw_history = get_last_message(agent_config, sender_id, limit=agent_config.get_settings.history_limit, platform=platform)
     
@@ -594,7 +756,7 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
             msg for msg in raw_history
             if msg.get("content") and msg.get("content").strip()
         ]
-    return system_instruction, history, text
+    return system_instruction, history, current_message
 
 def get_ai_response(agent_config, system_instruction, history, current_message):
     """

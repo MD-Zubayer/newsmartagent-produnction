@@ -43,6 +43,18 @@ export default function WhatsAppConnector() {
     }
   }, [status]);
 
+  const fetchPairingCode = useCallback(async () => {
+    if (status === "open") return;
+    try {
+      const res = await axiosInstance.get("/whatsapp/pairing-code/");
+      if (res.data.pairingCode) {
+        setPairingCode(res.data.pairingCode);
+      }
+    } catch (err) {
+      console.error("Pairing code fetch failed", err);
+    }
+  }, [status]);
+
   const initSession = async () => {
     if (usePairingCode && !phoneNumber) {
       toast.error("Please enter your phone number");
@@ -50,9 +62,14 @@ export default function WhatsAppConnector() {
     }
     setIsInitializing(true);
     try {
-      await axiosInstance.post("/whatsapp/init/", { phone: phoneNumber });
+      const payload = usePairingCode ? { phone: phoneNumber } : {};
+      await axiosInstance.post("/whatsapp/init/", payload);
       toast.success(usePairingCode ? "Generating Pairing Code..." : "Initializing WhatsApp session...");
       setStatus("connecting");
+      if (usePairingCode) {
+        setPairingCode(null);
+        setQrCode(null);
+      }
     } catch (err) {
       toast.error("Failed to initialize session");
       console.error(err);
@@ -65,12 +82,17 @@ export default function WhatsAppConnector() {
     fetchStatus();
     const interval = setInterval(() => {
       fetchStatus();
-      if (status === "connecting" && !pairingCode) {
-        fetchQR();
+      if (status === "connecting") {
+        if (usePairingCode && !pairingCode) {
+          fetchPairingCode();
+        }
+        if (!usePairingCode && !pairingCode) {
+          fetchQR();
+        }
       }
     }, 5000);
     return () => clearInterval(interval);
-  }, [status, fetchStatus, fetchQR, pairingCode]);
+  }, [status, fetchStatus, fetchQR, fetchPairingCode, pairingCode, usePairingCode]);
 
   return (
     <div className="w-full space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -86,45 +108,29 @@ export default function WhatsAppConnector() {
           </p>
         </div>
 
-        {status === "close" && !usePairingCode && (
-          <button
-            onClick={() => setUsePairingCode(true)}
-            className="text-[10px] font-black text-slate-400 hover:text-emerald-500 uppercase tracking-widest transition-all"
-          >
-            Pair with Phone Number?
-          </button>
-        )}
-      </div>
-
-      {/* Main Connection Area */}
-      <div className="bg-slate-50/50 rounded-[2rem] md:rounded-[3rem] p-4 sm:p-8 md:p-12 border border-slate-100 relative overflow-hidden">
-        <div className="relative z-10 flex flex-col md:flex-row items-center gap-6 md:gap-12">
-          
-          {/* Status Display / QR Code / Pairing Code */}
-          <div className="shrink-0 w-full md:w-auto flex flex-col items-center">
-            {status === "open" ? (
-              <div className="bg-white p-6 sm:p-10 rounded-[2rem] border border-emerald-100 shadow-2xl flex flex-col items-center gap-6 text-center w-full max-w-[320px] md:w-auto">
-                <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-500">
-                  <FaCheckCircle size={48} />
-                </div>
-                <div>
-                  <p className="font-black text-slate-900 text-xl tracking-tight uppercase italic mb-1">Authenticated</p>
-                  <p className="text-xs font-bold text-slate-400 tracking-widest uppercase">Linked: {connectedPhone}</p>
-                </div>
-                <button 
-                  onClick={() => {
-                    setStatus("close");
-                    setUsePairingCode(false);
-                    setPairingCode(null);
-                    setQrCode(null);
-                  }}
-                  className="text-[9px] font-black text-slate-400 hover:text-indigo-600 uppercase tracking-widest transition-colors"
-                >
-                  Reconnect New Device?
-                </button>
-              </div>
-            ) : status === "connecting" ? (
-              <div className="bg-white p-6 rounded-[2rem] sm:rounded-[2.5rem] border border-slate-100 shadow-2xl relative group w-full max-w-[320px] md:min-w-[320px] flex flex-col items-center justify-center min-h-[300px]">
+        {status === "open" ? (
+          <div className="bg-white p-6 sm:p-10 rounded-[2rem] border border-emerald-100 shadow-2xl flex flex-col items-center gap-6 text-center w-full max-w-[320px] md:w-auto">
+            <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-500">
+              <FaCheckCircle size={48} />
+            </div>
+            <div>
+              <p className="font-black text-slate-900 text-xl tracking-tight uppercase italic mb-1">Authenticated</p>
+              <p className="text-xs font-bold text-slate-400 tracking-widest uppercase">Linked: {connectedPhone}</p>
+            </div>
+            <button 
+              onClick={() => {
+                setStatus("close");
+                setUsePairingCode(false);
+                setPairingCode(null);
+                setQrCode(null);
+              }}
+              className="text-[9px] font-black text-slate-400 hover:text-indigo-600 uppercase tracking-widest transition-colors"
+            >
+              Reconnect New Device?
+            </button>
+          </div>
+        ) : status === "connecting" ? (
+          <div className="bg-white p-6 rounded-[2rem] sm:rounded-[2.5rem] border border-slate-100 shadow-2xl relative group w-full max-w-[320px] md:min-w-[320px] flex flex-col items-center justify-center min-h-[300px]">
                 {pairingCode ? (
                    <div className="space-y-6 flex flex-col items-center text-center w-full">
                       <div className="space-y-2 w-full flex flex-col items-center">
@@ -211,6 +217,12 @@ export default function WhatsAppConnector() {
                       >
                         {isInitializing ? "Wait..." : "Connect Session"}
                       </button>
+                      <button
+                        onClick={() => setUsePairingCode(true)}
+                        className="w-full text-[9px] font-black text-slate-400 hover:text-indigo-600 uppercase tracking-widest transition-colors"
+                      >
+                        Use Phone Pairing Instead
+                      </button>
                       <p className="text-[9px] font-black text-slate-200 uppercase tracking-[0.3em]">Awaiting Command</p>
                     </div>
                   </div>
@@ -264,8 +276,6 @@ export default function WhatsAppConnector() {
                </div>
              </div>
           </div>
-        </div>
-      </div>
     </div>
   );
 }

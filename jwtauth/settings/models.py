@@ -63,6 +63,12 @@ class GlobalSettings(models.Model):
         blank=True,
         help_text="Select the AI model that will be used globally for the Dashboard Assistant (New Smart Agent)."
     )
+    image_caption_provider = models.CharField(
+        max_length=20,
+        choices=[('gemini', 'Gemini'), ('openai', 'OpenAI')],
+        default='gemini',
+        help_text='Default provider to generate image captions for the system.'
+    )
     youtube_check_interval = models.PositiveIntegerField(
         default=1,
         help_text="How often to check for new YouTube comments (in minutes)."
