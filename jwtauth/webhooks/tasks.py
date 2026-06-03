@@ -46,6 +46,8 @@ from django.conf import settings
 from django.utils import timezone
 from aiAgent.cache.client import get_redis_client
 from . import youtube_tasks
+from PIL import Image
+
 
 @after_setup_logger.connect
 @after_setup_task_logger.connect
@@ -1645,6 +1647,16 @@ def process_ai_reply_task(self, data):
     if not text and media_url:
         text = data.get('caption') or f"[{message_type.capitalize() or 'Media'} received]"
         data['message'] = text
+
+    if message_type in ['image', 'video', 'audio', 'document'] and not media_url:
+        logger.error(f"⛔ [Task] Media message missing payload. sender={sender_id}, page={page_id}, message_id={data.get('message_id')}, type={message_type}")
+        if request_type == 'whatsapp':
+            try:
+                from aiAgent.business_logic.logic_handler import deliver_whatsapp_reply
+                deliver_whatsapp_reply(data, "দুঃখিত, আপনার পাঠানো মিডিয়া আমাদের সিস্টেমে ঠিকঠাক পৌঁছাতে পারেনি। দয়া করে আবার পাঠান।")
+            except Exception as e:
+                logger.error(f"⚠️ [Task] Failed to send WhatsApp error reply: {e}")
+        return
 
     msg_id = data.get('message_id')
     incoming_ts = data.get('timestamp')

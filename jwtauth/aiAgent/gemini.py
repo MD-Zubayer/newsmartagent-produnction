@@ -1,190 +1,201 @@
 import logging
-from google import genai
-from google.genai import types
+import json
 from django.conf import settings
-from aiAgent.utils import count_gemini_tokens
 
 logger = logging.getLogger('aiAgent')
 
-client = genai.Client(api_key=settings.GEMINI_API_KEY)
-
+try:
+    from google import genai
+    from google.genai import types
+    GENAI_CLIENT = genai.Client(api_key=settings.GEMINI_API_KEY)
+except Exception:
+    GENAI_CLIENT = None
 
 
 def generate_gemini_reply(prompt, history, current_message, agent_config):
+    """Simple Gemini reply helper (fallback)
+    """
+    if not GENAI_CLIENT:
+        return {"reply": "Gemini client not configured.", "total_tokens": 0, "status": "error"}
 
-    model_name = agent_config.ai_model if 'gemini' in agent_config.ai_model else 'gemini-2.5-flash'
+    model_name = agent_config.ai_model if agent_config and getattr(agent_config, 'ai_model', None) else 'gemini-2.5-flash'
 
     formatted_history = []
-
-    # 1. Add previous chat history
     for m in history:
-        role = "model" if m["role"] == "assistant" else "user"
-        formatted_history.append({
-            "role": role,
-            "parts": [{"text": m["content"]}]
-        })
+        role = "model" if m.get("role") == "assistant" else "user"
+        formatted_history.append({"role": role, "parts": [{"text": m.get("content", "")} ]})
 
-    # 2. Add current message
-    formatted_history.append({
-        "role": "user",
-        "parts": [{"text": current_message}]
-    })
-
-    # 🚨 Safety guard
-    if not formatted_history:
-        return {
-            "reply": "System error. Empty prompt.",
-            "total_tokens": 0,
-            "status": "error"
-        }
-
-    safety_settings = [
-        types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
-        types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
-        types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
-        types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
-    ]
+    formatted_history.append({"role": "user", "parts": [{"text": current_message}]})
 
     try:
-        ai_settings = agent_config.get_settings
-        base_max_token = int(ai_settings.max_tokens) if ai_settings.max_tokens else 500
-        # JSON wrapper overhead: {"reply":"...","cache_type":"agent_specific"} ≈ 20 tokens
-        # Extra safety buffer to prevent mid-JSON truncation
-        JSON_CACHE_BUFFER = 60
-        max_token = base_max_token + JSON_CACHE_BUFFER
-    except:
-        max_token = 560
-
-    try:
-        logger.info(f"Gemini History: {formatted_history}")
-        response = client.models.generate_content(
+        response = GENAI_CLIENT.models.generate_content(
             model=model_name,
             contents=formatted_history,
-            config=types.GenerateContentConfig(
-                system_instruction=prompt,
-                temperature=ai_settings.temperature or 0.7,
-                max_output_tokens=max_token,
-                safety_settings=safety_settings,
-                candidate_count=1
-            )
+            config=types.GenerateContentConfig(system_instruction=prompt)
         )
-
         reply = response.text.strip() if response.text else ""
-
-        input_tokens = response.usage_metadata.prompt_token_count or 0
-        output_tokens = response.usage_metadata.candidates_token_count or 0
-        total_tokens = input_tokens + output_tokens
-
-        return {
-            "reply": reply or "Sorry, I didn't understand.",
-            "input_tokens": input_tokens,
-            "output_tokens": output_tokens,
-            "total_tokens": total_tokens,
-            "model_name": model_name,
-            "status": "success" if reply else "empty_response"
-        }
-
+        return {"reply": reply or "", "total_tokens": response.usage_metadata.total_token_count or 0, "status": "success"}
     except Exception as e:
-        print(f'Gemini API Error: {str(e)}')
-        return {
-            "reply": "The system is experiencing some problems, please try again later.",
-            "total_tokens": 0,
-            "status": "error",
-            "error_message": str(e)
-        }
+        logger.error(f"Gemini generate error: {e}")
+        return {"reply": "Error calling Gemini", "total_tokens": 0, "status": "error", "error": str(e)}
 
-            
+
 def generate_quick_summary(raw_text):
     try:
+        if not GENAI_CLIENT:
+            return None
         model_name = 'models/gemini-2.5-flash'
-
-        prompt = f"""Summarize the following Facebook post in maximum 3 short sentences.
-                Rules:
-                - Keep all key points.
-                - Keep total length under 60-80 words.
-                - No opinion.
-                - No extra explanation.
-                - Simple and clear language.
-                Post: {raw_text}"""
-
-        response = client.models.generate_content(
+        prompt = f"Summarize: {raw_text}"
+        response = GENAI_CLIENT.models.generate_content(
             model=model_name,
             contents=[prompt],
-            config=types.GenerateContentConfig(
-                temperature=0.2,
-                max_output_tokens=600
-            )
+            config=types.GenerateContentConfig(temperature=0.2, max_output_tokens=600)
         )
-
-        if response.text:
-            summary = response.text.strip()
-            print(f"✅ Summary Generated Successfully: {summary[:50]}...")
-            return summary
-        return None
+        return response.text.strip() if response.text else None
     except Exception as e:
-        print(f'Summary Generation Error: {str(e)}')
+        logger.error(f"Summary generation failed: {e}")
         return None
-
 
 
 def generate_dashboard_help(user_query, page_context, chat_history=[]):
-    """
-    ড্যাশবোর্ড ইউজারদের প্রশ্নের উত্তর দেওয়ার জন্য বিশেষ ফাংশন।
-    """
-    model_name = 'models/gemini-2.5-flash' # আপনার লগের কোটা অনুযায়ী 1.5-flash ও দিতে পারেন
-    
-    # সিস্টেম প্রম্পট যা AI-কে আপনার ড্যাশবোর্ড বিশেষজ্ঞ বানাবে
-    system_prompt = f"""
-আপনি "New Smart Agent BD"-এর একজন এক্সপার্ট এআই অ্যাসিস্ট্যান্ট। আপনার নাম "Smart Agent AI"।
-আপনার মূল লক্ষ্য হলো ইউজারকে তাদের ড্যাশবোর্ড নেভিগেট করতে এবং বিভিন্ন সার্ভিস সম্পর্কে তথ্য দিয়ে সাহায্য করা।
-
-আপনার ব্যবহারের নিয়মাবলী:
-১. ভাষা: সর্বদা অত্যন্ত মার্জিত এবং পেশাদার বাংলায় কথা বলুন।
-২. সঠিকতা: {page_context} থেকে তথ্য নিয়ে উত্তর দিন। যদি কোনো তথ্য আপনার কাছে না থাকে, তবে অনুমান করবেন না। বিনীতভাবে বলুন যে আপনি এই মুহূর্তে সেটি দেখতে পাচ্ছেন না।
-৩. মেসেঞ্জার স্টাইল: ছোট কিন্তু তথ্যবহুল উত্তর দিন। ইউজারের সাথে বন্ধুত্বপূর্ণ সম্পর্ক বজায় রাখুন।
-৪. হেল্পফুলনেস: যদি ইউজার কোনো সমস্যার কথা বলে, তবে তাকে সম্ভাব্য সমাধান বা সঠিক পেজের দিকে গাইড করুন।
-
-ইউজারের বর্তমান লোকেশন বা পেজ কন্টেক্সট: {page_context}
-লাইভ ডাটা বা ডকুমেন্টেশন যা আপনার কাছে আছে: {page_context}
-
-আপনার উত্তরগুলো যেন একজন সত্যিকারের প্রফেশনাল এজেন্টের মতো হয়।
-"""
-
-    formatted_history = []
-    
-    # ১. সিস্টেম ইনস্ট্রাকশন সেট করা
-    # নতুন SDK-তে contents এর বদলে config এও system_instruction দেওয়া যায়
-    
-    # ২. হিস্ট্রি ফরম্যাট করা
-    for m in chat_history:
-        role = "model" if m["role"] == "assistant" else "user"
-        formatted_history.append({"role": role, "parts": [{"text": m["content"]}]})
-    
-    # ৩. বর্তমান প্রশ্ন যুক্ত করা
-    formatted_history.append({"role": "user", "parts": [{"text": user_query}]})
-
+    # Keep original behavior but safe-guarded
     try:
-        response = client.models.generate_content(
+        if not GENAI_CLIENT:
+            return {"reply": "AI client not configured", "status": "error"}
+
+        model_name = 'models/gemini-2.5-flash'
+        system_prompt = f"You are a dashboard assistant. Context: {page_context}"
+        formatted_history = []
+        for m in chat_history:
+            role = "model" if m.get("role") == "assistant" else "user"
+            formatted_history.append({"role": role, "parts": [{"text": m.get("content", "")} ]})
+        formatted_history.append({"role": "user", "parts": [{"text": user_query}]})
+
+        response = GENAI_CLIENT.models.generate_content(
             model=model_name,
             contents=formatted_history,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt, # এখানে ইনস্ট্রাকশন দেওয়া সবচেয়ে কার্যকর
-                temperature=0.3, # ড্যাশবোর্ড হেল্পের জন্য ক্রিয়েটিভিটি কম, একুরেসি বেশি দরকার
-                max_output_tokens=200,
-            )
+            config=types.GenerateContentConfig(system_instruction=system_prompt, temperature=0.3, max_output_tokens=200)
         )
-
         reply = response.text.strip() if response.text else ""
-        
-        return {
-            "reply": reply or "দুঃখিত, আমি বুঝতে পারছি না।",
-            "total_tokens": response.usage_metadata.total_token_count or 0,
-            "status": "success"
-        }
+        return {"reply": reply or "", "total_tokens": response.usage_metadata.total_token_count or 0, "status": "success"}
+    except Exception as e:
+        logger.error(f"Dashboard help error: {e}")
+        return {"reply": "Error", "status": "error"}
+
+
+def generate_gemini_reply_with_tools(
+    prompt, history, current_message, agent_config,
+    user_id, sheet_id, platform, enable_image_tool=True
+):
+    """Provider-agnostic wrapper that exposes image-delivery tool to multiple LLMs.
+
+    Supports: Gemini (if configured), OpenAI, Grok (best-effort via OpenAI-compatible SDK).
+    """
+    from aiAgent.image_delivery_tools import (
+        get_image_delivery_tool_definition,
+        execute_image_delivery_tool,
+        format_images_for_ai_response
+    )
+
+    # Build simple formatted history for providers
+    provider = 'gemini'
+    try:
+        provider = (agent_config.selected_model.provider or 'gemini') if agent_config and getattr(agent_config, 'selected_model', None) else 'gemini'
+    except Exception:
+        provider = 'gemini'
+
+    # Prepare history/messages
+    formatted_history = []
+    for m in history:
+        formatted_history.append(m)
+
+    # Build tool schema per provider
+    from aiAgent.llm_tools import get_tools_for_provider
+    tool_def = get_image_delivery_tool_definition()
+    tools_list = get_tools_for_provider(provider, tool_def) if enable_image_tool else []
+
+    # Dispatch to provider
+    try:
+        if 'openai' in provider.lower() or 'grok' in provider.lower():
+            # Use OpenAI-compatible functions interface
+            import openai
+            messages = [{"role": "system", "content": prompt}]
+            for m in history:
+                role = "assistant" if m.get("role") == "assistant" else "user"
+                messages.append({"role": role, "content": m.get("content", "")})
+            messages.append({"role": "user", "content": current_message})
+
+            kwargs = {
+                'model': agent_config.ai_model if agent_config and getattr(agent_config, 'ai_model', None) else 'gpt-4o-mini',
+                'messages': messages,
+                'temperature': getattr(agent_config.get_settings, 'temperature', 0.7) if agent_config else 0.7,
+                'max_tokens': 512,
+            }
+            if tools_list:
+                kwargs['functions'] = tools_list
+
+            resp = openai.ChatCompletion.create(**kwargs)
+            # Parse OpenAI-style response
+            choice = resp.choices[0]
+            msg = choice.message if hasattr(choice, 'message') else choice['message']
+            reply_text = ''
+            tool_calls = []
+            if isinstance(msg, dict) and msg.get('function_call'):
+                fc = msg['function_call']
+                name = fc.get('name')
+                raw_args = fc.get('arguments')
+                try:
+                    args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+                except Exception:
+                    args = {}
+                if name == 'get_product_images_with_presigned_urls':
+                    result = execute_image_delivery_tool(user_id, sheet_id, args, agent_config)
+                    tool_calls.append({'name': name, 'result': result})
+                    reply_text += format_images_for_ai_response(result)
+            # Append assistant text if any
+            assistant_text = msg.get('content') if isinstance(msg, dict) else getattr(msg, 'content', '')
+            if assistant_text:
+                reply_text = (reply_text + "\n\n" + assistant_text).strip()
+
+            usage = getattr(resp, 'usage', {})
+            input_tokens = usage.get('prompt_tokens', 0) if isinstance(usage, dict) else getattr(usage, 'prompt_tokens', 0)
+            output_tokens = usage.get('completion_tokens', 0) if isinstance(usage, dict) else getattr(usage, 'completion_tokens', 0)
+            total_tokens = input_tokens + output_tokens
+
+            return {
+                'reply': reply_text or "",
+                'input_tokens': input_tokens,
+                'output_tokens': output_tokens,
+                'total_tokens': total_tokens,
+                'tool_calls': tool_calls,
+                'status': 'success'
+            }
+
+        else:
+            # Default: Gemini
+            if not GENAI_CLIENT:
+                return {'reply': 'Gemini not configured', 'status': 'error'}
+
+            model_name = agent_config.ai_model if agent_config and getattr(agent_config, 'ai_model', None) else 'gemini-2.5-flash'
+            contents = []
+            for m in history:
+                role = 'model' if m.get('role') == 'assistant' else 'user'
+                contents.append({'role': role, 'parts': [{'text': m.get('content', '')}]})
+            contents.append({'role': 'user', 'parts': [{'text': current_message}]})
+
+            config_params = {
+                'system_instruction': prompt,
+                'temperature': getattr(agent_config.get_settings, 'temperature', 0.7) if agent_config else 0.7,
+                'max_output_tokens': 512,
+                'candidate_count': 1
+            }
+            if tools_list:
+                config_params['tools'] = tools_list
+
+            response = GENAI_CLIENT.models.generate_content(model=model_name, contents=contents, config=types.GenerateContentConfig(**config_params))
+            reply_text = response.text.strip() if response.text else ''
+            return {'reply': reply_text, 'total_tokens': response.usage_metadata.total_token_count or 0, 'status': 'success'}
 
     except Exception as e:
-        print(f'Dashboard AI Error: {str(e)}')
-        return {
-            "reply": "সার্ভারে সমস্যা হচ্ছে, অনুগ্রহ করে একটু পরে চেষ্টা করুন।",
-            "status": "error"
-        }
+        logger.error(f"LLM with tools error: {e}")
+        return {'reply': 'Error processing request', 'status': 'error', 'error': str(e)}

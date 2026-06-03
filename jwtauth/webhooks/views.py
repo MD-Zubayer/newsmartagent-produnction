@@ -309,6 +309,8 @@ def ai_webhook(request):
 
     media_present = bool(
         data.get('mediaUrl') or data.get('media_url') or data.get('attachments') or data.get('image_url') or data.get('image')
+        or data.get('image_base64') or data.get('video_base64') or data.get('audio_base64') or data.get('document_base64')
+        or ((request_type == 'whatsapp') and (data.get('message_id') or data.get('messageId')) and str(data.get('message_type') or data.get('type') or '').lower() in ['image', 'video', 'audio', 'document'])
     )
 
     if is_echo or (not text and not media_present):
@@ -318,6 +320,34 @@ def ai_webhook(request):
     if not text and media_present:
         text = data.get('caption') or f"[{str(data.get('message_type') or data.get('type') or 'Media').capitalize()} received]"
         data['message'] = text
+
+    # WhatsApp fallback: if a media message arrived with no image_base64 and no media URL,
+    # try to fetch the bytes from Baileys service using the cached message_id.
+    if request_type == 'whatsapp' and not data.get('image_base64'):
+        baileys_media_url = data.get('mediaUrl') or data.get('media_url')
+        message_id = data.get('message_id') or data.get('messageId')
+        session_id = data.get('sessionId')
+
+        if not baileys_media_url and message_id and session_id:
+            try:
+                from django.conf import settings
+                baileys_url = settings.BAILEYS_API_URL or 'http://baileys:3001'
+                media_fetch_url = f"{baileys_url}/media/message/{session_id}/{message_id}"
+                resp = requests.get(media_fetch_url, timeout=10)
+                if resp.status_code == 200:
+                    media_bytes = resp.content
+                    if media_bytes:
+                        image_base64 = base64.b64encode(media_bytes).decode('utf-8')
+                        data['image_base64'] = image_base64
+                        data['mimetype'] = resp.headers.get('content-type', 'image/jpeg')
+                        logger.info(f"✅ [Baileys] Recovered media via message_id {message_id} -> base64")
+                        media_present = True
+                else:
+                    logger.warning(f"⚠️ [Baileys] message_id fetch returned {resp.status_code} for {message_id}")
+            except requests.exceptions.Timeout:
+                logger.warning(f"⚠️ [Baileys] message_id fetch timed out: {message_id}")
+            except Exception as e:
+                logger.warning(f"⚠️ [Baileys] message_id fetch failed: {e}")
 
     if not all([sender_id, page_id]):
         print(f"Missing data: sender={sender_id}, page={page_id}")
