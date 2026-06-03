@@ -113,77 +113,20 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
         return [weight_a * a + weight_b * b for a, b in zip(vec_a, vec_b)]
 
     try:
-        # Helper: try to infer a product name from post_context_text or spreadsheet knowledge
-        def _infer_product_from_context(post_ctx, agent_cfg, valid_sheet_ids):
-            """
-            Attempt to find a product-like string from the provided post context
-            or from the user's SpreadsheetKnowledge rows. Returns a short product
-            hint or None.
-            """
-            if not post_ctx:
-                post_ctx = ""
-            ctx = post_ctx.lower()
-            try:
-                from embedding.models import SpreadsheetKnowledge
-                # Search recent rows for short product names and see if any token appears
-                candidates = SpreadsheetKnowledge.objects.filter(user=agent_cfg.user)
-                if valid_sheet_ids:
-                    from django.db.models import Q
-                    q = Q()
-                    for sid in valid_sheet_ids:
-                        q |= Q(row_id__startswith=f"sheet_{sid}_")
-                    candidates = candidates.filter(q)
-
-                # Iterate and try to find a substring match in the post context
-                for row in candidates.order_by('-created_at')[:200]:
-                    content = (row.content or '').strip()
-                    if not content:
-                        continue
-                    # Try first line or short title
-                    title = content.splitlines()[0][:120].lower()
-                    # check if some word from title exists in context
-                    for word in title.split():
-                        if len(word) < 3:
-                            continue
-                        if word in ctx:
-                            return title
-
-                # fallback: return the most recent row title if nothing matched
-                recent = candidates.order_by('-created_at').first()
-                if recent and recent.content:
-                    return recent.content.splitlines()[0][:120]
-            except Exception:
-                return None
-            return None
-
         caption_vector = None
-        image_query_vector = query_vector if vector_type == 'image' else None
-        text_query_vector = query_vector if vector_type != 'image' else None
-
         if vector_type == 'image' and image_caption:
             caption_vector = get_gemini_embedding(image_caption)
             if caption_vector:
                 logger.info("📝 Generated caption vector for image caption hybrid search.")
-            else:
-                logger.warning("⚠️ Caption vector generation failed for image caption fallback.")
+        
+        if query_vector and vector_type == 'image' and caption_vector:
+            blended_vector = _blend_vectors(query_vector, caption_vector, weight_a=0.6, weight_b=0.4)
+            if blended_vector:
+                logger.info("🧪 Blended image and caption vectors for hybrid image search.")
+                query_vector = blended_vector
 
-        if vector_type == 'image':
-            if image_query_vector and caption_vector:
-                blended_vector = _blend_vectors(image_query_vector, caption_vector, weight_a=0.4, weight_b=0.6)
-                if blended_vector:
-                    logger.info("🧪 Blended image and caption vectors for hybrid image search.")
-                    image_query_vector = blended_vector
-                    query_vector = blended_vector
-            elif not image_query_vector and caption_vector:
-                query_vector = caption_vector
-                logger.info("🔁 Falling back to caption-only vector search because image vector is unavailable.")
-            else:
-                query_vector = image_query_vector
-
-        if image_query_vector and vector_type == 'image':
+        if query_vector and vector_type == 'image':
             logger.info("✅ perform_rag_search received image vector; skipping text embedding generation.")
-        elif text_query_vector is not None and vector_type != 'image':
-            logger.info("✅ perform_rag_search received text vector; using it for text search.")
         elif not query_vector:
             # OPTIMIZATION: Only generate embedding if user has knowledge base
             has_spread_knowledge = SpreadsheetKnowledge.objects.filter(user=agent_config.user).exists()
@@ -218,36 +161,8 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                         break
         
             if not skip_embedding:
-                # If the user text is very short or generic (e.g., "দাম কত?"),
-                # try to infer a product hint from context and prepend it to the
-                # query so the embedding maps to actual product content.
-                is_generic_short = len(text.strip()) < 40 or bool(re.search(r"^\s*\W*\w{1,30}\s*\?*$", text))
-                product_hint = None
-                try:
-                    # valid_sheet_ids not yet defined here; compute minimal set if possible
-                    from django.db.models import Q
-                    from datasheet.models import Spreadsheet
-                    valid_sheet_ids = Spreadsheet.objects.filter(
-                        user=agent_config.user
-                    ).filter(
-                        Q(scope='global') | Q(scope='agent_specific', agent=agent_config)
-                    ).values_list('id', flat=True)
-                except Exception:
-                    valid_sheet_ids = []
-
-                if is_generic_short:
-                    try:
-                        product_hint = _infer_product_from_context(post_context_text, agent_config, valid_sheet_ids)
-                    except Exception:
-                        product_hint = None
-
-                if product_hint:
-                    merged_query = f"{product_hint} {text}"
-                    logger.info(f"Augmenting RAG query with product hint: {product_hint[:60]}")
-                    query_vector = get_gemini_embedding(merged_query)
-                else:
-                    logger.info(f"Generating Gemini Embedding inside perform_rag_search for '{text[:40]}'")
-                    query_vector = get_gemini_embedding(rag_query)
+                logger.info(f"Generating Gemini Embedding inside perform_rag_search for '{text[:20]}'")
+                query_vector = get_gemini_embedding(rag_query)
                 logger.info(f"DEBUG: Vector Generated: {True if query_vector else False}")
         else:
             logger.info(f"✅ Using existing query_vector passed to perform_rag_search (image embedding reuse, skipping text embedding)")
@@ -284,11 +199,11 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
 
             search_hits = []
             if valid_sheet_ids:
-                if image_query_vector and vector_type == 'image':
+                if query_vector and vector_type == 'image':
                     image_sheets = SpreadsheetKnowledge.objects.filter(
                         user=agent_config.user
                     ).filter(sheet_query).annotate(
-                        distance=CosineDistance('image_embedding', image_query_vector)
+                        distance=CosineDistance('image_embedding', query_vector)
                     ).filter(distance__lt=0.65).order_by('distance')[:3]
                     for row in image_sheets:
                         search_hits.append({
@@ -298,6 +213,7 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                             'source_label': 'Spreadsheet Image',
                             'confidence': _confidence_label(float(row.distance))
                         })
+
 
                 if caption_vector is not None:
                     caption_sheets = SpreadsheetKnowledge.objects.filter(
@@ -314,11 +230,11 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                             'confidence': _confidence_label(float(row.distance))
                         })
 
-                if vector_type != 'image' and text_query_vector is not None:
+                if vector_type != 'image' and query_vector:
                     text_sheets = SpreadsheetKnowledge.objects.filter(
                         user=agent_config.user
                     ).filter(sheet_query).annotate(
-                        distance=CosineDistance('embedding', text_query_vector)
+                        distance=CosineDistance('embedding', query_vector)
                     ).filter(distance__lt=0.65).order_by('distance')[:3]
                     for row in text_sheets:
                         search_hits.append({
@@ -335,7 +251,7 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                         user=agent_config.user,
                         document_id__in=valid_doc_ids
                     ).select_related('document').annotate(
-                        distance=CosineDistance('embedding', text_query_vector)
+                        distance=CosineDistance('embedding', query_vector)
                     ).filter(distance__lt=0.65).order_by('distance')[:3]
                 elif caption_vector is not None:
                     related_docs = DocumentKnowledge.objects.filter(
