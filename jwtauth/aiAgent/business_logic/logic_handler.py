@@ -385,13 +385,18 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
 
                 if is_ambiguous_match:
                     extra_instruction = f"""
-                    ⚠️ INSTRUCTION: The knowledge base has returned ambiguous results (multiple products with almost identical match scores).
-                    You MUST NOT arbitrarily pick one product.
-                    Instead, you MUST politely ask the user to specify which product they are asking about by mentioning the product name or model number.
-                    Be friendly and natural in your question, like: "I can see your image matches a few of our products. Could you let me know which specific model you're interested in?"
+                    ⚠️ INSTRUCTION: The knowledge base has returned multiple close product matches.
+                    You should NOT arbitrarily pick one product on behalf of the user.
+                    Instead, list the matching products from [KNOWLEDGE BASE DATA] and politely ask the user to specify the exact model/variant.
+                    Be friendly and natural, like: "আমাদের কাছে কয়েকটি মডেল আছে: [list]. আপনি কোনটি চাইছেন?"
+                    
+                    IMPORTANT: While asking for product clarification, you CAN and SHOULD still collect other order details 
+                    (customer_name, phone_number, address) if the user has expressed clear order intent.
+                    Do NOT block the entire order flow just because the product needs clarification.
+                    Once the user clarifies the product, proceed with the order normally.
                     {order_instruction}
                     """
-                    logger.info(f">>> AMBIGUOUS RAG MATCH! Forcing AI to ask for user clarification.")
+                    logger.info(f">>> AMBIGUOUS RAG MATCH! Asking AI to clarify with user while continuing order flow.")
                 elif filtered_hits and len(filtered_hits) == 1 and (1.0 - filtered_hits[0].get('adjusted_distance', filtered_hits[0]['distance'])) > 0.55:
                     # strong single match after filtering/rerank
                     extra_instruction = f"""
