@@ -1,8 +1,10 @@
 const Baileys = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
+const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const express = require('express');
 const pino = require('pino');
 const axios = require('axios');
+const Jimp = require('jimp');
 const path = require('path');
 const fs = require('fs');
 
@@ -10,6 +12,7 @@ const fs = require('fs');
 const PORT = process.env.PORT || 3001;
 const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || process.env.N8N_WHATSAPP_WEBHOOK_URL || '';
 const N8N_WEBHOOK_INTERNAL_URL = process.env.N8N_WEBHOOK_INTERNAL_URL || 'http://n8n:5678';
+const DJANGO_WHATSAPP_WEBHOOK_URL = process.env.DJANGO_WHATSAPP_WEBHOOK_URL || process.env.DJANGO_WHATSAPP_INCOMING_URL || '';
 const SYNC_AGENT_URL = process.env.SYNC_AGENT_URL || 'http://newsmartagent-django:8000/api/whatsapp/sync-agent/';
 const API_SECRET = process.env.BAILEYS_API_SECRET || 'nsa-baileys-secret-2024';
 const AUTH_BASE_FOLDER = './auth_info_baileys';
@@ -37,146 +40,232 @@ const cleanupPromises = new Map();
 const jidMap = new Map(); // Store LID -> Phone mappings
 const messageQueues = new Map(); // Store message queues per session
 const qrRateLimiter = new Map(); // Track QR generation times per session to prevent rapid regeneration
+const recentMessages = new Map(); // Cache recent incoming messages for media fallback
+
+const MAX_QUEUE_LENGTH = parseInt(process.env.BAILEYS_MAX_QUEUE_LENGTH || '10000', 10);
+const MAX_QUEUE_PER_SESSION = parseInt(process.env.BAILEYS_MAX_QUEUE_PER_SESSION || '3000', 10);
+const MESSAGE_SEND_RETRY_ATTEMPTS = parseInt(process.env.BAILEYS_SEND_RETRY_ATTEMPTS || '2', 10);
+const MESSAGE_SEND_RETRY_BASE_MS = parseInt(process.env.BAILEYS_SEND_RETRY_BASE_MS || '500', 10);
+const MESSAGE_SEND_DELAY_MS = parseInt(process.env.BAILEYS_SEND_DELAY_MS || '0', 10);
+const RECENT_MESSAGE_CACHE_LIMIT = parseInt(process.env.BAILEYS_RECENT_MESSAGE_CACHE_LIMIT || '2000', 10);
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 const delay = ms => new Promise(res => setTimeout(res, ms));
+
+function getSessionQueue(sessionId) {
+    if (!messageQueues.has(sessionId)) {
+        messageQueues.set(sessionId, { messages: [], processing: false });
+    }
+    return messageQueues.get(sessionId);
+}
+
+async function sendMessageWithRetries(session, jid, msgObj) {
+    let lastError = null;
+    for (let attempt = 1; attempt <= MESSAGE_SEND_RETRY_ATTEMPTS; attempt += 1) {
+        try {
+            return await session.sock.sendMessage(jid, msgObj);
+        } catch (err) {
+            lastError = err;
+            const errMsg = err?.message || 'unknown error';
+            logger.warn(`⚠️ [Baileys] sendMessage attempt ${attempt}/${MESSAGE_SEND_RETRY_ATTEMPTS} failed for ${jid}: ${errMsg}`);
+            if (attempt < MESSAGE_SEND_RETRY_ATTEMPTS) {
+                const backoffMs = MESSAGE_SEND_RETRY_BASE_MS * Math.pow(2, attempt - 1);
+                logger.info(`⏳ [Baileys] retrying message to ${jid} after ${backoffMs}ms`);
+                await delay(backoffMs);
+            }
+        }
+    }
+    throw lastError;
+}
 
 async function processQueue(sessionId) {
     const queueData = messageQueues.get(sessionId);
     if (!queueData || queueData.processing) return;
 
     queueData.processing = true;
-    while (queueData.messages.length > 0) {
-        const session = sessions.get(sessionId);
-        if (!session || session.state !== 'open') {
-            queueData.processing = false;
-            return;
-        }
-
-        const { jid, message, buttons, listMessage, type, media_url, image_base64, resolve, reject } = queueData.messages.shift();
-        try {
-            // Resolve LID to actual phone number if necessary
-            let resolvedJid = jid;
-            if (jid.includes('@lid')) {
-                const lidMapping = jidMap.get(jid);
-                if (lidMapping && lidMapping.phone) {
-                    resolvedJid = `${lidMapping.phone}@s.whatsapp.net`;
-                    logger.info(`🔍 [Baileys] Resolved LID ${jid} to phone: ${resolvedJid}`);
-                } else {
-                    logger.warn(`⚠️ [Baileys] LID ${jid} not resolved, trying to send anyway`);
-                }
+    try {
+        while (queueData.messages.length > 0) {
+            const session = sessions.get(sessionId);
+            if (!session || session.state !== 'open') {
+                return;
             }
 
-            // "Fake Typing" behavior: send presence update first
-            await session.sock.sendPresenceUpdate('composing', resolvedJid);
-
-            // Random delay between 2-5 seconds
-            const randomDelay = Math.floor(Math.random() * (5000 - 2000 + 1)) + 2000;
-            logger.info(`⏳ [Baileys] Typing for ${randomDelay}ms before sending to ${resolvedJid}`);
-            await delay(randomDelay);
-
-            let msgObj = { text: message };
-
-            if (type === 'image_base64' && image_base64) {
-                // Handle base64 image (for invoice delivery)
-                logger.info(`🖼️ [Baileys] Preparing base64 image message. Size: ${image_base64.length / 1024 / 1024}MB`);
-                try {
-                    const imageBuffer = Buffer.from(image_base64, 'base64');
-                    msgObj = {
-                        image: imageBuffer,
-                        caption: message || 'Invoice'
-                    };
-                    logger.info(`🖼️ [Baileys] Base64 image converted to buffer (${imageBuffer.length} bytes) for sending`);
-                } catch (convertErr) {
-                    logger.error(`❌ [Baileys] Failed to convert base64 image: ${convertErr.message}`);
-                    msgObj = { text: `[Image failed to process: ${convertErr.message}]` };
+            const { jid, message, buttons, listMessage, type, media_url, image_base64, resolve, reject } = queueData.messages.shift();
+            try {
+                // Resolve LID to actual phone number if necessary
+                let resolvedJid = jid;
+                if (jid.includes('@lid')) {
+                    const lidMapping = jidMap.get(jid);
+                    if (lidMapping && lidMapping.phone) {
+                        resolvedJid = `${lidMapping.phone}@s.whatsapp.net`;
+                        logger.info(`🔍 [Baileys] Resolved LID ${jid} to phone: ${resolvedJid}`);
+                    } else {
+                        logger.warn(`⚠️ [Baileys] LID ${jid} not resolved, trying to send anyway`);
+                    }
                 }
-            } else if (type === 'audio' && media_url) {
-                // Audio message - download from URL and convert to buffer
-                logger.info(`📻 [Baileys] Preparing audio message. Downloading from: ${media_url.substring(0, 80)}`);
-                try {
-                    const audioResponse = await axios.get(media_url, { responseType: 'arraybuffer', timeout: 15000 });
-                    const audioBuffer = Buffer.from(audioResponse.data);
-                    logger.info(`📻 [Baileys] Audio downloaded. Buffer size: ${audioBuffer.length} bytes`);
-                    
-                    msgObj = {
-                        audio: audioBuffer,
-                        mimetype: 'audio/ogg; codecs=opus',
-                        ptt: true,
-                        caption: message || undefined
-                    };
-                    logger.info(`📻 [Baileys] Audio buffer prepared for sending. mimetype=audio/ogg; codecs=opus, ptt=true, size=${audioBuffer.length}`);
-                } catch (downloadErr) {
-                    logger.error(`❌ [Baileys] Failed to download audio from ${media_url}: ${downloadErr.message}`);
-                    msgObj = { text: `[Audio failed to download: ${downloadErr.message}]` };
+
+                if (MESSAGE_SEND_DELAY_MS > 0) {
+                    logger.info(`⏳ [Baileys] waiting ${MESSAGE_SEND_DELAY_MS}ms before sending to ${resolvedJid}`);
+                    await delay(MESSAGE_SEND_DELAY_MS);
                 }
-            } else if (listMessage) {
-                // Baileys-এ লিস্ট মেসেজ পাঠানোর সঠিক পদ্ধতি (To avoid .match() crash)
-                msgObj = {
-                    text: listMessage.description || message || "Please select an option",
-                    footer: listMessage.footerText || "",
-                    title: listMessage.title || "",
-                    buttonText: listMessage.buttonText || "Select",
-                    sections: listMessage.sections,
-                    viewOnce: true
-                };
-            } else if (buttons && buttons.length > 0) {
-                msgObj = {
-                    text: message,
-                    buttons: buttons,
-                    headerType: 1,
-                    viewOnce: true
-                };
+
+                let msgObj = { text: message };
+
+                if (type === 'image_base64' && image_base64) {
+                    // Handle base64 image (for invoice delivery)
+                    logger.info(`🖼️ [Baileys] Preparing base64 image message. Size: ${image_base64.length / 1024 / 1024}MB`);
+                    try {
+                        const imageBuffer = Buffer.from(image_base64, 'base64');
+                        msgObj = {
+                            image: imageBuffer,
+                            caption: message || 'Invoice'
+                        };
+                        logger.info(`🖼️ [Baileys] Base64 image converted to buffer (${imageBuffer.length} bytes) for sending`);
+                    } catch (convertErr) {
+                        logger.error(`❌ [Baileys] Failed to convert base64 image: ${convertErr.message}`);
+                        msgObj = { text: `[Image failed to process: ${convertErr.message}]` };
+                    }
+                } else if (type === 'image' && media_url) {
+                    logger.info(`🖼️ [Baileys] Preparing image message from URL: ${media_url.substring(0, 120)}`);
+                    try {
+                        const imageResponse = await axios.get(media_url, { responseType: 'arraybuffer', timeout: 20000 });
+                        const imageBuffer = Buffer.from(imageResponse.data);
+                        logger.info(`🖼️ [Baileys] Image downloaded. Buffer size: ${imageBuffer.length} bytes`);
+                        
+                        let resizedBuffer = imageBuffer;
+                        try {
+                            const image = await Jimp.read(imageBuffer);
+                            const maxWidth = 1080;
+                            const originalMime = image.getMIME();
+                            if (image.bitmap.width > maxWidth) {
+                                image.resize(maxWidth, Jimp.AUTO);
+                            }
+
+                            if (originalMime === Jimp.MIME_JPEG) {
+                                image.quality(85);
+                                resizedBuffer = await image.getBufferAsync(Jimp.MIME_JPEG);
+                            } else {
+                                resizedBuffer = await image.getBufferAsync(originalMime);
+                            }
+
+                            logger.info(`🖼️ [Baileys] Image resized to ${image.bitmap.width}x${image.bitmap.height} and encoded as ${originalMime}. New size: ${resizedBuffer.length} bytes`);
+                        } catch (resizeErr) {
+                            logger.warn(`⚠️ [Baileys] Image resize failed, sending original image: ${resizeErr.message}`);
+                        }
+
+                        msgObj = {
+                            image: resizedBuffer,
+                            caption: message || ''
+                        };
+                        logger.info(`🖼️ [Baileys] Image message prepared for sending with caption: ${message ? message.substring(0, 120) : '<empty>'}`);
+                    } catch (downloadErr) {
+                        logger.error(`❌ [Baileys] Failed to download image from ${media_url}: ${downloadErr.message}`);
+                        msgObj = { text: message || `[Image failed to download: ${downloadErr.message}]` };
+                    }
+                } else if (type === 'audio' && media_url) {
+                    // Audio message - download from URL and convert to buffer
+                    logger.info(`📻 [Baileys] Preparing audio message. Downloading from: ${media_url.substring(0, 80)}`);
+                    try {
+                        const audioResponse = await axios.get(media_url, { responseType: 'arraybuffer', timeout: 15000 });
+                        const audioBuffer = Buffer.from(audioResponse.data);
+                        logger.info(`📻 [Baileys] Audio downloaded. Buffer size: ${audioBuffer.length} bytes`);
+                        
+                        msgObj = {
+                            audio: audioBuffer,
+                            mimetype: 'audio/ogg; codecs=opus',
+                            ptt: true,
+                            caption: message || undefined
+                        };
+                        logger.info(`📻 [Baileys] Audio buffer prepared for sending. mimetype=audio/ogg; codecs=opus, ptt=true, size=${audioBuffer.length}`);
+                    } catch (downloadErr) {
+                        logger.error(`❌ [Baileys] Failed to download audio from ${media_url}: ${downloadErr.message}`);
+                        msgObj = { text: `[Audio failed to download: ${downloadErr.message}]` };
+                    }
+                } else if (listMessage) {
+                    // Baileys-এ লিস্ট মেসেজ পাঠানোর সঠিক পদ্ধতি (To avoid .match() crash)
+                    msgObj = {
+                        text: listMessage.description || message || "Please select an option",
+                        footer: listMessage.footerText || "",
+                        title: listMessage.title || "",
+                        buttonText: listMessage.buttonText || "Select",
+                        sections: listMessage.sections,
+                        viewOnce: true
+                    };
+                } else if (buttons && buttons.length > 0) {
+                    msgObj = {
+                        text: message,
+                        buttons: buttons,
+                        headerType: 1,
+                        viewOnce: true
+                    };
+                }
+
+                const sent = await sendMessageWithRetries(session, resolvedJid, msgObj);
+                logger.info(`✅ [Baileys] Sent successfully to ${resolvedJid}. MessageId: ${sent?.key?.id}`);
+                logger.debug(`📝 [Baileys] Full message object sent: ${JSON.stringify(msgObj).substring(0, 300)}`);
+                logger.debug(`📝 [Baileys] Send response: ${JSON.stringify(sent).substring(0, 300)}`);
+                resolve({ success: true, messageId: sent?.key?.id });
+            } catch (err) {
+                logger.error(`❌ [Baileys] Send FAILED to ${jid}: ${err.message}`);
+                reject(err);
             }
-
-            const sent = await session.sock.sendMessage(jid, msgObj);
-            logger.info(`✅ [Baileys] Sent successfully to ${jid}. MessageId: ${sent?.key?.id}`);
-            logger.debug(`📝 [Baileys] Full message object sent: ${JSON.stringify(msgObj).substring(0, 300)}`);
-            logger.debug(`📝 [Baileys] Send response: ${JSON.stringify(sent).substring(0, 300)}`);
-            resolve({ success: true, messageId: sent?.key?.id });
-        } catch (err) {
-            logger.error(`❌ [Baileys] Send FAILED to ${jid}: ${err.message}`);
-            reject(err);
         }
+    } catch (err) {
+        logger.error(`❌ [Baileys] Queue processing failed for sessionId=${sessionId}: ${err.message}`);
+    } finally {
+        queueData.processing = false;
     }
-    queueData.processing = false;
 }
 
 async function forwardToN8n(payload) {
-    const webhookUrl = N8N_WEBHOOK_URL || `${N8N_WEBHOOK_INTERNAL_URL}/webhook/whatsapp-incoming`;
-    if (!webhookUrl) {
-        logger.warn(`⚠️ [Baileys→N8N] No N8N webhook configured, skipping forward`);
+    const targetWebhook = DJANGO_WHATSAPP_WEBHOOK_URL || N8N_WEBHOOK_URL || `${N8N_WEBHOOK_INTERNAL_URL}/webhook/whatsapp-incoming`;
+    if (!targetWebhook) {
+        logger.warn(`⚠️ [Baileys→Ingress] No webhook configured, skipping forward`);
         return;
     }
 
     const tryPost = async (url) => {
-        logger.info(`📤 [Baileys→N8N] Forwarding message from ${payload.phone} to ${url}: "${payload.message.substring(0, 50)}..."`);
-        logger.debug(`📦 [Baileys→N8N] Payload: ${JSON.stringify(payload)}`);
-        return axios.post(url, payload, { timeout: 10000 });
+        logger.info(`📤 [Baileys→Ingress] Forwarding message from ${payload.phone} to ${url}: "${payload.message.substring(0, 50)}..."`);
+        logger.debug(`📦 [Baileys→Ingress] Payload: ${JSON.stringify(payload)}`);
+        return axios.post(url, payload, { timeout: 15000 });
     };
 
     try {
-        const response = await tryPost(webhookUrl);
-        logger.info(`✅ [Baileys→N8N] Message forwarded successfully. Status: ${response.status}`);
-        logger.debug(`📄 [Baileys→N8N] Response: ${JSON.stringify(response.data).substring(0, 200)}`);
+        const response = await tryPost(targetWebhook);
+        logger.info(`✅ [Baileys→Ingress] Message forwarded successfully. Status: ${response.status}`);
+        logger.debug(`📄 [Baileys→Ingress] Response: ${JSON.stringify(response.data).substring(0, 200)}`);
         return;
     } catch (err) {
-        logger.error(`❌ [Baileys→N8N] Primary webhook forward failed: ${err.message}`);
-        logger.error(`   URL: ${webhookUrl}`);
+        logger.error(`❌ [Baileys→Ingress] Primary webhook forward failed: ${err.message}`);
+        logger.error(`   URL: ${targetWebhook}`);
         logger.error(`   Error Code: ${err.code || err.response?.status}`);
         logger.error(`   Detail: ${err.response?.data ? JSON.stringify(err.response.data) : err.stack}`);
 
-        // Fallback to internal Docker n8n if the external URL is unreachable or not matching
-        const internalUrl = `${N8N_WEBHOOK_INTERNAL_URL}/webhook/whatsapp-incoming`;
-        if (internalUrl !== webhookUrl) {
+        if (targetWebhook !== N8N_WEBHOOK_URL && N8N_WEBHOOK_URL) {
             try {
-                logger.info(`🔁 [Baileys→N8N] Trying internal fallback URL: ${internalUrl}`);
-                const response = await tryPost(internalUrl);
-                logger.info(`✅ [Baileys→N8N] Internal fallback forwarded successfully. Status: ${response.status}`);
-                logger.debug(`📄 [Baileys→N8N] Internal response: ${JSON.stringify(response.data).substring(0, 200)}`);
+                logger.info(`🔁 [Baileys→Ingress] Trying configured N8N webhook fallback: ${N8N_WEBHOOK_URL}`);
+                const response = await tryPost(N8N_WEBHOOK_URL);
+                logger.info(`✅ [Baileys→Ingress] N8N fallback forwarded successfully. Status: ${response.status}`);
+                logger.debug(`📄 [Baileys→Ingress] N8N fallback response: ${JSON.stringify(response.data).substring(0, 200)}`);
                 return;
             } catch (fallbackErr) {
-                logger.error(`❌ [Baileys→N8N] Internal webhook fallback failed: ${fallbackErr.message}`);
+                logger.error(`❌ [Baileys→Ingress] N8N fallback failed: ${fallbackErr.message}`);
+                logger.error(`   URL: ${N8N_WEBHOOK_URL}`);
+                logger.error(`   Error Code: ${fallbackErr.code || fallbackErr.response?.status}`);
+                logger.error(`   Detail: ${fallbackErr.response?.data ? JSON.stringify(fallbackErr.response.data) : fallbackErr.stack}`);
+            }
+        }
+
+        const internalUrl = `${N8N_WEBHOOK_INTERNAL_URL}/webhook/whatsapp-incoming`;
+        if (internalUrl !== targetWebhook && internalUrl !== N8N_WEBHOOK_URL) {
+            try {
+                logger.info(`🔁 [Baileys→Ingress] Trying internal fallback URL: ${internalUrl}`);
+                const response = await tryPost(internalUrl);
+                logger.info(`✅ [Baileys→Ingress] Internal fallback forwarded successfully. Status: ${response.status}`);
+                logger.debug(`📄 [Baileys→Ingress] Internal response: ${JSON.stringify(response.data).substring(0, 200)}`);
+                return;
+            } catch (fallbackErr) {
+                logger.error(`❌ [Baileys→Ingress] Internal webhook fallback failed: ${fallbackErr.message}`);
                 logger.error(`   URL: ${internalUrl}`);
                 logger.error(`   Error Code: ${fallbackErr.code || fallbackErr.response?.status}`);
                 logger.error(`   Detail: ${fallbackErr.response?.data ? JSON.stringify(fallbackErr.response.data) : fallbackErr.stack}`);
@@ -240,6 +329,7 @@ async function initSession(sessionId, phoneNumber = null) {
         initializing: true
     };
     sessions.set(sessionId, sessionData);
+    getSessionQueue(sessionId);
 
     try {
         const sessionFolder = path.join(AUTH_BASE_FOLDER, sessionId);
@@ -297,6 +387,11 @@ async function initSession(sessionId, phoneNumber = null) {
                 sessionData.phone = jidNormalizedUser(sock.user?.id)?.split('@')[0];
                 logger.info(`[Session: ${sessionId}] ✅ Connected as ${sessionData.phone}`);
                 await notifyDjangoSync(sessionId, sessionData.phone, sock.user?.name || '');
+                const queueData = getSessionQueue(sessionId);
+                if (queueData.messages.length > 0) {
+                    logger.info(`[Session: ${sessionId}] Resuming queued messages: ${queueData.messages.length}`);
+                    processQueue(sessionId).catch(err => logger.error(`Queue resume error: ${err.message}`));
+                }
                 return;
             }
 
@@ -348,6 +443,12 @@ async function initSession(sessionId, phoneNumber = null) {
                 }
 
                 const from = msg.key.remoteJid;
+                if (msg?.key?.id) {
+                    recentMessages.set(msg.key.id, { sessionId, message: msg });
+                    if (recentMessages.size > RECENT_MESSAGE_CACHE_LIMIT) {
+                        recentMessages.delete(recentMessages.keys().next().value);
+                    }
+                }
                 const messageType = Object.keys(msg.message || {})[0] || 'unknown';
                 let messageContent = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
                 let mediaPayload = {};
@@ -356,12 +457,20 @@ async function initSession(sessionId, phoneNumber = null) {
                 const decryptMedia = async (messageObj, type) => {
                     try {
                         logger.info(`🔐 [Baileys] Decrypting ${type} media...`);
-                        const mediaBuffer = await sock.downloadMediaMessage(messageObj);
+                        const mediaBuffer = await downloadMediaMessage(
+                            messageObj,
+                            'buffer',
+                            {},
+                            {
+                                logger,
+                                reuploadRequest: sock.updateMediaMessage
+                            }
+                        );
                         if (!mediaBuffer || mediaBuffer.length === 0) {
                             logger.warn(`⚠️  [Baileys] Media decryption returned empty buffer for ${type}`);
                             return null;
                         }
-                        const mediaBase64 = mediaBuffer.toString('base64');
+                        const mediaBase64 = Buffer.from(mediaBuffer).toString('base64');
                         logger.info(`✅ [Baileys] ${type} decrypted successfully. Buffer size: ${mediaBuffer.length} bytes, Base64 length: ${mediaBase64.length}`);
                         return mediaBase64;
                     } catch (decryptErr) {
@@ -371,7 +480,7 @@ async function initSession(sessionId, phoneNumber = null) {
                 };
 
                 if (messageType === 'imageMessage') {
-                    const imageBase64 = await decryptMedia(msg.message.imageMessage, 'image');
+                    const imageBase64 = await decryptMedia(msg, 'image');
                     mediaPayload = {
                         message_type: 'image',
                         mimetype: msg.message.imageMessage?.mimetype || 'image/jpeg',
@@ -385,7 +494,7 @@ async function initSession(sessionId, phoneNumber = null) {
                     }
                     logger.info(`📸 [Baileys] Image decrypted: ${imageBase64 ? imageBase64.substring(0, 50) : 'FAILED'}`);
                 } else if (messageType === 'videoMessage') {
-                    const videoBase64 = await decryptMedia(msg.message.videoMessage, 'video');
+                    const videoBase64 = await decryptMedia(msg, 'video');
                     mediaPayload = {
                         message_type: 'video',
                         mimetype: msg.message.videoMessage?.mimetype || 'video/mp4',
@@ -398,7 +507,7 @@ async function initSession(sessionId, phoneNumber = null) {
                         messageContent = msg.message.videoMessage?.caption || '[Video received]';
                     }
                 } else if (messageType === 'audioMessage') {
-                    const audioBase64 = await decryptMedia(msg.message.audioMessage, 'audio');
+                    const audioBase64 = await decryptMedia(msg, 'audio');
                     mediaPayload = {
                         message_type: 'audio',
                         mimetype: msg.message.audioMessage?.mimetype || 'audio/ogg',
@@ -410,7 +519,7 @@ async function initSession(sessionId, phoneNumber = null) {
                         messageContent = '[Audio received]';
                     }
                 } else if (messageType === 'documentMessage') {
-                    const documentBase64 = await decryptMedia(msg.message.documentMessage, 'document');
+                    const documentBase64 = await decryptMedia(msg, 'document');
                     mediaPayload = {
                         message_type: 'document',
                         mimetype: msg.message.documentMessage?.mimetype || 'application/octet-stream',
@@ -541,6 +650,51 @@ app.get('/pairing-code/:sessionId', (req, res) => {
     res.json({ pairingCode: session.pairingCode });
 });
 
+app.get('/media/message/:sessionId/:messageId', async (req, res) => {
+    const { sessionId, messageId } = req.params;
+    if (!sessionId || !messageId) {
+        return res.status(400).json({ error: 'sessionId and messageId are required' });
+    }
+
+    const session = sessions.get(sessionId);
+    if (!session || session.state !== 'open') {
+        return res.status(503).json({ error: 'WhatsApp session not connected' });
+    }
+
+    const cached = recentMessages.get(messageId);
+    if (!cached || cached.sessionId !== sessionId || !cached.message) {
+        return res.status(404).json({ error: 'Message not cached or not found' });
+    }
+
+    try {
+        const buffer = await downloadMediaMessage(
+            cached.message,
+            'buffer',
+            {},
+            {
+                logger,
+                reuploadRequest: session.sock.updateMediaMessage
+            }
+        );
+        if (!buffer || buffer.length === 0) {
+            return res.status(500).json({ error: 'Failed to decrypt media' });
+        }
+
+        const mediaType = Object.keys(cached.message.message || {})[0] || 'application/octet-stream';
+        let mimeType = 'application/octet-stream';
+        if (mediaType === 'imageMessage') mimeType = cached.message.message.imageMessage?.mimetype || 'image/jpeg';
+        if (mediaType === 'videoMessage') mimeType = cached.message.message.videoMessage?.mimetype || 'video/mp4';
+        if (mediaType === 'audioMessage') mimeType = cached.message.message.audioMessage?.mimetype || 'audio/ogg';
+        if (mediaType === 'documentMessage') mimeType = cached.message.message.documentMessage?.mimetype || 'application/octet-stream';
+
+        res.set('Content-Type', mimeType);
+        res.send(buffer);
+    } catch (err) {
+        logger.error(`❌ [Baileys] /media/message download failed: ${err.message}`);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.post('/send-message', async (req, res) => {
     const { sessionId, to, message, text, buttons, interactiveButtons, listMessage, type, media_url } = req.body;
     const secret = req.headers['x-api-secret'];
@@ -564,12 +718,18 @@ app.post('/send-message', async (req, res) => {
         return res.status(503).json({ error: 'WhatsApp session not connected' });
     }
 
-    if (!messageQueues.has(sessionId)) {
-        messageQueues.set(sessionId, { messages: [], processing: false });
+    const queueData = getSessionQueue(sessionId);
+    const totalQueueLength = Array.from(messageQueues.values()).reduce((count, queue) => count + queue.messages.length, 0);
+    if (totalQueueLength >= MAX_QUEUE_LENGTH) {
+        logger.warn(`⚠️ [Queue] Global queue limit reached: ${totalQueueLength}`);
+        return res.status(429).json({ error: 'Global message queue limit reached. Try again later.' });
+    }
+    if (queueData.messages.length >= MAX_QUEUE_PER_SESSION) {
+        logger.warn(`⚠️ [Queue] Session queue limit reached for ${sessionId}: ${queueData.messages.length}`);
+        return res.status(429).json({ error: 'Session queue limit reached. Please retry shortly.' });
     }
 
     const jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
-    const queueData = messageQueues.get(sessionId);
 
     const sendPromise = new Promise((resolve, reject) => {
         queueData.messages.push({ 
@@ -621,12 +781,18 @@ app.post('/send-message-base64', async (req, res) => {
         return res.status(503).json({ error: 'WhatsApp session not connected' });
     }
 
-    if (!messageQueues.has(sessionId)) {
-        messageQueues.set(sessionId, { messages: [], processing: false });
+    const queueData = getSessionQueue(sessionId);
+    const totalQueueLength = Array.from(messageQueues.values()).reduce((count, queue) => count + queue.messages.length, 0);
+    if (totalQueueLength >= MAX_QUEUE_LENGTH) {
+        logger.warn(`⚠️ [Queue] Global queue limit reached: ${totalQueueLength}`);
+        return res.status(429).json({ error: 'Global message queue limit reached. Try again later.' });
+    }
+    if (queueData.messages.length >= MAX_QUEUE_PER_SESSION) {
+        logger.warn(`⚠️ [Queue] Session queue limit reached for ${sessionId}: ${queueData.messages.length}`);
+        return res.status(429).json({ error: 'Session queue limit reached. Please retry shortly.' });
     }
 
     const jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
-    const queueData = messageQueues.get(sessionId);
 
     const sendPromise = new Promise((resolve, reject) => {
         queueData.messages.push({

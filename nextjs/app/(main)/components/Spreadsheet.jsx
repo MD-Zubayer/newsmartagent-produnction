@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"; // URL চেঞ্জ করার
 import * as XLSX from "xlsx";
 import toast from "react-hot-toast";
 import api from "@/lib/api";
+import ImageManagementModal from "./ImageManagementModal";
 import {
   Save,
   Undo2,
@@ -27,7 +28,8 @@ import {
   X,
   List as ListIcon,
   Globe,
-  User
+  User,
+  Image as ImageIcon
 } from "lucide-react";
 
 /* ================= CONFIG ================= */
@@ -55,6 +57,27 @@ const evaluateFormula = (value) => {
     }
   }
   return value;
+};
+
+const refusalCaptionTriggers = [
+  'unable to provide',
+  'unable to analyze',
+  'unable to',
+  "can't analyze",
+  'cannot analyze',
+  'cannot provide',
+  'cannot assist',
+  'sorry',
+  "i'm unable",
+  "i'm sorry",
+  'cannot help',
+  'not able to',
+];
+
+const isCaptionRefusal = (value) => {
+  if (!value || typeof value !== 'string') return false;
+  const lowerValue = value.toLowerCase();
+  return refusalCaptionTriggers.some((phrase) => lowerValue.includes(phrase));
 };
 
 // রেঞ্জ চেক ফাংশন
@@ -112,20 +135,23 @@ const RowHeader = ({ index, style, data }) => {
 
 /* ================= VIRTUAL CELL ================= */
 const Cell = memo(({ columnIndex, rowIndex, style, data }) => {
-  const { sheet, selection, handleMouseDown, handleMouseEnter, updateCell, dark, zoom, fontSize, fontFamily, rowImageInputRef, setUploadRowTarget, handleRowImageDelete } = data;
-  
+  const { sheet, selection, handleMouseDown, handleMouseEnter, updateCell, dark, zoom, fontSize, fontFamily, rowImageInputRef, setUploadRowTarget, handleRowImageDelete, setSelectedRowForImageModal, setIsImageModalOpen, setHoveredRow, captionRetrying, retryCaptionForRow } = data;
   const cellKey = `${rowIndex}-${columnIndex}`;
   const rawValue = sheet?.data?.[cellKey] || "";
   const formatting = sheet?.formatting?.[cellKey] || {};
-  
+
   const isStartCell = selection.start.row === rowIndex && selection.start.col === columnIndex;
   const inRange = isInRange(rowIndex, columnIndex, selection.start, selection.end);
 
   const isImportant = typeof rawValue === 'string' && rawValue.endsWith('*');
   const cleanValue = isImportant ? rawValue.slice(0, -1) : rawValue;
-  const displayValue = isStartCell ? rawValue : evaluateFormula(cleanValue);
   const isImageCell = columnIndex === 0 && rowIndex > 0;
   const isImageUrl = typeof rawValue === 'string' && /^(https?:\/\/|\/)/.test(rawValue);
+  const displayValue = isImageCell && isImageUrl ? '' : (isStartCell ? rawValue : evaluateFormula(cleanValue));
+  const rowImageUrl = sheet?.data?.[`${rowIndex}-0`] || '';
+  const isCaptionColumn = columnIndex === 1 && rowIndex > 0;
+  const isCaptionError = isCaptionColumn && isCaptionRefusal(displayValue);
+  const isRetrying = captionRetrying?.[rowIndex];
   const isMessageCard = rowIndex > 0 && !isStartCell && !isImageCell && typeof cleanValue === 'string' && cleanValue.trim().length > 0;
 
   return (
@@ -144,7 +170,8 @@ const Cell = memo(({ columnIndex, rowIndex, style, data }) => {
         ${isImportant && !inRange ? (dark ? "bg-rose-900/10 text-rose-300" : "bg-rose-50/50 text-rose-600") : ""}
       `}
       onMouseDown={(e) => handleMouseDown(rowIndex, columnIndex, e)}
-      onMouseEnter={() => handleMouseEnter(rowIndex, columnIndex)}
+      onMouseEnter={() => { handleMouseEnter(rowIndex, columnIndex); try { setHoveredRow && setHoveredRow(rowIndex); } catch (err) {} }}
+      onMouseLeave={() => { try { setHoveredRow && setHoveredRow(null); } catch (err) {} }}
     >
       {isImageCell ? (
         <div className="relative w-full h-full overflow-hidden rounded-sm">
@@ -157,7 +184,7 @@ const Cell = memo(({ columnIndex, rowIndex, style, data }) => {
             />
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-slate-100 dark:bg-slate-900 text-slate-400 text-xs">
-              <span>No image</span>
+             
               <button
                 onClick={(ev) => { ev.stopPropagation(); setUploadRowTarget(rowIndex); rowImageInputRef.current && rowImageInputRef.current.click(); }}
                 title="Upload image from device"
@@ -177,11 +204,15 @@ const Cell = memo(({ columnIndex, rowIndex, style, data }) => {
                 <Upload size={14} />
               </button>
               <button
-                onClick={(ev) => { ev.stopPropagation(); handleRowImageDelete(rowIndex); }}
-                title="Delete image from row"
-                className="bg-white/90 dark:bg-black/70 p-1 rounded-md shadow-sm text-rose-600 hover:bg-rose-100 dark:hover:bg-rose-900/60"
+                onClick={(ev) => {
+                  ev.stopPropagation();
+                  setSelectedRowForImageModal(rowIndex);
+                  setIsImageModalOpen(true);
+                }}
+                title="Open image modal"
+                className="bg-white/90 dark:bg-black/70 p-1 rounded-md shadow-sm text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800/70"
               >
-                <X size={14} />
+                <ImageIcon size={14} />
               </button>
             </div>
           )}
@@ -211,6 +242,21 @@ const Cell = memo(({ columnIndex, rowIndex, style, data }) => {
       )}
       {isImportant && !inRange && (
         <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-rose-500 rounded-full"></div>
+      )}
+      {isCaptionError && (
+        <div className="absolute top-1 right-1 flex items-center gap-1">
+          <span className="rounded-full bg-rose-50 text-rose-700 text-[10px] px-2 py-0.5 border border-rose-200">Warning</span>
+          <button
+            onClick={(ev) => {
+              ev.stopPropagation();
+              if (rowImageUrl) retryCaptionForRow(rowIndex);
+            }}
+            disabled={!rowImageUrl || isRetrying}
+            className="inline-flex items-center justify-center rounded-full bg-white/90 text-rose-700 border border-rose-200 px-2 py-0.5 text-[10px] font-semibold hover:bg-rose-100 disabled:opacity-50"
+          >
+            {isRetrying ? 'Retrying…' : 'Retry'}
+          </button>
+        </div>
       )}
       {isImageCell && !rawValue && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-[10px] text-slate-400">Image URL</div>
@@ -284,6 +330,12 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
   const [imageInputMode, setImageInputMode] = useState('url');
   const [imageInputUrl, setImageInputUrl] = useState('');
   const [uploadRowTarget, setUploadRowTarget] = useState(null);
+  const [captionRetrying, setCaptionRetrying] = useState({});
+  
+  // 🖼️ Image Management Modal State
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [selectedRowForImageModal, setSelectedRowForImageModal] = useState(null);
+  const [hoveredRow, setHoveredRow] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -524,7 +576,7 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
   };
 
   const uploadImageFileToRow = async (file, rowIndex) => {
-    if (!file || rowIndex == null) return null;
+    if (!file || rowIndex == null) return { imageUrl: null, caption: null };
     try {
       const fd = new FormData();
       fd.append('file', file);
@@ -532,11 +584,14 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
       const res = await api.post(`/datasheet/spreadsheets/${sheetId}/row-image/`, fd, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      return res?.data?.image_url || null;
+      return {
+        imageUrl: res?.data?.image_url || null,
+        caption: res?.data?.image_caption || ''
+      };
     } catch (err) {
       console.error('Row image upload failed', err);
       alert('Image upload failed');
-      return null;
+      return { imageUrl: null, caption: null };
     }
   };
 
@@ -544,10 +599,15 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
     const file = e.target.files[0];
     if (!file || uploadRowTarget == null) return;
 
-    const imageUrl = await uploadImageFileToRow(file, uploadRowTarget);
+    const { imageUrl, caption } = await uploadImageFileToRow(file, uploadRowTarget);
     if (imageUrl) {
-      const key = `${uploadRowTarget}-0`;
-      const updatedData = { ...sheet.data, [key]: imageUrl };
+      const imageKey = `${uploadRowTarget}-0`;
+      const captionKey = `${uploadRowTarget}-1`;
+      const updatedData = { 
+        ...sheet.data, 
+        [imageKey]: imageUrl,
+        [captionKey]: caption || ''
+      };
       pushToHistory({ ...sheet, data: updatedData });
       await api.put(`/datasheet/spreadsheets/${sheetId}/`, { ...sheet, data: updatedData, is_dark_mode: dark });
     }
@@ -565,10 +625,15 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
     event.preventDefault();
     const file = event.dataTransfer.files?.[0];
     if (!file || rowIndex == null) return;
-    const imageUrl = await uploadImageFileToRow(file, rowIndex);
+    const { imageUrl, caption } = await uploadImageFileToRow(file, rowIndex);
     if (imageUrl) {
-      const key = `${rowIndex}-0`;
-      const updatedData = { ...sheet.data, [key]: imageUrl };
+      const imageKey = `${rowIndex}-0`;
+      const captionKey = `${rowIndex}-1`;
+      const updatedData = { 
+        ...sheet.data, 
+        [imageKey]: imageUrl,
+        [captionKey]: caption || ''
+      };
       pushToHistory({ ...sheet, data: updatedData });
       await api.put(`/datasheet/spreadsheets/${sheetId}/`, { ...sheet, data: updatedData, is_dark_mode: dark });
     }
@@ -582,8 +647,16 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
     pushToHistory({ ...sheet, data: updatedData });
     setImageInputUrl('');
     try {
-      await api.put(`/datasheet/spreadsheets/${sheetId}/row-image/`, { row_index: rowIndex, image_url: imageInputUrl });
-      await api.put(`/datasheet/spreadsheets/${sheetId}/`, { ...sheet, data: updatedData, is_dark_mode: dark });
+      const res = await api.put(`/datasheet/spreadsheets/${sheetId}/row-image/`, { row_index: rowIndex, image_url: imageInputUrl, refresh_caption: true });
+      const caption = res?.data?.image_caption || '';
+      if (caption) {
+        const captionKey = `${rowIndex}-1`;
+        const withCaption = { ...updatedData, [captionKey]: caption };
+        pushToHistory({ ...sheet, data: withCaption });
+        await api.put(`/datasheet/spreadsheets/${sheetId}/`, { ...sheet, data: withCaption, is_dark_mode: dark });
+      } else {
+        await api.put(`/datasheet/spreadsheets/${sheetId}/`, { ...sheet, data: updatedData, is_dark_mode: dark });
+      }
     } catch (err) {
       console.error('Failed to persist image URL', err);
     }
@@ -591,60 +664,54 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
 
   const handleRowImageDelete = async (rowIndex) => {
     if (rowIndex == null) return;
-    
-    toast((t) => (
-      <div className="flex flex-col gap-3 w-80">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center">
-            <Trash2 size={18} className="text-rose-600 dark:text-rose-400" />
-          </div>
-          <div className="flex-1">
-            <p className="font-bold text-sm text-slate-900 dark:text-white">Delete Image?</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Row A{rowIndex} image will be permanently removed</p>
-          </div>
-        </div>
-        <div className="flex gap-2 ml-auto pr-2">
-          <button
-            onClick={() => toast.dismiss(t.id)}
-            className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold hover:bg-slate-300 dark:hover:bg-slate-600 transition-all"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={async () => {
-              toast.dismiss(t.id);
-              const deleteToast = toast.loading('Deleting...', { 
-                style: { background: '#fee2e2', color: '#991b1b' }
-              });
-              try {
-                await api.delete(`/datasheet/spreadsheets/${sheetId}/row-image/`, { data: { row_index: rowIndex } });
-                const key = `${rowIndex}-0`;
-                const updatedData = { ...sheet.data };
-                delete updatedData[key];
-                pushToHistory({ ...sheet, data: updatedData });
-                await api.put(`/datasheet/spreadsheets/${sheetId}/`, { ...sheet, data: updatedData, is_dark_mode: dark });
-                toast.success('Image deleted successfully', { id: deleteToast });
-              } catch (err) {
-                console.error('Failed to delete row image', err);
-                toast.error('Unable to delete image', { id: deleteToast });
-              }
-            }}
-            className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold transition-all"
-          >
-            Delete
-          </button>
-        </div>
-      </div>
-    ), {
-      duration: 10000,
-      style: {
-        background: '#fafafa',
-        color: '#000',
-        border: '1px solid #e5e7eb',
-        borderRadius: '12px',
-        boxShadow: '0 10px 25px rgba(0,0,0,0.1)'
-      }
-    });
+    if (!confirm(`Delete image for row ${rowIndex}?`)) return;
+    try {
+      // Server endpoint supports removing the row image for a given row index
+      await api.delete(`/datasheet/spreadsheets/${sheetId}/row-image/`, { data: { row_index: rowIndex } });
+
+      // Remove the image cell locally and persist sheet
+      const key = `${rowIndex}-0`;
+      const updatedData = { ...sheet.data };
+      delete updatedData[key];
+      pushToHistory({ ...sheet, data: updatedData });
+      await api.put(`/datasheet/spreadsheets/${sheetId}/`, { ...sheet, data: updatedData, is_dark_mode: dark });
+      toast.success('Row image deleted');
+    } catch (err) {
+      console.error('Failed to delete row image', err);
+      toast.error('Failed to delete image');
+    }
+  };
+
+  const retryCaptionForRow = async (rowIndex) => {
+    if (rowIndex == null || !sheetId) return;
+    const imageKey = `${rowIndex}-0`;
+    const captionKey = `${rowIndex}-1`;
+    const imageUrl = sheet.data[imageKey];
+
+    if (!imageUrl) {
+      toast.error('No product image found in Column A to refresh caption.');
+      return;
+    }
+
+    setCaptionRetrying((prev) => ({ ...prev, [rowIndex]: true }));
+
+    try {
+      const res = await api.put(`/datasheet/spreadsheets/${sheetId}/row-image/`, {
+        row_index: rowIndex,
+        image_url: imageUrl,
+        refresh_caption: true,
+      });
+      const newCaption = res?.data?.image_caption || '';
+      const updatedData = { ...sheet.data, [captionKey]: newCaption };
+      pushToHistory({ ...sheet, data: updatedData });
+      await api.put(`/datasheet/spreadsheets/${sheetId}/`, { ...sheet, data: updatedData, is_dark_mode: dark });
+      toast.success('Caption retried successfully');
+    } catch (err) {
+      console.error('Caption retry failed', err);
+      toast.error('Failed to retry caption.');
+    } finally {
+      setCaptionRetrying((prev) => ({ ...prev, [rowIndex]: false }));
+    }
   };
 
   const loadFile = (id) => {
@@ -1009,6 +1076,20 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
              <button onClick={() => setZoom(z => Math.min(200, z + 10))} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-slate-500 transition-colors"><ZoomIn size={14}/></button>
         </div>
 
+        {/* 🖼️ Image Management Button */}
+        <button
+          onClick={() => {
+            const r = (typeof hoveredRow === 'number' && hoveredRow !== null) ? hoveredRow : selection.start.row;
+            setSelectedRowForImageModal(r);
+            setIsImageModalOpen(true);
+          }}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/40 text-blue-600 dark:text-blue-400 border border-slate-200 dark:border-slate-700 transition-all shadow-sm text-xs font-semibold"
+          title="Manage row images"
+        >
+          <ImageIcon size={14} />
+          <span className="hidden sm:inline">Images</span>
+        </button>
+
         {/* Import/Export */}
         <div className="flex items-center gap-1 shrink-0">
             <input type="file" accept=".xlsx,.xls,.csv,.pdf,.docx" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileUpload} />
@@ -1041,39 +1122,6 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
 
       {/* GRID */}
       <div className={`flex-1 w-full overflow-hidden relative flex ${dark ? "bg-slate-900" : "bg-white"}`}>
-        <div className="hidden lg:flex flex-col w-72 min-w-[280px] border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950/95 p-4 gap-4">
-            <div className="flex items-center justify-between gap-2">
-                <div>
-                    <div className="text-xs uppercase tracking-[0.2em] font-semibold text-slate-500 dark:text-slate-400">Image preview</div>
-                    <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">Row A{selectedRowIndex}</div>
-                </div>
-                <div className={`text-[10px] px-2 py-1 rounded-full ${selectedRowHasImage ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300'}`}>
-                    {selectedRowHasImage ? 'Loaded' : 'Empty'}
-                </div>
-            </div>
-            <div className="relative h-52 rounded-3xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex items-center justify-center text-slate-500 dark:text-slate-400" onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleImageDrop(e, selectedRowIndex)}>
-                {selectedRowHasImage ? (
-                    <img src={selectedRowImageUrl} alt={`Row ${selectedRowIndex} image`} className="object-cover w-full h-full" />
-                ) : (
-                    <div className="flex flex-col items-center justify-center gap-2 px-4 text-center text-sm">
-                        <div className="text-lg">📷</div>
-                        <div>Drop an image here or upload to row A{selectedRowIndex}.</div>
-                    </div>
-                )}
-            </div>
-            <div className="space-y-2">
-                <button onClick={() => handleToolbarUploadClick(selectedRowIndex)} className="w-full px-4 py-2 rounded-2xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">Upload from device</button>
-                {imageInputMode === 'url' ? (
-                    <button onClick={handleApplyImageUrl} className="w-full px-4 py-2 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-100 text-sm font-semibold hover:bg-slate-100 dark:hover:bg-slate-800">Apply URL to A{selectedRowIndex}</button>
-                ) : null}
-                {selectedRowHasImage ? (
-                    <button onClick={() => handleRowImageDelete(selectedRowIndex)} className="w-full px-4 py-2 rounded-2xl border border-rose-200 dark:border-rose-700 bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 text-sm font-semibold hover:bg-rose-100 dark:hover:bg-rose-900">Delete row image</button>
-                ) : null}
-                <div className="text-xs text-slate-500 dark:text-slate-400 leading-5">
-                    Drag image files here or use the top toolbar to choose device upload or URL input.
-                </div>
-            </div>
-        </div>
         <div className="flex-1 relative">
             <AutoSizer>
                 {({ height, width }) => {
@@ -1101,7 +1149,7 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
                                     {RowHeader}
                                 </List>
                             </div>
-                            <Grid ref={gridRef} className="outline-none custom-scrollbar" columnCount={sheet.cols} columnWidth={scaledCellWidth} height={height - COL_HEADER_HEIGHT} rowCount={sheet.rows} rowHeight={scaledCellHeight} width={width - responsiveRowHeaderWidth} itemData={{ sheet, selection, handleMouseDown, handleMouseEnter, updateCell, dark, zoom, fontSize, fontFamily, rowImageInputRef, setUploadRowTarget, handleRowImageDelete }} onScroll={onGridScroll}>
+                                <Grid ref={gridRef} className="outline-none custom-scrollbar" columnCount={sheet.cols} columnWidth={scaledCellWidth} height={height - COL_HEADER_HEIGHT} rowCount={sheet.rows} rowHeight={scaledCellHeight} width={width - responsiveRowHeaderWidth} itemData={{ sheet, selection, handleMouseDown, handleMouseEnter, updateCell, dark, zoom, fontSize, fontFamily, rowImageInputRef, setUploadRowTarget, handleRowImageDelete, setSelectedRowForImageModal, setIsImageModalOpen, setHoveredRow, captionRetrying, retryCaptionForRow }} onScroll={onGridScroll}>
                                 {Cell}
                             </Grid>
                         </div>
@@ -1122,6 +1170,33 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
             <span className={`text-[7px] sm:text-xs ${saving ? "text-yellow-600 dark:text-yellow-400" : "text-emerald-600 dark:text-emerald-400"}`}><span className="hidden sm:inline">{saving ? "Saving..." : "Saved"}</span><span className="sm:hidden">{saving ? "..." : "✓"}</span></span>
          </div>
       </div>
+
+      {/* 🖼️ Image Management Modal */}
+      <ImageManagementModal
+        sheetId={sheetId}
+        rowIndex={selectedRowForImageModal}
+        fallbackRowImageUrl={selectedRowForImageModal !== null ? sheet.data[`${selectedRowForImageModal}-0`] : null}
+        isOpen={isImageModalOpen}
+        onClose={() => setIsImageModalOpen(false)}
+        onPrimaryImageChanged={async (primaryImage) => {
+          // Update cell with primary image URL when changed from modal
+          if (selectedRowForImageModal === null) return;
+          const key = `${selectedRowForImageModal}-0`;
+          const updatedData = { ...sheet.data };
+          if (primaryImage) {
+            updatedData[key] = primaryImage.url;
+          } else {
+            delete updatedData[key];
+          }
+          const newSheet = { ...sheet, data: updatedData };
+          pushToHistory(newSheet);
+          try {
+            await api.put(`/datasheet/spreadsheets/${sheetId}/`, { ...newSheet, is_dark_mode: dark });
+          } catch (err) {
+            console.error('Failed to persist sheet image update', err);
+          }
+        }}
+      />
     </div>
   );
 }

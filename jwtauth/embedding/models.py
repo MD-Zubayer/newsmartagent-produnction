@@ -46,6 +46,58 @@ class SpreadsheetKnowledge(models.Model):
         return f"{self.user.email}"
 
 
+class RowImage(models.Model):
+    """
+    🖼️ Stores multiple images per row with embeddings and captions.
+    Replaces single image_url field in SpreadsheetKnowledge.
+    """
+    IMAGE_SOURCE_CHOICES = [
+        ('manual', 'Manual'),
+        ('auto_search', 'Auto Search'),
+        ('playwright', 'Playwright'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='row_images')
+    row_id = models.CharField(max_length=50, db_index=True)  # Format: "sheet_{id}_row_{index}"
+    
+    # Image storage and metadata
+    image_url = models.TextField()  # URL on MinIO/S3 or external URL
+    image_filename = models.CharField(max_length=255, blank=True, default='')
+    image_caption = models.TextField(blank=True, default='')
+    image_embedding = VectorField(dimensions=768, null=True, blank=True)
+    
+    # Metadata
+    source = models.CharField(max_length=20, choices=IMAGE_SOURCE_CHOICES, default='manual')
+    is_primary = models.BooleanField(default=False, help_text="Primary image for row thumbnail")
+    position = models.IntegerField(default=0, help_text="Order index for display")
+    
+    # Tracking
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['position', 'created_at']
+        indexes = [
+            HnswIndex(
+                name='row_image_embedding_hnsw_idx',
+                fields=['image_embedding'],
+                m=16,
+                ef_construction=64,
+                opclasses=['vector_cosine_ops']
+            )
+        ]
+        unique_together = [['user', 'row_id', 'image_url']]
+
+    def __str__(self):
+        return f"RowImage-{self.row_id}: {self.image_filename or 'N/A'}"
+
+    def save(self, *args, **kwargs):
+        """Ensure only one primary image per row"""
+        if self.is_primary:
+            RowImage.objects.filter(user=self.user, row_id=self.row_id, is_primary=True).exclude(pk=self.pk).update(is_primary=False)
+        super().save(*args, **kwargs)
+
+
 class Document(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='documents')
     title = models.CharField(max_length=255, default='Untitled Document')

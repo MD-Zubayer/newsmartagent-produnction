@@ -428,6 +428,7 @@ class CustomerOrder(models.Model):
     upazila = models.CharField(max_length=30, blank=True, null=True)
     address = models.TextField()
     product_name = models.CharField(max_length=255, null=True, blank=True)
+    items = models.JSONField(default=list, blank=True, null=True, help_text="List of items: [{'name': '...', 'quantity': 1, 'price': 100}]")
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     extra_info = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')

@@ -293,6 +293,27 @@ class OrderFallbackRegressionTests(TestCase):
         print("✅ TEST 4 PASSED: Deterministic field validation working correctly.")
 
     # ============================================================
+    # TEST 4B: Editing state should overwrite existing order fields
+    # ============================================================
+    def test_4b_editing_overwrites_existing_order_field(self):
+        user_memory = _get_or_create_user_memory(self.agent_config, self.sender_id)
+        order_data = {
+            'customer_name': 'জাহিদ',
+            'phone_number': '01711111111',
+            'address': 'ঢাকা',
+            'product_name': 'রেডমি নোট',
+            'quantity': '1'
+        }
+        _save_order_fields_to_memory(user_memory, order_data)
+        _set_order_state(user_memory, 'editing')
+
+        updated = extract_order_data_from_text('নতুন নম্বর 01712345679', dict(order_data), user_memory)
+        self.assertEqual(updated.get('phone_number'), '01712345679')
+        self.assertEqual(updated.get('customer_name'), 'জাহিদ')
+
+        print("✅ TEST 4B PASSED: Editing state order field overwrite works correctly.")
+
+    # ============================================================
     # TEST 5: Validation with Strike Increment
     # ============================================================
     def test_5_validation_failure_increments_strike(self):

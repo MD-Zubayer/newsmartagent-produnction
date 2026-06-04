@@ -7,6 +7,7 @@ from embedding.models import SpreadsheetKnowledge
 import logging
 import requests
 from io import BytesIO
+from PIL import Image
 from settings.models import GlobalSettings
 import base64
 import imghdr
@@ -165,7 +166,8 @@ def sync_spreadsheet_to_knowledge(user, grid_data, sheet_id):
             # Use provider from GlobalSettings
             global_settings = GlobalSettings.get_settings()
             selected_provider = getattr(global_settings, 'image_caption_provider', 'gemini') or 'gemini'
-            image_caption = get_image_caption(image_url, provider=selected_provider)
+            fallback_text = row_text or 'Product Image'
+            image_caption = get_image_caption(image_url, provider=selected_provider, fallback_text=fallback_text)
             obj.image_url = image_url
             obj.image_caption = image_caption or ''
             if image_vector:
@@ -261,7 +263,72 @@ def detect_image_format_from_bytes(image_data):
     return 'image/jpeg', 'fallback_default'
 
 
-def get_gemini_image_caption(image_url):
+def is_refusal_caption(caption):
+    if not caption or not isinstance(caption, str):
+        return False
+    refusal_phrases = [
+        "unable to provide",
+        "unable to analyze",
+        "unable to",
+        "can't analyze",
+        "cannot analyze",
+        "cannot provide",
+        "cannot assist",
+        "sorry",
+        "i'm unable",
+        "i'm sorry",
+        "cannot help",
+        "not able to",
+    ]
+    lower_caption = caption.lower()
+    return any(phrase in lower_caption for phrase in refusal_phrases)
+
+
+def get_safe_caption(caption, fallback_text=None):
+    if not caption or not isinstance(caption, str):
+        print(f"⚠️ [BUG] Caption generation returned empty or invalid result.")
+        return fallback_text or "Product Image"
+
+    if is_refusal_caption(caption):
+        print(f"⚠️ [BUG] Vision model refused to caption the image: {caption[:120]}")
+        if fallback_text:
+            return fallback_text
+        return "Product Image"
+
+    return caption.strip()
+
+
+def resize_image_bytes(image_data, max_width=1000, quality=85):
+    if not image_data or len(image_data) == 0:
+        return image_data
+
+    try:
+        image = Image.open(BytesIO(image_data))
+    except Exception as e:
+        print(f"⚠️ [BUG] Failed to open image for resizing: {e}")
+        return image_data
+
+    original_width, original_height = image.size
+    if original_width <= max_width:
+        return image_data
+
+    ratio = max_width / float(original_width)
+    new_height = int(original_height * ratio)
+    image = image.convert('RGB')
+    image = image.resize((max_width, new_height), Image.LANCZOS)
+
+    output = BytesIO()
+    try:
+        image.save(output, format='JPEG', quality=quality, optimize=True)
+        resized_data = output.getvalue()
+        print(f"✅ [DEBUG] Resized image from {original_width}x{original_height} to {max_width}x{new_height} ({len(resized_data)} bytes)")
+        return resized_data
+    except Exception as e:
+        print(f"⚠️ [BUG] Failed to save resized image: {e}")
+        return image_data
+
+
+def get_gemini_image_caption(image_url, fallback_text=None):
     print(f"\n--- [DEBUG] Starting Image Caption Process ---")
     print(f"[DEBUG] Image URL type: {type(image_url)}, length: {len(image_url) if image_url else 0}")
     print(f"[DEBUG] URL starts with: {image_url[:80] if image_url else 'None'}")
@@ -308,6 +375,10 @@ def get_gemini_image_caption(image_url):
         else:
             print(f"[DEBUG] Using MIME type: {mime_type}")
 
+        # Optimize the payload for vision model calls
+        image_data = resize_image_bytes(image_data, max_width=1000, quality=85)
+        mime_type = 'image/jpeg'
+
         # ৪. প্রম্পট তৈরি করা (SMART structured prompt for DB-ready caption)
         prompt = (
             "Analyze this product image and extract key details for a search database. "
@@ -339,12 +410,13 @@ def get_gemini_image_caption(image_url):
         
         caption = response.text.strip() if getattr(response, 'text', None) else None
         if caption:
-            print(f"✅ [DEBUG] Generated Image Caption: {caption[:120]}")
+            final_caption = get_safe_caption(caption, fallback_text=fallback_text)
+            print(f"✅ [DEBUG] Generated Image Caption: {final_caption[:120]}")
             print(f"--- [DEBUG] Image Caption Process Finished ---\n")
-            return caption
+            return final_caption
         else:
             print(f"❌ [DEBUG] No caption generated (empty response). Response text attr: {getattr(response, 'text', 'NO TEXT ATTR')}")
-            return None
+            return get_safe_caption(None, fallback_text=fallback_text)
             
     except requests.exceptions.RequestException as e:
         import traceback
@@ -358,7 +430,7 @@ def get_gemini_image_caption(image_url):
         return None
 
 
-def get_openai_image_caption(image_url):
+def get_openai_image_caption(image_url, fallback_text=None):
     print(f"--- [DEBUG] Starting OpenAI Image Caption Process ---")
     print(f"[DEBUG] Image URL: {image_url}")
 
@@ -380,14 +452,18 @@ def get_openai_image_caption(image_url):
         
         if image_url.startswith('data:'):
             # Data URL from Baileys decrypted media
-            print(f"[DEBUG] Detected data URL (Baileys decrypted media). Using directly...")
-            data_url = image_url
-            # Extract MIME type for logging
+            print(f"[DEBUG] Detected data URL (Baileys decrypted media). Extracting base64...")
             try:
-                mime_type = image_url.split(';')[0].replace('data:', '')
-                print(f"[DEBUG] MIME type from data URL: {mime_type}")
-            except:
-                pass
+                header, b64_data = image_url.split(',', 1)
+                mime_type = header.split(';')[0].replace('data:', '')
+                image_data = base64.b64decode(b64_data)
+                image_data = resize_image_bytes(image_data, max_width=1000, quality=85)
+                mime_type = 'image/jpeg'
+                data_url = f"data:{mime_type};base64,{base64.b64encode(image_data).decode('utf-8')}"
+                print(f"✅ [DEBUG] Resized data URL image. MIME: {mime_type}, Size: {len(image_data)} bytes")
+            except Exception as e:
+                print(f"❌ [DEBUG] Failed to parse data URL: {e}")
+                return None
         else:
             # Regular URL - download normally
             print(f"[DEBUG] Downloading image from URL...")
@@ -409,11 +485,15 @@ def get_openai_image_caption(image_url):
             else:
                 print(f"[DEBUG] Using MIME type from header: {mime_type}")
 
-            # ४. बाइट्स कو base64 में कनवर्ट करा
+            # Optimize bytes before encoding
+            image_data = resize_image_bytes(image_data, max_width=1000, quality=85)
+            mime_type = 'image/jpeg'
+
+            # ৪. बाइट्स कו base64 میں کنورٹ करा
             image_base64 = base64.b64encode(image_data).decode('utf-8')
             print(f"[DEBUG] Converted image to base64. Length: {len(image_base64)} characters")
 
-            # ५. डेटा URL बनाना (base64 एन्कोडेड)
+            # ৫. डेटा URL बनाना (base64 एन्कोडेड)
             data_url = f"data:{mime_type};base64,{image_base64}"
             print(f"[DEBUG] Created data URL for OpenAI")
 
@@ -451,12 +531,13 @@ def get_openai_image_caption(image_url):
         caption = response.choices[0].message.content.strip() if response.choices else None
 
         if caption:
-            print(f"✅ [DEBUG] Generated Image Caption: {caption[:120]}")
+            final_caption = get_safe_caption(caption, fallback_text=fallback_text)
+            print(f"✅ [DEBUG] Generated Image Caption: {final_caption[:120]}")
             print(f"--- [DEBUG] Image Caption Process Finished ---\n")
-            return caption
+            return final_caption
         else:
             print(f"❌ [DEBUG] No caption generated (empty response). Choices: {response.choices}")
-            return None
+            return get_safe_caption(None, fallback_text=fallback_text)
             
     except requests.exceptions.RequestException as e:
         import traceback
@@ -471,16 +552,15 @@ def get_openai_image_caption(image_url):
 
 
 
-def get_image_caption(image_url, provider='gemini'):
+def get_image_caption(image_url, provider='gemini', fallback_text=None):
     print(f"\n[DEBUG] get_image_caption() called with provider='{provider}'")
     if provider and str(provider).lower() == 'openai':
         print(f"[DEBUG] Using OpenAI provider for caption generation")
-        return get_openai_image_caption(image_url)
+        return get_openai_image_caption(image_url, fallback_text=fallback_text)
     print(f"[DEBUG] Using Gemini provider for caption generation (default or explicit)")
-    return get_gemini_image_caption(image_url)
+    return get_gemini_image_caption(image_url, fallback_text=fallback_text)
 
-import re
-from embedding.models import DocumentKnowledge
+
 def _get_image_bytes_from_source(image_url: str):
     """Accepts a data URL or HTTP(S) URL, returns bytes and mime if possible."""
     if not image_url or not isinstance(image_url, str):
@@ -505,38 +585,6 @@ def _get_image_bytes_from_source(image_url: str):
     except Exception:
         return None, None
 
-
-def get_gemini_image_caption(image_url: str):
-    """Simple image caption: detects format and returns brief description."""
-    image_data, mime = _get_image_bytes_from_source(image_url)
-    if not image_data:
-        logger.debug(f"get_gemini_image_caption: no image data from {image_url}")
-        return None
-
-    detected_mime, method = detect_image_format_from_bytes(image_data)
-    mime = mime or detected_mime
-
-    # Try PIL for size/mode
-    info = None
-    if Image:
-        try:
-            img = Image.open(BytesIO(image_data))
-            info = f"{img.format}, {img.width}x{img.height}, {img.mode}"
-        except Exception:
-            pass
-
-    if not info:
-        info = f"{mime} (unknown size)"
-
-    caption = f"Image ({info})"
-    logger.debug(f"get_gemini_image_caption: {caption} via {method}")
-    return caption
-
-
-def get_openai_image_caption(image_url: str):
-    """Alias to Gemini caption for now; accepts data URLs."""
-    # Reuse the simple caption logic to ensure media flow works
-    return get_gemini_image_caption(image_url)
 
 import re
 from embedding.models import DocumentKnowledge
