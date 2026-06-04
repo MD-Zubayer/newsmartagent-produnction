@@ -208,18 +208,46 @@ def _deliver_images_for_ai_response(request_type, data, parsed_ai, best_row_id, 
         return False, None
 
     try:
+        # Retrieve image parameters from parsed AI response
+        limit = int(parsed_ai.get('image_limit', 3))
+        query = parsed_ai.get('image_query', '').strip()
+        image_more = parsed_ai.get('image_more', False)
+        if isinstance(image_more, str):
+            image_more = image_more.strip().lower() in ['true', 'yes', '1']
+
+        # Get user memory to check image history
+        sender_id = str(data.get('delivery_jid') or data.get('sender_id') or data.get('chat_id') or '')
+        user_memory = _get_or_create_user_memory(agent_config, sender_id)
+        memory_data = user_memory.data or {}
+        image_history = memory_data.get('image_history', {})
+
+        # Calculate offset for pagination
+        offset = 0
+        if image_more and image_history.get('last_row_id') == best_row_id:
+            offset = image_history.get('delivered_count', 0)
+
         tool_result = execute_image_delivery_tool(
             user_id=agent_config.user.id,
             sheet_id=sheet_id,
             tool_params={
                 'row_index': row_index,
                 'platform': platform,
-                'limit': 3,
+                'limit': limit,
+                'query': query,
+                'offset': offset,
             },
             agent_config=agent_config
         )
+
         if tool_result.get('status') != 'success':
-            logger.warning(f'Image delivery tool failed: {tool_result.get('message')}')
+            logger.warning(f"Image delivery tool failed: {tool_result.get('message')}")
+            # Override reply text
+            if image_more:
+                parsed_ai['reply'] = "দুঃখিত, আর কোনো ছবি নেই।"
+            elif query:
+                parsed_ai['reply'] = f"দুঃখিত, '{query}' রঙের/স্টাইলের কোনো ছবি পাওয়া যায়নি।"
+            else:
+                parsed_ai['reply'] = "দুঃখিত, এই প্রোডাক্টের কোনো ছবি পাওয়া যায়নি।"
             return False, None
 
         images = tool_result.get('images', []) or []
@@ -227,6 +255,13 @@ def _deliver_images_for_ai_response(request_type, data, parsed_ai, best_row_id, 
         captions = [img.get('caption') or '' for img in images if img.get('url')]
         if not image_urls:
             logger.warning('Image delivery tool returned no image URLs.')
+            # Override reply text
+            if image_more:
+                parsed_ai['reply'] = "দুঃখিত, আর কোনো ছবি নেই।"
+            elif query:
+                parsed_ai['reply'] = f"দুঃখিত, '{query}' রঙের/স্টাইলের কোনো ছবি পাওয়া যায়নি।"
+            else:
+                parsed_ai['reply'] = "দুঃখিত, এই প্রোডাক্টের কোনো ছবি পাওয়া যায়নি।"
             return False, None
 
         message_text = parsed_ai.get('reply', '').strip() or None
@@ -236,7 +271,7 @@ def _deliver_images_for_ai_response(request_type, data, parsed_ai, best_row_id, 
 
         route_result = route_images(
             platform=platform,
-            recipient_id=str(data.get('delivery_jid') or data.get('sender_id') or data.get('chat_id') or ''),
+            recipient_id=sender_id,
             image_urls=image_urls,
             captions=captions,
             agent_config=agent_config,
@@ -245,6 +280,20 @@ def _deliver_images_for_ai_response(request_type, data, parsed_ai, best_row_id, 
 
         if route_result.get('status') == 'success':
             logger.info(f'Image delivery succeeded for {platform} row {row_index}')
+            
+            # Update image history in memory
+            new_delivered_count = len(image_urls)
+            if image_more and image_history.get('last_row_id') == best_row_id:
+                new_delivered_count += image_history.get('delivered_count', 0)
+            
+            memory_data['image_history'] = {
+                'last_row_id': best_row_id,
+                'delivered_count': new_delivered_count,
+                'updated_at': timezone.now().isoformat()
+            }
+            user_memory.data = memory_data
+            user_memory.save(update_fields=['data'])
+            
             return True, route_result
         logger.warning(f'Image delivery routing failed: {route_result}')
         return False, route_result
@@ -972,35 +1021,10 @@ def handle_order_button_action(agent_config, contact, action, page_id, platform)
     return delivered
 
 
-BUTTON_SEND_INTERVAL = int(os.getenv("BUTTON_SEND_INTERVAL", "5"))  # প্রতি কতো message পর button যাবে
-BUTTON_COUNTER_TTL = 7 * 24 * 60 * 60  # ৭ দিন
-
-
-def _should_send_buttons(contact_id: int, platform: str) -> bool:
-    """
-    প্রথম AI reply তে সবসময় buttons পাঠাবে।
-    তারপর প্রতি BUTTON_SEND_INTERVAL (ডিফল্ট ৫) message পর পর।
-    Redis counter দিয়ে track করা হয় — DB migration ছাড়াই।
-    """
-    try:
-        key = f"btn_msg_count:{contact_id}:{platform}"
-        count = r.incr(key)           # atomically increment; returns new value
-        if count == 1:
-            # প্রথমবার key তৈরি হলে TTL সেট করো
-            r.expire(key, BUTTON_COUNTER_TTL)
-            return True              # ১ম message — সবসময় পাঠাও
-        if count % BUTTON_SEND_INTERVAL == 0:
-            return True             # প্রতি ৫ম message এ পাঠাও
-        return False
-    except Exception as exc:
-        logger.warning(f"_should_send_buttons redis error: {exc}")
-        return True                 # Redis ব্যর্থ হলে fallback: সবসময় পাঠাও
-
-
 def _maybe_send_button_voice_hint(request_type, data, sender_id, page_id, effective_access_token, contact_obj):
     """Send one periodic voice hint when control buttons are delivered externally."""
-    # Disabled by user request: voice messages should only go when they explicitly select 1, 2, etc.
-    return False
+    if not contact_obj or request_type not in BUTTON_VOICE_PLATFORMS:
+        return False
 
     voice_file = os.getenv("BUTTON_CONTROL_VOICE_FILE", "on-human-mode.wav")
     ttl_seconds = int(os.getenv("BUTTON_CONTROL_VOICE_TTL_SECONDS", str(30 * 24 * 60 * 60)))
@@ -1645,10 +1669,6 @@ def _send_platform_buttons_alone(request_type, data, sender_id, page_id, effecti
 def _deliver_reply_with_buttons(request_type, data, clean_reply, sender_id, page_id, effective_access_token, agent_config, send_buttons=True):
     from aiAgent.models import Contact
     contact_obj = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
-
-    # ✅ Interval guard: প্রথম message এ এবং প্রতি ৫ম message এ buttons পাঠাও
-    if send_buttons and contact_obj:
-        send_buttons = _should_send_buttons(contact_obj.id, request_type)
     
     if request_type == 'whatsapp':
         if send_buttons and contact_obj:
@@ -2847,12 +2867,17 @@ def process_ai_reply_task(self, data):
                 'Order_data should include customer_name, phone_number, address, product_name, quantity, and extra_info when available. '
                 'Do not ask for price and do not invent price. Price is authoritative from merchant catalog/database and backend will merge it.'
                 '\nYour output MUST always strictly follow this JSON structure: '
-                '{"reply": "string", "cache_type": "string", "human_handoff": boolean, "image_intent": boolean, "image_style": "string"}. '
-                'Always include "image_intent" and "image_style" in the JSON response. '
-                'If the user explicitly asks for photos/images (for example, "ছবি দেন", "পিকচার দেখান", "image please"), set "image_intent": true and "image_style": "image_with_caption". '
-                'If the user does not ask for images, set "image_intent": false and "image_style": "none" or "".'
-                '\nWhen the user asks for product images, do NOT say "I do not have images" even if [KNOWLEDGE BASE DATA] does not contain image URLs. '
-                'Instead, reply naturally that you are providing product images and set "image_intent": true so backend can deliver them.'
+                '{"reply": "string", "cache_type": "string", "human_handoff": boolean, "image_intent": boolean, "image_style": "string", "image_limit": integer, "image_query": "string", "image_more": boolean}. '
+                'Always include all image-related fields in the JSON response. '
+                '\nWhen the user asks for product images, follow these Product Filtering rules: '
+                '1. FIRST, check if the requested product exists in [KNOWLEDGE BASE DATA]. '
+                '2. If the product does NOT exist in [KNOWLEDGE BASE DATA] (or if there is only a completely different product like mobile when asking for a panjabi), set "image_intent": false, "image_style": "none", "image_limit": 3, "image_query": "", "image_more": false, and reply politely that the product is not available. '
+                '3. If the product DOES exist in [KNOWLEDGE BASE DATA], set "image_intent": true and "image_style": "image_with_caption". '
+                'If they specify a count/limit of images, set "image_limit" to that integer, otherwise default to 3. '
+                'If they specify a color/style (e.g., "sada", "red", "white", "black"), set "image_query" to that color/style name, otherwise default to "". '
+                'If they ask for more/additional/other images of the same product (e.g., "more", "আরও ছবি", "আগেরটার আরও দেখান"), set "image_more": true, otherwise default to false. '
+                'Do NOT say "I do not have images" if the product exists but no image URLs are in [KNOWLEDGE BASE DATA]; instead, reply naturally that you are providing the images and set "image_intent": true so the backend can deliver them.'
+                '\nIf the user does not ask for images, set "image_intent": false, "image_style": "none" or "", "image_limit": 3, "image_query": "", "image_more": false.'
                 '\nIf the user has already provided a field earlier in the conversation, do not ask for that field again. '
                 'If the user gives multiple fields in one message, extract them and proceed. '
                 '\nSTRICT: No markdown blocks, no preamble, and ensure JSON syntax is perfect.'
@@ -3022,6 +3047,8 @@ def process_ai_reply_task(self, data):
                     )
                     if image_delivered:
                         logger.info(f'AI image delivery performed: {image_route}')
+                    # Re-read reply from parsed in case it was overridden (e.g., no/pagination images)
+                    reply = parsed.get('reply', reply)
 
                 # ---- 3-Tier Grouped Cache Save ----
                 if cache_type == 'global':

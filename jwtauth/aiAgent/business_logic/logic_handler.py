@@ -1237,9 +1237,9 @@ def send_whatsapp_buttons(data, contact, reply_text="\u200e"):
             labels.append(f"{i}: {label}")
         menu_text += "  |  ".join(labels)
     else:
-        opt1 = "1: Human"
+        opt1 = "1: Human Mode"
         if contact.is_human_needed:
-            opt1 = "1: AI Reply"
+            opt1 = "1: Resolve Human"
             
         opt2 = "2: Off AI"
         if not contact.is_auto_reply_enabled:

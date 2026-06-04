@@ -746,6 +746,8 @@ class RowImagePresignedURLView(APIView):
         row_index = request.query_params.get('row_index')
         platform = request.query_params.get('platform', '').lower()
         limit = int(request.query_params.get('limit', 3))
+        query = request.query_params.get('query', '').strip()
+        offset = int(request.query_params.get('offset', 0))
         
         # Validate row_index
         if not row_index:
@@ -779,12 +781,34 @@ class RowImagePresignedURLView(APIView):
             row_id = f"sheet_{sheet_id}_row_{row_index}"
             
             # Get images for the row, ordered by position
-            images = RowImage.objects.filter(
+            images_qs = RowImage.objects.filter(
                 user=request.user,
                 row_id=row_id
-            ).order_by('position')[:limit]
+            )
             
-            if not images:
+            if query:
+                from embedding.utils import get_gemini_embedding
+                query_vector = get_gemini_embedding(query)
+                if query_vector:
+                    from pgvector.django import CosineDistance
+                    # Search using multimodal vector embedding
+                    filtered_images = images_qs.annotate(
+                        distance=CosineDistance('image_embedding', query_vector)
+                    ).filter(image_embedding__isnull=False, distance__lt=0.65).order_by('distance')
+                    
+                    if filtered_images.exists():
+                        images_qs = filtered_images
+                    else:
+                        images_qs = RowImage.objects.none()
+                else:
+                    images_qs = RowImage.objects.none()
+            else:
+                images_qs = images_qs.order_by('position')
+
+            total_matching = images_qs.count()
+            images = images_qs[offset:offset+limit]
+            
+            if not images and offset == 0:
                 return Response(
                     {'error': 'No images found for this row'},
                     status=status.HTTP_404_NOT_FOUND
@@ -811,6 +835,8 @@ class RowImagePresignedURLView(APIView):
                 'platform': platform,
                 'expires_in': expiration,
                 'total': len(presigned_data),
+                'total_matching': total_matching,
+                'offset': offset,
                 'caller_info': caller_info,  # For audit logging
             })
 

@@ -54,13 +54,15 @@ class ImageDeliveryTool:
         
         return True, "Valid"
     
-    def get_presigned_urls(self, row_index: int, limit: int = 3) -> Optional[Dict[str, Any]]:
+    def get_presigned_urls(self, row_index: int, limit: int = 3, query: str = '', offset: int = 0) -> Optional[Dict[str, Any]]:
         """
         Fetch presigned URLs for images in a specific row
         
         Args:
             row_index: Row number to fetch images from
             limit: Maximum number of images to return (default: 3)
+            query: Semantic search query
+            offset: Image pagination offset
         
         Returns:
             Dictionary with presigned_urls, captions, platform, expires_in
@@ -80,6 +82,8 @@ class ImageDeliveryTool:
                 'row_index': row_index,
                 'platform': self.platform,
                 'limit': limit,
+                'query': query,
+                'offset': offset,
             }
             
             # Build headers: include service-to-service secret or internal token if configured
@@ -155,6 +159,15 @@ def get_image_delivery_tool_definition():
                     "type": "integer",
                     "description": "Maximum number of images to return (default: 3, max: 5)",
                     "default": 3
+                },
+                "query": {
+                    "type": "string",
+                    "description": "Optional semantic query/filter for image color or style (e.g. 'white', 'black', 'lal', 'sada')"
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Pagination offset to skip previously sent images",
+                    "default": 0
                 }
             },
             "required": ["row_index", "platform"]
@@ -184,6 +197,8 @@ def execute_image_delivery_tool(
         row_index = tool_params.get('row_index')
         platform = tool_params.get('platform', '').lower()
         limit = min(int(tool_params.get('limit', 3)), 5)  # Cap at 5
+        query = tool_params.get('query', '')
+        offset = int(tool_params.get('offset', 0))
         
         # Validate parameters
         if row_index is None:
@@ -205,7 +220,7 @@ def execute_image_delivery_tool(
             }
         
         # Fetch presigned URLs
-        result = tool.get_presigned_urls(row_index, limit)
+        result = tool.get_presigned_urls(row_index, limit, query, offset)
         
         if result:
             # Format result for AI consumption
@@ -216,6 +231,8 @@ def execute_image_delivery_tool(
                 "platform": platform,
                 "images": images,
                 "expires_in": result.get('expires_in', 60),
+                "total_matching": result.get('total_matching', len(images)),
+                "offset": result.get('offset', offset),
                 "row_id": result.get('row_id', f'sheet_{sheet_id}_row_{row_index}')
             }
         else:
