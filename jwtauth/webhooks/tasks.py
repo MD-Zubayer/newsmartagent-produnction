@@ -2233,26 +2233,22 @@ def process_ai_reply_task(self, data):
                             except Exception:
                                 product = None
 
-                        # If still not found, ask user to pick from catalog or clarify
+                        # If still not found, DON'T block the pipeline.
+                        # Instead, clear product_name from memory and let the
+                        # main AI + RAG pipeline handle disambiguation naturally.
                         if not product:
                             invalid_product = product_name or 'অজানা'
+                            logger.info(f"⚠️ Product '{invalid_product}' not found in catalog. Passing to main AI for smart disambiguation.")
                             _increment_field_failure(user_memory, 'product_name', invalid_product)
                             # remove product_name so user can re-provide
                             fields.pop('product_name', None)
                             internal = user_memory.data.get('_internal', {})
                             internal['order_fields'] = fields
+                            # Reset order state to 'ordering' so AI can continue collecting
+                            internal['order_state'] = 'ordering'
                             user_memory.data['_internal'] = internal
                             user_memory.save(update_fields=['data'])
-
-                            invalid_prompt = (
-                                f"দুঃখিত, '{invalid_product}' আমাদের ক্যাটালগে নেই। "
-                                "আপনি কি ক্যাটালগ দেখতে চান, না কি পণ্যের সঠিক নামটি আবার বলবেন?"
-                            )
-                            _deliver_reply_with_buttons(request_type, data, invalid_prompt, sender_id, page_id, effective_access_token, agent_config)
-                            if msg_id:
-                                r.set(f'processed_msg:{msg_id}', '1', ex=3600)
-                                r.delete(f'processing_msg:{msg_id}')
-                            return invalid_prompt
+                            # Fall through to main AI pipeline instead of returning
 
                         # Product resolved successfully — proceed to confirmation
                         _set_order_state(user_memory, 'awaiting_confirmation')
@@ -2818,7 +2814,7 @@ def process_ai_reply_task(self, data):
                 'Order_data should include customer_name, phone_number, address, product_name, quantity, and extra_info when available. '
                 'Do not ask for price and do not invent price. Price is authoritative from merchant catalog/database and backend will merge it.'
                 '\nYour output MUST always strictly follow this JSON structure: '
-                '{"reply": "string", "cache_type": "string", "human_handoff": boolean, "image_intent": boolean, "image_style": "string"}. '
+                '{"reply": "string", "cache_type": "string", "human_handoff": boolean, "image_intent": boolean, "image_style": "string", "order_intent": "string or null", "order_data": "object or null"}. '
                 'Always include "image_intent" and "image_style" in the JSON response. '
                 'If the user explicitly asks for photos/images (for example, "ছবি দেন", "পিকচার দেখান", "image please"), set "image_intent": true and "image_style": "image_with_caption". '
                 'If the user does not ask for images, set "image_intent": false and "image_style": "none" or "".'
@@ -2859,11 +2855,15 @@ def process_ai_reply_task(self, data):
                         is_json_handoff_override = True
 
                     logger.info(f"📋 AI cache_type classified as: '{cache_type}' for '{text[:30]}'")
+                    
+                    logger.info(f"AI Response JSON: {parsed}")
+                    
                     order_intent = parsed.get('order_intent')
                     order_data = parsed.get('order_data')
 
                     # If AI provided an order_intent, seed memory and optionally auto-confirm
                     if order_intent == 'create' and isinstance(order_data, dict):
+                        logger.info("Order intent detected! Processing order in DB...")
                         try:
                             # Seed parsed order fields into user memory (normalize + save)
                             user_memory = _get_or_create_user_memory(agent_config, sender_id)
