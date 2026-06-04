@@ -12,7 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 from datetime import timedelta
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 import os
 from dotenv import load_dotenv
 import dj_database_url
@@ -30,6 +30,11 @@ else:
     load_dotenv()
 
 
+def _normalize_redis_url(redis_url: str) -> str:
+    parsed = urlparse(redis_url)
+    return urlunparse(parsed._replace(query=""))
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
@@ -43,7 +48,7 @@ DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 MAIN_DOMAIN = os.environ.get('MAIN_DOMAIN', 'newsmartagent.com')
 N8N_DOMAIN = os.environ.get('N8N_DOMAIN', 'n8n.newsmartagent.com')
 PROJECT_NAME = os.environ.get('PROJECT_NAME', 'newsmartagent')
-REDIS_URL = os.environ.get('REDIS_URL', f"redis://{os.environ.get('REDIS_HOST', f'{PROJECT_NAME}-redis')}:{os.environ.get('REDIS_PORT', 6379)}/0")
+REDIS_URL = _normalize_redis_url(os.environ.get('REDIS_URL', f"redis://{os.environ.get('REDIS_HOST', f'{PROJECT_NAME}-redis')}:{os.environ.get('REDIS_PORT', 6379)}/0"))
 REDIS_HOST = os.environ.get('REDIS_HOST', f'{PROJECT_NAME}-redis')
 REDIS_PORT = int(os.environ.get('REDIS_PORT', 6379))
 

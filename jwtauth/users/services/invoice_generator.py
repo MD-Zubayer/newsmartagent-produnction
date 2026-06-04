@@ -122,6 +122,51 @@ class InvoiceImageGenerator:
             'DELIVERED': '#10b981'
         }
         status_color = status_color_map.get(status, '#6b7280')
+
+        # Generate table rows
+        items = order_data.get('items')
+        table_rows = ""
+        total_price = 0
+        
+        if items and isinstance(items, list) and len(items) > 0:
+            for idx, item in enumerate(items, 1):
+                name = item.get('name', 'Product')
+                qty = item.get('quantity', 1)
+                item_price = float(item.get('price', 0))
+                line_total = item_price * qty
+                total_price += line_total
+                
+                table_rows += f"""
+                        <tr>
+                            <td>{idx}</td>
+                            <td>
+                                <div class="item-name">{name} (x{qty})</div>
+                                <div class="item-description">Product order from {shop_name}</div>
+                            </td>
+                            <td style="text-align: right; font-weight: 600;">৳ {item_price:,.2f}</td>
+                            <td style="text-align: center;">
+                                <span class="status-badge">{status}</span>
+                            </td>
+                            <td style="text-align: right; font-weight: 700; color: #111827;">৳ {line_total:,.2f}</td>
+                        </tr>"""
+        else:
+            # Fallback
+            total_price = float(order_data.get('price', 0))
+            qty = int(order_data.get('item_quantity', 1))
+            
+            table_rows = f"""
+                        <tr>
+                            <td>1</td>
+                            <td>
+                                <div class="item-name">{product_name} (x{qty})</div>
+                                <div class="item-description">Product order from {shop_name}</div>
+                            </td>
+                            <td style="text-align: right; font-weight: 600;">৳ {(total_price/qty if qty > 0 else total_price):,.2f}</td>
+                            <td style="text-align: center;">
+                                <span class="status-badge">{status}</span>
+                            </td>
+                            <td style="text-align: right; font-weight: 700; color: #111827;">৳ {total_price:,.2f}</td>
+                        </tr>"""
         
         html = f"""
         <!DOCTYPE html>
@@ -451,18 +496,7 @@ class InvoiceImageGenerator:
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td>1</td>
-                            <td>
-                                <div class="item-name">{product_name}</div>
-                                <div class="item-description">Product order from {shop_name}</div>
-                            </td>
-                            <td style="text-align: right; font-weight: 600;">৳ {price:,.2f}</td>
-                            <td style="text-align: center;">
-                                <span class="status-badge">{status}</span>
-                            </td>
-                            <td style="text-align: right; font-weight: 700; color: #111827;">৳ {price:,.2f}</td>
-                        </tr>
+{table_rows}
                     </tbody>
                 </table>
                 
@@ -470,7 +504,7 @@ class InvoiceImageGenerator:
                     <div class="totals">
                         <div class="total-line">
                             <span>Subtotal:</span>
-                            <strong>৳ {price:,.2f}</strong>
+                            <strong>৳ {total_price:,.2f}</strong>
                         </div>
                         <div class="total-line">
                             <span>Shipping:</span>
@@ -482,7 +516,7 @@ class InvoiceImageGenerator:
                         </div>
                         <div class="total-final">
                             <span>TOTAL:</span>
-                            <span>৳ {price:,.2f}</span>
+                            <span>৳ {total_price:,.2f}</span>
                         </div>
                     </div>
                 </div>

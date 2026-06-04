@@ -2,6 +2,7 @@
 from celery import shared_task
 import requests
 import re
+import os
 
 from aiAgent.models import AgentAI
 from chat.services import save_message
@@ -82,7 +83,10 @@ def _default_direct_order_instructions():
         "When you have enough information for a complete order, return a valid JSON object with keys: "
         "\"reply\", \"cache_type\", \"human_handoff\", \"order_intent\", and \"order_data\". "
         "\"order_intent\" should be \"create\". "
-        "\"order_data\" should be an object containing customer_name, phone_number, address, product_name, quantity, and extra_info when available. Do not include price unless the user explicitly provided it; backend will merge catalog price. "
+        "\"order_data\" should be an object containing customer_name, phone_number, address, and extra_info when available. "
+        "CRITICAL: For products, \"order_data\" MUST include an \"items\" array. Each element in \"items\" must be an object with \"name\" and \"quantity\". "
+        "Example: \"items\": [{\"name\": \"product 1\", \"quantity\": 1}, {\"name\": \"product 2\", \"quantity\": 2}]. "
+        "Do not include price unless the user explicitly provided it; backend will merge catalog price. "
         "If the user is confirming details or answering follow-up questions, do not repeat earlier questions. "
         "Keep the reply natural, polite, and simple. "
         "If the user is not placing an order, answer normally."
@@ -93,6 +97,9 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
     sheet_context = ""
     extra_instruction = ""
     query_vector = existing_vector  # Initialize query_vector for later reuse
+    best_hit_row_id = None
+    RAG_TOP_K = int(os.getenv('RAG_TOP_K', '5'))
+    TOP_K = min(max(3, RAG_TOP_K), 10)
     rag_query = f"{post_context_text} {text}" if post_context_text else text
     
     def _confidence_label(distance):
@@ -107,7 +114,7 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
             return f"{score}% (Moderate)"
         return f"{score}% (Low)"
 
-    def _blend_vectors(vec_a, vec_b, weight_a=0.6, weight_b=0.4):
+    def _blend_vectors(vec_a, vec_b, weight_a=0.4, weight_b=0.6):
         if not vec_a or not vec_b or len(vec_a) != len(vec_b):
             return vec_a
         return [weight_a * a + weight_b * b for a, b in zip(vec_a, vec_b)]
@@ -118,7 +125,7 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
             caption_vector = get_gemini_embedding(image_caption)
             if caption_vector:
                 logger.info("📝 Generated caption vector for image caption hybrid search.")
-
+        
         if query_vector and vector_type == 'image' and caption_vector:
             blended_vector = _blend_vectors(query_vector, caption_vector, weight_a=0.6, weight_b=0.4)
             if blended_vector:
@@ -134,7 +141,7 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
             
             if not has_spread_knowledge and not has_doc_knowledge:
                 logger.info(f"⏭️ Skipping embedding: User {agent_config.user.email} has no records in Knowledge bases.")
-                return "", "Answer naturally using your knowledge.", None
+                return "", "Answer naturally using your knowledge.", None, best_hit_row_id
 
             skip_embedding = False
 
@@ -204,7 +211,7 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                         user=agent_config.user
                     ).filter(sheet_query).annotate(
                         distance=CosineDistance('image_embedding', query_vector)
-                    ).filter(distance__lt=0.65).order_by('distance')[:3]
+                    ).filter(distance__lt=0.65).order_by('distance')[:TOP_K]
                     for row in image_sheets:
                         search_hits.append({
                             'row_id': row.row_id,
@@ -214,12 +221,13 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                             'confidence': _confidence_label(float(row.distance))
                         })
 
+
                 if caption_vector is not None:
                     caption_sheets = SpreadsheetKnowledge.objects.filter(
                         user=agent_config.user
                     ).filter(sheet_query).annotate(
                         distance=CosineDistance('embedding', caption_vector)
-                    ).filter(distance__lt=0.65).order_by('distance')[:3]
+                    ).filter(distance__lt=0.65).order_by('distance')[:TOP_K]
                     for row in caption_sheets:
                         search_hits.append({
                             'row_id': row.row_id,
@@ -229,12 +237,12 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                             'confidence': _confidence_label(float(row.distance))
                         })
 
-                if vector_type != 'image' and query_vector is not None:
+                if vector_type != 'image' and query_vector:
                     text_sheets = SpreadsheetKnowledge.objects.filter(
                         user=agent_config.user
                     ).filter(sheet_query).annotate(
                         distance=CosineDistance('embedding', query_vector)
-                    ).filter(distance__lt=0.65).order_by('distance')[:3]
+                    ).filter(distance__lt=0.65).order_by('distance')[:TOP_K]
                     for row in text_sheets:
                         search_hits.append({
                             'row_id': row.row_id,
@@ -251,14 +259,14 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                         document_id__in=valid_doc_ids
                     ).select_related('document').annotate(
                         distance=CosineDistance('embedding', query_vector)
-                    ).filter(distance__lt=0.65).order_by('distance')[:3]
+                    ).filter(distance__lt=0.65).order_by('distance')[:TOP_K]
                 elif caption_vector is not None:
                     related_docs = DocumentKnowledge.objects.filter(
                         user=agent_config.user,
                         document_id__in=valid_doc_ids
                     ).select_related('document').annotate(
                         distance=CosineDistance('embedding', caption_vector)
-                    ).filter(distance__lt=0.65).order_by('distance')[:3]
+                    ).filter(distance__lt=0.65).order_by('distance')[:TOP_K]
 
                 for doc in related_docs:
                     title = doc.document.title if doc.document else doc.doc_title
@@ -281,37 +289,92 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
 
             MIN_MATCH_DISTANCE = 0.6
             filtered_hits = []
-            for hit in ordered_hits[:4]:
+            for hit in ordered_hits[:TOP_K]:
                 if hit['distance'] >= MIN_MATCH_DISTANCE:
                     logger.info(f"⚠️ Skipping low-confidence hit: {hit['row_id']} distance={hit['distance']:.4f}")
                     continue
                 filtered_hits.append(hit)
 
-            # 🔍 AMBIGUITY DETECTION: Check if top 2 matches are too close (≤5% difference)
+            # 🔍 AMBIGUITY DETECTION + TWO-STAGE RANKING
+            # 1) If top vs second gap > 5% -> hard-filter to top only
+            # 2) If gap <= 5% -> apply a lightweight lexical reranker using the image caption/text
+            def _lexical_similarity(a: str, b: str) -> float:
+                try:
+                    from aiAgent.cache.utils import normalize_text
+                except Exception:
+                    def normalize_text(x):
+                        return ''.join(ch.lower() if ch.isalnum() or ch.isspace() else ' ' for ch in (x or '')).split()
+
+                toks_a = set(normalize_text(a)) if a else set()
+                toks_b = set(normalize_text(b)) if b else set()
+                if not toks_a or not toks_b:
+                    return 0.0
+                inter = toks_a.intersection(toks_b)
+                return float(len(inter)) / float(max(1, min(len(toks_a), len(toks_b))))
+
             is_ambiguous_match = False
             ambiguity_warning = ""
+            # compute initial human-friendly scores
             if len(filtered_hits) >= 2:
                 score1 = max(0, min(100, int((1.0 - filtered_hits[0]['distance']) * 100)))
                 score2 = max(0, min(100, int((1.0 - filtered_hits[1]['distance']) * 100)))
                 score_diff = abs(score1 - score2)
-                
-                if score_diff <= 5:
-                    is_ambiguous_match = True
-                    logger.warning(f"⚠️ AMBIGUOUS MATCH DETECTED! Top match: {score1}% | Second match: {score2}% | Difference: {score_diff}%")
-                    ambiguity_warning = (
-                        "[⚠️ CRITICAL SYSTEM NOTE - READ FIRST]:\n"
-                        "The image search engine returned EXTREMELY CLOSE scores for multiple products. "
-                        "The difference between them is only " + str(score_diff) + "%, which means the system CANNOT reliably determine which one the user is asking about. "
-                        "DO NOT GUESS or arbitrarily pick one. You MUST politely ask the user to clarify which product they are asking about by providing the product name or model number.\n"
-                    )
+
+                # Hard filter: if top is clearly ahead, keep only the top match
+                if score_diff > 10:
+                    logger.info(f"🔒 Top match ahead by {score_diff}%. Hard-filtering to top match {filtered_hits[0]['row_id']}")
+                    filtered_hits = [filtered_hits[0]]
+                else:
+                    # Apply lightweight reranker using image_caption (preferred) or the incoming text
+                    rerank_basis = image_caption or text or post_context_text or ""
+                    if rerank_basis:
+                        # compute lexical sim and adjust distance (smaller better)
+                        alpha = 0.15
+                        for h in filtered_hits:
+                            lex = _lexical_similarity(rerank_basis, h['content'])
+                            # adjusted distance: prefer hits with higher lexical similarity
+                            h['adjusted_distance'] = h['distance'] - (alpha * lex)
+                            h['lexical_sim'] = lex
+
+                        # sort by adjusted_distance
+                        filtered_hits = sorted(filtered_hits, key=lambda x: x.get('adjusted_distance', x['distance']))
+
+                        # re-evaluate gap after rerank
+                        if len(filtered_hits) >= 2:
+                            score1_r = max(0, min(100, int((1.0 - filtered_hits[0].get('adjusted_distance', filtered_hits[0]['distance'])) * 100)))
+                            score2_r = max(0, min(100, int((1.0 - filtered_hits[1].get('adjusted_distance', filtered_hits[1]['distance'])) * 100)))
+                            score_diff_r = abs(score1_r - score2_r)
+                            logger.info(f"🔁 Post-rerank score gap: {score_diff_r}% (before: {score_diff}%)")
+                            if score_diff_r > 10:
+                                logger.info(f"🔒 Reranker resolved ambiguity; selecting top {filtered_hits[0]['row_id']}")
+                                filtered_hits = [filtered_hits[0]]
+                            else:
+                                is_ambiguous_match = True
+                        else:
+                            # only one candidate after rerank
+                            pass
+                    else:
+                        is_ambiguous_match = True
+
+            if filtered_hits:
+                top_hit = filtered_hits[0]
+                if isinstance(top_hit.get('row_id'), str) and top_hit['row_id'].startswith('sheet_'):
+                    best_hit_row_id = top_hit['row_id']
+                    logger.info(f"✅ Best RAG row candidate for image delivery: {best_hit_row_id}")
 
             matched_content = []
-            if ambiguity_warning:
+            if is_ambiguous_match:
+                ambiguity_warning = (
+                    "[⚠️ CRITICAL SYSTEM NOTE - READ FIRST]:\n"
+                    "The image search returned multiple close matches; please ask the user to clarify which product they mean.\n"
+                )
                 matched_content.append(ambiguity_warning)
-            
+
             for hit in filtered_hits:
+                # show lexical sim when available for easier debugging
+                lex_info = f" (lex:{hit.get('lexical_sim'):.2f})" if hit.get('lexical_sim') is not None else ""
                 matched_content.append(
-                    f"[Source: {hit['source_label']}] {hit['content']} | Match Confidence: {hit['confidence']}"
+                    f"[Source: {hit['source_label']}] {hit['content']} | Match Confidence: {hit['confidence']}{lex_info}"
                 )
 
             if matched_content:
@@ -320,7 +383,6 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                 sheet_context = f"\n[KNOWLEDGE BASE DATA]:\n{clean_data}"
                 post_info = f"User commented on this post: '{post_context_text}'. " if post_context_text else ""
 
-                # If ambiguous match detected, force the AI to ask for clarification
                 if is_ambiguous_match:
                     extra_instruction = f"""
                     ⚠️ INSTRUCTION: The knowledge base has returned ambiguous results (multiple products with almost identical match scores).
@@ -330,7 +392,8 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                     {order_instruction}
                     """
                     logger.info(f">>> AMBIGUOUS RAG MATCH! Forcing AI to ask for user clarification.")
-                elif overall_best_dist < 0.45:
+                elif filtered_hits and len(filtered_hits) == 1 and (1.0 - filtered_hits[0].get('adjusted_distance', filtered_hits[0]['distance'])) > 0.55:
+                    # strong single match after filtering/rerank
                     extra_instruction = f"""
                             {post_info}  strictly using only the content inside [KNOWLEDGE BASE DATA].
                             Keep it short, clear, friendly, natural, conversational..
@@ -338,14 +401,14 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                             If appropriate, end with a short, warm follow-up question that encourages the user to continue.
                             {order_instruction}
                             """
-                    logger.info(f">>> Strong RAG Match! overall best distance: {overall_best_dist}")
+                    logger.info(f">>> Strong RAG Match after rerank! selected distance: {filtered_hits[0].get('adjusted_distance', filtered_hits[0]['distance'])}")
                 else:
                     extra_instruction = f"""
                     You may use [KNOWLEDGE BASE DATA] if relevant.
                     If not, answer politely using your knowledge.
                     {order_instruction}
                     """
-                    logger.info(f">>> Weak RAG Match! overall best distance: {overall_best_dist}")
+                    logger.info(f">>> Weak or multiple RAG Match! overall_best_dist: {overall_best_dist}")
             else:
                 sheet_context = ""
                 extra_instruction = f"""
@@ -363,7 +426,7 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
     except Exception as e:
         logger.error(f"RAG Search Error: {e}", exc_info=True)
         extra_instruction = f' Answer politely. If data missing, politely ask clarifying questions instead of handoff. {order_instruction}'
-    return sheet_context, extra_instruction, query_vector
+    return sheet_context, extra_instruction, query_vector, best_hit_row_id
 
 def check_token_availability(user_profile, ai_model_name):
     """
@@ -1528,7 +1591,7 @@ def handle_ai_response(agent_id, sender_id, message_text, platform='web_widget')
 
         # 2. Context & RAG
         order_instr = get_order_instructions(agent_config.user)
-        sheet_ctx, extra_instr, query_vector = perform_rag_search(
+        sheet_ctx, extra_instr, query_vector, _ = perform_rag_search(
             agent_config, message_text, "", order_instr
         )
         system_instruction, history, current_msg = build_ai_context(

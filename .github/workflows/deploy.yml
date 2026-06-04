@@ -72,12 +72,16 @@ jobs:
 
       - name: "🏗️ Build New Image"
         run: |
-          echo "🔨 Setting up Docker Buildx..."
-          DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker buildx create --use || true
-
           echo "🔨 Building new images..."
-          DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker compose build --progress=plain --build-arg BUILDKIT_INLINE_CACHE=1
-          
+          DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 docker compose build --progress=plain
+
+      - name: "🧹 Prune Docker build cache"
+        if: always()
+        run: |
+          echo "🔍 Cleaning up old Docker builder cache..."
+          docker builder prune --all --force || true
+          sudo rm -rf /tmp/.buildx-cache || true
+
       - name: "🚢 Zero Downtime Deployment & Rollback"
         run: |
           # এনভায়রনমেন্ট ও ফাইল সেটআপ

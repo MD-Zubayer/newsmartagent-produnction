@@ -21,7 +21,7 @@ services:
     restart: always
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 100s
+      interval: 30s
       timeout: 5s
       retries: 5
     logging: *default-logging
@@ -37,7 +37,7 @@ services:
     restart: always
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
-      interval: 100s
+      interval: 30s
       timeout: 5s
       retries: 5
     logging: *default-logging
@@ -220,6 +220,7 @@ services:
       update_config:
         order: start-first
 
+  
   n8n:
     image: n8nio/n8n:latest
     container_name: ${PROJECT_NAME}-n8n
@@ -231,7 +232,7 @@ services:
       TRUST_PROXY: "1"
       N8N_LOG_LEVEL: "debug"
       N8N_EXPRESS_TRUST_PROXY: "true"
-      
+   
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "false"
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
       N8N_PROTOCOL: https
@@ -308,6 +309,7 @@ services:
     environment:
       - PORT=3001
       - N8N_WEBHOOK_URL=${N8N_WHATSAPP_WEBHOOK_URL}
+      - DJANGO_WHATSAPP_WEBHOOK_URL=http://backend:8000/api/webhooks/ai/
       - SYNC_AGENT_URL=http://backend:8000/api/whatsapp/sync-agent/
       - BAILEYS_API_SECRET=${BAILEYS_API_SECRET}
       - BAILEYS_API_URL=http://baileys:3001

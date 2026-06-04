@@ -32,6 +32,8 @@ from aiAgent.business_logic.logic_handler import (
     log_token_usage, deduct_user_tokens, deliver_whatsapp_reply, deliver_instagram_reply, deliver_facebook_reply, deliver_telegram_reply, handle_public_comment_logic,
     check_token_availability, deliver_dashboard_reply
 )
+from aiAgent.platform_image_router import route_images
+from aiAgent.image_delivery_tools import execute_image_delivery_tool
 from webhooks.utils import fetch_messenger_profile
 from aiAgent.cache.redis_vector import (
     save_vector_embedding,
@@ -46,6 +48,8 @@ from django.conf import settings
 from django.utils import timezone
 from aiAgent.cache.client import get_redis_client
 from . import youtube_tasks
+from PIL import Image
+
 
 @after_setup_logger.connect
 @after_setup_task_logger.connect
@@ -119,6 +123,134 @@ def clean_ai_response(raw_reply):
                 order_data["price"] = 0
     
     return data
+
+
+def _parse_sheet_row_id(row_id):
+    """Parse a row_id string like sheet_{sheet_id}_row_{row_index}."""
+    if not row_id or not isinstance(row_id, str):
+        return None, None
+    try:
+        parts = row_id.split('_')
+        if len(parts) >= 4 and parts[0] == 'sheet' and parts[2] == 'row':
+            return int(parts[1]), int(parts[3])
+    except Exception:
+        pass
+    return None, None
+
+
+BENGALI_DIGIT_MAP = str.maketrans('০১২৩৪৫৬৭৮৯', '0123456789')
+
+
+def _normalize_bengali_digits(text):
+    if not isinstance(text, str):
+        return text
+    return text.translate(BENGALI_DIGIT_MAP)
+
+
+def _extract_order_data_with_ai(agent_config, sender_id, text):
+    if not agent_config or not text:
+        return {}
+
+    try:
+        instruction = (
+            "Extract only order field values from the customer's message. "
+            "Return only a valid JSON object containing any of the following keys: "
+            "customer_name, phone_number, address, product_name, quantity, extra_info. "
+            "Do not include any other keys. "
+            "If there is no order-related information, return {}."
+        )
+        ai_data = get_ai_response(agent_config, instruction, [], text)
+        raw_reply = ''
+        if isinstance(ai_data, dict):
+            raw_reply = ai_data.get('reply', '')
+        else:
+            raw_reply = str(ai_data)
+
+        parsed = clean_ai_response(raw_reply)
+        if not isinstance(parsed, dict):
+            return {}
+
+        if isinstance(parsed.get('order_data'), dict):
+            parsed = parsed.get('order_data')
+
+        return {
+            field: str(parsed[field]).strip()
+            for field in ORDER_FIELDS
+            if parsed.get(field) not in [None, '']
+        }
+    except Exception as e:
+        logger.debug(f"AI order extraction fallback failed: {e}")
+        return {}
+
+
+def _deliver_images_for_ai_response(request_type, data, parsed_ai, best_row_id, agent_config):
+    if not parsed_ai or not isinstance(parsed_ai, dict):
+        return False, None
+
+    image_intent = parsed_ai.get('image_intent')
+    if isinstance(image_intent, str):
+        image_intent = image_intent.strip().lower() in ['true', 'yes', '1']
+    if not image_intent:
+        return False, None
+
+    sheet_id, row_index = _parse_sheet_row_id(best_row_id)
+    if sheet_id is None or row_index is None:
+        logger.warning('Image intent requested but no valid matched sheet row available.')
+        return False, None
+
+    platform = request_type if request_type in ['whatsapp', 'messenger', 'instagram', 'telegram', 'tiktok'] else None
+    if not platform:
+        logger.warning(f'Image delivery not supported for platform: {request_type}')
+        return False, None
+
+    if not agent_config or not getattr(agent_config, 'user', None):
+        logger.warning('Image delivery failed: missing agent user context.')
+        return False, None
+
+    try:
+        tool_result = execute_image_delivery_tool(
+            user_id=agent_config.user.id,
+            sheet_id=sheet_id,
+            tool_params={
+                'row_index': row_index,
+                'platform': platform,
+                'limit': 3,
+            },
+            agent_config=agent_config
+        )
+        if tool_result.get('status') != 'success':
+            logger.warning(f'Image delivery tool failed: {tool_result.get('message')}')
+            return False, None
+
+        images = tool_result.get('images', []) or []
+        image_urls = [img.get('url') for img in images if img.get('url')]
+        captions = [img.get('caption') or '' for img in images if img.get('url')]
+        if not image_urls:
+            logger.warning('Image delivery tool returned no image URLs.')
+            return False, None
+
+        message_text = parsed_ai.get('reply', '').strip() or None
+        if parsed_ai.get('image_style') == 'image_only':
+            if not message_text:
+                message_text = 'Here are the requested product images.'
+
+        route_result = route_images(
+            platform=platform,
+            recipient_id=str(data.get('delivery_jid') or data.get('sender_id') or data.get('chat_id') or ''),
+            image_urls=image_urls,
+            captions=captions,
+            agent_config=agent_config,
+            message_text=message_text
+        )
+
+        if route_result.get('status') == 'success':
+            logger.info(f'Image delivery succeeded for {platform} row {row_index}')
+            return True, route_result
+        logger.warning(f'Image delivery routing failed: {route_result}')
+        return False, route_result
+    except Exception as e:
+        logger.error(f'Image delivery exception: {e}', exc_info=True)
+        return False, None
 
 
 def _get_or_create_user_memory(agent_config, sender_id):
@@ -1039,31 +1171,55 @@ def create_customer_order_from_ai(agent_config, sender_id, request_type, data, o
         return None
 
 
-def _merge_order_data_with_conversation(agent_config, sender_id, request_type, current_text, order_data):
-    user_memory = _get_or_create_user_memory(agent_config, sender_id)
-    merged = _seed_order_data_from_recent_interest(user_memory, order_data)
-    merged = extract_order_data_from_text(current_text, merged, user_memory)
-    if not merged.get('product_name'):
-        inferred_product = _infer_catalog_product_from_text(agent_config.user, current_text)
-        if inferred_product:
-            merged['product_name'] = inferred_product
-
+def _extract_order_data_with_ai(agent_config, sender_id, text):
+    """
+    Use AI to extract order fields from text during editing mode.
+    AI extracts ALL fields (not just missing ones), enabling field updates.
+    Returns dict of extracted fields or empty dict on error.
+    """
+    if not text or not agent_config:
+        return {}
+    
     try:
-        history = get_last_message(agent_config, sender_id, limit=10, platform=request_type)
-        for msg in history:
-            if msg.get('role') != 'user':
-                continue
-            history_text = str(msg.get('content') or '')
-            merged = extract_order_data_from_text(history_text, merged, user_memory)
-            if not merged.get('product_name'):
-                inferred_product = _infer_catalog_product_from_text(agent_config.user, history_text)
-                if inferred_product:
-                    merged['product_name'] = inferred_product
-    except Exception as e:
-        logger.error(f"Order data merge error: {e}", exc_info=True)
+        from aiAgent.gemini import generate_gemini_reply
+        
+        prompt = f"""Extract order field updates from this user message.
+        
+Message: '{text}'
+        
+Extract ANY of these fields if mentioned or updated (return only non-empty fields):
+- customer_name: Full name
+- phone_number: 10-11 digit Bangladesh phone (remove non-digits)
+- address: Delivery address
+- product_name: Product/item name
+- quantity: Number (1-9999)
+- price: Price in BDT (number only)
+- extra_info: Special instructions or notes
 
-    normalized, _ = normalize_order_entities(agent_config.user, merged)
-    return _hydrate_order_from_catalog(agent_config.user, normalized)
+Return ONLY a JSON object with extracted fields. Example:
+{{
+  "customer_name": "রহিম",
+  "phone_number": "01712345678",
+  "quantity": "2"
+}}
+
+If no fields are mentioned, return: {{}}
+Never return fields that weren't actually mentioned in the message."""
+        
+        ai_response = generate_gemini_reply(prompt, [], text, agent_config)
+        if ai_response.get('status') == 'error' or not ai_response.get('reply'):
+            return {}
+        
+        reply_text = ai_response.get('reply', '').strip()
+        json_match = re.search(r'\{[^{}]*\}', reply_text)
+        if not json_match:
+            return {}
+        
+        extracted = json.loads(json_match.group())
+        return {k: v for k, v in extracted.items() if k in ORDER_FIELDS and v}
+    except Exception as e:
+        logger.debug(f"AI order extraction failed: {e}")
+        return {}
 
 
 def extract_order_data_from_text(text, order_data=None, user_memory=None):
@@ -1071,7 +1227,9 @@ def extract_order_data_from_text(text, order_data=None, user_memory=None):
         return dict(order_data or {})
 
     merged = dict(order_data or {})
-    text = text.strip()
+    text = _normalize_bengali_digits(text.strip())
+    order_state = _get_order_state(user_memory) if user_memory is not None else 'idle'
+    overwrite = order_state in ['editing', 'awaiting_confirmation']
 
     def _search(patterns):
         for pattern in patterns:
@@ -1080,94 +1238,105 @@ def extract_order_data_from_text(text, order_data=None, user_memory=None):
                 return match.group(1).strip()
         return None
 
+    def _set_field(key, value):
+        if not value:
+            return
+        if overwrite or not merged.get(key):
+            merged[key] = str(value).strip()
+
     if not merged.get('customer_name'):
-        merged['customer_name'] = _search([
+        customer_name = _search([
             r'\b(?:name|customer_name|customer)\s*[:\-]\s*([^,;\n]+)',
-            r'\b(?:my name is|I am|আমি)\s+([^,;\n]+)'
+            r'\b(?:my name is|I am|আমি|নামের? নাম|নাম|নতুন নাম)\s+([^,;\n]+)'
         ])
+        _set_field('customer_name', customer_name)
         # 🧠 Context-aware: if asking for customer_name and user just typed a word/phrase, treat it as name
         if not merged.get('customer_name') and user_memory is not None and _get_next_missing_field(user_memory) == 'customer_name':
-            # Check if text looks like a name (not a phone, address, or number)
             if not re.search(r'(\d{10,}|@|\.com|,|\bta\b|\bpcs\b)', text, re.IGNORECASE):
-                # Clean up and use text as name
                 name_candidate = re.sub(r'[^\w\s\u0980-\u09FF]', ' ', text).strip()
                 if name_candidate and len(name_candidate.split()) <= 4 and len(name_candidate) < 50:
-                    merged['customer_name'] = name_candidate
+                    _set_field('customer_name', name_candidate)
 
-    if not merged.get('phone_number'):
-        merged['phone_number'] = _search([
-            r'\b(?:phone|phone_number|number|mobile)\s*[:\-]\s*(\+?\d[\d\s\-]{7,}\d)',
+    if not merged.get('phone_number') or overwrite:
+        phone_number = _search([
+            r'\b(?:phone|phone_number|number|mobile|নম্বর|মোবাইল)\s*[:\-]\s*(\+?\d[\d\s\-]{7,}\d)',
+            r'\b(?:নতুন\s+নম্বর|নম্বর:\s*|নম্বর)\s*(\+?\d[\d\s\-]{7,}\d)'
         ])
-        if not merged['phone_number']:
+        if phone_number:
+            _set_field('phone_number', phone_number)
+        elif not merged.get('phone_number'):
             phone_match = re.search(r'(\+?88)?0\d{10}', text)
             if phone_match:
-                merged['phone_number'] = phone_match.group(0)
+                _set_field('phone_number', phone_match.group(0))
         # 🧠 Context-aware: if asking for phone and user types only digits, treat as phone
         if not merged.get('phone_number') and user_memory is not None and _get_next_missing_field(user_memory) == 'phone_number':
             digit_only = re.sub(r'\D', '', text)
             if 10 <= len(digit_only) <= 15:  # Bangladesh phone is 10-11 digits
-                merged['phone_number'] = digit_only
+                _set_field('phone_number', digit_only)
 
     if not merged.get('customer_name') and merged.get('phone_number'):
         name_candidate = text.split(str(merged.get('phone_number')))[0]
         name_candidate = re.sub(r'[\d,+\-:;]+', ' ', name_candidate).strip(' ,।')
         if name_candidate and len(name_candidate.split()) <= 4:
-            merged['customer_name'] = name_candidate
+            _set_field('customer_name', name_candidate)
 
-    if user_memory is not None and not merged.get('address') and not merged.get('quantity'):
+    if user_memory is not None and (not merged.get('address') or overwrite) and not merged.get('quantity'):
         address_qty_match = re.match(r'^\s*(.+?)\s*[,،]\s*([1-9]\d{0,3})\s*(?:ta|টা|টি|pcs|pieces|unit|units)?\s*$', text, re.IGNORECASE)
         if address_qty_match and _get_next_missing_field(user_memory) in ['address', 'quantity']:
             possible_address = address_qty_match.group(1).strip(' ,।')
             if possible_address and not _infer_catalog_product_from_text(user_memory.ai_agent.user, possible_address):
-                merged['address'] = possible_address
-                merged['quantity'] = address_qty_match.group(2)
+                _set_field('address', possible_address)
+                _set_field('quantity', address_qty_match.group(2))
 
-    if not merged.get('address'):
-        merged['address'] = _search([
-            r'\b(?:address|address is|located at|ঠিকানা)\s*[:\-]\s*([^,;\n]+)',
+    if not merged.get('address') or overwrite:
+        address = _search([
+            r'\b(?:address|address is|located at|ঠিকানা|নতুন ঠিকানা|ঠিকানা পরিবর্তন)\s*[:\-]\s*([^,;\n]+)',
         ])
+        _set_field('address', address)
         if not merged.get('address') and user_memory is not None and _get_next_missing_field(user_memory) == 'address':
             if not merged.get('phone_number') and not _infer_catalog_product_from_text(user_memory.ai_agent.user, text):
-                merged['address'] = text
+                _set_field('address', text)
 
-    if not merged.get('product_name'):
-        merged['product_name'] = _search([
-            r'\b(?:product name|product|item|ব্র্যান্ড|পণ্যের নাম)\s*[:\-]\s*([^,;\n]+)',
+    if not merged.get('product_name') or overwrite:
+        product_name = _search([
+            r'\b(?:product name|product|item|ব্র্যান্ড|পণ্যের নাম|পণ্য|নতুন পণ্য)\s*[:\-]\s*([^,;\n]+)',
+            r'\b(?:পণ্য|product)\s*নাম\s*[:\-]\s*([^,;\n]+)'
         ])
-        # 🧠 Context-aware: if asking for product_name and user provided text, treat as product
+        _set_field('product_name', product_name)
         if not merged.get('product_name') and user_memory is not None and _get_next_missing_field(user_memory) == 'product_name':
-            # Only if text isn't a phone, address, or obvious quantity
             if not re.search(r'(\d{10,}|,|\bta\b|\btata\b|\bpcs\b|quantity)', text, re.IGNORECASE):
                 product_candidate = text.strip()
                 if product_candidate and len(product_candidate) < 100:
-                    merged['product_name'] = product_candidate
+                    _set_field('product_name', product_candidate)
 
-    if not merged.get('quantity'):
+    if not merged.get('quantity') or overwrite:
         quantity = _search([
-            r'\b(?:quantity|qty|poriman|পরিমাণ)\s*[:\-]\s*(\d+)',
+            r'\b(?:quantity|qty|poriman|পরিমাণ|নতুন পরিমাণ)\s*[:\-]\s*(\d+)',
             r'\b(\d+)\s*(?:ta|pcs|pieces|unit|units|qty|পিস|টি|টা|খানা|টি পণ্য|টা পণ্য)\b',
         ])
         if quantity:
-            merged['quantity'] = quantity
+            _set_field('quantity', quantity)
         elif user_memory is not None and _get_next_missing_field(user_memory) == 'quantity':
             quantity_match = re.fullmatch(r'\s*([1-9]\d{0,3})\s*', text, re.IGNORECASE)
             if quantity_match:
-                merged['quantity'] = quantity_match.group(1)
+                _set_field('quantity', quantity_match.group(1))
 
-    if not merged.get('price'):
-        merged['price'] = _search([
-            r'\b(?:price|amount|total|টাকা)\s*[:\-]\s*([0-9]+(?:\.[0-9]+)?)',
+    if not merged.get('price') or overwrite:
+        price = _search([
+            r'\b(?:price|amount|total|টাকা|মূল্য)\s*[:\-]\s*([0-9]+(?:\.[0-9]+)?)',
         ])
-        if not merged.get('price'):
-            # Fallback: plain numeric message likely means the price when other order fields exist
+        if price:
+            _set_field('price', price)
+        elif not merged.get('price'):
             plain_number = re.fullmatch(r'\s*([0-9]{3,}(?:\.[0-9]+)?)\s*', text)
             if plain_number:
-                merged['price'] = plain_number.group(1)
+                _set_field('price', plain_number.group(1))
 
-    if not merged.get('extra_info'):
-        merged['extra_info'] = _search([
-            r'\b(?:extra_info|notes|note|special instructions|special instruction|বিশেষ নির্দেশনা)\s*[:\-]\s*([^,;\n]+)',
+    if not merged.get('extra_info') or overwrite:
+        extra_info = _search([
+            r'\b(?:extra_info|notes|note|special instructions|special instruction|বিশেষ নির্দেশনা|অতিরিক্ত তথ্য)\s*[:\-]\s*([^,;\n]+)',
         ])
+        _set_field('extra_info', extra_info)
 
     if user_memory is not None:
         if merged.get('phone_number'):
@@ -1195,6 +1364,37 @@ def extract_order_data_from_text(text, order_data=None, user_memory=None):
                 merged.pop('price', None)
 
     return merged
+
+
+def _merge_order_data_with_conversation(agent_config, sender_id, request_type, current_text, order_data):
+    user_memory = _get_or_create_user_memory(agent_config, sender_id)
+    merged = _seed_order_data_from_recent_interest(user_memory, order_data)
+    merged = extract_order_data_from_text(current_text, merged, user_memory)
+    if user_memory and _get_order_state(user_memory) in ['editing', 'awaiting_confirmation']:
+        ai_updates = _extract_order_data_with_ai(agent_config, sender_id, current_text)
+        if ai_updates:
+            merged.update(ai_updates)
+    if not merged.get('product_name'):
+        inferred_product = _infer_catalog_product_from_text(agent_config.user, current_text)
+        if inferred_product:
+            merged['product_name'] = inferred_product
+
+    try:
+        history = get_last_message(agent_config, sender_id, limit=10, platform=request_type)
+        for msg in history:
+            if msg.get('role') != 'user':
+                continue
+            history_text = str(msg.get('content') or '')
+            merged = extract_order_data_from_text(history_text, merged, user_memory)
+            if not merged.get('product_name'):
+                inferred_product = _infer_catalog_product_from_text(agent_config.user, history_text)
+                if inferred_product:
+                    merged['product_name'] = inferred_product
+    except Exception as e:
+        logger.error(f"Order data merge error: {e}", exc_info=True)
+
+    normalized, _ = normalize_order_entities(agent_config.user, merged)
+    return _hydrate_order_from_catalog(agent_config.user, normalized)
 
 
 def _has_order_intent_in_conversation(agent_config, sender_id, request_type, current_text):
@@ -1645,6 +1845,16 @@ def process_ai_reply_task(self, data):
     if not text and media_url:
         text = data.get('caption') or f"[{message_type.capitalize() or 'Media'} received]"
         data['message'] = text
+
+    if message_type in ['image', 'video', 'audio', 'document'] and not media_url:
+        logger.error(f"⛔ [Task] Media message missing payload. sender={sender_id}, page={page_id}, message_id={data.get('message_id')}, type={message_type}")
+        if request_type == 'whatsapp':
+            try:
+                from aiAgent.business_logic.logic_handler import deliver_whatsapp_reply
+                deliver_whatsapp_reply(data, "দুঃখিত, আপনার পাঠানো মিডিয়া আমাদের সিস্টেমে ঠিকঠাক পৌঁছাতে পারেনি। দয়া করে আবার পাঠান।")
+            except Exception as e:
+                logger.error(f"⚠️ [Task] Failed to send WhatsApp error reply: {e}")
+        return
 
     msg_id = data.get('message_id')
     incoming_ts = data.get('timestamp')
@@ -2121,6 +2331,9 @@ def process_ai_reply_task(self, data):
         ai_data = {'success': False, 'total_tokens': 0}
         query_vector = None
         query_vector_type = 'text'
+        # Defensive init to avoid UnboundLocalError when image delivery
+        # isn't attempted (ensures variable exists for downstream checks)
+        image_delivered = False
 
         post_context = ""
         if request_type == 'facebook_comment':
@@ -2531,7 +2744,7 @@ def process_ai_reply_task(self, data):
                     "Do not show order progress, do not ask for missing order fields, and do not include order buttons or summaries. "
                     "Keep the answer short and natural."
                 )
-                sheet_ctx, extra_instr, query_vector = perform_rag_search(
+                sheet_ctx, extra_instr, query_vector, _ = perform_rag_search(
                     agent_config,
                     text,
                     post_context,
@@ -2577,7 +2790,7 @@ def process_ai_reply_task(self, data):
             if resume_prompt:
                 order_instr = f"{order_instr or ''}\n\n{resume_prompt}"
             order_instr = _get_order_prompt_instruction(agent_config, sender_id, text, order_instr)
-            sheet_ctx, extra_instr, query_vector = perform_rag_search(
+            sheet_ctx, extra_instr, query_vector, best_hit_row_id = perform_rag_search(
                 agent_config,
                 text,
                 post_context,
@@ -2604,6 +2817,13 @@ def process_ai_reply_task(self, data):
                 '\nIf the user wants to place an order, also include "order_intent": "create" and "order_data": {...} in the same JSON object. '
                 'Order_data should include customer_name, phone_number, address, product_name, quantity, and extra_info when available. '
                 'Do not ask for price and do not invent price. Price is authoritative from merchant catalog/database and backend will merge it.'
+                '\nYour output MUST always strictly follow this JSON structure: '
+                '{"reply": "string", "cache_type": "string", "human_handoff": boolean, "image_intent": boolean, "image_style": "string"}. '
+                'Always include "image_intent" and "image_style" in the JSON response. '
+                'If the user explicitly asks for photos/images (for example, "ছবি দেন", "পিকচার দেখান", "image please"), set "image_intent": true and "image_style": "image_with_caption". '
+                'If the user does not ask for images, set "image_intent": false and "image_style": "none" or "".'
+                '\nWhen the user asks for product images, do NOT say "I do not have images" even if [KNOWLEDGE BASE DATA] does not contain image URLs. '
+                'Instead, reply naturally that you are providing product images and set "image_intent": true so backend can deliver them.'
                 '\nIf the user has already provided a field earlier in the conversation, do not ask for that field again. '
                 'If the user gives multiple fields in one message, extract them and proceed. '
                 '\nSTRICT: No markdown blocks, no preamble, and ensure JSON syntax is perfect.'
@@ -2761,6 +2981,19 @@ def process_ai_reply_task(self, data):
 
                 deduct_user_tokens(user_profile, total_tokens, effective_model)
 
+                # ---- Image delivery (AI-driven) ----
+                image_delivered = False
+                if parsed.get('image_intent'):
+                    image_delivered, image_route = _deliver_images_for_ai_response(
+                        request_type,
+                        data,
+                        parsed,
+                        best_hit_row_id,
+                        agent_config
+                    )
+                    if image_delivered:
+                        logger.info(f'AI image delivery performed: {image_route}')
+
                 # ---- 3-Tier Grouped Cache Save ----
                 if cache_type == 'global':
                     set_global_cached_reply(
@@ -2824,7 +3057,10 @@ def process_ai_reply_task(self, data):
             elif request_type == 'dashboard':
                 delivered = deliver_dashboard_reply(agent_config.user.id, clean_reply, msg_id)
             else:
-                delivered = _deliver_reply_with_buttons(request_type, data, clean_reply, sender_id, page_id, effective_access_token, agent_config)
+                if image_delivered:
+                    delivered = True
+                else:
+                    delivered = _deliver_reply_with_buttons(request_type, data, clean_reply, sender_id, page_id, effective_access_token, agent_config)
 
             if delivered and msg_id:
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)
