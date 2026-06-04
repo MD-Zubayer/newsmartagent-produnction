@@ -196,35 +196,51 @@ class RowImageUploadView(APIView):
         )
 
     def _update_row_image(self, request, sheet, row_index, image_url):
-        from embedding.utils import get_image_caption
-        from settings.models import GlobalSettings
+        from embedding.models import RowImage
+        from .tasks import process_row_image_task, sync_primary_image_to_knowledge
 
+        row_id = f"sheet_{sheet.id}_row_{row_index}"
+        
+        # 1. Update/clear SpreadsheetKnowledge basic URL field
         obj, created = self._get_row_knowledge(request, sheet, row_index)
         old_url = obj.image_url or ''
         if old_url and old_url != image_url:
             self._delete_storage_file(old_url)
+            # Delete corresponding RowImage if URL changed
+            RowImage.objects.filter(user=request.user, row_id=row_id, image_url=old_url).delete()
+
         obj.image_url = image_url or ''
+        obj.save()
 
         if image_url:
-            image_vector = get_gemini_image_embedding(image_url)
-            # Use provider from GlobalSettings
-            global_settings = GlobalSettings.get_settings()
-            selected_provider = getattr(global_settings, 'image_caption_provider', 'gemini') or 'gemini'
-            fallback_text = obj.content or 'Product Image'
-            image_caption = get_image_caption(image_url, provider=selected_provider, fallback_text=fallback_text)
-            obj.image_caption = image_caption or ''
-            if image_vector:
-                obj.image_embedding = image_vector
-                obj.image_source = 'manual'
-                from django.utils import timezone
-                obj.image_updated_at = timezone.now()
+            # Check if RowImage already exists for this URL
+            row_img, img_created = RowImage.objects.get_or_create(
+                user=request.user,
+                row_id=row_id,
+                image_url=image_url,
+                defaults={
+                    'image_filename': 'single_upload',
+                    'is_primary': True,
+                    'source': 'manual'
+                }
+            )
+            
+            # Ensure it is primary
+            if not row_img.is_primary:
+                row_img.is_primary = True
+                row_img.save()
+            
+            # Clear other primary flags
+            RowImage.objects.filter(user=request.user, row_id=row_id, is_primary=True).exclude(pk=row_img.id).update(is_primary=False)
+            
+            # Defer API calls to background Celery task
+            process_row_image_task.delay(row_img.id)
         else:
-            obj.image_caption = ''
-            obj.image_embedding = None
-            obj.image_source = None
-            obj.image_updated_at = None
+            # If image cleared, remove all row images and clear sync
+            RowImage.objects.filter(user=request.user, row_id=row_id).delete()
+            sync_primary_image_to_knowledge(request.user, row_id)
 
-        obj.save()
+        obj.refresh_from_db()
         return obj
 
     def post(self, request, pk):
@@ -400,18 +416,14 @@ class RowImagesListCreateView(APIView):
                 saved_path = default_storage.save(filename, ContentFile(file_obj.read()))
                 image_url = default_storage.url(saved_path)
 
-                # Generate embeddings and caption
-                image_vector = get_gemini_image_embedding(image_url)
-                image_caption = get_image_caption(image_url, provider=selected_provider)
-
-                # Create RowImage record
+                # Create RowImage record with empty captions and embeddings
                 row_img = RowImage.objects.create(
                     user=request.user,
                     row_id=row_id,
                     image_url=image_url,
                     image_filename=file_obj.name,
-                    image_caption=image_caption or '',
-                    image_embedding=image_vector,
+                    image_caption='',
+                    image_embedding=None,
                     source='manual',
                     position=position
                 )
@@ -427,6 +439,11 @@ class RowImagesListCreateView(APIView):
                     'url': row_img.image_url,
                     'filename': row_img.image_filename,
                 })
+
+                # Defer API calls to background Celery task
+                from .tasks import process_row_image_task
+                process_row_image_task.delay(row_img.id)
+
             except Exception as e:
                 return Response({'error': f'File upload failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -435,16 +452,13 @@ class RowImagesListCreateView(APIView):
             if not image_url.strip():
                 continue
             try:
-                image_vector = get_gemini_image_embedding(image_url)
-                image_caption = get_image_caption(image_url, provider=selected_provider)
-
                 row_img = RowImage.objects.create(
                     user=request.user,
                     row_id=row_id,
                     image_url=image_url,
                     image_filename='external_url',
-                    image_caption=image_caption or '',
-                    image_embedding=image_vector,
+                    image_caption='',
+                    image_embedding=None,
                     source='manual',
                     position=position
                 )
@@ -460,8 +474,14 @@ class RowImagesListCreateView(APIView):
                     'url': row_img.image_url,
                     'filename': 'external',
                 })
+
+                # Defer API calls to background Celery task
+                from .tasks import process_row_image_task
+                process_row_image_task.delay(row_img.id)
+
             except Exception as e:
                 continue  # Skip failed URLs, don't block batch upload
+
 
         if not uploaded_images:
             return Response({'error': 'No images could be uploaded'}, status=status.HTTP_400_BAD_REQUEST)
@@ -494,12 +514,12 @@ class RowImageDetailView(APIView):
         if not image:
             return Response({'error': 'Image not found'}, status=status.HTTP_404_NOT_FOUND)
 
-        from embedding.utils import get_image_caption, get_gemini_image_embedding
-        from settings.models import GlobalSettings
+        from .tasks import process_row_image_task, sync_primary_image_to_knowledge
 
         # Handle replacement
         file_obj = request.FILES.get('file')
         new_image_url = request.data.get('image_url')
+        trigger_task = False
         
         if file_obj:
             # Parse row info from row_id
@@ -518,28 +538,18 @@ class RowImageDetailView(APIView):
             # Update image
             image.image_url = new_image_url
             image.image_filename = file_obj.name
-            
-            # Regenerate embeddings
-            global_settings = GlobalSettings.get_settings()
-            selected_provider = getattr(global_settings, 'image_caption_provider', 'gemini') or 'gemini'
-            
-            image_vector = get_gemini_image_embedding(new_image_url)
-            image_caption = get_image_caption(new_image_url, provider=selected_provider)
-            image.image_embedding = image_vector
-            image.image_caption = image_caption or ''
+            image.image_embedding = None
+            image.image_caption = ''
+            trigger_task = True
 
         elif new_image_url:
             # Update from URL
             delete_storage_file(image.image_url)
             image.image_url = new_image_url
-            
-            global_settings = GlobalSettings.get_settings()
-            selected_provider = getattr(global_settings, 'image_caption_provider', 'gemini') or 'gemini'
-            
-            image_vector = get_gemini_image_embedding(new_image_url)
-            image_caption = get_image_caption(new_image_url, provider=selected_provider)
-            image.image_embedding = image_vector
-            image.image_caption = image_caption or ''
+            image.image_filename = 'external_url'
+            image.image_embedding = None
+            image.image_caption = ''
+            trigger_task = True
 
         # Handle caption update
         caption = request.data.get('caption')
@@ -554,6 +564,11 @@ class RowImageDetailView(APIView):
             image.is_primary = True
 
         image.save()
+
+        if trigger_task:
+            process_row_image_task.delay(image.id)
+        else:
+            sync_primary_image_to_knowledge(request.user, image.row_id)
         
         return Response({
             'id': image.id,
@@ -569,11 +584,17 @@ class RowImageDetailView(APIView):
         if not image:
             return Response({'error': 'Image not found'}, status=status.HTTP_404_NOT_FOUND)
 
+        row_id = image.row_id
+
         # Delete storage file
         delete_storage_file(image.image_url)
         
         # Delete record
         image.delete()
+
+        # Update primary image in SpreadsheetKnowledge
+        from .tasks import sync_primary_image_to_knowledge
+        sync_primary_image_to_knowledge(request.user, row_id)
         
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -587,6 +608,7 @@ class RowImageSetPrimaryView(APIView):
 
     def post(self, request, sheet_id, image_id):
         from embedding.models import RowImage
+        from .tasks import sync_primary_image_to_knowledge
         
         try:
             image = RowImage.objects.get(id=image_id, user=request.user)
@@ -599,6 +621,9 @@ class RowImageSetPrimaryView(APIView):
         # Set this as primary
         image.is_primary = True
         image.save()
+
+        # Synchronize new primary image details to SpreadsheetKnowledge
+        sync_primary_image_to_knowledge(request.user, image.row_id)
 
         return Response({'is_primary': True})
 
