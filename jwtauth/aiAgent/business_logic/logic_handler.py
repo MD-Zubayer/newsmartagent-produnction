@@ -1225,22 +1225,27 @@ def send_whatsapp_buttons(data, contact, reply_text="\u200e"):
         
     buttons_data = get_button_payload(contact)
     
-    # ── Text Menu Fallback (no URLs) ──
-    # Meta/LID sometimes blocks interactive buttons; we send a plain numbered menu without links.
-    # Keep text compact so bubbles don't look big
-    menu_text = f"{reply_text}\n\n"
-    menu_text += "Choose: "
+    has_order_buttons = any(b['action'] in ["CONFIRM_ORDER", "EDIT_ORDER", "CANCEL_ORDER"] for b in buttons_data)
     
-    labels = []
-    for i, b in enumerate(buttons_data, 1):
-        label = b['text']
-        # remove emojis for WhatsApp compact view
-        label = ''.join(ch for ch in label if ch.isalnum() or ch.isspace())
-        label = label.strip()
-        if len(label) > 18:
-            label = label[:17] + "…"
-        labels.append(f"{i}) {label}")
-    menu_text += " ".join(labels)
+    menu_text = f"{reply_text}\n\n"
+    if has_order_buttons:
+        labels = []
+        for i, b in enumerate(buttons_data, 1):
+            label = b['text']
+            label = ''.join(ch for ch in label if ch.isalnum() or ch.isspace())
+            label = label.strip()
+            labels.append(f"{i}: {label}")
+        menu_text += "  |  ".join(labels)
+    else:
+        opt1 = "1: Human"
+        if contact.is_human_needed:
+            opt1 = "1: AI Reply"
+            
+        opt2 = "2: Off AI"
+        if not contact.is_auto_reply_enabled:
+            opt2 = "2: On AI"
+            
+        menu_text += f"{opt1}          {opt2}"
     
 
     payload = {

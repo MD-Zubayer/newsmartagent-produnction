@@ -972,10 +972,35 @@ def handle_order_button_action(agent_config, contact, action, page_id, platform)
     return delivered
 
 
+BUTTON_SEND_INTERVAL = int(os.getenv("BUTTON_SEND_INTERVAL", "5"))  # প্রতি কতো message পর button যাবে
+BUTTON_COUNTER_TTL = 7 * 24 * 60 * 60  # ৭ দিন
+
+
+def _should_send_buttons(contact_id: int, platform: str) -> bool:
+    """
+    প্রথম AI reply তে সবসময় buttons পাঠাবে।
+    তারপর প্রতি BUTTON_SEND_INTERVAL (ডিফল্ট ৫) message পর পর।
+    Redis counter দিয়ে track করা হয় — DB migration ছাড়াই।
+    """
+    try:
+        key = f"btn_msg_count:{contact_id}:{platform}"
+        count = r.incr(key)           # atomically increment; returns new value
+        if count == 1:
+            # প্রথমবার key তৈরি হলে TTL সেট করো
+            r.expire(key, BUTTON_COUNTER_TTL)
+            return True              # ১ম message — সবসময় পাঠাও
+        if count % BUTTON_SEND_INTERVAL == 0:
+            return True             # প্রতি ৫ম message এ পাঠাও
+        return False
+    except Exception as exc:
+        logger.warning(f"_should_send_buttons redis error: {exc}")
+        return True                 # Redis ব্যর্থ হলে fallback: সবসময় পাঠাও
+
+
 def _maybe_send_button_voice_hint(request_type, data, sender_id, page_id, effective_access_token, contact_obj):
     """Send one periodic voice hint when control buttons are delivered externally."""
-    if not contact_obj or request_type not in BUTTON_VOICE_PLATFORMS:
-        return False
+    # Disabled by user request: voice messages should only go when they explicitly select 1, 2, etc.
+    return False
 
     voice_file = os.getenv("BUTTON_CONTROL_VOICE_FILE", "on-human-mode.wav")
     ttl_seconds = int(os.getenv("BUTTON_CONTROL_VOICE_TTL_SECONDS", str(30 * 24 * 60 * 60)))
@@ -1620,6 +1645,10 @@ def _send_platform_buttons_alone(request_type, data, sender_id, page_id, effecti
 def _deliver_reply_with_buttons(request_type, data, clean_reply, sender_id, page_id, effective_access_token, agent_config, send_buttons=True):
     from aiAgent.models import Contact
     contact_obj = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
+
+    # ✅ Interval guard: প্রথম message এ এবং প্রতি ৫ম message এ buttons পাঠাও
+    if send_buttons and contact_obj:
+        send_buttons = _should_send_buttons(contact_obj.id, request_type)
     
     if request_type == 'whatsapp':
         if send_buttons and contact_obj:
