@@ -2,6 +2,7 @@
 from celery import shared_task
 import requests
 import re
+import os
 
 from aiAgent.models import AgentAI
 from chat.services import save_message
@@ -82,7 +83,10 @@ def _default_direct_order_instructions():
         "When you have enough information for a complete order, return a valid JSON object with keys: "
         "\"reply\", \"cache_type\", \"human_handoff\", \"order_intent\", and \"order_data\". "
         "\"order_intent\" should be \"create\". "
-        "\"order_data\" should be an object containing customer_name, phone_number, address, product_name, quantity, and extra_info when available. Do not include price unless the user explicitly provided it; backend will merge catalog price. "
+        "\"order_data\" should be an object containing customer_name, phone_number, address, and extra_info when available. "
+        "CRITICAL: For products, \"order_data\" MUST include an \"items\" array. Each element in \"items\" must be an object with \"name\" and \"quantity\". "
+        "Example: \"items\": [{\"name\": \"product 1\", \"quantity\": 1}, {\"name\": \"product 2\", \"quantity\": 2}]. "
+        "Do not include price unless the user explicitly provided it; backend will merge catalog price. "
         "If the user is confirming details or answering follow-up questions, do not repeat earlier questions. "
         "Keep the reply natural, polite, and simple. "
         "If the user is not placing an order, answer normally."
@@ -93,6 +97,9 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
     sheet_context = ""
     extra_instruction = ""
     query_vector = existing_vector  # Initialize query_vector for later reuse
+    best_hit_row_id = None
+    RAG_TOP_K = int(os.getenv('RAG_TOP_K', '5'))
+    TOP_K = min(max(3, RAG_TOP_K), 10)
     rag_query = f"{post_context_text} {text}" if post_context_text else text
     
     def _confidence_label(distance):
@@ -134,7 +141,7 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
             
             if not has_spread_knowledge and not has_doc_knowledge:
                 logger.info(f"⏭️ Skipping embedding: User {agent_config.user.email} has no records in Knowledge bases.")
-                return "", "Answer naturally using your knowledge.", None
+                return "", "Answer naturally using your knowledge.", None, best_hit_row_id
 
             skip_embedding = False
 
@@ -204,7 +211,7 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                         user=agent_config.user
                     ).filter(sheet_query).annotate(
                         distance=CosineDistance('image_embedding', query_vector)
-                    ).filter(distance__lt=0.65).order_by('distance')[:3]
+                    ).filter(distance__lt=0.65).order_by('distance')[:TOP_K]
                     for row in image_sheets:
                         search_hits.append({
                             'row_id': row.row_id,
@@ -220,7 +227,7 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                         user=agent_config.user
                     ).filter(sheet_query).annotate(
                         distance=CosineDistance('embedding', caption_vector)
-                    ).filter(distance__lt=0.65).order_by('distance')[:3]
+                    ).filter(distance__lt=0.65).order_by('distance')[:TOP_K]
                     for row in caption_sheets:
                         search_hits.append({
                             'row_id': row.row_id,
@@ -235,7 +242,7 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                         user=agent_config.user
                     ).filter(sheet_query).annotate(
                         distance=CosineDistance('embedding', query_vector)
-                    ).filter(distance__lt=0.65).order_by('distance')[:3]
+                    ).filter(distance__lt=0.65).order_by('distance')[:TOP_K]
                     for row in text_sheets:
                         search_hits.append({
                             'row_id': row.row_id,
@@ -252,14 +259,14 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                         document_id__in=valid_doc_ids
                     ).select_related('document').annotate(
                         distance=CosineDistance('embedding', query_vector)
-                    ).filter(distance__lt=0.65).order_by('distance')[:3]
+                    ).filter(distance__lt=0.65).order_by('distance')[:TOP_K]
                 elif caption_vector is not None:
                     related_docs = DocumentKnowledge.objects.filter(
                         user=agent_config.user,
                         document_id__in=valid_doc_ids
                     ).select_related('document').annotate(
                         distance=CosineDistance('embedding', caption_vector)
-                    ).filter(distance__lt=0.65).order_by('distance')[:3]
+                    ).filter(distance__lt=0.65).order_by('distance')[:TOP_K]
 
                 for doc in related_docs:
                     title = doc.document.title if doc.document else doc.doc_title
@@ -282,7 +289,7 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
 
             MIN_MATCH_DISTANCE = 0.6
             filtered_hits = []
-            for hit in ordered_hits[:4]:
+            for hit in ordered_hits[:TOP_K]:
                 if hit['distance'] >= MIN_MATCH_DISTANCE:
                     logger.info(f"⚠️ Skipping low-confidence hit: {hit['row_id']} distance={hit['distance']:.4f}")
                     continue
@@ -314,7 +321,7 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                 score_diff = abs(score1 - score2)
 
                 # Hard filter: if top is clearly ahead, keep only the top match
-                if score_diff > 5:
+                if score_diff > 10:
                     logger.info(f"🔒 Top match ahead by {score_diff}%. Hard-filtering to top match {filtered_hits[0]['row_id']}")
                     filtered_hits = [filtered_hits[0]]
                 else:
@@ -338,7 +345,7 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                             score2_r = max(0, min(100, int((1.0 - filtered_hits[1].get('adjusted_distance', filtered_hits[1]['distance'])) * 100)))
                             score_diff_r = abs(score1_r - score2_r)
                             logger.info(f"🔁 Post-rerank score gap: {score_diff_r}% (before: {score_diff}%)")
-                            if score_diff_r > 5:
+                            if score_diff_r > 10:
                                 logger.info(f"🔒 Reranker resolved ambiguity; selecting top {filtered_hits[0]['row_id']}")
                                 filtered_hits = [filtered_hits[0]]
                             else:
@@ -348,6 +355,12 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                             pass
                     else:
                         is_ambiguous_match = True
+
+            if filtered_hits:
+                top_hit = filtered_hits[0]
+                if isinstance(top_hit.get('row_id'), str) and top_hit['row_id'].startswith('sheet_'):
+                    best_hit_row_id = top_hit['row_id']
+                    logger.info(f"✅ Best RAG row candidate for image delivery: {best_hit_row_id}")
 
             matched_content = []
             if is_ambiguous_match:
@@ -413,7 +426,7 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
     except Exception as e:
         logger.error(f"RAG Search Error: {e}", exc_info=True)
         extra_instruction = f' Answer politely. If data missing, politely ask clarifying questions instead of handoff. {order_instruction}'
-    return sheet_context, extra_instruction, query_vector
+    return sheet_context, extra_instruction, query_vector, best_hit_row_id
 
 def check_token_availability(user_profile, ai_model_name):
     """
@@ -1578,7 +1591,7 @@ def handle_ai_response(agent_id, sender_id, message_text, platform='web_widget')
 
         # 2. Context & RAG
         order_instr = get_order_instructions(agent_config.user)
-        sheet_ctx, extra_instr, query_vector = perform_rag_search(
+        sheet_ctx, extra_instr, query_vector, _ = perform_rag_search(
             agent_config, message_text, "", order_instr
         )
         system_instruction, history, current_msg = build_ai_context(

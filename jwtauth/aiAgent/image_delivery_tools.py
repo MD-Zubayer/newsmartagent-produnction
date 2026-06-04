@@ -4,6 +4,7 @@
 Enables AI to fetch product images with platform restrictions
 """
 import logging
+import os
 import requests
 from typing import Optional, List, Dict, Any
 from django.conf import settings
@@ -32,7 +33,13 @@ class ImageDeliveryTool:
         self.user_id = user_id
         self.sheet_id = sheet_id
         self.platform = platform.lower()
-        self.base_url = getattr(settings, 'API_BASE_URL', 'http://localhost:8000')
+        self.base_url = (
+            getattr(settings, 'API_BASE_URL', None)
+            or os.environ.get('API_BASE_URL')
+            or os.environ.get('INTERNAL_API_URL')
+            or 'http://backend:8000'
+        )
+        logger.info(f"ImageDeliveryTool using base_url={self.base_url}")
         
     def validate(self) -> tuple[bool, str]:
         """Validate platform and configuration"""
@@ -75,15 +82,30 @@ class ImageDeliveryTool:
                 'limit': limit,
             }
             
+            # Build headers: include service-to-service secret or internal token if configured
+            headers = {
+                'X-User-ID': str(self.user_id),
+                'Accept': 'application/json',
+            }
+
+            # Prefer a configured internal API secret (used widely across services)
+            baileys_secret = getattr(settings, 'BAILEYS_API_SECRET', None) or os.environ.get('BAILEYS_API_SECRET')
+            if baileys_secret:
+                headers['x-api-secret'] = baileys_secret
+
+            # Optional: include an internal bearer token if available
+            internal_token = getattr(settings, 'INTERNAL_API_TOKEN', None) or os.environ.get('INTERNAL_API_TOKEN')
+            if internal_token:
+                headers['Authorization'] = f"Bearer {internal_token}"
+
+            logger.info(f"ImageDeliveryTool calling presigned endpoint with headers: {', '.join(k for k in headers.keys())}")
+
             # Make request to presigned URL endpoint
             response = requests.get(
                 endpoint,
                 params=params,
                 timeout=10,
-                headers={
-                    'X-User-ID': str(self.user_id),
-                    'Accept': 'application/json',
-                }
+                headers=headers
             )
             
             if response.status_code == 200:

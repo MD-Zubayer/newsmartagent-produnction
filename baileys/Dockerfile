@@ -6,7 +6,8 @@ RUN apk add --no-cache python3 make g++ cairo-dev pango-dev git
 WORKDIR /app
 
 COPY package.json ./
-RUN npm install --production
+
+RUN npm install --production --legacy-peer-deps
 
 COPY index.js ./
 

@@ -4,6 +4,7 @@ const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 const express = require('express');
 const pino = require('pino');
 const axios = require('axios');
+const Jimp = require('jimp');
 const path = require('path');
 const fs = require('fs');
 
@@ -123,6 +124,43 @@ async function processQueue(sessionId) {
                     } catch (convertErr) {
                         logger.error(`❌ [Baileys] Failed to convert base64 image: ${convertErr.message}`);
                         msgObj = { text: `[Image failed to process: ${convertErr.message}]` };
+                    }
+                } else if (type === 'image' && media_url) {
+                    logger.info(`🖼️ [Baileys] Preparing image message from URL: ${media_url.substring(0, 120)}`);
+                    try {
+                        const imageResponse = await axios.get(media_url, { responseType: 'arraybuffer', timeout: 20000 });
+                        const imageBuffer = Buffer.from(imageResponse.data);
+                        logger.info(`🖼️ [Baileys] Image downloaded. Buffer size: ${imageBuffer.length} bytes`);
+                        
+                        let resizedBuffer = imageBuffer;
+                        try {
+                            const image = await Jimp.read(imageBuffer);
+                            const maxWidth = 1080;
+                            const originalMime = image.getMIME();
+                            if (image.bitmap.width > maxWidth) {
+                                image.resize(maxWidth, Jimp.AUTO);
+                            }
+
+                            if (originalMime === Jimp.MIME_JPEG) {
+                                image.quality(85);
+                                resizedBuffer = await image.getBufferAsync(Jimp.MIME_JPEG);
+                            } else {
+                                resizedBuffer = await image.getBufferAsync(originalMime);
+                            }
+
+                            logger.info(`🖼️ [Baileys] Image resized to ${image.bitmap.width}x${image.bitmap.height} and encoded as ${originalMime}. New size: ${resizedBuffer.length} bytes`);
+                        } catch (resizeErr) {
+                            logger.warn(`⚠️ [Baileys] Image resize failed, sending original image: ${resizeErr.message}`);
+                        }
+
+                        msgObj = {
+                            image: resizedBuffer,
+                            caption: message || ''
+                        };
+                        logger.info(`🖼️ [Baileys] Image message prepared for sending with caption: ${message ? message.substring(0, 120) : '<empty>'}`);
+                    } catch (downloadErr) {
+                        logger.error(`❌ [Baileys] Failed to download image from ${media_url}: ${downloadErr.message}`);
+                        msgObj = { text: message || `[Image failed to download: ${downloadErr.message}]` };
                     }
                 } else if (type === 'audio' && media_url) {
                     // Audio message - download from URL and convert to buffer

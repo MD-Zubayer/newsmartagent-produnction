@@ -10,9 +10,11 @@ from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.urls import reverse
 from django.conf import settings
+from django.utils import timezone
 from urllib.parse import urlparse
 from embedding.utils import get_gemini_image_embedding
 from django.db.models import Max
+from users.authentication import InternalServiceAuthentication
 
 def normalize_storage_path(image_url):
     if not image_url:
@@ -625,6 +627,7 @@ class RowImagePresignedURLView(APIView):
         "expires_in": 60
     }
     """
+    authentication_classes = [InternalServiceAuthentication]
     permission_classes = [IsAuthenticated]
     
     # Allowed platforms
@@ -747,7 +750,6 @@ class RowImagePresignedURLView(APIView):
 
         try:
             from embedding.models import RowImage
-            from django.utils import timezone
             
             row_id = f"sheet_{sheet_id}_row_{row_index}"
             

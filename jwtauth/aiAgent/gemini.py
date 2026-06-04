@@ -11,6 +11,8 @@ try:
 except Exception:
     GENAI_CLIENT = None
 
+client = GENAI_CLIENT
+
 
 def generate_gemini_reply(prompt, history, current_message, agent_config):
     """Simple Gemini reply helper (fallback)
