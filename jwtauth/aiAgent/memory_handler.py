@@ -193,8 +193,11 @@ def handle_smart_memory_update(agent_config, sender, current_text):
     # Fast lane: if any 'target' keyword matched, force a memory extraction
     target_hits = check_keyword_match(current_text, 'target')
     
-    internal['accumulated_score'] += score
-    internal['unskipped_count'] += 1
+    internal['accumulated_score'] = internal.get('accumulated_score', 0) + score
+    internal['unskipped_count'] = internal.get('unskipped_count', 0) + 1
+    
+    if 'unskipped_buffer' not in internal:
+        internal['unskipped_buffer'] = []
     internal['unskipped_buffer'].append(f"User: {current_text}")
     
     if len(internal['unskipped_buffer']) > 30:
@@ -206,10 +209,10 @@ def handle_smart_memory_update(agent_config, sender, current_text):
     if target_hits:
         should_call = True
         reason = f"Target keyword: {target_hits[0]}"
-    elif internal['accumulated_score'] >= 10:
+    elif internal.get('accumulated_score', 0) >= 10:
         should_call = True
-        reason = f"High Context Density ({internal['accumulated_score']})"
-    elif internal['unskipped_count'] >= 20:
+        reason = f"High Context Density ({internal.get('accumulated_score', 0)})"
+    elif internal.get('unskipped_count', 0) >= 20:
         should_call = True
         reason = "Periodic Hybrid Summary (20 Unskipped Messages)"
 
