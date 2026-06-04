@@ -127,11 +127,17 @@ def sync_spreadsheet_to_knowledge(user, grid_data, sheet_id):
         combined_hash = hashlib.md5((text_content + header_hash).encode()).hexdigest()
         image_hash = hashlib.md5(image_url.encode()).hexdigest() if image_url else ''
 
+        row_text = ""
+        image_caption = ""
+
         obj, created = SpreadsheetKnowledge.objects.get_or_create(
             user=user,
             row_id=row_unique_id,
             defaults={'column_hashes': {}, 'content': ''}
         )
+
+        if not created:
+            row_text = obj.content or ""
 
         old_hash = obj.column_hashes.get('combined_hash')
         old_image_url = obj.image_url or ''
