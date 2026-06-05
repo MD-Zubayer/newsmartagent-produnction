@@ -2793,9 +2793,24 @@ def process_ai_reply_task(self, data):
                     "Do not show order progress, do not ask for missing order fields, and do not include order buttons or summaries. "
                     "Keep the answer short and natural."
                 )
+                # ── Step 1: Log input query ──
+                logger.info(f"[DEBUG] Input Query: '{text}'")
+                # ── Step 2: Local intent rewrite decision (zero API calls) ──
+                logger.info(
+                    "[DEBUG] ai jodi buze je rewrite kora lagbe tahole rewrite korbe, "
+                    "ar jodi dekhe lagbe na, tahole rewrite na kore Rag search korbe"
+                )
+                from embedding.utils import rewrite_query_with_history as _rewrite
+                _intr_history = get_last_message(agent_config, sender_id, limit=6, platform=request_type)
+                search_query_intr = _rewrite(
+                    query=text,
+                    history_list=_intr_history,
+                    user=agent_config.user,
+                    user_memory=user_memory,
+                )
                 sheet_ctx, extra_instr, query_vector, _ = perform_rag_search(
                     agent_config,
-                    text,
+                    search_query_intr,
                     post_context,
                     interruption_instruction,
                     existing_vector=query_vector,
@@ -2811,6 +2826,8 @@ def process_ai_reply_task(self, data):
                     + '\n\nReturn ONLY a valid JSON object: {"reply": "...", "cache_type": "no_cache", "human_handoff": false}. '
                     + 'Do not include order collection, order summary, or order confirmation text in this reply.'
                 )
+                # ── Step 4: Log before main AI dispatch ──
+                logger.info("[DEBUG] Main AI Call dispatched with Sheet Context.")
                 ai_data = get_ai_response(agent_config, system_instruction, history, current_msg)
                 reply = _extract_plain_reply(ai_data) or "দুঃখিত, এই তথ্যটি এখন পরিষ্কারভাবে দিতে পারছি না।"
 
@@ -2839,15 +2856,70 @@ def process_ai_reply_task(self, data):
             if resume_prompt:
                 order_instr = f"{order_instr or ''}\n\n{resume_prompt}"
             order_instr = _get_order_prompt_instruction(agent_config, sender_id, text, order_instr)
+
+            # ── Step 1: Log input query ──
+            logger.info(f"[DEBUG] Input Query: '{text}'")
+            # ── Step 2: Local intent rewrite decision (zero API calls) ──
+            logger.info(
+                "[DEBUG] ai jodi buze je rewrite kora lagbe tahole rewrite korbe, "
+                "ar jodi dekhe lagbe na, tahole rewrite na kore Rag search korbe"
+            )
+            from embedding.utils import rewrite_query_with_history as _rewrite
+            _rag_history = get_last_message(agent_config, sender_id, limit=6, platform=request_type)
+            search_query = _rewrite(
+                query=text,
+                history_list=_rag_history,
+                user=agent_config.user,
+                user_memory=user_memory,
+            )
+
+            # ── Step 3: RAG Search ──
             sheet_ctx, extra_instr, query_vector, best_hit_row_id = perform_rag_search(
                 agent_config,
-                text,
+                search_query,
                 post_context,
                 order_instr,
                 existing_vector=query_vector,
                 vector_type=query_vector_type,
                 image_caption=image_caption,
             )
+
+            # ── Step 3a: Memory Fallback if RAG returned no hit ──
+            if not best_hit_row_id:
+                logger.info(f"[DEBUG] RAG Search Results: Empty (best_hit_row_id: None)")
+                try:
+                    mem_data = user_memory.data or {}
+                    fallback_row_id = mem_data.get('image_history', {}).get('last_row_id')
+                    if fallback_row_id:
+                        logger.info(f"[DEBUG] Triggering Memory Fallback... Found last_row_id: {fallback_row_id}")
+                        from embedding.models import SpreadsheetKnowledge
+                        fallback_obj = SpreadsheetKnowledge.objects.filter(
+                            user=agent_config.user,
+                            row_id=fallback_row_id
+                        ).first()
+                        if fallback_obj and fallback_obj.content:
+                            logger.info(
+                                f"[DEBUG] Loading SpreadsheetKnowledge for Row ID: {fallback_row_id}... Success!"
+                            )
+                            best_hit_row_id = fallback_row_id
+                            fallback_content = (
+                                f"[Source: Memory Fallback — Last Viewed Product]\n"
+                                f"{fallback_obj.content} | Match Confidence: Context-based"
+                            )
+                            sheet_ctx = f"\n[KNOWLEDGE BASE DATA]:\n{fallback_content}"
+                            extra_instr = (
+                                extra_instr or
+                                f"Use [KNOWLEDGE BASE DATA] to answer. {order_instr}"
+                            )
+                        else:
+                            logger.info(
+                                f"[DEBUG] Memory Fallback: SpreadsheetKnowledge for row_id={fallback_row_id} not found or empty."
+                            )
+                    else:
+                        logger.info("[DEBUG] Memory Fallback: No last_row_id found in memory.")
+                except Exception as _fb_err:
+                    logger.warning(f"[DEBUG] Memory Fallback error: {_fb_err}")
+
             system_instruction, history, current_msg = build_ai_context(
                 agent_config, sender_id, text, extra_instr, sheet_ctx,
                 platform=request_type, message_type=message_type,
@@ -2874,7 +2946,7 @@ def process_ai_reply_task(self, data):
                 '2. If the product does NOT exist in [KNOWLEDGE BASE DATA] (or if there is only a completely different product like mobile when asking for a panjabi), set "image_intent": false, "image_style": "none", "image_limit": 3, "image_query": "", "image_more": false, and reply politely that the product is not available. '
                 '3. If the product DOES exist in [KNOWLEDGE BASE DATA], set "image_intent": true and "image_style": "image_with_caption". '
                 'If they specify a count/limit of images, set "image_limit" to that integer, otherwise default to 3. '
-                'If they specify a color/style (e.g., "sada", "red", "white", "black"), set "image_query" to that color/style name, otherwise default to "". '
+                'If they specify a color/style (e.g., "কালো", "sada", "red", "white", "black"), translate and set "image_query" to its standard English name (e.g., always use "black" for "কালো" or "kalo"), otherwise default to "". '
                 'If they ask for more/additional/other images of the same product (e.g., "more", "আরও ছবি", "আগেরটার আরও দেখান"), set "image_more": true, otherwise default to false. '
                 'Do NOT say "I do not have images" if the product exists but no image URLs are in [KNOWLEDGE BASE DATA]; instead, reply naturally that you are providing the images and set "image_intent": true so the backend can deliver them.'
                 '\nIf the user does not ask for images, set "image_intent": false, "image_style": "none" or "", "image_limit": 3, "image_query": "", "image_more": false.'
@@ -2885,6 +2957,8 @@ def process_ai_reply_task(self, data):
             )
             system_instruction = system_instruction + classify_instruction
 
+            # ── Step 4: Log before main AI dispatch ──
+            logger.info("[DEBUG] Main AI Call dispatched with Sheet Context.")
             # --- AI Call ---
             ai_data = get_ai_response(agent_config, system_instruction, history, current_msg)
 

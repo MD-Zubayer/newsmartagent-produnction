@@ -93,7 +93,7 @@ def sync_primary_image_to_knowledge(user, row_id):
 )
 def process_row_image_task(self, row_image_id):
     from embedding.models import RowImage
-    from embedding.utils import get_gemini_image_embedding, get_image_caption
+    from embedding.utils import get_gemini_image_embedding, get_image_caption, get_gemini_embedding
     from settings.models import GlobalSettings
 
     try:
@@ -131,6 +131,8 @@ def process_row_image_task(self, row_image_id):
     row_img.image_caption = image_caption or ''
     if image_vector:
         row_img.image_embedding = image_vector
+    if image_caption:
+        row_img.caption_embedding = get_gemini_embedding(image_caption)
     row_img.save()
 
     # 3. Synchronize to SpreadsheetKnowledge if primary

@@ -373,14 +373,30 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
             for hit in filtered_hits:
                 # show lexical sim when available for easier debugging
                 lex_info = f" (lex:{hit.get('lexical_sim'):.2f})" if hit.get('lexical_sim') is not None else ""
+                # ── Image Match Rate ──
+                # Use adjusted_distance (post-rerank) if available, otherwise raw distance
+                effective_dist = hit.get('adjusted_distance', hit['distance'])
+                image_match_rate = max(0, min(100, round((1.0 - effective_dist) * 100)))
+                logger.debug(f"📊 [ImageMatchRate] row={hit['row_id']} dist={effective_dist:.4f} → {image_match_rate}%")
                 matched_content.append(
-                    f"[Source: {hit['source_label']}] {hit['content']} | Match Confidence: {hit['confidence']}{lex_info}"
+                    f"[Source: {hit['source_label']}] {hit['content']} | Match Confidence: {hit['confidence']}{lex_info} | Image Match Rate: {image_match_rate}%"
                 )
 
             if matched_content:
                 unique_content = list(dict.fromkeys(matched_content))
                 clean_data = "\n".join(unique_content)
-                sheet_context = f"\n[KNOWLEDGE BASE DATA]:\n{clean_data}"
+                # Inject AI instruction about Image Match Rate so the AI understands the field
+                image_rate_rule = (
+                    "\n[SYSTEM NOTE — Image Match Rate & Color Policy]: "
+                    "Each knowledge base entry includes an 'Image Match Rate'. "
+                    "CRITICAL: If the Image Match Rate is 70% or above, the product image is highly accurate and available. "
+                    "Even if the user asks for a specific color (e.g., 'কমলা', 'orange') that is NOT explicitly written in the product details text below, "
+                    "as long as the Image Match Rate is >= 70%, you MUST consider the product and color available. "
+                    "Do NOT reply that the specific color or product is unavailable. "
+                    "Instead, reply naturally that you are providing the images, and strictly set 'image_intent': true, "
+                    "translating the requested color into English inside 'image_query' (e.g., 'orange')."
+                )
+                sheet_context = f"\n[KNOWLEDGE BASE DATA]:\n{clean_data}{image_rate_rule}"
                 post_info = f"User commented on this post: '{post_context_text}'. " if post_context_text else ""
 
                 if is_ambiguous_match:
@@ -824,6 +840,9 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
             msg for msg in raw_history
             if msg.get("content") and msg.get("content").strip()
         ]
+        # Avoid duplicating the current message if it's already the last message in raw_history
+        if history and history[-1].get("role") == "user" and history[-1].get("content") == text:
+            history.pop()
     return system_instruction, history, current_message
 
 def get_ai_response(agent_config, system_instruction, history, current_message):
