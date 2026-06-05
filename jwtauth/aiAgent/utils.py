@@ -134,7 +134,50 @@ def extract_known_addresses(user=None, limit=300):
 def normalize_order_entities(user, order_data):
     normalized = dict(order_data or {})
     metadata = {}
+    
+    # Process multiple items in the array
+    if "items" in normalized and isinstance(normalized["items"], list) and len(normalized["items"]) > 0:
+        normalized_items = []
+        for item in normalized["items"]:
+            if not isinstance(item, dict):
+                continue
+            
+            norm_item = {}
+            for name_key in ["name", "product_name", "product", "item", "item_name"]:
+                if name_key in item and item[name_key]:
+                    norm_item["name"] = item[name_key]
+                    break
+            
+            for qty_key in ["quantity", "qty", "quantity_ordered", "count"]:
+                if qty_key in item and item[qty_key]:
+                    try:
+                        norm_item["quantity"] = int(item[qty_key])
+                    except (ValueError, TypeError):
+                        norm_item["quantity"] = item[qty_key]
+                    break
+            
+            # Fuzzy match the item name with catalog
+            if "name" in norm_item:
+                product_match = fuzzy_best_match(norm_item["name"], extract_catalog_product_names(user))
+                if product_match.get("matched"):
+                    norm_item["name"] = product_match["value"]
+                
+                if "price" in item:
+                    norm_item["price"] = item["price"]
+                    
+                normalized_items.append(norm_item)
+                
+        normalized["items"] = normalized_items
+        
+        # Set top-level product_name and quantity for backward compatibility if missing
+        if normalized_items:
+            first_item = normalized_items[0]
+            if not normalized.get("product_name"):
+                normalized["product_name"] = first_item.get("name")
+            if not normalized.get("quantity"):
+                normalized["quantity"] = first_item.get("quantity")
 
+    # Resolve top-level product name if passed directly instead of in items array
     product_name = normalized.get("product_name")
     if product_name:
         product_match = fuzzy_best_match(product_name, extract_catalog_product_names(user))

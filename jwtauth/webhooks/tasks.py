@@ -71,7 +71,6 @@ def clean_ai_response(raw_reply):
     1. AI sometimes returns text + JSON instead of just JSON
     2. AI sends int/bool instead of string for fields like phone_number, address, etc.
     3. Prevents "expected string or bytes-like object, got 'int'" errors
-    4. Handles nested "items" lists from AI response by extracting product_name and quantity.
     
     Returns: Cleaned parsed dict or fallback dict on error
     """
@@ -104,35 +103,6 @@ def clean_ai_response(raw_reply):
     if "order_data" in data and isinstance(data["order_data"], dict):
         order_data = data["order_data"]
         
-        # 4. Extract product_name and quantity from items list if present
-        if "items" in order_data and isinstance(order_data["items"], list) and len(order_data["items"]) > 0:
-            first_item = order_data["items"][0]
-            if isinstance(first_item, dict):
-                # Look for name of product
-                for name_key in ["name", "product_name", "product", "item", "item_name"]:
-                    if name_key in first_item and first_item[name_key]:
-                        order_data["product_name"] = first_item[name_key]
-                        break
-                # Look for quantity
-                for qty_key in ["quantity", "qty", "quantity_ordered", "count"]:
-                    if qty_key in first_item and first_item[qty_key]:
-                        order_data["quantity"] = first_item[qty_key]
-                        break
-
-        # Fallbacks for product_name on order_data directly
-        if "product_name" not in order_data or not order_data["product_name"]:
-            for k in ["product", "item", "item_name"]:
-                if k in order_data and order_data[k]:
-                    order_data["product_name"] = order_data[k]
-                    break
-
-        # Fallbacks for quantity on order_data directly
-        if "quantity" not in order_data or not order_data["quantity"]:
-            for k in ["qty", "quantity_ordered", "count"]:
-                if k in order_data and order_data[k]:
-                    order_data["quantity"] = order_data[k]
-                    break
-        
         # String fields: FORCE convert to string (fixes 'got int' error)
         string_fields = ["phone_number", "customer_name", "address", "product_name", "extra_info", "item_description"]
         for field in string_fields:
@@ -142,14 +112,7 @@ def clean_ai_response(raw_reply):
         # Quantity/Price must be numeric
         if "quantity" in order_data and order_data["quantity"] is not None:
             try:
-                # Convert Bengali digits to English digits and extract integer
-                qty_str = str(order_data["quantity"]).strip()
-                qty_str = qty_str.translate(str.maketrans('০১২৩৪৫৬৭৮৯', '0123456789'))
-                match = re.search(r'\d+', qty_str)
-                if match:
-                    order_data["quantity"] = int(match.group(0))
-                else:
-                    order_data["quantity"] = int(qty_str)
+                order_data["quantity"] = int(str(order_data["quantity"]).strip())
             except (ValueError, TypeError):
                 order_data["quantity"] = 1
         
@@ -443,11 +406,14 @@ def _get_order_fields(user_memory):
 
 def _get_plain_order_values(user_memory):
     fields = _get_order_fields(user_memory)
-    return {
+    values = {
         field: fields.get(field, {}).get('value')
         for field in ORDER_FIELDS
         if fields.get(field, {}).get('value') and fields.get(field, {}).get('confidence', 1.0) >= 0.75
     }
+    if 'items' in fields:
+        values['items'] = fields['items'].get('value')
+    return values
 
 
 def _hydrate_order_from_catalog(user, order_data):
@@ -591,18 +557,30 @@ def _save_order_fields_to_memory(user_memory, order_data, source='ai_extraction'
 
     field_metadata = field_metadata or {}
     for key, value in (order_data or {}).items():
-        if key not in ORDER_FIELDS or value is None:
+        if key not in ORDER_FIELDS and key != 'items':
             continue
+        if value is None:
+            continue
+            
         existing = order_fields.get(key, {})
         metadata = field_metadata.get(key, {})
-        order_fields[key] = {
-            'value': str(value).strip(),
-            'confidence': metadata.get('confidence', existing.get('confidence', 0.95 if source == 'regex_validated' else 0.85)),
-            'source': metadata.get('source', source),
-            'updated_at': timezone.now().isoformat()
-        }
-        if metadata.get('matched_from'):
-            order_fields[key]['matched_from'] = metadata.get('matched_from')
+        
+        if key == 'items':
+            order_fields[key] = {
+                'value': value,  # Keep as list/dict
+                'confidence': 1.0,
+                'source': metadata.get('source', source),
+                'updated_at': timezone.now().isoformat()
+            }
+        else:
+            order_fields[key] = {
+                'value': str(value).strip(),
+                'confidence': metadata.get('confidence', existing.get('confidence', 0.95 if source == 'regex_validated' else 0.85)),
+                'source': metadata.get('source', source),
+                'updated_at': timezone.now().isoformat()
+            }
+            if metadata.get('matched_from'):
+                order_fields[key]['matched_from'] = metadata.get('matched_from')
 
     internal['order_fields'] = order_fields
     if internal.get('order_state') == 'idle' and order_fields:
@@ -908,7 +886,44 @@ def create_customer_order_from_memory(agent_config, sender_id, request_type, msg
     except (ValueError, TypeError):
         quantity_value = 1
 
-    product = _resolve_catalog_product_for_user(agent_config.user, product_name, quantity_value)
+    items_array = seeded_fields.get('items') or input_fields.get('items') or []
+    order_items_payload = []
+    
+    if isinstance(items_array, list) and len(items_array) > 0:
+        total_price = 0
+        resolved_items = []
+        for item in items_array:
+            item_name = item.get('name') or item.get('product_name')
+            if not item_name: continue
+            
+            item_qty = 1
+            for q_key in ['quantity', 'qty', 'count']:
+                if q_key in item:
+                    try:
+                        item_qty = int(item[q_key])
+                        break
+                    except: pass
+                    
+            cat_prod = _resolve_catalog_product_for_user(agent_config.user, item_name, item_qty)
+            if cat_prod:
+                i_price = cat_prod.get('price') or 0
+                total_price += i_price * item_qty
+                resolved_items.append({
+                    "name": cat_prod.get('name', item_name),
+                    "quantity": item_qty,
+                    "price": float(i_price)
+                })
+        
+        if resolved_items:
+            product_name = f"Multi-item Order ({len(resolved_items)} items)"
+            price_value = total_price
+            quantity_value = sum(i["quantity"] for i in resolved_items)
+            order_items_payload = resolved_items
+            product = True  # Bypass single product validation
+        else:
+            product = None
+    else:
+        product = _resolve_catalog_product_for_user(agent_config.user, product_name, quantity_value)
     
     # 💥 FALLBACK: If product still not found, search conversation history for product mentions
     if not product and product_name == 'Product':
@@ -928,8 +943,10 @@ def create_customer_order_from_memory(agent_config, sender_id, request_type, msg
         logger.warning(f"Catalog validation failed for product '{product_name}' and quantity {quantity_value} for user {agent_config.user.email}")
         return None
 
-    price_value = product.get('price')
-    product_name = product.get('name', product_name)
+    if not order_items_payload:
+        unit_price = product.get('price') or 0 if isinstance(product, dict) else 0
+        price_value = unit_price * quantity_value
+        product_name = product.get('name', product_name) if isinstance(product, dict) else product_name
 
     source_platform = request_type if request_type != 'web_widget' else 'web'
 
@@ -942,6 +959,7 @@ def create_customer_order_from_memory(agent_config, sender_id, request_type, msg
             product_name=product_name,
             price=price_value,
             item_quantity=quantity_value,
+            items=order_items_payload,
             extra_info=extra_info,
             source_platform=source_platform,
             source_contact_id=sender_id
@@ -963,7 +981,7 @@ def handle_order_button_action(agent_config, contact, action, page_id, platform)
     sender_id = contact.identifier
     user_memory = _get_or_create_user_memory(agent_config, sender_id)
     response_text = None
-    reply_data = {'sender_id': sender_id, 'message_id': '', 'sessionId': ''}
+    reply_data = {'sender_id': sender_id, 'message_id': '', 'sessionId': f"user_{agent_config.user.id}"}
 
     if platform == 'whatsapp':
         reply_data['delivery_jid'] = sender_id
@@ -1166,13 +1184,53 @@ def create_customer_order_from_ai(agent_config, sender_id, request_type, data, o
     except (ValueError, TypeError):
         item_quantity = 1
 
-    product = _resolve_catalog_product_for_user(agent_config.user, product_name, item_quantity)
+    items_array = order_data.get('items') or []
+    order_items_payload = []
+    
+    if isinstance(items_array, list) and len(items_array) > 0:
+        total_price = 0
+        resolved_items = []
+        for item in items_array:
+            item_name = item.get('name') or item.get('product_name')
+            if not item_name: continue
+            
+            item_qty = 1
+            for q_key in ['quantity', 'qty', 'count']:
+                if q_key in item:
+                    try:
+                        item_qty = int(item[q_key])
+                        break
+                    except: pass
+                    
+            cat_prod = _resolve_catalog_product_for_user(agent_config.user, item_name, item_qty)
+            if cat_prod:
+                i_price = cat_prod.get('price') or 0
+                total_price += i_price * item_qty
+                resolved_items.append({
+                    "name": cat_prod.get('name', item_name),
+                    "quantity": item_qty,
+                    "price": float(i_price)
+                })
+        
+        if resolved_items:
+            product_name = f"Multi-item Order ({len(resolved_items)} items)"
+            price = total_price
+            item_quantity = sum(i["quantity"] for i in resolved_items)
+            order_items_payload = resolved_items
+            product = True  # Bypass single product validation
+        else:
+            product = None
+    else:
+        product = _resolve_catalog_product_for_user(agent_config.user, product_name, item_quantity)
+
     if not product:
         logger.warning(f"Catalog validation failed for product '{product_name}' and quantity {item_quantity} for user {agent_config.user.email}")
         return None
 
-    price = product.get('price')
-    product_name = product.get('name', product_name)
+    if not order_items_payload:
+        unit_price = product.get('price') or 0 if isinstance(product, dict) else 0
+        price = unit_price * item_quantity
+        product_name = product.get('name', product_name) if isinstance(product, dict) else product_name
 
     if quantity:
         try:
@@ -1195,6 +1253,7 @@ def create_customer_order_from_ai(agent_config, sender_id, request_type, data, o
             product_name=product_name,
             price=price,
             item_quantity=item_quantity,
+            items=order_items_payload,
             extra_info=extra_info,
             source_platform=source_platform,
             source_contact_id=source_contact_id
@@ -2900,23 +2959,14 @@ def process_ai_reply_task(self, data):
 
                     # If AI provided an order_intent, seed memory and optionally auto-confirm
                     if order_intent == 'create' and isinstance(order_data, dict):
-                        logger.info(f"🔍 [AI Order Intake] Order intent 'create' detected. Raw order_data: {order_data}")
+                        logger.info("Order intent detected! Processing order in DB...")
                         try:
                             # Seed parsed order fields into user memory (normalize + save)
                             user_memory = _get_or_create_user_memory(agent_config, sender_id)
-                            logger.info(f"🔍 [AI Order Intake] Loaded memory for sender {sender_id}. Current memory fields: {_get_order_fields(user_memory)}")
-                            
                             normalized_order, field_metadata = normalize_order_entities(agent_config.user, order_data)
-                            logger.info(f"🔍 [AI Order Intake] Normalized order fields: {normalized_order}")
-                            
                             normalized_order = _seed_order_data_from_recent_interest(user_memory, normalized_order)
-                            logger.info(f"🔍 [AI Order Intake] After seeding recent interest: {normalized_order}")
-                            
                             normalized_order = _hydrate_order_from_catalog(agent_config.user, normalized_order)
-                            logger.info(f"🔍 [AI Order Intake] After catalog hydration: {normalized_order}")
-                            
                             _save_order_fields_to_memory(user_memory, normalized_order, source='ai_extraction', field_metadata=field_metadata)
-                            logger.info(f"🔍 [AI Order Intake] Saved to memory. New memory fields: {_get_order_fields(user_memory)}")
 
                             # Determine intent confidence (fallbacks)
                             intent_conf = None
@@ -2931,16 +2981,11 @@ def process_ai_reply_task(self, data):
                                 intent_conf = 1.0
 
                             # If memory now has complete order fields, consider auto confirm
-                            has_complete_fields = _has_complete_order_fields(user_memory)
-                            logger.info(f"🔍 [AI Order Intake] Order completeness: {has_complete_fields}, confidence: {intent_conf}")
-                            
-                            if has_complete_fields:
+                            if _has_complete_order_fields(user_memory):
                                 # High confidence -> auto-create order
                                 if intent_conf >= 0.9:
-                                    logger.info(f"🔍 [AI Order Intake] Auto-creating order since confidence ({intent_conf}) >= 0.9")
                                     order_obj = create_customer_order_from_memory(agent_config, sender_id, request_type, msg_id=msg_id)
                                     if order_obj:
-                                        logger.info(f"✅ [AI Order Intake] Order #{order_obj.id} created successfully!")
                                         parsed_reply = f"✅ আপনার অর্ডার #{order_obj.id} নিশ্চিত করা হয়েছে। ইনভয়েস শীঘ্রই পাঠানো হবে।"
                                         cache_type = 'no_cache'
                                         # deliver immediate reply and return
@@ -2949,20 +2994,14 @@ def process_ai_reply_task(self, data):
                                             r.set(f'processed_msg:{msg_id}', '1', ex=3600)
                                             r.delete(f'processing_msg:{msg_id}')
                                         return parsed_reply
-                                    else:
-                                        logger.error(f"❌ [AI Order Intake] create_customer_order_from_memory returned None for sender {sender_id}!")
                                 # Medium confidence -> prompt for explicit confirmation
                                 else:
-                                    logger.info(f"🔍 [AI Order Intake] Prompting for confirmation since confidence ({intent_conf}) < 0.9")
                                     confirmation = _get_confirmation_prompt(user_memory)
                                     if confirmation:
                                         parsed_reply = confirmation
                                         cache_type = 'no_cache'
-                            else:
-                                missing_field = _get_next_missing_field(user_memory)
-                                logger.info(f"🔍 [AI Order Intake] Order memory not complete yet. Missing field: {missing_field}")
                         except Exception as seed_err:
-                            logger.error(f"❌ [AI Order Intake] Failed to seed AI order into memory: {seed_err}", exc_info=True)
+                            logger.error(f"Failed to seed AI order into memory: {seed_err}", exc_info=True)
                 else:
                     logger.warning(f"⚠️ JSON parsed but reply field is empty. Using raw.")
             except (KeyError, TypeError, ValueError) as e:

@@ -46,6 +46,8 @@ def generate_and_send_invoice_async_task(self, order_id):
             'user_id': order.user_id,
             'source_platform': order.source_platform,
             'source_contact_id': order.source_contact_id,
+            'item_quantity': order.item_quantity,
+            'items': order.items,
         }
         
         try:
