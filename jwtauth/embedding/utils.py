@@ -748,6 +748,258 @@ def process_document_text(user, text, document):
     
 
 
+# ============================================================================
+# 🔁 LLM-driven Image Re-ranking (Cross-Encoder Style)
+# ============================================================================
+
+def rerank_images_with_llm(query: str, images: list) -> list:
+    """
+    Re-rank a list of image candidates using Gemini as a lightweight cross-encoder.
+
+    Args:
+        query: The enriched search query (e.g. "kalo punjabi").
+        images: List of dicts, each must contain at least:
+                  - 'image_id' (int)
+                  - 'caption' (str)
+                  - 'hybrid_score' (float, lower = better, from Stage 1)
+
+    Returns:
+        Re-ranked list of image dicts (best match first).
+        Falls back to original Stage 1 order if LLM call fails.
+    """
+    if not images:
+        return images
+    if not query or not query.strip():
+        return sorted(images, key=lambda x: x.get('hybrid_score', 1.0))
+
+    # Build a compact candidate list for the LLM
+    candidate_lines = []
+    for idx, img in enumerate(images):
+        caption = (img.get('caption') or '').strip() or 'No caption'
+        score = round(img.get('hybrid_score', 1.0), 4)
+        candidate_lines.append(f"{idx}: caption=\"{caption}\" hybrid_score={score}")
+
+    candidates_text = "\n".join(candidate_lines)
+
+    prompt = (
+        f"You are an image search re-ranker and filter. The user searched for: \"{query}\".\n"
+        "Below are candidate images identified by index, their captions, and a hybrid similarity score (lower = better).\n"
+        f"{candidates_text}\n\n"
+        "Re-rank these images. Return ONLY a JSON array of indices in order from most relevant to least relevant. "
+        "IMPORTANT: If an image is completely irrelevant to the query (for example, if the query asks for a specific color like 'black' and the image caption describes a different color like 'orange', or there is a category mismatch), do NOT include its index in the returned list. "
+        "Example: [2, 0] (if index 1 is irrelevant). Do not include any other text."
+    )
+
+    try:
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=[prompt],
+            config=types.GenerateContentConfig(temperature=0.0, max_output_tokens=100)
+        )
+        raw = (response.text or '').strip()
+        # Parse JSON array of indices
+        import json as _json
+        import re as _re
+        match = _re.search(r'\[[\d,\s]*\]', raw)
+        if match:
+            ranked_indices = _json.loads(match.group(0))
+            reranked = []
+            seen = set()
+            for i in ranked_indices:
+                if isinstance(i, int) and 0 <= i < len(images) and i not in seen:
+                    reranked.append(images[i])
+                    seen.add(i)
+            logger.info(f"🔁 LLM reranked & filtered {len(images)} images for query='{query}'. Order: {ranked_indices}")
+            return reranked
+    except Exception as e:
+        logger.warning(f"LLM image re-ranking failed (falling back to hybrid score): {e}")
+
+    # Fallback: sort by Stage 1 hybrid_score
+    return sorted(images, key=lambda x: x.get('hybrid_score', 1.0))
+
+
+def _is_followup_query(query: str) -> bool:
+    """
+    Returns True if the query looks like an implicit/follow-up query that
+    needs context enrichment (e.g. short, color-only, or vague action words).
+    Returns False if the query is already self-contained and specific.
+    Zero API calls — pure heuristic check.
+    """
+    q = query.strip()
+    if not q:
+        return False
+
+    # Already long and specific — don't rewrite
+    if len(q.split()) >= 5:
+        return False
+
+    # Common implicit/follow-up indicators (Bangla + Romanized + English)
+    followup_patterns = [
+        # Color words (Bangla)
+        'কালো', 'সাদা', 'লাল', 'নীল', 'হলুদ', 'সবুজ', 'বাদামি', 'বেগুনি',
+        'গোলাপি', 'কমলা', 'ধূসর', 'খাকি', 'ফ্যাকাশে', 'তামাটে',
+        # Color words (Romanized Bangla)
+        'kalo', 'shada', 'lal', 'neel', 'holud', 'sabuj', 'badami', 'beguni',
+        'golapi', 'komola', 'dhushor', 'khaki', 'feka',
+        # Color words (English)
+        'black', 'white', 'red', 'blue', 'yellow', 'green', 'brown', 'purple',
+        'pink', 'orange', 'grey', 'gray',
+        # Vague action queries (Bangla)
+        'ছবি', 'ছবি দেন', 'ছবি দেখান', 'দাম', 'দাম কত', 'কত', 'কত টাকা',
+        'দেখান', 'আরও', 'বিস্তারিত', 'তথ্য',
+        # Vague action queries (English/Romanized)
+        'price', 'photo', 'image', 'pic', 'show', 'more', 'details', 'info',
+        'dam', 'dam koto', 'chobi', 'dekhao', 'deen',
+    ]
+
+    q_lower = q.lower()
+    for pattern in followup_patterns:
+        if pattern in q_lower:
+            return True
+
+    # Very short query (1–2 words) that contains no product-like nouns → likely follow-up
+    if len(q.split()) <= 2:
+        return True
+
+    return False
+
+
+def _extract_product_from_history(history_list: list) -> str | None:
+    """
+    Scan the last 6 messages in history (newest first) to extract the most recently
+    mentioned product name by searching for AI agent replies that contain product details.
+    Prioritizes the most recent assistant (Sales Agent) message.
+    Zero API calls.
+    """
+    if not history_list:
+        return None
+
+    # Scan from most recent to oldest
+    for msg in reversed(history_list[-6:]):
+        if isinstance(msg, dict):
+            role = msg.get('role', '')
+            content = msg.get('content', '') or ''
+        else:
+            role = getattr(msg, 'role', '')
+            content = getattr(msg, 'content', '') or ''
+
+        if not content:
+            continue
+
+        # Look at assistant messages first — they confirm what product was discussed
+        if role in ('assistant', 'model'):
+            # Extract first noun-phrase before common delimiters that looks like a product
+            # Simple heuristic: look for known product pattern hints in the assistant reply
+            # We take the first line or first 80 chars as the "topic" of the reply
+            snippet = content.strip().split('\n')[0][:120]
+            if snippet:
+                logger.debug(f"🔍 [QueryRewrite] History product candidate from assistant: '{snippet[:60]}'")
+                return snippet  # Return the snippet; caller will enrich query with it
+
+    # If no assistant message found, scan user messages for product mentions
+    for msg in reversed(history_list[-6:]):
+        if isinstance(msg, dict):
+            role = msg.get('role', '')
+            content = msg.get('content', '') or ''
+        else:
+            role = getattr(msg, 'role', '')
+            content = getattr(msg, 'content', '') or ''
+        if role == 'user' and content:
+            snippet = content.strip().split('\n')[0][:120]
+            if snippet and len(snippet.split()) >= 2:
+                logger.debug(f"🔍 [QueryRewrite] History product candidate from user: '{snippet[:60]}'")
+                return snippet
+
+    return None
+
+
+def rewrite_query_with_history(
+    query: str,
+    history_list: list,
+    user=None,
+    user_memory=None,
+) -> str:
+    """
+    ✅ LOCAL, ZERO-API-CALL query enrichment.
+
+    Decision logic (strict):
+    1. If the query is already self-contained → return as-is (no rewrite).
+    2. If the query is a follow-up (short/implicit):
+       a. Extract product context from chat history (PRIORITY).
+       b. If not found in history, fall back to user_memory.
+       c. If conflict → history wins.
+       d. Rewrite query by prepending the product context.
+    """
+    logger.info(f"🔄 [QueryRewrite] Input Query: '{query}'")
+    logger.info(
+        "[DEBUG] ai jodi buze je rewrite kora lagbe tahole rewrite korbe, "
+        "ar jodi dekhe lagbe na, tahole rewrite na kore Rag search korbe"
+    )
+
+    if not query or not query.strip():
+        logger.info("[QueryRewrite] Empty query — skipping rewrite.")
+        return query
+
+    # ── Step 1: Decide if rewrite is needed ──
+    needs_rewrite = _is_followup_query(query)
+    if not needs_rewrite:
+        logger.info(f"✅ [QueryRewrite] Query is self-contained — no rewrite needed. Using: '{query}'")
+        return query
+
+    logger.info(f"🔁 [QueryRewrite] Follow-up query detected: '{query}'. Attempting context enrichment...")
+
+    # ── Step 2a: Extract product context from chat HISTORY (highest priority) ──
+    history_product = None
+    if history_list:
+        history_product = _extract_product_from_history(history_list)
+        if history_product:
+            logger.info(f"📖 [QueryRewrite] Product context from HISTORY: '{history_product[:80]}'")
+
+    # ── Step 2b: Extract product context from user MEMORY (fallback) ──
+    memory_product = None
+    if user_memory:
+        try:
+            mem_data = user_memory.data or {}
+            # Priority 1: last delivered image row product name
+            image_history = mem_data.get('image_history', {})
+            memory_product = image_history.get('last_product_name') or None
+
+            # Priority 2: recent order interest product name
+            if not memory_product:
+                recent_interest = mem_data.get('_internal', {}).get('recent_order_interest') or {}
+                memory_product = recent_interest.get('product_name') or None
+
+            if memory_product:
+                logger.info(f"🧠 [QueryRewrite] Product context from MEMORY: '{memory_product}'")
+        except Exception as e:
+            logger.warning(f"[QueryRewrite] Memory read error: {e}")
+
+    # ── Step 2c: Conflict resolution — HISTORY wins ──
+    if history_product and memory_product and history_product.lower() != memory_product.lower():
+        logger.info(
+            f"⚖️ [QueryRewrite] Conflict detected! History='{history_product[:60]}' vs "
+            f"Memory='{memory_product}'. Prioritizing HISTORY."
+        )
+        resolved_context = history_product
+    elif history_product:
+        resolved_context = history_product
+    elif memory_product:
+        resolved_context = memory_product
+    else:
+        resolved_context = None
+
+    # ── Step 2d: Enrich query ──
+    if not resolved_context:
+        logger.info(f"⚠️ [QueryRewrite] No product context found. Using original query: '{query}'")
+        return query
+
+    # Build the enriched query: "{product_context} {color_or_action}"
+    rewritten = f"{resolved_context} {query}".strip()
+    logger.info(f"✅ [QueryRewrite] Rewritten Query: '{query}' → '{rewritten}'")
+    return rewritten
+
+
+
 
 
 
