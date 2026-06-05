@@ -2,9 +2,12 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
+import logging
+
+logger = logging.getLogger(__name__)
 from .models import Spreadsheet
 from .serializers import SpreadsheetSerializer
-from embedding.utils import sync_spreadsheet_to_knowledge
+from embedding.utils import sync_spreadsheet_to_knowledge, rerank_images_with_llm
 from .tasks import run_auto_image_search_task, sync_spreadsheet_to_knowledge_task
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
@@ -787,26 +790,224 @@ class RowImagePresignedURLView(APIView):
             )
             
             if query:
+                # ─────────────────────────────────────────────────────────
+                # Stage 1 — True Hybrid Retrieval (3 signals)
+                #
+                #  Signal A: query_text_vector ↔ DB image_embedding  (W=0.5)
+                #            (cross-modal: text query vs visual embedding)
+                #  Signal B: query_text_vector ↔ DB text_embedding   (W=0.4)
+                #            (text query vs text/caption embedding)
+                #  Signal C: caption keyword match                    (−0.10 bonus)
+                #
+                #  hybrid_score = W_A*img_dist + W_B*txt_dist - colour_bonus - caption_bonus
+                #  (lower score = better match)
+                # ─────────────────────────────────────────────────────────
                 from embedding.utils import get_gemini_embedding
-                query_vector = get_gemini_embedding(query)
-                if query_vector:
-                    from pgvector.django import CosineDistance
-                    # Search using multimodal vector embedding
-                    filtered_images = images_qs.annotate(
-                        distance=CosineDistance('image_embedding', query_vector)
-                    ).filter(image_embedding__isnull=False, distance__lt=0.65).order_by('distance')
-                    
-                    if filtered_images.exists():
-                        images_qs = filtered_images
-                    else:
-                        images_qs = RowImage.objects.none()
-                else:
-                    images_qs = RowImage.objects.none()
-            else:
-                images_qs = images_qs.order_by('position')
+                from pgvector.django import CosineDistance
 
-            total_matching = images_qs.count()
-            images = images_qs[offset:offset+limit]
+                # ── Weight knobs ──
+                W_IMG_EMB    = 0.5    # text query vs image_embedding column
+                W_TXT_EMB    = 0.4    # text query vs text_embedding column
+                CAPTION_BONUS = 0.10  # bonus for keyword hit in caption
+                COLOUR_BONUS  = 0.10  # bonus for colour synonym match in caption
+                MAX_CANDIDATES   = 20
+                DISTANCE_THRESHOLD = 0.75
+
+                # ── Colour synonym map (Bangla + English) ──
+                COLOUR_SYNONYMS = {
+    'kalo':   ['black', 'dark', 'jet black', 'charcoal', 'কালো', 'কুচকুচে'],
+    'shada':  ['white', 'light', 'off-white', 'snow white', 'সাদা', 'ধবধবে'],
+    'lal':    ['red', 'maroon', 'crimson', 'scarlet', 'burgundy', 'লাল', 'খয়েরি', 'টকটকে লাল'],
+    'neel':   ['blue', 'navy', 'sky blue', 'royal blue', 'azure', 'নীল', 'আকাশি'],
+    'holud':  ['yellow', 'mustard', 'lemon', 'golden', 'হলুদ', 'সরিষা রঙ', 'সোনালী'],
+    'sabuj':  ['green', 'olive', 'emerald', 'teal', 'mint', 'সবুজ', 'অলিভ', 'কলাপাতা'],
+    'badami': ['brown', 'chocolate', 'coffee', 'tan', 'beige', 'বাদামি', 'কফি', 'চকলেট'],
+    'khaki':  ['khaki', 'dusty', 'sand', 'olive drab', 'খাকি', 'মাটি রঙ'],
+    'beguni': ['purple', 'violet', 'magenta', 'lavender', 'plum', 'বেগুনি', 'জাম রঙ'],
+    'golapi': ['pink', 'rose', 'fuchsia', 'baby pink', 'গোলাপি', 'পিঙ্ক'],
+    'komola': ['orange', 'peach', 'apricot', 'saffron', 'কমলা', 'গেরুয়া'],
+    'dhushor':['grey', 'gray', 'silver', 'ash', 'slate', 'ধূসর', 'ছাই রঙ', 'সিলভার'],
+    'tamate': ['copper', 'bronze', 'metallic', 'তামাটে', 'ব্রোঞ্জ'],
+    'feka':   ['pale', 'pastel', 'faded', 'ফ্যাকাশে'],
+}
+
+                def _colour_bonus(caption_text: str, q: str) -> float:
+                    q_lower      = q.lower()
+                    caption_lower = caption_text.lower()
+                    for key, synonyms in COLOUR_SYNONYMS.items():
+                        all_terms = [key] + synonyms
+                        if any(t in q_lower for t in all_terms):
+                            if any(t in caption_lower for t in all_terms):
+                                return COLOUR_BONUS
+                    return 0.0
+
+                def _caption_kw_bonus(caption_text: str, q: str) -> float:
+                    caption_lower = caption_text.lower()
+                    for word in q.lower().split():
+                        if len(word) >= 3 and word in caption_lower:
+                            return CAPTION_BONUS
+                    return 0.0
+
+                # ── Step 1: ONE text embedding for the query ──
+                # Used for BOTH image_embedding and text_embedding searches.
+                logger.info("Hybrid search initiated. Query: '%s'", query)
+                query_vector = get_gemini_embedding(query)
+
+                seen_ids = {}
+
+                if query_vector:
+                    # ── Signal A: text query vector ↔ DB image_embedding column ──
+                    # Cross-modal: the query text is embedded as text and compared
+                    # against image embeddings stored in the DB (generated from actual images).
+                    img_emb_qs = images_qs.annotate(
+                        img_dist=CosineDistance('image_embedding', query_vector)
+                    ).filter(image_embedding__isnull=False, img_dist__lt=DISTANCE_THRESHOLD)
+
+                    img_candidates_list = list(img_emb_qs[:MAX_CANDIDATES])
+                    logger.info("Signal A (Visual Embedding): Found %d candidates under threshold %s", len(img_candidates_list), DISTANCE_THRESHOLD)
+
+                    for img in img_candidates_list:
+                        logger.debug("Signal A Candidate: ID %s, Visual Dist: %f", img.id, float(img.img_dist))
+                        seen_ids[img.id] = {
+                            'img': img,
+                            'img_dist': float(img.img_dist),
+                            'txt_dist': 1.0,
+                        }
+
+                    # ── Signal B: text query vector ↔ DB caption_embedding column ──
+                    # Same-modal: product description / caption text embeddings.
+                    txt_emb_qs = images_qs.annotate(
+                        txt_dist=CosineDistance('caption_embedding', query_vector)
+                    ).filter(caption_embedding__isnull=False, txt_dist__lt=DISTANCE_THRESHOLD)
+
+                    txt_candidates_list = list(txt_emb_qs[:MAX_CANDIDATES])
+                    logger.info("Signal B (Text Embedding): Found %d candidates under threshold %s", len(txt_candidates_list), DISTANCE_THRESHOLD)
+
+                    for img in txt_candidates_list:
+                        logger.debug("Signal B Candidate: ID %s, Text Dist: %f", img.id, float(img.txt_dist))
+                        if img.id in seen_ids:
+                            seen_ids[img.id]['txt_dist'] = float(img.txt_dist)
+                        else:
+                            seen_ids[img.id] = {
+                                'img': img,
+                                'img_dist': 1.0,
+                                'txt_dist': float(img.txt_dist),
+                            }
+
+                    # Calculate the final unified hybrid score for all gathered candidates
+                    logger.info("Calculating hybrid scores for %d unique candidates", len(seen_ids))
+                    for candidate in seen_ids.values():
+                        img = candidate['img']
+                        img_dist = candidate['img_dist']
+                        txt_dist = candidate['txt_dist']
+                        cb = _colour_bonus(img.image_caption or '', query)
+                        kb = _caption_kw_bonus(img.image_caption or '', query)
+                        candidate['hybrid_score'] = W_IMG_EMB * img_dist + W_TXT_EMB * txt_dist - cb - kb
+                        logger.info(
+                            "Candidate ID %s (%s): visual_dist=%f (w=%s), text_dist=%f (w=%s), cb=%f, kb=%f => hybrid_score=%f",
+                            img.id, img.image_caption or "No Caption", img_dist, W_IMG_EMB, txt_dist, W_TXT_EMB, cb, kb, candidate['hybrid_score']
+                        )
+                else:
+                    logger.warning("Could not generate query embedding vector for query: '%s'", query)
+
+                # ── Signal C: caption keyword fallback ──
+                # If BOTH embedding searches returned nothing (no embeddings stored yet),
+                # fall back to simple keyword match on caption text so we never return empty.
+                if not seen_ids:
+                    logger.info("Both embedding searches returned 0 candidates. Triggering Signal C (caption keyword fallback) for query: '%s'", query)
+                    for word in query.split():
+                        if len(word) < 3:
+                            continue
+                        kw_qs = images_qs.filter(image_caption__icontains=word)
+                        kw_candidates = list(kw_qs[:MAX_CANDIDATES])
+                        logger.info("Keyword '%s' fallback: Found %d matching candidates", word, len(kw_candidates))
+                        for img in kw_candidates:
+                            if img.id not in seen_ids:
+                                seen_ids[img.id] = {
+                                    'img': img,
+                                    'hybrid_score': 0.5,
+                                    'img_dist': 1.0,
+                                    'txt_dist': 1.0,
+                                }
+                                logger.info("Signal C Candidate: ID %s (%s) mapped with neutral score 0.5", img.id, img.image_caption or "No Caption")
+
+                if seen_ids:
+                    sorted_candidates = sorted(seen_ids.values(), key=lambda x: x['hybrid_score'])
+
+                    llm_input = [
+                        {
+                            'image_id':     c['img'].id,
+                            'caption':      c['img'].image_caption or '',
+                            'hybrid_score': c['hybrid_score'],
+                            'img_dist':     c['img_dist'],
+                            'txt_dist':     c['txt_dist'],
+                            '_obj':         c['img'],
+                        }
+                        for c in sorted_candidates[:MAX_CANDIDATES]
+                    ]
+                    logger.info("Candidates sorted by hybrid score: %s", [(c['image_id'], round(c['hybrid_score'], 4)) for c in llm_input])
+
+                    # ── Python-side Color Filtering ──
+                    def _filter_images_by_color(q: str, candidates: list) -> list:
+                        q_lower = q.lower()
+                        requested_groups = set()
+                        for group_name, synonyms in COLOUR_SYNONYMS.items():
+                            all_terms = [group_name] + synonyms
+                            if any(t in q_lower for t in all_terms):
+                                requested_groups.add(group_name)
+                        
+                        if not requested_groups:
+                            return candidates
+                            
+                        filtered = []
+                        for item in candidates:
+                            img_obj = item['_obj']
+                            caption = (img_obj.image_caption or '').lower()
+                            
+                            mentions_requested = False
+                            mentions_other = False
+                            
+                            for group_name, synonyms in COLOUR_SYNONYMS.items():
+                                all_terms = [group_name] + synonyms
+                                if any(t in caption for t in all_terms):
+                                    if group_name in requested_groups:
+                                        mentions_requested = True
+                                    else:
+                                        mentions_other = True
+                                        
+                            # Exclude only if it explicitly mentions a different color, and NOT the requested color
+                            if mentions_other and not mentions_requested:
+                                logger.info(f"Filtering out image ID {img_obj.id} because color doesn't match requested {requested_groups}")
+                                continue
+                            filtered.append(item)
+                        return filtered
+
+                    llm_input = _filter_images_by_color(query, llm_input)
+                    logger.info("Candidates after color filtering: %s", [c['image_id'] for c in llm_input])
+
+                    # ── Stage 2: LLM Re-ranking (Gemini cross-encoder) ──
+                    try:
+                        logger.info("Running Stage 4 (LLM Re-ranking) via Gemini for query: '%s'", query)
+                        reranked = rerank_images_with_llm(query, llm_input)
+                        logger.info("Gemini re-ranking finished. Final ordered IDs: %s", [c['image_id'] for c in reranked])
+                    except Exception as e:
+                        logger.error("LLM re-ranking failed, falling back to hybrid score sorting: %s", str(e))
+                        reranked = llm_input
+
+                    images_qs = [c['_obj'] for c in reranked]
+                else:
+                    logger.info("No candidates found via embeddings or keyword fallback. Returning images ordered by position.")
+                    images_qs = list(images_qs.order_by('position')[:MAX_CANDIDATES])
+            else:
+                images_qs = list(images_qs.order_by('position'))
+
+            # images_qs may now be a plain Python list (after re-ranking) or a QS
+            if not isinstance(images_qs, list) and hasattr(images_qs, 'count'):
+                total_matching = images_qs.count()
+                images = list(images_qs[offset:offset+limit])
+            else:
+                total_matching = len(images_qs)
+                images = images_qs[offset:offset+limit]
             
             if not images and offset == 0:
                 return Response(

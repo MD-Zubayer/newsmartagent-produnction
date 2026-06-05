@@ -65,6 +65,7 @@ class RowImage(models.Model):
     image_filename = models.CharField(max_length=255, blank=True, default='')
     image_caption = models.TextField(blank=True, default='')
     image_embedding = VectorField(dimensions=768, null=True, blank=True)
+    caption_embedding = VectorField(dimensions=768, null=True, blank=True)
     
     # Metadata
     source = models.CharField(max_length=20, choices=IMAGE_SOURCE_CHOICES, default='manual')
@@ -74,13 +75,20 @@ class RowImage(models.Model):
     # Tracking
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
+ 
     class Meta:
         ordering = ['position', 'created_at']
         indexes = [
             HnswIndex(
                 name='row_image_embedding_hnsw_idx',
                 fields=['image_embedding'],
+                m=16,
+                ef_construction=64,
+                opclasses=['vector_cosine_ops']
+            ),
+            HnswIndex(
+                name='row_image_caption_emb_hnsw_idx',
+                fields=['caption_embedding'],
                 m=16,
                 ef_construction=64,
                 opclasses=['vector_cosine_ops']
