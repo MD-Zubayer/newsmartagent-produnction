@@ -71,6 +71,7 @@ def clean_ai_response(raw_reply):
     1. AI sometimes returns text + JSON instead of just JSON
     2. AI sends int/bool instead of string for fields like phone_number, address, etc.
     3. Prevents "expected string or bytes-like object, got 'int'" errors
+    4. Handles nested "items" lists from AI response by extracting product_name and quantity.
     
     Returns: Cleaned parsed dict or fallback dict on error
     """
@@ -103,6 +104,35 @@ def clean_ai_response(raw_reply):
     if "order_data" in data and isinstance(data["order_data"], dict):
         order_data = data["order_data"]
         
+        # 4. Extract product_name and quantity from items list if present
+        if "items" in order_data and isinstance(order_data["items"], list) and len(order_data["items"]) > 0:
+            first_item = order_data["items"][0]
+            if isinstance(first_item, dict):
+                # Look for name of product
+                for name_key in ["name", "product_name", "product", "item", "item_name"]:
+                    if name_key in first_item and first_item[name_key]:
+                        order_data["product_name"] = first_item[name_key]
+                        break
+                # Look for quantity
+                for qty_key in ["quantity", "qty", "quantity_ordered", "count"]:
+                    if qty_key in first_item and first_item[qty_key]:
+                        order_data["quantity"] = first_item[qty_key]
+                        break
+
+        # Fallbacks for product_name on order_data directly
+        if "product_name" not in order_data or not order_data["product_name"]:
+            for k in ["product", "item", "item_name"]:
+                if k in order_data and order_data[k]:
+                    order_data["product_name"] = order_data[k]
+                    break
+
+        # Fallbacks for quantity on order_data directly
+        if "quantity" not in order_data or not order_data["quantity"]:
+            for k in ["qty", "quantity_ordered", "count"]:
+                if k in order_data and order_data[k]:
+                    order_data["quantity"] = order_data[k]
+                    break
+        
         # String fields: FORCE convert to string (fixes 'got int' error)
         string_fields = ["phone_number", "customer_name", "address", "product_name", "extra_info", "item_description"]
         for field in string_fields:
@@ -112,7 +142,14 @@ def clean_ai_response(raw_reply):
         # Quantity/Price must be numeric
         if "quantity" in order_data and order_data["quantity"] is not None:
             try:
-                order_data["quantity"] = int(str(order_data["quantity"]).strip())
+                # Convert Bengali digits to English digits and extract integer
+                qty_str = str(order_data["quantity"]).strip()
+                qty_str = qty_str.translate(str.maketrans('০১২৩৪৫৬৭৮৯', '0123456789'))
+                match = re.search(r'\d+', qty_str)
+                if match:
+                    order_data["quantity"] = int(match.group(0))
+                else:
+                    order_data["quantity"] = int(qty_str)
             except (ValueError, TypeError):
                 order_data["quantity"] = 1
         
@@ -208,46 +245,18 @@ def _deliver_images_for_ai_response(request_type, data, parsed_ai, best_row_id, 
         return False, None
 
     try:
-        # Retrieve image parameters from parsed AI response
-        limit = int(parsed_ai.get('image_limit', 3))
-        query = parsed_ai.get('image_query', '').strip()
-        image_more = parsed_ai.get('image_more', False)
-        if isinstance(image_more, str):
-            image_more = image_more.strip().lower() in ['true', 'yes', '1']
-
-        # Get user memory to check image history
-        sender_id = str(data.get('delivery_jid') or data.get('sender_id') or data.get('chat_id') or '')
-        user_memory = _get_or_create_user_memory(agent_config, sender_id)
-        memory_data = user_memory.data or {}
-        image_history = memory_data.get('image_history', {})
-
-        # Calculate offset for pagination
-        offset = 0
-        if image_more and image_history.get('last_row_id') == best_row_id:
-            offset = image_history.get('delivered_count', 0)
-
         tool_result = execute_image_delivery_tool(
             user_id=agent_config.user.id,
             sheet_id=sheet_id,
             tool_params={
                 'row_index': row_index,
                 'platform': platform,
-                'limit': limit,
-                'query': query,
-                'offset': offset,
+                'limit': 3,
             },
             agent_config=agent_config
         )
-
         if tool_result.get('status') != 'success':
-            logger.warning(f"Image delivery tool failed: {tool_result.get('message')}")
-            # Override reply text
-            if image_more:
-                parsed_ai['reply'] = "দুঃখিত, আর কোনো ছবি নেই।"
-            elif query:
-                parsed_ai['reply'] = f"দুঃখিত, '{query}' রঙের/স্টাইলের কোনো ছবি পাওয়া যায়নি।"
-            else:
-                parsed_ai['reply'] = "দুঃখিত, এই প্রোডাক্টের কোনো ছবি পাওয়া যায়নি।"
+            logger.warning(f'Image delivery tool failed: {tool_result.get('message')}')
             return False, None
 
         images = tool_result.get('images', []) or []
@@ -255,13 +264,6 @@ def _deliver_images_for_ai_response(request_type, data, parsed_ai, best_row_id, 
         captions = [img.get('caption') or '' for img in images if img.get('url')]
         if not image_urls:
             logger.warning('Image delivery tool returned no image URLs.')
-            # Override reply text
-            if image_more:
-                parsed_ai['reply'] = "দুঃখিত, আর কোনো ছবি নেই।"
-            elif query:
-                parsed_ai['reply'] = f"দুঃখিত, '{query}' রঙের/স্টাইলের কোনো ছবি পাওয়া যায়নি।"
-            else:
-                parsed_ai['reply'] = "দুঃখিত, এই প্রোডাক্টের কোনো ছবি পাওয়া যায়নি।"
             return False, None
 
         message_text = parsed_ai.get('reply', '').strip() or None
@@ -271,7 +273,7 @@ def _deliver_images_for_ai_response(request_type, data, parsed_ai, best_row_id, 
 
         route_result = route_images(
             platform=platform,
-            recipient_id=sender_id,
+            recipient_id=str(data.get('delivery_jid') or data.get('sender_id') or data.get('chat_id') or ''),
             image_urls=image_urls,
             captions=captions,
             agent_config=agent_config,
@@ -280,20 +282,6 @@ def _deliver_images_for_ai_response(request_type, data, parsed_ai, best_row_id, 
 
         if route_result.get('status') == 'success':
             logger.info(f'Image delivery succeeded for {platform} row {row_index}')
-            
-            # Update image history in memory
-            new_delivered_count = len(image_urls)
-            if image_more and image_history.get('last_row_id') == best_row_id:
-                new_delivered_count += image_history.get('delivered_count', 0)
-            
-            memory_data['image_history'] = {
-                'last_row_id': best_row_id,
-                'delivered_count': new_delivered_count,
-                'updated_at': timezone.now().isoformat()
-            }
-            user_memory.data = memory_data
-            user_memory.save(update_fields=['data'])
-            
             return True, route_result
         logger.warning(f'Image delivery routing failed: {route_result}')
         return False, route_result
@@ -2282,26 +2270,22 @@ def process_ai_reply_task(self, data):
                             except Exception:
                                 product = None
 
-                        # If still not found, ask user to pick from catalog or clarify
+                        # If still not found, DON'T block the pipeline.
+                        # Instead, clear product_name from memory and let the
+                        # main AI + RAG pipeline handle disambiguation naturally.
                         if not product:
                             invalid_product = product_name or 'অজানা'
+                            logger.info(f"⚠️ Product '{invalid_product}' not found in catalog. Passing to main AI for smart disambiguation.")
                             _increment_field_failure(user_memory, 'product_name', invalid_product)
                             # remove product_name so user can re-provide
                             fields.pop('product_name', None)
                             internal = user_memory.data.get('_internal', {})
                             internal['order_fields'] = fields
+                            # Reset order state to 'ordering' so AI can continue collecting
+                            internal['order_state'] = 'ordering'
                             user_memory.data['_internal'] = internal
                             user_memory.save(update_fields=['data'])
-
-                            invalid_prompt = (
-                                f"দুঃখিত, '{invalid_product}' আমাদের ক্যাটালগে নেই। "
-                                "আপনি কি ক্যাটালগ দেখতে চান, না কি পণ্যের সঠিক নামটি আবার বলবেন?"
-                            )
-                            _deliver_reply_with_buttons(request_type, data, invalid_prompt, sender_id, page_id, effective_access_token, agent_config)
-                            if msg_id:
-                                r.set(f'processed_msg:{msg_id}', '1', ex=3600)
-                                r.delete(f'processing_msg:{msg_id}')
-                            return invalid_prompt
+                            # Fall through to main AI pipeline instead of returning
 
                         # Product resolved successfully — proceed to confirmation
                         _set_order_state(user_memory, 'awaiting_confirmation')
@@ -2793,24 +2777,9 @@ def process_ai_reply_task(self, data):
                     "Do not show order progress, do not ask for missing order fields, and do not include order buttons or summaries. "
                     "Keep the answer short and natural."
                 )
-                # ── Step 1: Log input query ──
-                logger.info(f"[DEBUG] Input Query: '{text}'")
-                # ── Step 2: Local intent rewrite decision (zero API calls) ──
-                logger.info(
-                    "[DEBUG] ai jodi buze je rewrite kora lagbe tahole rewrite korbe, "
-                    "ar jodi dekhe lagbe na, tahole rewrite na kore Rag search korbe"
-                )
-                from embedding.utils import rewrite_query_with_history as _rewrite
-                _intr_history = get_last_message(agent_config, sender_id, limit=6, platform=request_type)
-                search_query_intr = _rewrite(
-                    query=text,
-                    history_list=_intr_history,
-                    user=agent_config.user,
-                    user_memory=user_memory,
-                )
                 sheet_ctx, extra_instr, query_vector, _ = perform_rag_search(
                     agent_config,
-                    search_query_intr,
+                    text,
                     post_context,
                     interruption_instruction,
                     existing_vector=query_vector,
@@ -2826,8 +2795,6 @@ def process_ai_reply_task(self, data):
                     + '\n\nReturn ONLY a valid JSON object: {"reply": "...", "cache_type": "no_cache", "human_handoff": false}. '
                     + 'Do not include order collection, order summary, or order confirmation text in this reply.'
                 )
-                # ── Step 4: Log before main AI dispatch ──
-                logger.info("[DEBUG] Main AI Call dispatched with Sheet Context.")
                 ai_data = get_ai_response(agent_config, system_instruction, history, current_msg)
                 reply = _extract_plain_reply(ai_data) or "দুঃখিত, এই তথ্যটি এখন পরিষ্কারভাবে দিতে পারছি না।"
 
@@ -2856,70 +2823,15 @@ def process_ai_reply_task(self, data):
             if resume_prompt:
                 order_instr = f"{order_instr or ''}\n\n{resume_prompt}"
             order_instr = _get_order_prompt_instruction(agent_config, sender_id, text, order_instr)
-
-            # ── Step 1: Log input query ──
-            logger.info(f"[DEBUG] Input Query: '{text}'")
-            # ── Step 2: Local intent rewrite decision (zero API calls) ──
-            logger.info(
-                "[DEBUG] ai jodi buze je rewrite kora lagbe tahole rewrite korbe, "
-                "ar jodi dekhe lagbe na, tahole rewrite na kore Rag search korbe"
-            )
-            from embedding.utils import rewrite_query_with_history as _rewrite
-            _rag_history = get_last_message(agent_config, sender_id, limit=6, platform=request_type)
-            search_query = _rewrite(
-                query=text,
-                history_list=_rag_history,
-                user=agent_config.user,
-                user_memory=user_memory,
-            )
-
-            # ── Step 3: RAG Search ──
             sheet_ctx, extra_instr, query_vector, best_hit_row_id = perform_rag_search(
                 agent_config,
-                search_query,
+                text,
                 post_context,
                 order_instr,
                 existing_vector=query_vector,
                 vector_type=query_vector_type,
                 image_caption=image_caption,
             )
-
-            # ── Step 3a: Memory Fallback if RAG returned no hit ──
-            if not best_hit_row_id:
-                logger.info(f"[DEBUG] RAG Search Results: Empty (best_hit_row_id: None)")
-                try:
-                    mem_data = user_memory.data or {}
-                    fallback_row_id = mem_data.get('image_history', {}).get('last_row_id')
-                    if fallback_row_id:
-                        logger.info(f"[DEBUG] Triggering Memory Fallback... Found last_row_id: {fallback_row_id}")
-                        from embedding.models import SpreadsheetKnowledge
-                        fallback_obj = SpreadsheetKnowledge.objects.filter(
-                            user=agent_config.user,
-                            row_id=fallback_row_id
-                        ).first()
-                        if fallback_obj and fallback_obj.content:
-                            logger.info(
-                                f"[DEBUG] Loading SpreadsheetKnowledge for Row ID: {fallback_row_id}... Success!"
-                            )
-                            best_hit_row_id = fallback_row_id
-                            fallback_content = (
-                                f"[Source: Memory Fallback — Last Viewed Product]\n"
-                                f"{fallback_obj.content} | Match Confidence: Context-based"
-                            )
-                            sheet_ctx = f"\n[KNOWLEDGE BASE DATA]:\n{fallback_content}"
-                            extra_instr = (
-                                extra_instr or
-                                f"Use [KNOWLEDGE BASE DATA] to answer. {order_instr}"
-                            )
-                        else:
-                            logger.info(
-                                f"[DEBUG] Memory Fallback: SpreadsheetKnowledge for row_id={fallback_row_id} not found or empty."
-                            )
-                    else:
-                        logger.info("[DEBUG] Memory Fallback: No last_row_id found in memory.")
-                except Exception as _fb_err:
-                    logger.warning(f"[DEBUG] Memory Fallback error: {_fb_err}")
-
             system_instruction, history, current_msg = build_ai_context(
                 agent_config, sender_id, text, extra_instr, sheet_ctx,
                 platform=request_type, message_type=message_type,
@@ -2939,17 +2851,12 @@ def process_ai_reply_task(self, data):
                 'Order_data should include customer_name, phone_number, address, product_name, quantity, and extra_info when available. '
                 'Do not ask for price and do not invent price. Price is authoritative from merchant catalog/database and backend will merge it.'
                 '\nYour output MUST always strictly follow this JSON structure: '
-                '{"reply": "string", "cache_type": "string", "human_handoff": boolean, "image_intent": boolean, "image_style": "string", "image_limit": integer, "image_query": "string", "image_more": boolean}. '
-                'Always include all image-related fields in the JSON response. '
-                '\nWhen the user asks for product images, follow these Product Filtering rules: '
-                '1. FIRST, check if the requested product exists in [KNOWLEDGE BASE DATA]. '
-                '2. If the product does NOT exist in [KNOWLEDGE BASE DATA] (or if there is only a completely different product like mobile when asking for a panjabi), set "image_intent": false, "image_style": "none", "image_limit": 3, "image_query": "", "image_more": false, and reply politely that the product is not available. '
-                '3. If the product DOES exist in [KNOWLEDGE BASE DATA], set "image_intent": true and "image_style": "image_with_caption". '
-                'If they specify a count/limit of images, set "image_limit" to that integer, otherwise default to 3. '
-                'If they specify a color/style (e.g., "কালো", "sada", "red", "white", "black"), translate and set "image_query" to its standard English name (e.g., always use "black" for "কালো" or "kalo"), otherwise default to "". '
-                'If they ask for more/additional/other images of the same product (e.g., "more", "আরও ছবি", "আগেরটার আরও দেখান"), set "image_more": true, otherwise default to false. '
-                'Do NOT say "I do not have images" if the product exists but no image URLs are in [KNOWLEDGE BASE DATA]; instead, reply naturally that you are providing the images and set "image_intent": true so the backend can deliver them.'
-                '\nIf the user does not ask for images, set "image_intent": false, "image_style": "none" or "", "image_limit": 3, "image_query": "", "image_more": false.'
+                '{"reply": "string", "cache_type": "string", "human_handoff": boolean, "image_intent": boolean, "image_style": "string", "order_intent": "string or null", "order_data": "object or null"}. '
+                'Always include "image_intent" and "image_style" in the JSON response. '
+                'If the user explicitly asks for photos/images (for example, "ছবি দেন", "পিকচার দেখান", "image please"), set "image_intent": true and "image_style": "image_with_caption". '
+                'If the user does not ask for images, set "image_intent": false and "image_style": "none" or "".'
+                '\nWhen the user asks for product images, do NOT say "I do not have images" even if [KNOWLEDGE BASE DATA] does not contain image URLs. '
+                'Instead, reply naturally that you are providing product images and set "image_intent": true so backend can deliver them.'
                 '\nIf the user has already provided a field earlier in the conversation, do not ask for that field again. '
                 'If the user gives multiple fields in one message, extract them and proceed. '
                 '\nSTRICT: No markdown blocks, no preamble, and ensure JSON syntax is perfect.'
@@ -2957,8 +2864,6 @@ def process_ai_reply_task(self, data):
             )
             system_instruction = system_instruction + classify_instruction
 
-            # ── Step 4: Log before main AI dispatch ──
-            logger.info("[DEBUG] Main AI Call dispatched with Sheet Context.")
             # --- AI Call ---
             ai_data = get_ai_response(agent_config, system_instruction, history, current_msg)
 
@@ -2987,18 +2892,31 @@ def process_ai_reply_task(self, data):
                         is_json_handoff_override = True
 
                     logger.info(f"📋 AI cache_type classified as: '{cache_type}' for '{text[:30]}'")
+                    
+                    logger.info(f"AI Response JSON: {parsed}")
+                    
                     order_intent = parsed.get('order_intent')
                     order_data = parsed.get('order_data')
 
                     # If AI provided an order_intent, seed memory and optionally auto-confirm
                     if order_intent == 'create' and isinstance(order_data, dict):
+                        logger.info(f"🔍 [AI Order Intake] Order intent 'create' detected. Raw order_data: {order_data}")
                         try:
                             # Seed parsed order fields into user memory (normalize + save)
                             user_memory = _get_or_create_user_memory(agent_config, sender_id)
+                            logger.info(f"🔍 [AI Order Intake] Loaded memory for sender {sender_id}. Current memory fields: {_get_order_fields(user_memory)}")
+                            
                             normalized_order, field_metadata = normalize_order_entities(agent_config.user, order_data)
+                            logger.info(f"🔍 [AI Order Intake] Normalized order fields: {normalized_order}")
+                            
                             normalized_order = _seed_order_data_from_recent_interest(user_memory, normalized_order)
+                            logger.info(f"🔍 [AI Order Intake] After seeding recent interest: {normalized_order}")
+                            
                             normalized_order = _hydrate_order_from_catalog(agent_config.user, normalized_order)
+                            logger.info(f"🔍 [AI Order Intake] After catalog hydration: {normalized_order}")
+                            
                             _save_order_fields_to_memory(user_memory, normalized_order, source='ai_extraction', field_metadata=field_metadata)
+                            logger.info(f"🔍 [AI Order Intake] Saved to memory. New memory fields: {_get_order_fields(user_memory)}")
 
                             # Determine intent confidence (fallbacks)
                             intent_conf = None
@@ -3013,11 +2931,16 @@ def process_ai_reply_task(self, data):
                                 intent_conf = 1.0
 
                             # If memory now has complete order fields, consider auto confirm
-                            if _has_complete_order_fields(user_memory):
+                            has_complete_fields = _has_complete_order_fields(user_memory)
+                            logger.info(f"🔍 [AI Order Intake] Order completeness: {has_complete_fields}, confidence: {intent_conf}")
+                            
+                            if has_complete_fields:
                                 # High confidence -> auto-create order
                                 if intent_conf >= 0.9:
+                                    logger.info(f"🔍 [AI Order Intake] Auto-creating order since confidence ({intent_conf}) >= 0.9")
                                     order_obj = create_customer_order_from_memory(agent_config, sender_id, request_type, msg_id=msg_id)
                                     if order_obj:
+                                        logger.info(f"✅ [AI Order Intake] Order #{order_obj.id} created successfully!")
                                         parsed_reply = f"✅ আপনার অর্ডার #{order_obj.id} নিশ্চিত করা হয়েছে। ইনভয়েস শীঘ্রই পাঠানো হবে।"
                                         cache_type = 'no_cache'
                                         # deliver immediate reply and return
@@ -3026,14 +2949,20 @@ def process_ai_reply_task(self, data):
                                             r.set(f'processed_msg:{msg_id}', '1', ex=3600)
                                             r.delete(f'processing_msg:{msg_id}')
                                         return parsed_reply
+                                    else:
+                                        logger.error(f"❌ [AI Order Intake] create_customer_order_from_memory returned None for sender {sender_id}!")
                                 # Medium confidence -> prompt for explicit confirmation
                                 else:
+                                    logger.info(f"🔍 [AI Order Intake] Prompting for confirmation since confidence ({intent_conf}) < 0.9")
                                     confirmation = _get_confirmation_prompt(user_memory)
                                     if confirmation:
                                         parsed_reply = confirmation
                                         cache_type = 'no_cache'
+                            else:
+                                missing_field = _get_next_missing_field(user_memory)
+                                logger.info(f"🔍 [AI Order Intake] Order memory not complete yet. Missing field: {missing_field}")
                         except Exception as seed_err:
-                            logger.error(f"Failed to seed AI order into memory: {seed_err}", exc_info=True)
+                            logger.error(f"❌ [AI Order Intake] Failed to seed AI order into memory: {seed_err}", exc_info=True)
                 else:
                     logger.warning(f"⚠️ JSON parsed but reply field is empty. Using raw.")
             except (KeyError, TypeError, ValueError) as e:
@@ -3121,8 +3050,6 @@ def process_ai_reply_task(self, data):
                     )
                     if image_delivered:
                         logger.info(f'AI image delivery performed: {image_route}')
-                    # Re-read reply from parsed in case it was overridden (e.g., no/pagination images)
-                    reply = parsed.get('reply', reply)
 
                 # ---- 3-Tier Grouped Cache Save ----
                 if cache_type == 'global':

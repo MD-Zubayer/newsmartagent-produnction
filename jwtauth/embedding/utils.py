@@ -168,12 +168,21 @@ def sync_spreadsheet_to_knowledge(user, grid_data, sheet_id):
                 obj.embedding = None
 
         if should_update_image:
-            image_vector = get_gemini_image_embedding(image_url)
-            # Use provider from GlobalSettings
-            global_settings = GlobalSettings.get_settings()
-            selected_provider = getattr(global_settings, 'image_caption_provider', 'gemini') or 'gemini'
-            fallback_text = row_text or 'Product Image'
-            image_caption = get_image_caption(image_url, provider=selected_provider, fallback_text=fallback_text)
+            from embedding.models import RowImage
+            existing_row_image = RowImage.objects.filter(user=user, image_url=image_url).first()
+            
+            if existing_row_image and existing_row_image.image_embedding and existing_row_image.image_caption:
+                image_vector = existing_row_image.image_embedding
+                image_caption = existing_row_image.image_caption
+                print(f"[DEBUG] Reusing existing embedding and caption for {image_url} from RowImage")
+            else:
+                image_vector = get_gemini_image_embedding(image_url)
+                # Use provider from GlobalSettings
+                global_settings = GlobalSettings.get_settings()
+                selected_provider = getattr(global_settings, 'image_caption_provider', 'gemini') or 'gemini'
+                fallback_text = row_text or 'Product Image'
+                image_caption = get_image_caption(image_url, provider=selected_provider, fallback_text=fallback_text)
+                
             obj.image_url = image_url
             obj.image_caption = image_caption or ''
             if image_vector:
