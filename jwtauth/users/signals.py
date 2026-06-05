@@ -119,7 +119,7 @@ def handle_order_created_invoice_n8n(sender, instance, created, **kwargs):
         # Trigger async invoice generation safely on transaction commit
         from django.db import transaction
         from users.signals_tasks import generate_and_send_invoice_async_task
-        transaction.on_commit(lambda: generate_and_send_invoice_async_task.delay(instance.id))
+        transaction.on_commit(lambda order_id=instance.id: generate_and_send_invoice_async_task.delay(order_id))
         
     except Exception as e:
         logger.error(f"❌ Error triggering invoice generation task: {e}", exc_info=True)

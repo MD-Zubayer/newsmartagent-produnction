@@ -406,11 +406,14 @@ def _get_order_fields(user_memory):
 
 def _get_plain_order_values(user_memory):
     fields = _get_order_fields(user_memory)
-    return {
+    values = {
         field: fields.get(field, {}).get('value')
         for field in ORDER_FIELDS
         if fields.get(field, {}).get('value') and fields.get(field, {}).get('confidence', 1.0) >= 0.75
     }
+    if 'items' in fields:
+        values['items'] = fields['items'].get('value')
+    return values
 
 
 def _hydrate_order_from_catalog(user, order_data):
@@ -554,18 +557,30 @@ def _save_order_fields_to_memory(user_memory, order_data, source='ai_extraction'
 
     field_metadata = field_metadata or {}
     for key, value in (order_data or {}).items():
-        if key not in ORDER_FIELDS or value is None:
+        if key not in ORDER_FIELDS and key != 'items':
             continue
+        if value is None:
+            continue
+            
         existing = order_fields.get(key, {})
         metadata = field_metadata.get(key, {})
-        order_fields[key] = {
-            'value': str(value).strip(),
-            'confidence': metadata.get('confidence', existing.get('confidence', 0.95 if source == 'regex_validated' else 0.85)),
-            'source': metadata.get('source', source),
-            'updated_at': timezone.now().isoformat()
-        }
-        if metadata.get('matched_from'):
-            order_fields[key]['matched_from'] = metadata.get('matched_from')
+        
+        if key == 'items':
+            order_fields[key] = {
+                'value': value,  # Keep as list/dict
+                'confidence': 1.0,
+                'source': metadata.get('source', source),
+                'updated_at': timezone.now().isoformat()
+            }
+        else:
+            order_fields[key] = {
+                'value': str(value).strip(),
+                'confidence': metadata.get('confidence', existing.get('confidence', 0.95 if source == 'regex_validated' else 0.85)),
+                'source': metadata.get('source', source),
+                'updated_at': timezone.now().isoformat()
+            }
+            if metadata.get('matched_from'):
+                order_fields[key]['matched_from'] = metadata.get('matched_from')
 
     internal['order_fields'] = order_fields
     if internal.get('order_state') == 'idle' and order_fields:
@@ -871,7 +886,44 @@ def create_customer_order_from_memory(agent_config, sender_id, request_type, msg
     except (ValueError, TypeError):
         quantity_value = 1
 
-    product = _resolve_catalog_product_for_user(agent_config.user, product_name, quantity_value)
+    items_array = seeded_fields.get('items') or input_fields.get('items') or []
+    order_items_payload = []
+    
+    if isinstance(items_array, list) and len(items_array) > 0:
+        total_price = 0
+        resolved_items = []
+        for item in items_array:
+            item_name = item.get('name') or item.get('product_name')
+            if not item_name: continue
+            
+            item_qty = 1
+            for q_key in ['quantity', 'qty', 'count']:
+                if q_key in item:
+                    try:
+                        item_qty = int(item[q_key])
+                        break
+                    except: pass
+                    
+            cat_prod = _resolve_catalog_product_for_user(agent_config.user, item_name, item_qty)
+            if cat_prod:
+                i_price = cat_prod.get('price') or 0
+                total_price += i_price * item_qty
+                resolved_items.append({
+                    "name": cat_prod.get('name', item_name),
+                    "quantity": item_qty,
+                    "price": float(i_price)
+                })
+        
+        if resolved_items:
+            product_name = f"Multi-item Order ({len(resolved_items)} items)"
+            price_value = total_price
+            quantity_value = sum(i["quantity"] for i in resolved_items)
+            order_items_payload = resolved_items
+            product = True  # Bypass single product validation
+        else:
+            product = None
+    else:
+        product = _resolve_catalog_product_for_user(agent_config.user, product_name, quantity_value)
     
     # 💥 FALLBACK: If product still not found, search conversation history for product mentions
     if not product and product_name == 'Product':
@@ -891,8 +943,10 @@ def create_customer_order_from_memory(agent_config, sender_id, request_type, msg
         logger.warning(f"Catalog validation failed for product '{product_name}' and quantity {quantity_value} for user {agent_config.user.email}")
         return None
 
-    price_value = product.get('price')
-    product_name = product.get('name', product_name)
+    if not order_items_payload:
+        unit_price = product.get('price') or 0 if isinstance(product, dict) else 0
+        price_value = unit_price * quantity_value
+        product_name = product.get('name', product_name) if isinstance(product, dict) else product_name
 
     source_platform = request_type if request_type != 'web_widget' else 'web'
 
@@ -905,6 +959,7 @@ def create_customer_order_from_memory(agent_config, sender_id, request_type, msg
             product_name=product_name,
             price=price_value,
             item_quantity=quantity_value,
+            items=order_items_payload,
             extra_info=extra_info,
             source_platform=source_platform,
             source_contact_id=sender_id
@@ -926,7 +981,7 @@ def handle_order_button_action(agent_config, contact, action, page_id, platform)
     sender_id = contact.identifier
     user_memory = _get_or_create_user_memory(agent_config, sender_id)
     response_text = None
-    reply_data = {'sender_id': sender_id, 'message_id': '', 'sessionId': ''}
+    reply_data = {'sender_id': sender_id, 'message_id': '', 'sessionId': f"user_{agent_config.user.id}"}
 
     if platform == 'whatsapp':
         reply_data['delivery_jid'] = sender_id
@@ -1129,13 +1184,53 @@ def create_customer_order_from_ai(agent_config, sender_id, request_type, data, o
     except (ValueError, TypeError):
         item_quantity = 1
 
-    product = _resolve_catalog_product_for_user(agent_config.user, product_name, item_quantity)
+    items_array = order_data.get('items') or []
+    order_items_payload = []
+    
+    if isinstance(items_array, list) and len(items_array) > 0:
+        total_price = 0
+        resolved_items = []
+        for item in items_array:
+            item_name = item.get('name') or item.get('product_name')
+            if not item_name: continue
+            
+            item_qty = 1
+            for q_key in ['quantity', 'qty', 'count']:
+                if q_key in item:
+                    try:
+                        item_qty = int(item[q_key])
+                        break
+                    except: pass
+                    
+            cat_prod = _resolve_catalog_product_for_user(agent_config.user, item_name, item_qty)
+            if cat_prod:
+                i_price = cat_prod.get('price') or 0
+                total_price += i_price * item_qty
+                resolved_items.append({
+                    "name": cat_prod.get('name', item_name),
+                    "quantity": item_qty,
+                    "price": float(i_price)
+                })
+        
+        if resolved_items:
+            product_name = f"Multi-item Order ({len(resolved_items)} items)"
+            price = total_price
+            item_quantity = sum(i["quantity"] for i in resolved_items)
+            order_items_payload = resolved_items
+            product = True  # Bypass single product validation
+        else:
+            product = None
+    else:
+        product = _resolve_catalog_product_for_user(agent_config.user, product_name, item_quantity)
+
     if not product:
         logger.warning(f"Catalog validation failed for product '{product_name}' and quantity {item_quantity} for user {agent_config.user.email}")
         return None
 
-    price = product.get('price')
-    product_name = product.get('name', product_name)
+    if not order_items_payload:
+        unit_price = product.get('price') or 0 if isinstance(product, dict) else 0
+        price = unit_price * item_quantity
+        product_name = product.get('name', product_name) if isinstance(product, dict) else product_name
 
     if quantity:
         try:
@@ -1158,6 +1253,7 @@ def create_customer_order_from_ai(agent_config, sender_id, request_type, data, o
             product_name=product_name,
             price=price,
             item_quantity=item_quantity,
+            items=order_items_payload,
             extra_info=extra_info,
             source_platform=source_platform,
             source_contact_id=source_contact_id
