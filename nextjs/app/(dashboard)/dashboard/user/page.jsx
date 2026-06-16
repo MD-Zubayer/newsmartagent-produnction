@@ -175,7 +175,7 @@ export default function UserDashboard() {
   const { analytics, user, subscriptions } = data;
   const { summary, charts, recent_logs } = analytics;
   const currentSub = subscriptions?.find(sub => sub.is_active) || subscriptions?.[subscriptions.length - 1];
-  const activeSubs = subscriptions?.filter(s => s.is_active) || [];
+  const activeSubs = subscriptions?.filter(s => s.is_active && s.offer) || [];
   const totalScheduleSlots = activeSubs.reduce((acc, s) => acc + (s.offer?.schedule_messages || 0), 0);
   const remainingSchedules = user?.profile?.schedule_balance || 0;
   const usedSchedules = Math.max(totalScheduleSlots - remainingSchedules, 0);
@@ -308,15 +308,18 @@ export default function UserDashboard() {
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em]">Active Subscriptions & Model Access</p>
             </div>
             <div className="bg-indigo-50 px-4 py-2 rounded-xl">
-              <p className="text-[10px] font-black text-indigo-600 uppercase">Active Slots: {subscriptions?.filter(s => s.is_active).length}</p>
+              <p className="text-[10px] font-black text-indigo-600 uppercase">Active Slots: {activeSubs.length}</p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
             {activeSubs.map((sub) => {
-              const percent = Math.round((sub.remaining_tokens / sub.offer.tokens) * 100);
+              const offer = sub.offer || {};
+              const remainingTokens = sub.remaining_tokens || 0;
+              const totalTokens = offer.tokens || 0;
+              const percent = totalTokens > 0 ? Math.min(Math.round((remainingTokens / totalTokens) * 100), 100) : 0;
               const isLow = percent < 15;
-              const schedTotal = sub.offer?.schedule_messages || 0;
+              const schedTotal = offer.schedule_messages || 0;
               const schedRemaining = sub.remaining_schedule_messages ?? 0;
 
               return (
@@ -332,17 +335,17 @@ export default function UserDashboard() {
                           <Zap size={24} className="text-white fill-current" />
                         </div>
                         <div>
-                          <h4 className="text-lg font-black text-slate-800 uppercase tracking-tighter">{sub.offer.name}</h4>
+                          <h4 className="text-lg font-black text-slate-800 uppercase tracking-tighter">{offer.name || "Unknown Plan"}</h4>
                           <div className="flex flex-wrap gap-1.5 mt-1.5">
-                            {sub.offer.allowed_models?.map(model => (
+                            {offer.allowed_models?.map(model => (
                               <span key={model.id} className="text-[8px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded-lg uppercase tracking-tight border border-slate-200/50">
                                 {model.model_name}
                               </span>
                             ))}
                           </div>
                           <div className="flex gap-2 text-[10px] text-gray-500 mt-2 flex-wrap">
-                            <span className="px-2 py-1 bg-gray-100 rounded-full">Duration: {sub.offer.duration_days}d</span>
-                            <span className="px-2 py-1 bg-gray-100 rounded-full">Price: {sub.offer.price} BDT</span>
+                            <span className="px-2 py-1 bg-gray-100 rounded-full">Duration: {offer.duration_days || 0}d</span>
+                            <span className="px-2 py-1 bg-gray-100 rounded-full">Price: {offer.price || 0} BDT</span>
                             <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-full">Schedules: {schedRemaining}/{schedTotal}</span>
                           </div>
                         </div>
@@ -359,11 +362,11 @@ export default function UserDashboard() {
                     <div className="grid grid-cols-2 gap-4 bg-slate-50 p-5 rounded-3xl border border-slate-100">
                       <div>
                         <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">Remaining</p>
-                        <p className={`text-xl font-black ${isLow ? 'text-rose-600' : 'text-slate-800'}`}>{sub.remaining_tokens.toLocaleString()}</p>
+                        <p className={`text-xl font-black ${isLow ? 'text-rose-600' : 'text-slate-800'}`}>{remainingTokens.toLocaleString()}</p>
                       </div>
                       <div className="border-l border-slate-200 pl-4">
                         <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">Total Limit</p>
-                        <p className="text-xl font-black text-slate-500">{sub.offer.tokens.toLocaleString()}</p>
+                        <p className="text-xl font-black text-slate-500">{totalTokens.toLocaleString()}</p>
                       </div>
                     </div>
 
