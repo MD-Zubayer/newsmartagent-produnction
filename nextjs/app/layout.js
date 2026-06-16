@@ -1,4 +1,3 @@
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Navbar from "./(main)/components/Navbar";
 import Footer from "./(main)/components/Footer";
@@ -6,20 +5,6 @@ import { Toaster } from "react-hot-toast";
 import MessengerButton from "./(main)/components/MessengerButton";
 import VisitorTracker from "../components/VisitorTracker";
 // import Footer from "../components/Footer";
-
-
-
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 
 
 
@@ -139,9 +124,7 @@ export default function RootLayout({ children }) {
         <meta name="facebook-domain-verification" content="mtx9mkprfp4g4qth08yyt53r69k561" />
 
       </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+      <body className="antialiased">
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
