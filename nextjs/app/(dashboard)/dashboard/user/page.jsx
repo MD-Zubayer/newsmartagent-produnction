@@ -174,8 +174,32 @@ export default function UserDashboard() {
 
   const { analytics, user, subscriptions } = data;
   const { summary, charts, recent_logs } = analytics;
-  const currentSub = subscriptions?.find(sub => sub.is_active) || subscriptions?.[subscriptions.length - 1];
-  const activeSubs = subscriptions?.filter(s => s.is_active && s.offer) || [];
+  const now = new Date();
+  const trulyActiveSubs = subscriptions?.filter(sub => sub.is_active && new Date(sub.end_date) > now) || [];
+  const activeSubs = trulyActiveSubs.filter(s => s.offer);
+  
+  const totalAvailableBalance = trulyActiveSubs.length > 0
+    ? trulyActiveSubs.reduce((acc, sub) => acc + (sub.remaining_tokens || 0), 0)
+    : 0;
+
+  let earliestStartDate = null;
+  let latestEndDate = null;
+
+  if (trulyActiveSubs.length > 0) {
+    const startDates = trulyActiveSubs.map(sub => new Date(sub.start_date));
+    const endDates = trulyActiveSubs.map(sub => new Date(sub.end_date));
+    earliestStartDate = new Date(Math.min(...startDates));
+    latestEndDate = new Date(Math.max(...endDates));
+  } else if (subscriptions && subscriptions.length > 0) {
+    const lastSub = subscriptions[subscriptions.length - 1];
+    earliestStartDate = new Date(lastSub.start_date);
+    latestEndDate = new Date(lastSub.end_date);
+  }
+
+  const currentSub = trulyActiveSubs.length > 0
+    ? trulyActiveSubs[0]
+    : null;
+
   const totalScheduleSlots = activeSubs.reduce((acc, s) => acc + (s.offer?.schedule_messages || 0), 0);
   const remainingSchedules = user?.profile?.schedule_balance || 0;
   const usedSchedules = Math.max(totalScheduleSlots - remainingSchedules, 0);
@@ -210,7 +234,7 @@ export default function UserDashboard() {
                   <div className="min-w-0">
                     <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-[0.2em] mb-1 md:mb-2">Total Available Balance</p>
                     <h2 className="text-2xl sm:text-3xl md:text-5xl font-black tracking-tight flex flex-wrap items-baseline gap-x-2 gap-y-1 leading-tight min-w-0">
-                      <span className="max-w-full break-all">{user?.profile?.word_balance?.toLocaleString() || 0}</span>
+                      <span className="max-w-full break-all">{totalAvailableBalance.toLocaleString()}</span>
                       <span className="text-xs sm:text-sm md:text-xl text-slate-500 font-bold uppercase tracking-widest shrink-0">Tokens</span>
                     </h2>
                   </div>
@@ -222,14 +246,14 @@ export default function UserDashboard() {
                       <Calendar size={14} className="text-blue-400" />
                       <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Global Start</p>
                     </div>
-                    <p className="text-sm md:text-xl font-black">{formatDateTime(currentSub.start_date).date}</p>
+                    <p className="text-sm md:text-xl font-black">{formatDateTime(earliestStartDate).date}</p>
                   </div>
                   <div className="text-center lg:text-left">
                     <div className="flex items-center gap-2 mb-2 justify-center lg:justify-start">
                       <CreditCard size={14} className="text-pink-400" />
                       <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Global End</p>
                     </div>
-                    <p className="text-sm md:text-xl font-black">{formatDateTime(currentSub.end_date).date}</p>
+                    <p className="text-sm md:text-xl font-black">{formatDateTime(latestEndDate).date}</p>
                   </div>
                 </div>
 
@@ -238,7 +262,7 @@ export default function UserDashboard() {
                     <Hourglass size={24} className="text-emerald-400 animate-pulse shrink-0" />
                     <div>
                       <p className="text-[9px] md:text-[10px] font-black text-emerald-400/70 uppercase tracking-widest mb-0.5">Time Remaining</p>
-                      <p className="text-lg md:text-2xl font-black tracking-tighter">{calculateTimeLeft(currentSub.end_date)}</p>
+                      <p className="text-lg md:text-2xl font-black tracking-tighter">{calculateTimeLeft(latestEndDate)}</p>
                     </div>
                   </div>
                 </div>
