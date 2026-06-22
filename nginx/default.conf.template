@@ -1,3 +1,6 @@
+
+limit_req_zone $binary_remote_addr zone=api_limit:10m rate=10r/s;
+
 upstream django_backend {
     server backend:8000;
     keepalive 32;
@@ -5,6 +8,7 @@ upstream django_backend {
 
 upstream nextjs_frontend {
     server frontend:3000;
+    keepalive 16;
 }
 
 upstream n8n_backend {
@@ -23,13 +27,15 @@ upstream minio_console {
     server minio:9001;
 }
 
+# 🔒 কমন সিকিউরিটি হেডার্স (Global Injection Shield)
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 server {
     listen 80;
     client_max_body_size 20M;
     resolver 127.0.0.11 valid=30s;
-    gzip on;
-    gzip_types text/plain application/xml text/css application/javascript application/json;
-    gzip_min_length 1000;
     server_name ${MAIN_DOMAIN};
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -38,8 +44,8 @@ server {
     # ১. Django Static Files (এটি মাস্ট লাগবেই)
     location /static/ {
         alias /app/static/;
-        # expires 30d;
-        # add_header Cache-Control "public, no-transform";
+        expires 30d;
+        add_header Cache-Control "public, no-transform";
         
     }
 
@@ -73,6 +79,7 @@ server {
 
     # Django API
     location /api/ {
+        limit_req zone=api_limit burst=20 nodelay; # বট বোম্বিং আটকানোর জন্য রেট লিমিট যুক্ত
         proxy_pass http://django_backend;
         proxy_http_version 1.1;       # Keepalive এর জন্য HTTP 1.1 দরকার
         proxy_set_header Connection ""; # ডিফল্ট "close" হেডার মুছে ফেলতে হবে
@@ -80,29 +87,7 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
-    location ~ ^/flower/(static|assets)/ {
-        proxy_pass http://flower_backend; # শেষে স্ল্যাশ দিবেন না
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Script-Name /flower; # এটি এখানেও লাগবে
-}
 
-# ২. মূল Flower লোকেশন
-    location /flower/ {
-        proxy_pass http://flower_backend/; # শেষে স্ল্যাশ মাস্ট
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto https; 
-
-         proxy_redirect off;
-         proxy_set_header X-Script-Name /flower; 
-        
-         proxy_http_version 1.1;
-         proxy_set_header Upgrade $http_upgrade;
-         proxy_set_header Connection "upgrade";
-         proxy_buffering off;
-}
 
     location /ws/ {
         proxy_pass http://django_backend; 
@@ -151,6 +136,34 @@ server {
 
 }
 
+
+server {
+        listen 80;
+        server_name ${FLOWER_DOMAIN}; # সাবডোমেন মাস্ট
+
+        location ~ ^/flower/(static|assets)/ {
+            proxy_pass http://flower_backend;
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_set_header X-Script-Name /flower;
+        }
+
+        location / {
+            proxy_pass http://flower_backend/;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto https; 
+
+            proxy_redirect off;
+            proxy_set_header X-Script-Name /flower; 
+            
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_buffering off;
+        }
+    }
 
 server {
     listen 80;
