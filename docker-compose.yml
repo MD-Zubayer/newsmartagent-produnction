@@ -66,6 +66,43 @@ services:
       --appendfsync everysec
       --save 60 1000
 
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: ${PROJECT_NAME}-pgbouncer
+    restart: always
+
+    environment:
+      - DB_HOST=db
+      - DB_PORT=${DB_POSTGRESDB_PORT}
+      - DB_USER=${POSTGRES_USER}
+      - AUTH_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${PGBOUNCER_PASSWORD}
+      - DB_NAME=${POSTGRES_DB}
+      - POOL_MODE=transaction # প্রোডাকশন ও জ্যাঙ্গো/সেলেরির জন্য বেস্ট মোড
+      - MAX_CLIENT_CONN=1000  # সর্বোচ্চ কতটি ইনকামিং কানেকশন হ্যান্ডেল করবে
+      - DEFAULT_POOL_SIZE=50  # আসল ডাটাবেজের সাথে সর্বোচ্চ কানেকশন পুল
+      - MIN_POOL_SIZE=10
+      - SERVER_RESET_QUERY=DISCARD ALL
+      - SERVER_CHECK_QUERY=SELECT 1
+      - SERVER_IDLE_TIMEOUT=600
+      - AUTH_TYPE=scram-sha-256    # সহজ ও সিকিউর ইন্টারনাল ডকার অথেন্টিকেশন
+      - LISTEN_PORT=${DB_POSTGRESDB_PORT}     # PgBouncer নিজে ৫৪৩২ পোর্টে লিসেন করবে
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p ${DB_POSTGRESDB_PORT} || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
+    deploy:
+      update_config:
+        order: start-first
+    networks:
+      - smart-network
+
   backend:
     build: ./jwtauth
     container_name: ${PROJECT_NAME}-django
@@ -93,7 +130,7 @@ services:
       - BAILEYS_API_URL=${BAILEYS_API_URL}
       - BAILEYS_API_SECRET=${BAILEYS_API_SECRET}
     depends_on:
-      - db
+      - pgbouncer
       - redis
     logging: *default-logging
     restart: always
@@ -188,7 +225,7 @@ services:
       - GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE=/app/gdrive_key.json
 
     depends_on:
-      db:
+      pgbouncer:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -220,7 +257,7 @@ services:
       - GOOGLE_DRIVE_LOG_SUBFOLDER=${GOOGLE_DRIVE_LOG_SUBFOLDER}
       - GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE=/app/gdrive_key.json
     depends_on:
-      db:
+      pgbouncer:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -262,7 +299,7 @@ services:
     depends_on:
       - backend
       - redis
-      - db
+      - pgbouncer
     deploy:
       update_config:
         order: start-first
