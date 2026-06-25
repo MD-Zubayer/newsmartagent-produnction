@@ -1660,31 +1660,15 @@ def sync_contact_profile_picture(self, contact_id, platform, sender_id, page_id,
             cache.set(cache_key, "1", timeout=cache_timeout)
             return
             
-        img_resp = requests.get(image_url, timeout=15)
-        if img_resp.status_code == 200:
-            content = img_resp.content
-            img_hash = hashlib.md5(content).hexdigest()
+        if contact.profile_photo_url != image_url:
+            contact.profile_photo_url = image_url
+            contact.save(update_fields=['profile_photo_url'])
+            logger.info(f"✅ Saved new profile picture URL for contact {contact_id}: {image_url}")
+        else:
+            logger.info(f"⏭️ Profile picture URL for {contact_id} unchanged")
             
-            if contact.profile_picture_hash != img_hash:
-                # Delete old file from MinIO securely
-                if contact.profile_picture:
-                    try:
-                        contact.profile_picture.delete(save=False)
-                    except Exception as minio_err:
-                        logger.error(f"MinIO delete error: {minio_err}")
-                
-                # Save new file
-                ext = "jpg"
-                filename = f"profile_{contact.id}_{int(time.time())}.{ext}"
-                contact.profile_picture.save(filename, ContentFile(content), save=False)
-                contact.profile_picture_hash = img_hash
-                contact.save(update_fields=['profile_picture', 'profile_picture_hash'])
-                logger.info(f"✅ Downloaded & saved new profile picture for contact {contact_id}")
-            else:
-                logger.info(f"⏭️ Profile picture for {contact_id} unchanged (Hash match)")
-            
-            # Cache success for 24h
-            cache.set(cache_key, "1", timeout=86400)
+        # Cache success for 24h
+        cache.set(cache_key, "1", timeout=86400)
             
     except Exception as e:
         logger.error(f"Profile picture sync failed for contact {contact_id}: {e}")
@@ -2772,13 +2756,77 @@ def process_ai_reply_task(self, data):
                 logger.info(f"⏭️ Skipping Vector Embedding for User {agent_config.user.email} (No knowledge or skip kw)")
 
 
-        # ========================================================
         # ৮. Cache Hit হলে → সরাসরি reply পাঠাও
         # ========================================================
         if cached_res:
             reply = cached_res.get('reply')
             success = True
             total_tokens = 0
+
+            # Retrieve cached metadata fields
+            cached_handoff = cached_res.get('human_handoff', False)
+            cached_image_intent = cached_res.get('image_intent', False)
+            cached_order_intent = cached_res.get('order_intent')
+            cached_order_data = cached_res.get('order_data')
+            cached_best_row_id = cached_res.get('best_row_id')
+
+            # 1. Human Handoff Pipeline
+            if cached_handoff:
+                reply = "অনুগ্রহ করে একটু অপেক্ষা করুন। আমাদের একজন human agent শীঘ্রই আপনার সাথে যোগাযোগ করবেন। 🙏"
+                try:
+                    platform_for_lookup = request_type if request_type in ['whatsapp', 'messenger', 'web_widget', 'facebook_comment', 'instagram'] else 'messenger'
+                    updated = Contact.objects.filter(agent=agent_config, identifier=sender_id).update(is_human_needed=True)
+                    logger.info(f"🔄 [Task - Cache Hit] Handoff update for {sender_id}: {'Success' if updated else f'FAILED'}")
+                    if not updated:
+                        Contact.objects.filter(agent=agent_config, identifier=sender_id).update(is_human_needed=True)
+                    
+                    contact_obj = Contact.objects.filter(agent=agent_config, identifier=sender_id, platform=platform_for_lookup).first() or Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
+                    if contact_obj:
+                        contact_name = contact_obj.name or contact_obj.push_name or sender_id
+                        send_human_handoff_ws(agent_config.user.id, page_id, sender_id, contact_obj.id, contact_name)
+                        send_cache_update_ws(agent_config.user.id, page_id, sender_id=sender_id, contact_id=contact_obj.id)
+                        logger.info(f"🚨 Human Handoff WS sent via Cache Hit for {sender_id}")
+                except Exception as handoff_err:
+                    logger.error(f"[Cache Hit] Error handling human handoff: {handoff_err}", exc_info=True)
+
+            # 2. Order Creation Pipeline
+            if cached_order_intent == 'create' and isinstance(cached_order_data, dict):
+                logger.info("[Cache Hit] Order intent detected! Processing order in DB...")
+                try:
+                    user_memory = _get_or_create_user_memory(agent_config, sender_id)
+                    normalized_order, field_metadata = normalize_order_entities(agent_config.user, cached_order_data)
+                    normalized_order = _seed_order_data_from_recent_interest(user_memory, normalized_order)
+                    normalized_order = _hydrate_order_from_catalog(agent_config.user, normalized_order)
+                    _save_order_fields_to_memory(user_memory, normalized_order, source='ai_extraction', field_metadata=field_metadata)
+                    
+                    if _has_complete_order_fields(user_memory):
+                        order_obj = create_customer_order_from_memory(agent_config, sender_id, request_type, msg_id=msg_id)
+                        if order_obj:
+                            reply = f"✅ আপনার অর্ডার #{order_obj.id} নিশ্চিত করা হয়েছে। ইনভয়েস শীঘ্রই পাঠানো হবে।"
+                            _deliver_reply_with_buttons(request_type, data, reply, sender_id, page_id, effective_access_token, agent_config)
+                            if msg_id:
+                                r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                                r.delete(f'processing_msg:{msg_id}')
+                            return reply
+                    else:
+                        confirmation = _get_confirmation_prompt(user_memory)
+                        if confirmation:
+                            reply = confirmation
+                except Exception as seed_err:
+                    logger.error(f"[Cache Hit] Failed to seed AI order into memory: {seed_err}", exc_info=True)
+
+            # 3. Image Delivery Pipeline
+            image_delivered = False
+            if cached_image_intent:
+                image_delivered, image_route = _deliver_images_for_ai_response(
+                    request_type,
+                    data,
+                    cached_res,
+                    cached_best_row_id,
+                    agent_config
+                )
+                if image_delivered:
+                    logger.info(f'[Cache Hit] AI image delivery performed: {image_route}')
 
             incr_counter(page_id, "cache_hit")
             logger.info(f"⚡ CACHE HIT [{cache_hit_scope}] → '{text[:30]}'")
@@ -2791,10 +2839,6 @@ def process_ai_reply_task(self, data):
             if agent_config.platform == 'whatsapp':
                 request_type = 'whatsapp'
 
-            # Force platform-based routing: if agent is WhatsApp, send via WhatsApp delivery
-            if agent_config.platform == 'whatsapp':
-                request_type = 'whatsapp'
-
             if request_type == 'web_widget':
                 if msg_id:
                     r.set(f'processed_msg:{msg_id}', '1', ex=3600)
@@ -2803,7 +2847,10 @@ def process_ai_reply_task(self, data):
             elif request_type == 'dashboard':
                 delivered = deliver_dashboard_reply(agent_config.user.id, clean_reply, msg_id)
             else:
-                delivered = _deliver_reply_with_buttons(request_type, data, clean_reply, sender_id, page_id, effective_access_token, agent_config)
+                if image_delivered:
+                    delivered = True
+                else:
+                    delivered = _deliver_reply_with_buttons(request_type, data, clean_reply, sender_id, page_id, effective_access_token, agent_config)
 
             if delivered and msg_id:
                 r.set(f'processed_msg:{msg_id}', '1', ex=3600)
@@ -3013,7 +3060,7 @@ def process_ai_reply_task(self, data):
                 if is_json_handoff_override:
                     parsed_reply = "অনুগ্রহ করে একটু অপেক্ষা করুন। আমাদের একজন human agent শীঘ্রই আপনার সাথে যোগাযোগ করবেন। 🙏"
                 
-                cache_type = 'no_cache'  # এই message কখনো cache হবে না
+                # We no longer override cache_type to no_cache here because we want to cache the handoff intent.
                 try:
                     platform_for_lookup = request_type if request_type in ['whatsapp', 'messenger', 'web_widget', 'facebook_comment', 'instagram'] else 'messenger'
                     
@@ -3096,6 +3143,13 @@ def process_ai_reply_task(self, data):
                         text, reply, model=effective_model,
                         input_tokens=ai_data.get('input_tokens', 0),
                         output_tokens=ai_data.get('output_tokens', 0),
+                        cache_type=cache_type,
+                        human_handoff=is_handoff,
+                        image_intent=parsed.get('image_intent'),
+                        image_style=parsed.get('image_style'),
+                        order_intent=parsed.get('order_intent'),
+                        order_data=parsed.get('order_data'),
+                        best_row_id=best_hit_row_id
                     )
                     send_cache_update_ws(agent_config.user.id, page_id, sender_id=sender_id, contact_id=contact_obj.id if contact_obj else None)
                 elif cache_type == 'sender_specific':
@@ -3103,6 +3157,13 @@ def process_ai_reply_task(self, data):
                         page_id, sender_id, text, reply, model=effective_model,
                         input_tokens=ai_data.get('input_tokens', 0),
                         output_tokens=ai_data.get('output_tokens', 0),
+                        cache_type=cache_type,
+                        human_handoff=is_handoff,
+                        image_intent=parsed.get('image_intent'),
+                        image_style=parsed.get('image_style'),
+                        order_intent=parsed.get('order_intent'),
+                        order_data=parsed.get('order_data'),
+                        best_row_id=best_hit_row_id
                     )
                 elif cache_type == 'agent_specific':
                     # বিদ্যমান agent-level cache (DB 2)
@@ -3110,7 +3171,14 @@ def process_ai_reply_task(self, data):
                         page_id, text, reply, model=effective_model,
                         input_tokens=ai_data.get('input_tokens', 0),
                         output_tokens=ai_data.get('output_tokens', 0),
-                        is_special=agent_config.is_special_agent
+                        is_special=agent_config.is_special_agent,
+                        cache_type=cache_type,
+                        human_handoff=is_handoff,
+                        image_intent=parsed.get('image_intent'),
+                        image_style=parsed.get('image_style'),
+                        order_intent=parsed.get('order_intent'),
+                        order_data=parsed.get('order_data'),
+                        best_row_id=best_hit_row_id
                     )
                     send_cache_update_ws(agent_config.user.id, page_id, sender_id=sender_id, contact_id=contact_obj.id if contact_obj else None)
                 else:

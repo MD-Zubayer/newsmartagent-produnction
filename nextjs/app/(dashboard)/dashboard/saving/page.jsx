@@ -492,6 +492,16 @@ export default function RankingReportPage() {
                            {item.is_blocked ? 'Shared Blocked' : 'Shared'}
                         </span>
                       )}
+                      {isStaff && item.raw_reply_json && (
+                        <details className="mt-2 text-xs group">
+                          <summary className="text-[10px] font-black uppercase tracking-widest text-pink-500 cursor-pointer select-none outline-none hover:text-pink-600">
+                            View Cached Reply JSON
+                          </summary>
+                          <div className="mt-2 p-3 bg-slate-900 rounded-xl overflow-x-auto font-mono text-emerald-400 border border-slate-800 max-h-60 shadow-inner">
+                            <pre className="whitespace-pre-wrap">{JSON.stringify(item.raw_reply_json, null, 2)}</pre>
+                          </div>
+                        </details>
+                      )}
                     </div>
                     <button
                       onClick={() => handleToggleSharing(item.msg_hash, item.is_shareable)}
@@ -576,6 +586,16 @@ export default function RankingReportPage() {
                             <span className={`self-start px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded-lg border ${item.is_blocked ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-indigo-50 text-indigo-600 border-indigo-100'}`}>
                                {item.is_blocked ? 'Shared Blocked' : 'Shared'}
                             </span>
+                          )}
+                          {isStaff && item.raw_reply_json && (
+                            <details className="mt-2 text-xs group">
+                              <summary className="text-[10px] font-black uppercase tracking-widest text-pink-500 cursor-pointer select-none outline-none hover:text-pink-600">
+                                View Cached Reply JSON
+                              </summary>
+                              <div className="mt-2 p-3 bg-slate-900 rounded-xl overflow-x-auto font-mono text-emerald-400 border border-slate-800 max-h-60 shadow-inner text-left">
+                                <pre className="whitespace-pre-wrap">{JSON.stringify(item.raw_reply_json, null, 2)}</pre>
+                              </div>
+                            </details>
                           )}
                         </div>
                       </td>
