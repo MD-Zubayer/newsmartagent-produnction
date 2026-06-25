@@ -271,11 +271,14 @@ class TokenUsageAnalyticsSerializer(serializers.ModelSerializer):
 
     def get_contact_profile(self, obj):
         contact = self._get_contact(obj)
-        if contact and contact.profile_picture:
-            try:
-                return contact.profile_picture.url
-            except ValueError:
-                return None
+        if contact:
+            if contact.profile_photo_url:
+                return contact.profile_photo_url
+            if contact.profile_picture:
+                try:
+                    return contact.profile_picture.url
+                except ValueError:
+                    return None
         return None
 
 class ContactSerializer(serializers.ModelSerializer):
@@ -285,6 +288,7 @@ class ContactSerializer(serializers.ModelSerializer):
     unread_count = serializers.SerializerMethodField()
     crm_data = serializers.SerializerMethodField()
     is_comment = serializers.SerializerMethodField()
+    profile_picture = serializers.SerializerMethodField()
 
     class Meta:
         model = Contact
@@ -354,6 +358,16 @@ class ContactSerializer(serializers.ModelSerializer):
 
     def get_is_comment(self, obj):
         return obj.platform in ['youtube', 'facebook_comment']
+
+    def get_profile_picture(self, obj):
+        if obj.profile_photo_url:
+            return obj.profile_photo_url
+        if obj.profile_picture:
+            try:
+                return obj.profile_picture.url
+            except ValueError:
+                return None
+        return None
 
 class MessageSerializer(serializers.ModelSerializer):
     class Meta:

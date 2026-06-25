@@ -17,7 +17,12 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-    command: postgres -c shared_buffers=4GB -c effective_cache_size=10GB -c work_mem=64MB -c maintenance_work_mem=1GB
+    command: >
+      postgres 
+      -c shared_buffers=${POSTGRES_SHARED_BUFFERS:-4GB} 
+      -c effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE:-10GB} 
+      -c work_mem=${POSTGRES_WORK_MEM:-64MB} 
+      -c maintenance_work_mem=${POSTGRES_MAINTENANCE_WORK_MEM:-1GB}
     restart: always
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
@@ -54,17 +59,54 @@ services:
       redis-server
       --loadmodule /opt/redis-stack/lib/redisearch.so
       --loadmodule /opt/redis-stack/lib/rejson.so
-      --maxmemory 6gb
-      --maxmemory-policy allkeys-lru
+      --maxmemory ${REDIS_MAX_MEMORY:-6gb}
+      --maxmemory-policy volatile-lru
       --protected-mode no
       --appendonly yes
       --appendfsync everysec
       --save 60 1000
 
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: ${PROJECT_NAME}-pgbouncer
+    restart: always
+
+    environment:
+      - DB_HOST=db
+      - DB_PORT=${DB_POSTGRESDB_PORT}
+      - DB_USER=${POSTGRES_USER}
+      - AUTH_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${PGBOUNCER_PASSWORD}
+      - DB_NAME=${POSTGRES_DB}
+      - POOL_MODE=transaction # প্রোডাকশন ও জ্যাঙ্গো/সেলেরির জন্য বেস্ট মোড
+      - MAX_CLIENT_CONN=1000  # সর্বোচ্চ কতটি ইনকামিং কানেকশন হ্যান্ডেল করবে
+      - DEFAULT_POOL_SIZE=50  # আসল ডাটাবেজের সাথে সর্বোচ্চ কানেকশন পুল
+      - MIN_POOL_SIZE=10
+      - SERVER_RESET_QUERY=DISCARD ALL
+      - SERVER_CHECK_QUERY=SELECT 1
+      - SERVER_IDLE_TIMEOUT=600
+      - AUTH_TYPE=scram-sha-256    # সহজ ও সিকিউর ইন্টারনাল ডকার অথেন্টিকেশন
+      - LISTEN_PORT=${DB_POSTGRESDB_PORT}     # PgBouncer নিজে ৫৪৩২ পোর্টে লিসেন করবে
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p ${DB_POSTGRESDB_PORT} || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
+    deploy:
+      update_config:
+        order: start-first
+    networks:
+      - smart-network
+
   backend:
     build: ./jwtauth
     container_name: ${PROJECT_NAME}-django
-    command: gunicorn jwtauth.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --workers 5 --threads 4 --timeout 120
+    command: gunicorn jwtauth.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --workers 6 --timeout 60
     volumes:
       - ./jwtauth:/app
       - static_volume:/app/static
@@ -74,7 +116,7 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}     
+      - DATABASE_URL=${DATABASE_URL}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - REDIS_URL=${REDIS_URL}
@@ -88,7 +130,7 @@ services:
       - BAILEYS_API_URL=${BAILEYS_API_URL}
       - BAILEYS_API_SECRET=${BAILEYS_API_SECRET}
     depends_on:
-      - db
+      - pgbouncer
       - redis
     logging: *default-logging
     restart: always
@@ -102,7 +144,7 @@ services:
         order: start-first
       resources:
         limits:
-          memory: 4G
+          memory: ${BACKEND_MEMORY_LIMIT:-4G}
     networks:
       - smart-network
 
@@ -127,7 +169,7 @@ services:
         order: start-first
       resources:
         limits:
-          memory: 4G
+          memory: ${FRONTEND_MEMORY_LIMIT:-4G}
     
     networks:
       - smart-network
@@ -135,8 +177,7 @@ services:
   nginx:
     build: ./nginx
     container_name: ${PROJECT_NAME}-nginx
-    ports:
-      - "80:80"
+
     volumes:
       - static_volume:/app/static
       - media_volume:/app/media
@@ -145,9 +186,11 @@ services:
       - N8N_DOMAIN=${N8N_DOMAIN}
       - MINIO_CONSOLE_DOMAIN=${MINIO_CONSOLE_DOMAIN}
       - MINIO_API_DOMAIN=${MINIO_API_DOMAIN}
+      - FLOWER_DOMAIN=${FLOWER_DOMAIN}
     depends_on:
        - backend
        - frontend
+       - flower
     deploy:
       update_config:
         order: start-first
@@ -166,7 +209,7 @@ services:
   celery_worker:
     build: ./jwtauth
     container_name: ${PROJECT_NAME}-celery-worker
-    command: celery -A jwtauth worker -Q chat_queue,celery -c 8 --prefetch-multiplier 1 --max-tasks-per-child 1000 --loglevel=info
+    command: celery -A jwtauth worker -Q chat_queue,celery -c 6 --prefetch-multiplier 1 --max-tasks-per-child 1000 --loglevel=info
     volumes:
       - ./jwtauth:/app
       - ${HOST_CONFIG_PATH}/service_account.json:/app/gdrive_key.json:ro
@@ -174,7 +217,7 @@ services:
       - .env
     
     environment:
-      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
       - VOICE_MEDIA_URL=${VOICE_MEDIA_URL}
       - GOOGLE_DRIVE_LOG_FOLDER_ID=${GOOGLE_DRIVE_LOG_FOLDER_ID}
@@ -182,8 +225,10 @@ services:
       - GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE=/app/gdrive_key.json
 
     depends_on:
-      - db
-      - redis
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - smart-network
     restart: always
@@ -191,7 +236,9 @@ services:
     deploy:
       update_config:
         order: start-first
-
+      resources:
+        limits:
+          memory: ${CELERY_WORKER_MEMORY_LIMIT:-6G}
 
   celery_beat:
     build: ./jwtauth
@@ -203,15 +250,17 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
       - VOICE_MEDIA_URL=${VOICE_MEDIA_URL}
       - GOOGLE_DRIVE_LOG_FOLDER_ID=${GOOGLE_DRIVE_LOG_FOLDER_ID}
       - GOOGLE_DRIVE_LOG_SUBFOLDER=${GOOGLE_DRIVE_LOG_SUBFOLDER}
       - GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE=/app/gdrive_key.json
     depends_on:
-      - db
-      - redis
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - smart-network
     logging: *default-logging
@@ -238,10 +287,10 @@ services:
       N8N_PROTOCOL: https
       N8N_DISABLE_UI_RATE_LIMITING_DISABLED: "true"
       GENERIC_TIMEZONE: Asia/Dhaka
-      NODE_OPTIONS: --max-old-space-size=2048
+      NODE_OPTIONS: --max-old-space-size=${N8N_NODE_MEMORY_LIMIT:-2048}
       DB_TYPE: postgresdb
       DB_POSTGRESDB_HOST: db
-      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_PORT: ${DB_POSTGRESDB_PORT}
       DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
       DB_POSTGRESDB_USER: ${POSTGRES_USER}
       DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
@@ -250,7 +299,7 @@ services:
     depends_on:
       - backend
       - redis
-      - db
+      - pgbouncer
     deploy:
       update_config:
         order: start-first
@@ -270,8 +319,6 @@ services:
     environment:
       - CELERY_BROKER_URL=${REDIS_URL}
       - FLOWER_BASIC_AUTH=${FLOWER_BASIC_AUTH}
-    ports:
-      - "5555:5555"
     depends_on:
       - redis
       - celery_worker
@@ -306,15 +353,17 @@ services:
   baileys:
     build: ./baileys
     container_name: ${PROJECT_NAME}-baileys
+    env_file: 
+      - .env
     environment:
-      - PORT=3001
+      - PORT=${BAILEYS_PORT}
       - N8N_WEBHOOK_URL=${N8N_WHATSAPP_WEBHOOK_URL}
-      - DJANGO_WHATSAPP_WEBHOOK_URL=http://backend:8000/api/webhooks/ai/
-      - SYNC_AGENT_URL=http://backend:8000/api/whatsapp/sync-agent/
+      - DJANGO_WHATSAPP_WEBHOOK_URL=${DJANGO_WHATSAPP_WEBHOOK_URL}
+      - SYNC_AGENT_URL=${SYNC_AGENT_URL}
       - BAILEYS_API_SECRET=${BAILEYS_API_SECRET}
-      - BAILEYS_API_URL=http://baileys:3001
-      - LOG_LEVEL=debug
-      - NODE_ENV=development
+      - BAILEYS_API_URL=${BAILEYS_API_URL}
+      - LOG_LEVEL=${BAILEYS_LOG_LEVEL} 
+      - NODE_ENV=${NODE_ENV}
     volumes:
       - baileys_auth:/app/auth_info_baileys
     depends_on:
@@ -330,9 +379,11 @@ services:
   minio:
     image: quay.io/minio/minio:latest
     container_name: ${PROJECT_NAME}-minio
-    command: server /data --console-address ":9001"
+    command: server /data --console-address ":${MINIO_CONSOLE_PORT:-9001}"
     volumes:
       - minio_data:/data
+    env_file: 
+      - .env
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER}
       - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}

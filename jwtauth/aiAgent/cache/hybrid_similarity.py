@@ -41,6 +41,19 @@ def normalize_for_cache(text):
     return normalized
 
 
+def _normalize_cached_data(data, default_scope):
+    if not isinstance(data, dict):
+        return data
+    data.setdefault("cache_type", data.get("cache_scope", default_scope))
+    data.setdefault("human_handoff", False)
+    data.setdefault("image_intent", False)
+    data.setdefault("image_style", "")
+    data.setdefault("order_intent", None)
+    data.setdefault("order_data", None)
+    data.setdefault("best_row_id", None)
+    return data
+
+
 def get_cached_reply(agent_id, msg_text=None, msg_hash=None, track_hit=True):                
     if msg_hash:
         key = f"agent:{agent_id}:reply:{msg_hash}"
@@ -57,6 +70,7 @@ def get_cached_reply(agent_id, msg_text=None, msg_hash=None, track_hit=True):
             if track_hit:
                 incr_message_frequency(agent_id, msg_hash)
             data = json.loads(cached)
+            data = _normalize_cached_data(data, "agent_specific")
             data['msg_hash'] = msg_hash
             return data
     except Exception as e:
@@ -66,7 +80,9 @@ def get_cached_reply(agent_id, msg_text=None, msg_hash=None, track_hit=True):
     return None
 
 
-def set_cached_reply(agent_id, msg_text, reply, model, input_tokens=0, output_tokens=0, ttl=None, is_special=False):
+def set_cached_reply(agent_id, msg_text, reply, model, input_tokens=0, output_tokens=0, ttl=None, is_special=False,
+                     cache_type='agent_specific', human_handoff=False, image_intent=False, image_style='',
+                     order_intent=None, order_data=None, best_row_id=None):
     normalized = normalize_for_cache(msg_text)
     msg_hash = hashlib.md5(normalized.encode()).hexdigest()
     key = f"agent:{agent_id}:reply:{msg_hash}"
@@ -82,7 +98,14 @@ def set_cached_reply(agent_id, msg_text, reply, model, input_tokens=0, output_to
         "original_normalized": normalized,
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
-        "cache_scope": "special" if is_special else "agent_specific"
+        "cache_scope": "special" if is_special else "agent_specific",
+        "cache_type": cache_type,
+        "human_handoff": human_handoff,
+        "image_intent": image_intent,
+        "image_style": image_style,
+        "order_intent": order_intent,
+        "order_data": order_data,
+        "best_row_id": best_row_id
     }), ex=ttl)
 
     incr_message_frequency(agent_id, msg_hash)
@@ -93,17 +116,16 @@ def fuzzy_match(agent_id, msg_text, threshold=85, track_hit=True): # ⚡ RapidFu
     
     # ১. r.keys() এর বদলে r.scan_iter() ব্যবহার করা হয়েছে (Non-blocking approach)
     pattern = f"agent:{agent_id}:reply:*"
-    
-    # scan_iter একটি জেনারেটর রিটার্ন করে যা মেমোরি সাশ্রয়ী
-    cache_keys = r.scan_iter(match=pattern, count=100) 
-    
-    logger.debug(f"Fuzzy Matching for: {normalized_input}") # সরাসরি প্রিন্ট লগে দেখার জন্য
-    
+
+    # Tracking variables
     best_score = 0
     best_data = None
     best_hash = None
-    found_any = False # চেক করার জন্য যে কোনো কী পাওয়া গেল কি না
+    found_any = False
 
+    # scan_iter একটি generator — এটাকে cache_keys-এ assign করা হচ্ছে
+    cache_keys = r.scan_iter(match=pattern, count=100)
+    
     # ২. সব ক্যাশ করা মেসেজের সাথে তুলনা করা
     for key in cache_keys:
         found_any = True
@@ -112,6 +134,7 @@ def fuzzy_match(agent_id, msg_text, threshold=85, track_hit=True): # ⚡ RapidFu
             continue
             
         stored_data = json.loads(cached_raw)
+        stored_data = _normalize_cached_data(stored_data, "agent_specific")
         stored_text = stored_data.get('original_normalized', '')
         
         # ⚡ RapidFuzz Token Sort Ratio ব্যবহার করা ভালো (শব্দ উল্টাপাল্টা হলেও ধরে ফেলে)
@@ -282,6 +305,7 @@ def get_global_cached_reply(agent_id, msg_text, track_hit=True):
             if track_hit:
                 incr_message_frequency(agent_id, msg_hash)
             data = json.loads(cached)
+            data = _normalize_cached_data(data, "global")
             data['msg_hash'] = msg_hash
             return data
     except Exception as e:
@@ -289,7 +313,9 @@ def get_global_cached_reply(agent_id, msg_text, track_hit=True):
     return None
 
 
-def set_global_cached_reply(msg_text, reply, model, input_tokens=0, output_tokens=0, ttl=GLOBAL_CACHE_TTL):
+def set_global_cached_reply(msg_text, reply, model, input_tokens=0, output_tokens=0, ttl=GLOBAL_CACHE_TTL,
+                            cache_type='global', human_handoff=False, image_intent=False, image_style='',
+                            order_intent=None, order_data=None, best_row_id=None):
     """AI reply-কে global cache-এ save করে।"""
     normalized = normalize_for_cache(msg_text)
     msg_hash = hashlib.md5(normalized.encode()).hexdigest()
@@ -303,6 +329,13 @@ def set_global_cached_reply(msg_text, reply, model, input_tokens=0, output_token
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
             "cache_scope": "global",
+            "cache_type": cache_type,
+            "human_handoff": human_handoff,
+            "image_intent": image_intent,
+            "image_style": image_style,
+            "order_intent": order_intent,
+            "order_data": order_data,
+            "best_row_id": best_row_id
         }), ex=ttl)
         logger.info(f"✅ Global cache saved: '{msg_text[:30]}'")
     except Exception as e:
@@ -329,6 +362,7 @@ def global_fuzzy_match(agent_id, msg_text, threshold=92, track_hit=True):
             if not cached_raw:
                 continue
             stored_data = json.loads(cached_raw)
+            stored_data = _normalize_cached_data(stored_data, "global")
             stored_text = stored_data.get('original_normalized', '')
             score = fuzz.token_sort_ratio(normalized_input, stored_text)
             if score > best_score and score >= threshold:
@@ -368,13 +402,17 @@ def get_sender_cached_reply(agent_id, sender_id, msg_text):
             logger.info(f"⚡ SENDER EXACT HIT for sender {sender_id}: '{msg_text[:30]}'")
             # র‍্যাঙ্কিং ট্র্যাকিং
             incr_message_frequency(agent_id, msg_hash)
-            return json.loads(cached)
+            data = json.loads(cached)
+            data = _normalize_cached_data(data, "sender_specific")
+            return data
     except Exception as e:
         logger.error(f"Sender Cache Get Error: {e}")
     return None
 
 
-def set_sender_cached_reply(agent_id, sender_id, msg_text, reply, model, input_tokens=0, output_tokens=0, ttl=SENDER_CACHE_TTL):
+def set_sender_cached_reply(agent_id, sender_id, msg_text, reply, model, input_tokens=0, output_tokens=0, ttl=SENDER_CACHE_TTL,
+                            cache_type='sender_specific', human_handoff=False, image_intent=False, image_style='',
+                            order_intent=None, order_data=None, best_row_id=None):
     """AI reply-কে sender-specific cache-এ save করে।"""
     normalized = normalize_for_cache(msg_text)
     msg_hash = hashlib.md5(normalized.encode()).hexdigest()
@@ -388,6 +426,13 @@ def set_sender_cached_reply(agent_id, sender_id, msg_text, reply, model, input_t
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
             "cache_scope": "sender_specific",
+            "cache_type": cache_type,
+            "human_handoff": human_handoff,
+            "image_intent": image_intent,
+            "image_style": image_style,
+            "order_intent": order_intent,
+            "order_data": order_data,
+            "best_row_id": best_row_id
         }), ex=ttl)
         logger.info(f"✅ Sender cache saved for {sender_id}: '{msg_text[:30]}'")
     except Exception as e:

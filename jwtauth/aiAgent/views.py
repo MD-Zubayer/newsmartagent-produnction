@@ -406,9 +406,11 @@ class RankingAPIView(APIView):
                             source = 'sender_specific'
                             break
 
+                parsed_json = None
                 if raw_data:
                     try:
                         data = json.loads(raw_data)
+                        parsed_json = data
                         text = data.get('original_text', data.get('original_normalized', 'Unknown Message'))
                         
                         if source == 'agent' or source == 'shared_agent':
@@ -431,7 +433,7 @@ class RankingAPIView(APIView):
 
                 is_shareable = msg_hash not in my_excluded_hashes
 
-                ranking_list.append({
+                item_data = {
                     'text': text,
                     'frequency': int(frequency),
                     'token_savings': total_token_savings,
@@ -440,7 +442,10 @@ class RankingAPIView(APIView):
                     'is_shareable': is_shareable,
                     'is_shared': is_shared,
                     'is_blocked': is_blocked,
-                })
+                }
+                if request.user.is_staff or request.user.is_superuser:
+                    item_data['raw_reply_json'] = parsed_json
+                ranking_list.append(item_data)
 
             return Response({
                 "data": ranking_list,
