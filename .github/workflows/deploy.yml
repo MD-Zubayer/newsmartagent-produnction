@@ -173,25 +173,48 @@ jobs:
           # কন্টেইনারগুলো স্থির হতে সামান্য সময় দিন
           sleep 5
 
-          # Backend health JSON টেনে এনে status/DB/Redis চেক
-          HEALTH_JSON=$(curl -s --max-time 10 http://localhost/api/health/)
-          if [ -z "$HEALTH_JSON" ]; then
-            echo "🚨 Backend health endpoint did not respond"; exit 1
-          fi
+          PROJECT_NAME=$(grep '^PROJECT_NAME=' .env | head -n 1 | cut -d '=' -f2)
 
-          STATUS=$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); print(d.get("status",""))' "$HEALTH_JSON")
-          DB_STATUS=$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); print(d.get("checks",{}).get("database",""))' "$HEALTH_JSON")
-          REDIS_STATUS=$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); print(d.get("checks",{}).get("redis",""))' "$HEALTH_JSON")
+          # Verify Django backend (DB & Redis) internally
+          echo "Checking Django backend health..."
+          docker exec ${PROJECT_NAME}-django python3 -c "
+          import urllib.request, json, sys
+          try:
+              res = urllib.request.urlopen('http://localhost:8000/api/health/', timeout=10)
+              data = json.loads(res.read().decode())
+              status = data.get('status', '')
+              db = data.get('checks', {}).get('database', '')
+              redis = data.get('checks', {}).get('redis', '')
+              print(f'Status: {status}, DB: {db}, Redis: {redis}')
+              if status == 'ok' and db == 'ok' and redis == 'ok':
+                  sys.exit(0)
+              else:
+                  sys.exit(1)
+          except Exception as e:
+              print(f'Error querying backend: {e}')
+              sys.exit(1)
+          " || (echo "🚨 Django backend health check failed" && exit 1)
 
-          if [ "$STATUS" = "ok" ] && [ "$DB_STATUS" = "ok" ] && [ "$REDIS_STATUS" = "ok" ]; then
-            echo "✅ Backend healthy (app, DB, Redis)"
-          else
-            echo "🚨 Backend degraded! status=$STATUS db=$DB_STATUS redis=$REDIS_STATUS"
-            exit 1
-          fi
+          # Verify Next.js frontend internally
+          echo "Checking Next.js frontend health..."
+          docker exec ${PROJECT_NAME}-nextjs node -e "
+          const http = require('http');
+          const req = http.get('http://localhost:3000/frontend-health', (res) => {
+              if (res.statusCode === 200) {
+                  console.log('Frontend is healthy');
+                  process.exit(0);
+              } else {
+                  console.error('Frontend returned status code:', res.statusCode);
+                  process.exit(1);
+              }
+          });
+          req.on('error', (err) => {
+              console.error('Error querying frontend:', err);
+              process.exit(1);
+          });
+          " || (echo "🚨 Next.js frontend health check failed" && exit 1)
 
-          # Frontend simple probe
-          curl -f --max-time 10 http://localhost/frontend-health || (echo "🚨 Frontend health failed" && exit 1)
+          echo "✅ All internal health checks passed successfully!"
 
       - name: "🧹 Post-Deployment Cleanup"
         if: always()
