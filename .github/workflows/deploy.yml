@@ -180,22 +180,24 @@ jobs:
           success=false
           for i in 1 2 3 4 5; do
             echo "Attempt $i to check backend health..."
-            if docker exec ${PROJECT_NAME}-django python3 -c "import urllib.request, json, sys; import urllib.error; import time; url='http://localhost:8000/api/health/'; 
-try:
-    res = urllib.request.urlopen(url, timeout=10)
-    data = json.loads(res.read().decode())
-    status = data.get('status', '')
-    db = data.get('checks', {}).get('database', '')
-    redis = data.get('checks', {}).get('redis', '')
-    print(f'Status: {status}, DB: {db}, Redis: {redis}')
-    sys.exit(0) if status == 'ok' and db == 'ok' and redis == 'ok' else sys.exit(1)
-except urllib.error.HTTPError as e:
-    print(f'HTTP {e.code}: {e.reason} - Service may still be starting...')
-    sys.exit(1)
-except Exception as e:
-    print(f'Error querying health: {e}')
-    sys.exit(1)
-" 2>&1; then
+            if docker exec ${PROJECT_NAME}-django python3 << 'HEALTHCHECK'
+              import urllib.request, json, sys, urllib.error
+              try:
+                  res = urllib.request.urlopen('http://localhost:8000/api/health/', timeout=10)
+                  data = json.loads(res.read().decode())
+                  status = data.get('status', '')
+                  db = data.get('checks', {}).get('database', '')
+                  redis = data.get('checks', {}).get('redis', '')
+                  print(f'Status: {status}, DB: {db}, Redis: {redis}')
+                  sys.exit(0 if status == 'ok' and db == 'ok' and redis == 'ok' else 1)
+              except urllib.error.HTTPError as e:
+                  print(f'HTTP {e.code}: Still starting...')
+                  sys.exit(1)
+              except Exception as e:
+                  print(f'Error: {e}')
+                  sys.exit(1)
+            HEALTHCHECK
+             2>&1; then
               success=true
               break
             fi
