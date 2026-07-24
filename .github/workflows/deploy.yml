@@ -178,17 +178,17 @@ jobs:
           # Verify Django backend (DB & Redis) internally with retry logic
           echo "Checking Django backend health..."
           success=false
-          for i in 1 2 3 4 5; do
+          for i in 1 2 3 4 5 6 7 8 9 10; do
             echo "Attempt $i to check backend health..."
-            if docker exec ${PROJECT_NAME}-django python3 -c "import urllib.request, urllib.error, json, sys; res=urllib.request.urlopen('http://localhost:8000/api/health/', timeout=10); data=json.loads(res.read().decode()); status=data.get('status',''); db=data.get('checks',{}).get('database',''); redis=data.get('checks',{}).get('redis',''); print(f'Status: {status}, DB: {db}, Redis: {redis}'); sys.exit(0 if status=='ok' and db=='ok' and redis=='ok' else 1)" 2>&1; then
+            if docker exec ${PROJECT_NAME}-django python3 -c "import urllib.request, urllib.error, json, sys; try: res = urllib.request.urlopen('http://localhost:8000/api/health/', timeout=10); data = json.loads(res.read().decode()); status = data.get('status', ''); db = data.get('checks', {}).get('database', ''); redis = data.get('checks', {}).get('redis', ''); print(f'Status: {status}, DB: {db}, Redis: {redis}'); sys.exit(0 if status == 'ok' and db == 'ok' and redis == 'ok' else 1); except urllib.error.HTTPError as e: body = e.read().decode(errors='replace') if hasattr(e, 'read') else '<no body>'; print(f'HTTP {e.code}: {e.reason} - body={body}'); sys.exit(1); except Exception as e: print(f'Error: {e}'); sys.exit(1)" 2>&1; then
               success=true
               break
             fi
-            echo "Health check failed, retrying in 10 seconds..."
-            sleep 10
+            echo "Health check failed, retrying in 15 seconds..."
+            sleep 15
           done
           if [ "$success" = false ]; then
-            echo "🚨 Django backend health check failed after 5 attempts"
+            echo "🚨 Django backend health check failed after 10 attempts"
             echo "Checking container status..."
             docker ps | grep ${PROJECT_NAME}-django || echo "Django container not running!"
             docker logs --tail 50 ${PROJECT_NAME}-django || echo "Could not retrieve logs"
