@@ -1,0 +1,6 @@
+### Check Django health endpoint
+GET http://localhost:8000/api/health/
+Accept: application/json
+
+### Example: follow redirects and show response
+# > curl -i -L http://localhost:8000/api/health/
