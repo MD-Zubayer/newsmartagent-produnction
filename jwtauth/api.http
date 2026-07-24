@@ -111,4 +111,3 @@ GET https://portal.packzy.com/api/v1/get_balance
 Api-Key: "zzlkaylvphfchtolqijdvqhlbvmet6aw"
 Secret-Key: "7badtd3jru59kio7xetvokff"
 Content-Type: application/json
-
