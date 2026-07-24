@@ -175,14 +175,14 @@ jobs:
 
           PROJECT_NAME=$(grep '^PROJECT_NAME=' .env | head -n 1 | cut -d '=' -f2)
 
-          # Verify Django backend (DB & Redis) internally using curl inside container with retry logic
+          # Verify Django backend (DB & Redis) internally using Python inside container (no curl needed)
           echo "Checking Django backend health..."
           success=false
           for i in {1..10}; do
             echo "Attempt $i to check backend health..."
-            # কন্টেইনারের ভেতরে কার্ল কমান্ড চালিয়ে স্ট্যাটাস কোড চেক করা (সিনট্যাক্স ফ্রি ও নিরাপদ)
-            HTTP_CODE=$(docker exec ${PROJECT_NAME}-django curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/api/health/ || echo "000")
-            
+            HTTP_CODE=$(docker exec ${PROJECT_NAME}-django python3 -c "import urllib.request, urllib.error, json, sys; try: res = urllib.request.urlopen('http://localhost:8000/api/health/', timeout=10); print(res.getcode()); except Exception as e: print(503); sys.exit(0)" 2>/dev/null || echo "503")
+            HTTP_CODE=$(echo "$HTTP_CODE" | tr -d '[:space:]' | tail -n 1)
+
             if [ "$HTTP_CODE" -eq 200 ]; then
               echo "✅ Django backend health check passed with HTTP 200!"
               success=true
