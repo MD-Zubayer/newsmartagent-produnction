@@ -170,33 +170,31 @@ jobs:
       - name: "🌡️ Critical Health Verification"
         run: |
           echo "Verifying NSA system integrity..."
-          # কন্টেইনারগুলো স্থির হতে সামান্য সময় দিন
           sleep 5
 
           PROJECT_NAME=$(grep '^PROJECT_NAME=' .env | head -n 1 | cut -d '=' -f2)
 
-          # Verify Django backend (DB & Redis) internally using Python inside container (no curl needed)
-          echo "Checking Django backend health..."
+          # জ্যাঙ্গোর ভেতরের HTTP রিকোয়েস্ট চেক বাদ দিয়ে সরাসরি ডকার কন্টেইনারের হেলথ চেক করা
+          echo "Checking Django backend container health..."
           success=false
           for i in {1..10}; do
-            echo "Attempt $i to check backend health..."
-            HTTP_CODE=$(docker exec ${PROJECT_NAME}-django python3 -c "import urllib.request, urllib.error, json, sys; try: res = urllib.request.urlopen('http://localhost:8000/api/health/', timeout=10); print(res.getcode()); except Exception as e: print(503); sys.exit(0)" 2>/dev/null || echo "503")
-            HTTP_CODE=$(echo "$HTTP_CODE" | tr -d '[:space:]' | tail -n 1)
-
-            if [ "$HTTP_CODE" -eq 200 ]; then
-              echo "✅ Django backend health check passed with HTTP 200!"
+            echo "Attempt $i to check container status..."
+            
+            # সরাসরি ডকার থেকে কন্টেইনার হেলথ স্টেটাস চেক করা
+            CONTAINER_STATUS=$(docker inspect --format='{{.State.Health.Status}}' ${PROJECT_NAME}-django 2>/dev/null || echo "unhealthy")
+            
+            if [ "$CONTAINER_STATUS" = "healthy" ]; then
+              echo "✅ Django backend container is healthy!"
               success=true
               break
             else
-              echo "⚠️ Attempt $i: Received HTTP status $HTTP_CODE, retrying in 15 seconds..."
+              echo "⚠️ Attempt $i: Container status is '$CONTAINER_STATUS', retrying in 15 seconds..."
               sleep 15
             fi
           done
 
           if [ "$success" = false ]; then
-            echo "🚨 Django backend health check failed after 10 attempts"
-            echo "Checking container status..."
-            docker ps | grep ${PROJECT_NAME}-django || echo "Django container not running!"
+            echo "🚨 Django backend container failed to become healthy after 10 attempts"
             docker logs --tail 50 ${PROJECT_NAME}-django || echo "Could not retrieve logs"
             exit 1
           fi
