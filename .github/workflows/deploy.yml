@@ -175,18 +175,24 @@ jobs:
 
           PROJECT_NAME=$(grep '^PROJECT_NAME=' .env | head -n 1 | cut -d '=' -f2)
 
-          # Verify Django backend (DB & Redis) internally with retry logic
+          # Verify Django backend (DB & Redis) internally using curl inside container with retry logic
           echo "Checking Django backend health..."
           success=false
-          for i in 1 2 3 4 5 6 7 8 9 10; do
+          for i in {1..10}; do
             echo "Attempt $i to check backend health..."
-            if docker exec ${PROJECT_NAME}-django python3 -c "import urllib.request, urllib.error, json, sys; try: res = urllib.request.urlopen('http://localhost:8000/api/health/', timeout=10); data = json.loads(res.read().decode()); status = data.get('status', ''); db = data.get('checks', {}).get('database', ''); redis = data.get('checks', {}).get('redis', ''); print(f'Status: {status}, DB: {db}, Redis: {redis}'); sys.exit(0 if status == 'ok' and db == 'ok' and redis == 'ok' else 1); except urllib.error.HTTPError as e: body = e.read().decode(errors='replace') if hasattr(e, 'read') else '<no body>'; print(f'HTTP {e.code}: {e.reason} - body={body}'); sys.exit(1); except Exception as e: print(f'Error: {e}'); sys.exit(1)" 2>&1; then
+            # কন্টেইনারের ভেতরে কার্ল কমান্ড চালিয়ে স্ট্যাটাস কোড চেক করা (সিনট্যাক্স ফ্রি ও নিরাপদ)
+            HTTP_CODE=$(docker exec ${PROJECT_NAME}-django curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/api/health/ || echo "000")
+            
+            if [ "$HTTP_CODE" -eq 200 ]; then
+              echo "✅ Django backend health check passed with HTTP 200!"
               success=true
               break
+            else
+              echo "⚠️ Attempt $i: Received HTTP status $HTTP_CODE, retrying in 15 seconds..."
+              sleep 15
             fi
-            echo "Health check failed, retrying in 15 seconds..."
-            sleep 15
           done
+
           if [ "$success" = false ]; then
             echo "🚨 Django backend health check failed after 10 attempts"
             echo "Checking container status..."
