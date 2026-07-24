@@ -156,7 +156,7 @@ jobs:
           # ৩. হেলথ চেক: ভেরিয়েবল লোড করা এবং ১৫ সেকেন্ড অপেক্ষা করা
           PROJECT_NAME=$(grep '^PROJECT_NAME=' .env | head -n 1 | cut -d '=' -f2)
           echo "⏳ Waiting for services to stabilize for project: ${PROJECT_NAME}..."
-          sleep 30
+          sleep 90
           
           # চেক করা হচ্ছে মেইন সার্ভিস (Django) রানিং কি না (grep safety added)
           if ! docker ps | grep -q -- "${PROJECT_NAME}-django"; then
@@ -178,17 +178,35 @@ jobs:
           # Verify Django backend (DB & Redis) internally with retry logic
           echo "Checking Django backend health..."
           success=false
-          for i in 1 2 3; do
+          for i in 1 2 3 4 5; do
             echo "Attempt $i to check backend health..."
-            if docker exec ${PROJECT_NAME}-django python3 -c "import urllib.request, json, sys; res=urllib.request.urlopen('http://localhost:8000/api/health/', timeout=10); data=json.loads(res.read().decode()); status=data.get('status',''); db=data.get('checks',{}).get('database',''); redis=data.get('checks',{}).get('redis',''); print(f'Status: {status}, DB: {db}, Redis: {redis}'); sys.exit(0) if status=='ok' and db=='ok' and redis=='ok' else sys.exit(1)"; then
+            if docker exec ${PROJECT_NAME}-django python3 -c "import urllib.request, json, sys; import urllib.error; import time; url='http://localhost:8000/api/health/'; 
+try:
+    res = urllib.request.urlopen(url, timeout=10)
+    data = json.loads(res.read().decode())
+    status = data.get('status', '')
+    db = data.get('checks', {}).get('database', '')
+    redis = data.get('checks', {}).get('redis', '')
+    print(f'Status: {status}, DB: {db}, Redis: {redis}')
+    sys.exit(0) if status == 'ok' and db == 'ok' and redis == 'ok' else sys.exit(1)
+except urllib.error.HTTPError as e:
+    print(f'HTTP {e.code}: {e.reason} - Service may still be starting...')
+    sys.exit(1)
+except Exception as e:
+    print(f'Error querying health: {e}')
+    sys.exit(1)
+" 2>&1; then
               success=true
               break
             fi
-            echo "Health check failed, retrying in 5 seconds..."
-            sleep 5
+            echo "Health check failed, retrying in 10 seconds..."
+            sleep 10
           done
           if [ "$success" = false ]; then
-            echo "🚨 Django backend health check failed after multiple attempts"
+            echo "🚨 Django backend health check failed after 5 attempts"
+            echo "Checking container status..."
+            docker ps | grep ${PROJECT_NAME}-django || echo "Django container not running!"
+            docker logs --tail 50 ${PROJECT_NAME}-django || echo "Could not retrieve logs"
             exit 1
           fi
 
