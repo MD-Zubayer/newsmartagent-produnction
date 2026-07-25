@@ -66,6 +66,7 @@ class RowImage(models.Model):
     image_caption = models.TextField(blank=True, default='')
     image_embedding = VectorField(dimensions=768, null=True, blank=True)
     caption_embedding = VectorField(dimensions=768, null=True, blank=True)
+    source_url = models.TextField(blank=True, default='')
     
     # Metadata
     source = models.CharField(max_length=20, choices=IMAGE_SOURCE_CHOICES, default='manual')

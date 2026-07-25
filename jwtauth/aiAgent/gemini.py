@@ -201,3 +201,48 @@ def generate_gemini_reply_with_tools(
     except Exception as e:
         logger.error(f"LLM with tools error: {e}")
         return {'reply': 'Error processing request', 'status': 'error', 'error': str(e)}
+
+
+def transcribe_audio_with_gemini(audio_bytes: bytes, mime_type: str, agent_config=None) -> str:
+    """
+    Transcribes audio bytes into text using Gemini API.
+    Returns the transcribed text or empty string on failure.
+    """
+    if not GENAI_CLIENT:
+        logger.error("Gemini client not configured for transcription.")
+        return ""
+    
+    model_name = 'gemini-2.5-flash'
+    if agent_config and getattr(agent_config, 'ai_model', None):
+        configured_model = agent_config.ai_model
+        if configured_model and 'gemini' in configured_model.lower():
+            model_name = configured_model
+
+    try:
+        logger.info(f"🎙️ Transcribing audio with Gemini model {model_name}. Mime type: {mime_type}")
+        
+        prompt = (
+            "You are a highly accurate audio transcriber. Listen to the audio and transcribe "
+            "exactly what is said. Respond ONLY with the transcribed text in the language "
+            "spoken (which is likely Bengali or English). Do not translate, do not add any "
+            "explanations, notes, metadata or formatting. If there is no speech or it is quiet, "
+            "return an empty string."
+        )
+        
+        audio_part = types.Part.from_bytes(
+            data=audio_bytes,
+            mime_type=mime_type
+        )
+        
+        response = GENAI_CLIENT.models.generate_content(
+            model=model_name,
+            contents=[audio_part, prompt],
+        )
+        
+        transcription = response.text.strip() if response.text else ""
+        logger.info(f"✅ Audio transcription completed: '{transcription[:100]}'")
+        return transcription
+    except Exception as e:
+        logger.error(f"❌ Audio transcription failed: {e}", exc_info=True)
+        return ""
+

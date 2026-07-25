@@ -112,15 +112,26 @@ class TokenUsageAnalyticsView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request):
 
-        today = timezone.now().date()
-        start_date = today - timedelta(days=30)
+        start_date_param = request.query_params.get('start_date')
+        end_date_param = request.query_params.get('end_date')
 
         # <! -------- Setting the base query -------------!>
 
         user_logs = TokenUsageLog.objects.filter(
-            user=request.user,
-            created_at__date__gte=start_date
+            user=request.user
         ).exclude(request_type='dashboard')
+
+        if start_date_param:
+            if start_date_param.strip().lower() != 'all':
+                user_logs = user_logs.filter(created_at__date__gte=start_date_param.strip())
+        else:
+            today = timezone.now().date()
+            start_date = today - timedelta(days=30)
+            user_logs = user_logs.filter(created_at__date__gte=start_date)
+
+        if end_date_param and end_date_param.strip().lower() != 'all':
+            user_logs = user_logs.filter(created_at__date__lte=end_date_param.strip())
+
 
 
         #<!------------- 1. Daily Trend (Line Chart) --------------!>

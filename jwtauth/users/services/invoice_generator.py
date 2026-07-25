@@ -84,13 +84,16 @@ class InvoiceImageGenerator:
             raise
     
     @staticmethod
-    def generate_invoice_html(order_data: dict, shop_name: str = "Smart Shop BD") -> str:
+    def generate_invoice_html(order_data: dict, shop_name: str = "Smart Shop BD", profile_photo_url: str = None, website_url: str = None, business_email: str = None) -> str:
         """
         Order data থেকে professional invoice HTML তৈরি করে
         
         Args:
             order_data: CustomerOrder dictionary
             shop_name: Shop/Business name
+            profile_photo_url: URL to business profile image
+            website_url: Custom website URL
+            business_email: Custom business email
         
         Returns:
             HTML string
@@ -107,6 +110,10 @@ class InvoiceImageGenerator:
         price = order_data.get('price', 0)
         status = order_data.get('status', 'pending').upper()
         created_at = order_data.get('created_at', datetime.now().isoformat())
+
+        # Fallbacks for website and email
+        footer_email = business_email if business_email else f"support@{shop_name.lower().replace(' ', '')}.com"
+        footer_website = website_url if website_url else f"www.{shop_name.lower().replace(' ', '')}.com"
         
         # Date formatting
         try:
@@ -206,6 +213,25 @@ class InvoiceImageGenerator:
                     border-bottom: 3px solid #e5e7eb;
                     padding-bottom: 30px;
                     margin-bottom: 40px;
+                }}
+                
+                .company-header {{
+                    display: flex;
+                    gap: 20px;
+                    align-items: flex-start;
+                }}
+                
+                .profile-logo {{
+                    flex-shrink: 0;
+                }}
+                
+                .profile-photo {{
+                    width: 80px;
+                    height: 80px;
+                    border-radius: 50%;
+                    object-fit: cover;
+                    border: 3px solid #3b82f6;
+                    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
                 }}
                 
                 .company-info h1 {{
@@ -444,9 +470,12 @@ class InvoiceImageGenerator:
         <body>
             <div class="invoice-page">
                 <div class="invoice-header">
-                    <div class="company-info">
-                        <h1>{shop_name}</h1>
-                        <p>Your Trusted Shopping Partner</p>
+                    <div class="company-header">
+                        {f'<div class="profile-logo"><img src="{profile_photo_url}" alt="Business Logo" class="profile-photo"></div>' if profile_photo_url else ''}
+                        <div class="company-info">
+                            <h1>{shop_name}</h1>
+                            <p>Your Trusted Shopping Partner</p>
+                        </div>
                     </div>
                     <div class="invoice-title-block">
                         <div class="invoice-title">INVOICE</div>
@@ -526,8 +555,8 @@ class InvoiceImageGenerator:
                         Thank you for your business!
                     </div>
                     <div class="footer-contact">
-                        support@{shop_name.lower().replace(' ', '')}.com<br/>
-                        www.{shop_name.lower().replace(' ', '')}.com
+                        {footer_email}<br/>
+                        {footer_website}
                     </div>
                 </div>
             </div>

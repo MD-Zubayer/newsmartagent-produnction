@@ -3,9 +3,10 @@ import { useEffect, useState, useMemo, useCallback } from "react";
 import api from "@/lib/api";
 import { useAuth } from "app/context/AuthContext";
 import {
-  Package, Phone, CheckSquare, Square, Store,
+  Package, Phone, CheckSquare, Square, Store, Mail, Globe,
   ChevronRight, Link as LinkIcon, Check, MapPin,
-  Search, Printer, LayoutDashboard, BarChart3, TrendingUp, Truck, Plus
+  Search, Printer, LayoutDashboard, BarChart3, TrendingUp, Truck, Plus,
+  Filter, RotateCcw, Calendar, Clock, AlertCircle, DollarSign, ShoppingBag, Award, PieChart
 } from "lucide-react";
 
 // Chart JS Imports
@@ -46,6 +47,63 @@ export default function OrderDashboard() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [districtFilter, setDistrictFilter] = useState("all");
   const [selectedOrders, setSelectedOrders] = useState([]);
+
+  // Helper for today's date YYYY-MM-DD
+  const getTodayStr = useCallback(() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
+
+  // Date Filter State (default to Current Day / Today)
+  const [selectedPreset, setSelectedPreset] = useState("today"); // "today" | "7d" | "30d" | "month" | "all" | "custom"
+  const [startDate, setStartDate] = useState(getTodayStr());
+  const [endDate, setEndDate] = useState(getTodayStr());
+
+  const handlePresetChange = (preset) => {
+    setSelectedPreset(preset);
+    const today = new Date();
+    const formatDateStr = (d) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    let sStr = "";
+    let eStr = "";
+
+    if (preset === "today") {
+      sStr = formatDateStr(today);
+      eStr = formatDateStr(today);
+    } else if (preset === "7d") {
+      const past = new Date();
+      past.setDate(today.getDate() - 7);
+      sStr = formatDateStr(past);
+      eStr = formatDateStr(today);
+    } else if (preset === "30d") {
+      const past = new Date();
+      past.setDate(today.getDate() - 30);
+      sStr = formatDateStr(past);
+      eStr = formatDateStr(today);
+    } else if (preset === "month") {
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+      sStr = formatDateStr(firstDay);
+      eStr = formatDateStr(today);
+    } else if (preset === "all") {
+      sStr = "";
+      eStr = "";
+    }
+
+    setStartDate(sStr);
+    setEndDate(eStr);
+  };
+
+  const handleCustomDateApply = () => {
+    setSelectedPreset("custom");
+  };
   
   // Create Store States
   const [createStoreModalOpen, setCreateStoreModalOpen] = useState(false);
@@ -156,26 +214,33 @@ export default function OrderDashboard() {
 
   const shopName = user?.name || "Smart Shop BD";
 
-  const orderLink = formId
-    ? `${typeof window !== 'undefined' ? window.location.origin : 'https://newsmartagent.com/'}/orders/${formId}`
-    : "Generating link...";
+  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [businessEmail, setBusinessEmail] = useState("");
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
-  // --- ১. কপি লিঙ্ক ফাংশন (প্রিমিয়াম) ---
-  const copyLink = () => {
-    if (!formId) return toast.error("The link has not been created yet!");
+  useEffect(() => {
+    if (user?.profile) {
+      setWebsiteUrl(user.profile.website_url || "");
+      setBusinessEmail(user.profile.business_email || user.email || "");
+    }
+  }, [user]);
 
-    if (copied) return;
-
-    navigator.clipboard.writeText(orderLink)
-      .then(() => {
-        setCopied(true);
-        toast.success("Order link copied !", {
-          icon: '🔗',
-          style: { borderRadius: '12px' }
-        });
-        setTimeout(() => setCopied(false), 2000);
-      })
-      .catch(() => toast.error("Could not copy link."));
+  const saveProfileSettings = async () => {
+    setIsSavingProfile(true);
+    const loadingToast = toast.loading("Saving invoice settings...");
+    try {
+      await api.patch('/users/update-me/', {
+        profile: {
+          website_url: websiteUrl,
+          business_email: businessEmail
+        }
+      });
+      toast.success("Invoice settings updated successfully!", { id: loadingToast });
+    } catch (err) {
+      toast.error("Failed to save settings. Please try again.", { id: loadingToast });
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
 
@@ -534,6 +599,72 @@ export default function OrderDashboard() {
     }
   }, [addOrderModalOpen]);
 
+  // Auto-select Courier City based on bookingOrder.district
+  useEffect(() => {
+    if (bookingModalOpen && bookingOrder && bookingCities.length > 0 && !bookingDetails.recipient_city) {
+      const searchName = (bookingOrder.district || "").toLowerCase().trim();
+      if (searchName) {
+        const matched = bookingCities.find(c => {
+          const cityName = (c.city_name || c.name || "").toLowerCase();
+          return cityName.includes(searchName) || searchName.includes(cityName);
+        });
+        if (matched) {
+          const cityId = matched.city_id || matched.id;
+          setBookingDetails(prev => ({
+            ...prev,
+            recipient_city: String(cityId)
+          }));
+        }
+      }
+    }
+  }, [bookingModalOpen, bookingOrder, bookingCities]);
+
+  // Auto-select Pathao Zone based on bookingOrder.upazila
+  useEffect(() => {
+    if (bookingModalOpen && selectedCourier === "pathao" && bookingOrder && bookingZones.length > 0 && !bookingDetails.recipient_zone) {
+      const searchName = (bookingOrder.upazila || "").toLowerCase().trim();
+      if (searchName) {
+        const matched = bookingZones.find(z => {
+          const zoneName = (z.zone_name || "").toLowerCase();
+          return zoneName.includes(searchName) || searchName.includes(zoneName);
+        });
+        if (matched) {
+          setBookingDetails(prev => ({
+            ...prev,
+            recipient_zone: String(matched.zone_id)
+          }));
+        }
+      }
+    }
+  }, [bookingModalOpen, selectedCourier, bookingOrder, bookingZones]);
+
+  // Auto-select Courier Area based on bookingOrder.upazila
+  useEffect(() => {
+    if (bookingModalOpen && bookingOrder && bookingAreas.length > 0 && !bookingDetails.recipient_area) {
+      const searchName = (bookingOrder.upazila || "").toLowerCase().trim();
+      if (searchName) {
+        const matched = bookingAreas.find(a => {
+          const areaName = (a.area_name || a.name || "").toLowerCase();
+          return areaName.includes(searchName) || searchName.includes(areaName);
+        });
+        if (matched) {
+          const areaId = matched.area_id || matched.id;
+          setBookingDetails(prev => ({
+            ...prev,
+            recipient_area: String(areaId)
+          }));
+        } else {
+          const firstArea = bookingAreas[0];
+          const areaId = firstArea.area_id || firstArea.id;
+          setBookingDetails(prev => ({
+            ...prev,
+            recipient_area: String(areaId)
+          }));
+        }
+      }
+    }
+  }, [bookingModalOpen, bookingOrder, bookingAreas]);
+
   useEffect(() => {
     if (selectedManualCity) {
       api.get(`/courier/zones/?city_id=${selectedManualCity}`).then(res => setManualZones(res.data || [])).catch(console.error);
@@ -684,6 +815,122 @@ export default function OrderDashboard() {
     return { labels: dateLabels, lineData: orderCounts, statusData: [pending, shipped, delivered] };
   }, [orders, user]);
 
+  const detailedAnalytics = useMemo(() => {
+    if (!orders || orders.length === 0) return null;
+
+    let totalRevenue = 0;
+    let deliveredRevenue = 0;
+    let totalItemsCount = 0;
+
+    // Time-based calculations
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(now.getDate() - 7);
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(now.getDate() - 30);
+
+    let todayRevenue = 0;
+    let todayCount = 0;
+    let weeklyRevenue = 0;
+    let weeklyCount = 0;
+    let monthlyRevenue = 0;
+    let monthlyCount = 0;
+
+    const dailyMap = {};
+    const districtMap = {};
+    const productMap = {};
+
+    orders.forEach(o => {
+      const price = Number(o.price) || 0;
+      const qty = Number(o.item_quantity) || 1;
+      totalRevenue += price;
+      totalItemsCount += qty;
+
+      const orderDate = o.created_at ? new Date(o.created_at) : new Date();
+      const orderDateStr = o.created_at ? o.created_at.split('T')[0] : '';
+
+      // Today's stats
+      if (orderDateStr === todayStr) {
+        todayRevenue += price;
+        todayCount += 1;
+      }
+
+      // Weekly stats (Last 7 Days)
+      if (orderDate >= sevenDaysAgo) {
+        weeklyRevenue += price;
+        weeklyCount += 1;
+      }
+
+      // Monthly stats (Last 30 Days)
+      if (orderDate >= thirtyDaysAgo) {
+        monthlyRevenue += price;
+        monthlyCount += 1;
+      }
+
+      if (o.status === 'delivered') {
+        deliveredRevenue += price;
+      }
+
+      // Date breakdown (YYYY-MM-DD)
+      const dateStr = o.created_at ? o.created_at.split('T')[0] : 'Unknown';
+      if (!dailyMap[dateStr]) {
+        dailyMap[dateStr] = { date: dateStr, count: 0, revenue: 0, deliveredRevenue: 0 };
+      }
+      dailyMap[dateStr].count += 1;
+      dailyMap[dateStr].revenue += price;
+      if (o.status === 'delivered') {
+        dailyMap[dateStr].deliveredRevenue += price;
+      }
+
+      // District breakdown
+      const dist = (o.district || 'Unspecified').trim();
+      if (!districtMap[dist]) {
+        districtMap[dist] = { district: dist, count: 0, revenue: 0 };
+      }
+      districtMap[dist].count += 1;
+      districtMap[dist].revenue += price;
+
+      // Product breakdown
+      const prod = (o.product_name || 'Unspecified Product').trim();
+      if (!productMap[prod]) {
+        productMap[prod] = { name: prod, count: 0, revenue: 0, quantity: 0 };
+      }
+      productMap[prod].count += 1;
+      productMap[prod].quantity += qty;
+      productMap[prod].revenue += price;
+    });
+
+    const dailyIncomeList = Object.values(dailyMap).sort((a, b) => a.date.localeCompare(b.date));
+    const topDistricts = Object.values(districtMap).sort((a, b) => b.revenue - a.revenue || b.count - a.count);
+    const topProducts = Object.values(productMap).sort((a, b) => b.count - a.count || b.revenue - a.revenue);
+
+    const avgOrderValue = orders.length > 0 ? Math.round(totalRevenue / orders.length) : 0;
+    const topDistrict = topDistricts[0] || { district: 'N/A', count: 0, revenue: 0 };
+    const topProduct = topProducts[0] || { name: 'N/A', count: 0, revenue: 0 };
+
+    return {
+      totalRevenue,
+      deliveredRevenue,
+      avgOrderValue,
+      totalOrders: orders.length,
+      totalItemsCount,
+      todayRevenue,
+      todayCount,
+      weeklyRevenue,
+      weeklyCount,
+      monthlyRevenue,
+      monthlyCount,
+      dailyIncomeList,
+      topDistricts,
+      topProducts,
+      topDistrict,
+      topProduct
+    };
+  }, [orders]);
+
   const lineChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -701,7 +948,7 @@ export default function OrderDashboard() {
     return ["all", ...new Set(list)];
   }, [orders]);
 
-  const filteredOrders = useMemo(() => {
+  const searchDistrictFiltered = useMemo(() => {
     return orders.filter(order => {
       const matchSearch = (order.customer_name + order.phone_number + (order.upazila || "") + (order.district || "")).toLowerCase().includes(searchTerm.toLowerCase());
       const matchStatus = statusFilter === "all" || order.status === statusFilter;
@@ -710,14 +957,159 @@ export default function OrderDashboard() {
     });
   }, [orders, searchTerm, statusFilter, districtFilter]);
 
+  const rangeOrders = useMemo(() => {
+    return searchDistrictFiltered.filter(order => {
+      if (!startDate && !endDate) return true;
+      const orderDateStr = order.created_at ? order.created_at.split('T')[0] : "";
+      if (startDate && orderDateStr < startDate) return false;
+      if (endDate && orderDateStr > endDate) return false;
+      return true;
+    });
+  }, [searchDistrictFiltered, startDate, endDate]);
+
+  const undeliveredOrders = useMemo(() => {
+    const rangeOrderIds = new Set(rangeOrders.map(o => o.id));
+    return orders.filter(order => {
+      if (order.status === 'delivered') return false;
+      if (rangeOrderIds.has(order.id)) return false;
+      const matchSearch = (order.customer_name + order.phone_number + (order.upazila || "") + (order.district || "")).toLowerCase().includes(searchTerm.toLowerCase());
+      const matchStatus = statusFilter === "all" || order.status === statusFilter;
+      const matchDistrict = districtFilter === "all" || order.district === districtFilter;
+      return matchSearch && matchStatus && matchDistrict;
+    });
+  }, [orders, rangeOrders, searchTerm, statusFilter, districtFilter]);
+
+  const allVisibleOrders = useMemo(() => {
+    return [...rangeOrders, ...undeliveredOrders];
+  }, [rangeOrders, undeliveredOrders]);
+
   const toggleSelect = (id) => {
     setSelectedOrders(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
   const toggleSelectAll = () => {
-    if (selectedOrders.length === filteredOrders.length) setSelectedOrders([]);
-    else setSelectedOrders(filteredOrders.map(o => o.id));
+    if (selectedOrders.length === allVisibleOrders.length && allVisibleOrders.length > 0) {
+      setSelectedOrders([]);
+    } else {
+      setSelectedOrders(allVisibleOrders.map(o => o.id));
+    }
   };
+
+  const renderOrderCard = (order) => (
+    <div key={order.id} className={`bg-white border rounded-2xl p-4 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-5 transition-all hover:shadow-md ${selectedOrders.includes(order.id) ? 'border-indigo-500 ring-1 ring-indigo-500 bg-indigo-50/10' : 'border-gray-200 hover:border-indigo-300'}`}>
+
+      {/* Left Section: Checkbox & Customer Info */}
+      <div className="flex items-start lg:items-center gap-4 w-full lg:w-4/12">
+        <div className="mt-1 lg:mt-0">
+          <button onClick={() => toggleSelect(order.id)} className="text-gray-400 hover:text-indigo-600 transition-colors">
+            {selectedOrders.includes(order.id) ? <CheckSquare className="w-6 h-6 text-indigo-600" /> : <Square className="w-6 h-6" />}
+          </button>
+        </div>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 mb-1.5">
+            <h3 className="font-bold text-gray-900 text-base sm:text-lg truncate">{order.customer_name}</h3>
+            <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 flex-shrink-0">
+              #{order.id}
+            </span>
+          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs text-gray-500 font-medium tracking-wide">
+            <span className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-gray-400" /> {order.phone_number}</span>
+            <span className="flex items-center gap-1.5 truncate"><MapPin className="w-3.5 h-3.5 text-gray-400" /> {order.district}, {order.upazila}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Middle Section: Product Details & Price */}
+      <div className="flex flex-col w-full lg:w-4/12 px-0 lg:px-6 border-t lg:border-t-0 lg:border-l lg:border-r border-gray-100 pt-4 lg:pt-0 pb-4 lg:pb-0">
+        <div className="font-semibold text-gray-800 flex items-center gap-2 text-sm sm:text-base mb-1.5">
+          <Package className="w-4.5 h-4.5 text-indigo-500 flex-shrink-0" />
+          <span className="truncate">{order.product_name || "N/A"}</span>
+        </div>
+        <div className="flex items-center flex-wrap gap-3 mb-2">
+          {order.price > 0 ? (
+            <span className="text-sm font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100">
+              ৳ {Number(order.price).toLocaleString()}
+            </span>
+          ) : (
+            <span className="text-sm font-medium text-gray-400 italic">No price set</span>
+          )}
+          {order.extra_info && (
+            <span className="text-xs font-medium text-gray-500 bg-gray-50 px-2 py-1 rounded-md border border-gray-200 truncate max-w-[150px]" title={order.extra_info}>
+              Info: {order.extra_info}
+            </span>
+          )}
+          {order.item_weight && (
+            <span className="text-xs font-medium text-slate-500 bg-slate-50 px-2 py-1 rounded-md border border-slate-200">
+              Weight: {order.item_weight} kg
+            </span>
+          )}
+          {order.item_quantity && (
+            <span className="text-xs font-medium text-slate-500 bg-slate-50 px-2 py-1 rounded-md border border-slate-200">
+              Qty: {order.item_quantity}
+            </span>
+          )}
+          {order.special_instruction && (
+            <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-md border border-amber-100 truncate max-w-[180px]" title={order.special_instruction}>
+              Note: {order.special_instruction}
+            </span>
+          )}
+        </div>
+        <div className="text-xs text-gray-500 line-clamp-2 leading-relaxed" title={order.address}>
+          <span className="font-semibold text-gray-400 uppercase tracking-widest text-[9px] mr-1">Address:</span> {order.address}
+        </div>
+      </div>
+
+      {/* Right Section: Actions & Status */}
+      <div className="flex flex-col sm:flex-row items-center justify-between lg:justify-end gap-4 w-full lg:w-3/12 pt-4 lg:pt-0 border-t lg:border-t-0 border-gray-100">
+        <div className="text-left sm:text-right w-full sm:w-auto flex flex-row sm:flex-col justify-between sm:justify-start">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Date Added</p>
+          <p className="text-xs font-bold text-gray-700">{new Date(order.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+        </div>
+
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <button onClick={() => handlePrint([order])} className="p-2 sm:p-2.5 bg-white text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-200 hover:border-indigo-200 shadow-sm">
+            <Printer className="w-4 h-4" />
+          </button>
+
+          {order.status === "pending" && (
+            <button
+              onClick={() => courierActive ? openBookingModal(order) : setCourierConfigModalOpen(true)}
+              title={courierActive ? "Book Pathao Delivery" : "Configure Pathao Courier"}
+              className={`p-2 sm:p-2.5 rounded-xl transition-all shadow-sm flex items-center justify-center active:scale-95 ${courierActive ? 'bg-indigo-600 text-white hover:bg-indigo-700 border-indigo-600 hover:border-indigo-700' : 'bg-slate-100 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200'}`}
+            >
+              <Truck className="w-4 h-4" />
+            </button>
+          )}
+
+          {getConsignmentId(order.extra_info) && (
+            <button
+              onClick={() => handleTrackOrder(getConsignmentId(order.extra_info))}
+              title="Track Pathao Delivery"
+              className="p-2 sm:p-2.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl transition-all border border-indigo-100 shadow-sm flex items-center justify-center active:scale-95"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+          )}
+
+          <div className="relative flex-1 sm:flex-none">
+            <select
+              value={order.status}
+              onChange={(e) => updateStatus(order.id, e.target.value)}
+              className={`w-full appearance-none pl-4 pr-10 py-2 sm:py-2.5 rounded-xl font-bold text-xs uppercase tracking-wide cursor-pointer transition-colors border shadow-sm ${order.status === 'delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 focus:ring-2 focus:ring-emerald-500 focus:outline-none' :
+                  order.status === 'shipped' ? 'bg-indigo-50 text-indigo-700 border-indigo-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none' : 'bg-amber-50 text-amber-700 border-amber-200 focus:ring-2 focus:ring-amber-500 focus:outline-none'
+                }`}
+            >
+              <option value="pending">Pending</option>
+              <option value="shipped">Shipped</option>
+              <option value="delivered">Delivered</option>
+            </select>
+            <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none rotate-90 opacity-50" />
+          </div>
+        </div>
+      </div>
+
+    </div>
+  );
 
   if (loading) return (
     <div className="p-8 grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1082,8 +1474,8 @@ export default function OrderDashboard() {
               Thank you for your business!
             </div>
             <div class="footer-contact">
-              support@${shopName.toLowerCase().replace(/\s/g, '')}.com<br/>
-              www.${shopName.toLowerCase().replace(/\s/g, '')}.com
+              ${businessEmail || `support@${shopName.toLowerCase().replace(/\s/g, '')}.com`}<br/>
+              ${websiteUrl || `www.${shopName.toLowerCase().replace(/\s/g, '')}.com`}
             </div>
           </div>
 
@@ -1126,21 +1518,61 @@ export default function OrderDashboard() {
           </div>
         </div>
 
-        <div className="w-full lg:w-auto">
-          <div className="bg-white border border-indigo-100 p-1.5 md:p-2.5 md:pl-6 rounded-xl md:rounded-[2.5rem] shadow-lg flex items-center justify-between gap-2 border-b-4 border-b-indigo-500">
-            <div className="pl-2 block min-w-0">
-              <p className="text-[7px] md:text-[10px] font-black text-indigo-400 uppercase tracking-widest">Share Order Form</p>
-              <p className="text-[9px] md:text-sm font-bold text-gray-400 truncate max-w-[100px] xs:max-w-[140px] sm:max-w-[200px] italic">
-                {formId ? orderLink : "Loading..."}
-              </p>
+        <div className="w-full lg:w-[480px]">
+          <div className="bg-white border border-indigo-100 p-4 sm:p-5 rounded-3xl shadow-xl flex flex-col gap-4 border-b-4 border-b-indigo-500 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
+            
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
+                <Store className="w-4.5 h-4.5" />
+              </div>
+              <div>
+                <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">Invoice Branding Settings</h3>
+                <p className="text-[9px] font-bold text-slate-400">Configure custom contact info displayed on order invoices</p>
+              </div>
             </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+              <div className="flex flex-col gap-1 w-full">
+                <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest pl-1">Business Email</span>
+                <div className="relative flex items-center w-full">
+                  <Mail className="absolute left-3 w-3.5 h-3.5 text-slate-400" />
+                  <input
+                    type="email"
+                    value={businessEmail}
+                    onChange={(e) => setBusinessEmail(e.target.value)}
+                    placeholder="shop@email.com"
+                    className="pl-9 pr-3 py-2 bg-slate-50 hover:bg-slate-100/50 text-xs font-bold text-slate-700 rounded-xl border border-slate-200 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 w-full transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1 w-full">
+                <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest pl-1">Website URL</span>
+                <div className="relative flex items-center w-full">
+                  <Globe className="absolute left-3 w-3.5 h-3.5 text-slate-400" />
+                  <input
+                    type="text"
+                    value={websiteUrl}
+                    onChange={(e) => setWebsiteUrl(e.target.value)}
+                    placeholder="www.shop.com"
+                    className="pl-9 pr-3 py-2 bg-slate-50 hover:bg-slate-100/50 text-xs font-bold text-slate-700 rounded-xl border border-slate-200 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 w-full transition-all"
+                  />
+                </div>
+              </div>
+            </div>
+
             <button
-              onClick={copyLink}
-              disabled={!formId}
-              className={`flex items-center gap-1.5 px-3 md:px-8 py-2.5 md:py-4 rounded-lg md:rounded-[1.8rem] font-black text-[10px] md:text-sm transition-all duration-300 flex-shrink-0 ${copied ? 'bg-emerald-500 text-white' : 'bg-indigo-600 text-white active:scale-95'}`}
+              onClick={saveProfileSettings}
+              disabled={isSavingProfile}
+              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white rounded-xl font-black text-xs transition-all active:scale-95 shadow-md hover:shadow-lg disabled:opacity-50 w-full"
             >
-              {copied ? <Check className="w-3 h-3 md:w-4 md:h-4" /> : <LinkIcon className="w-3 h-3 md:w-4 md:h-4" />}
-              <span>{copied ? 'Copied!' : 'Copy Link'}</span>
+              {isSavingProfile ? (
+                <span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+              ) : (
+                <Check className="w-4 h-4" />
+              )}
+              <span>Save Invoice Branding</span>
             </button>
           </div>
         </div>
@@ -1168,74 +1600,117 @@ export default function OrderDashboard() {
       {viewMode === "analytics" && (
         <div className="space-y-6 md:space-y-10 animate-in fade-in slide-in-from-bottom-6 duration-700">
 
-          {/* TOP STATS CARDS */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-            <div className="relative overflow-hidden bg-gradient-to-br from-indigo-600 to-indigo-700 p-6 md:p-8 rounded-[2rem] shadow-xl shadow-indigo-100 group transition-all hover:-translate-y-1">
-              <TrendingUp className="absolute -right-4 -top-4 w-24 h-24 text-white/10 rotate-12 group-hover:scale-110 transition-transform" />
-              <p className="text-indigo-100 text-[10px] md:text-xs font-black uppercase tracking-[0.2em] mb-2">Total Volume</p>
-              <h3 className="text-3xl md:text-5xl font-black text-white">{orders.length}</h3>
-              <div className="mt-4 flex items-center gap-2 text-indigo-100/80 text-[10px] font-bold">
-                <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" /> Live Orders Tracking
+          {/* FINANCIAL SUMMARY CARDS */}
+          {detailedAnalytics && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+              <div className="relative overflow-hidden bg-gradient-to-br from-indigo-600 via-indigo-700 to-indigo-800 p-6 md:p-8 rounded-[2.5rem] shadow-xl text-white group">
+                <DollarSign className="absolute -right-4 -top-4 w-28 h-28 text-white/10 rotate-12 group-hover:scale-110 transition-transform" />
+                <p className="text-indigo-200 text-[10px] md:text-xs font-black uppercase tracking-[0.2em] mb-2">Total Sales / Revenue</p>
+                <h3 className="text-2xl md:text-4xl font-black tracking-tight">৳ {detailedAnalytics.totalRevenue.toLocaleString()}</h3>
+                <p className="mt-3 text-indigo-200/80 text-xs font-bold">From {detailedAnalytics.totalOrders} Total Orders</p>
               </div>
-            </div>
 
-            <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-emerald-100 flex flex-col justify-between group transition-all hover:border-emerald-500">
-              <div>
-                <div className="w-10 h-10 bg-emerald-50 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-emerald-500 transition-colors">
-                  <Check className="w-5 h-5 text-emerald-600 group-hover:text-white" />
-                </div>
-                <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Success Rate</p>
-              </div>
-              <h3 className="text-2xl md:text-4xl font-black text-slate-900 mt-2">
-                {orders.length > 0 ? ((orders.filter(o => o.status === 'delivered').length / orders.length) * 100).toFixed(1) : 0}%
-              </h3>
-            </div>
-
-            <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-indigo-50 flex flex-col justify-between group transition-all hover:border-indigo-500">
-              <div>
-                <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-indigo-500 transition-colors">
-                  <Package className="w-5 h-5 text-indigo-600 group-hover:text-white" />
-                </div>
-                <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Shipped Items</p>
-              </div>
-              <h3 className="text-2xl md:text-4xl font-black text-slate-900 mt-2">{orders.filter(o => o.status === 'shipped').length}</h3>
-            </div>
-
-            <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-amber-100 flex flex-col justify-between group transition-all hover:border-amber-500">
-              <div>
-                <div className="w-10 h-10 bg-amber-50 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-amber-500 transition-colors">
-                  <BarChart3 className="w-5 h-5 text-amber-600 group-hover:text-white" />
-                </div>
-                <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Awaiting Action</p>
-              </div>
-              <h3 className="text-2xl md:text-4xl font-black text-slate-900 mt-2">{orders.filter(o => o.status === 'pending').length}</h3>
-            </div>
-          </div>
-
-          {/* CHARTS SECTION */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 bg-white p-6 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] shadow-sm border border-slate-50 relative overflow-hidden">
-              <div className="flex items-center justify-between mb-8">
+              <div className="bg-white p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-emerald-100 flex flex-col justify-between group hover:border-emerald-500 transition-all">
                 <div>
-                  <h4 className="text-xl font-black text-slate-900 italic uppercase tracking-tighter">Order Trajectory</h4>
-                  <p className="text-slate-400 text-[10px] font-bold">Timeline of your business growth</p>
+                  <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center mb-4 text-emerald-600 group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+                    <Check className="w-6 h-6" />
+                  </div>
+                  <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Delivered Revenue</p>
                 </div>
-                <div className="hidden sm:block bg-indigo-50 px-4 py-2 rounded-2xl text-indigo-600 font-black text-[10px] uppercase">
-                  Daily Analytics
+                <div>
+                  <h3 className="text-2xl md:text-3xl font-black text-slate-900">৳ {detailedAnalytics.deliveredRevenue.toLocaleString()}</h3>
+                  <p className="text-xs font-bold text-emerald-600 mt-1">Successfully Delivered</p>
                 </div>
               </div>
+
+              <div className="bg-white p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-indigo-50 flex flex-col justify-between group hover:border-indigo-500 transition-all">
+                <div>
+                  <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center mb-4 text-indigo-600 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
+                    <TrendingUp className="w-6 h-6" />
+                  </div>
+                  <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Avg Order Value (AOV)</p>
+                </div>
+                <div>
+                  <h3 className="text-2xl md:text-3xl font-black text-slate-900">৳ {detailedAnalytics.avgOrderValue.toLocaleString()}</h3>
+                  <p className="text-xs font-bold text-slate-400 mt-1">Per Order Average</p>
+                </div>
+              </div>
+
+              <div className="bg-white p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-amber-100 flex flex-col justify-between group hover:border-amber-500 transition-all">
+                <div>
+                  <div className="w-12 h-12 bg-amber-50 rounded-2xl flex items-center justify-center mb-4 text-amber-600 group-hover:bg-amber-500 group-hover:text-white transition-colors">
+                    <Award className="w-6 h-6" />
+                  </div>
+                  <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Top District & Product</p>
+                </div>
+                <div>
+                  <p className="text-xs font-black text-slate-800 truncate" title={detailedAnalytics.topDistrict.district}>
+                    📍 {detailedAnalytics.topDistrict.district} ({detailedAnalytics.topDistrict.count} Orders)
+                  </p>
+                  <p className="text-xs font-black text-indigo-600 truncate mt-1" title={detailedAnalytics.topProduct.name}>
+                    🛍️ {detailedAnalytics.topProduct.name} ({detailedAnalytics.topProduct.count} Sold)
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SALES PERIOD BREAKDOWN (TODAY, WEEKLY, MONTHLY, TOTAL) */}
+          {detailedAnalytics && (
+            <div className="bg-white p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
+              <div>
+                <h4 className="text-lg md:text-xl font-black text-slate-900 italic uppercase tracking-tighter flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-indigo-600" /> Sales Period Summary (সময়ভিত্তিক বিক্রির হিসাব)
+                </h4>
+                <p className="text-slate-400 text-[10px] md:text-xs font-bold">Compare your sales performance across different time intervals</p>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {[
+                  { label: "Today (আজকের হিসাব)", revenue: detailedAnalytics.todayRevenue, count: detailedAnalytics.todayCount, bg: "from-pink-500/10 to-pink-500/5", border: "border-pink-200/60", text: "text-pink-600" },
+                  { label: "This Week (এই সপ্তাহের হিসাব)", revenue: detailedAnalytics.weeklyRevenue, count: detailedAnalytics.weeklyCount, bg: "from-indigo-500/10 to-indigo-500/5", border: "border-indigo-200/60", text: "text-indigo-600" },
+                  { label: "This Month (এই মাসের হিসাব)", revenue: detailedAnalytics.monthlyRevenue, count: detailedAnalytics.monthlyCount, bg: "from-purple-500/10 to-purple-500/5", border: "border-purple-200/60", text: "text-purple-600" },
+                  { label: "Total Lifetime (সর্বমোট হিসাব)", revenue: detailedAnalytics.totalRevenue, count: detailedAnalytics.totalOrders, bg: "from-emerald-500/10 to-emerald-500/5", border: "border-emerald-200/60", text: "text-emerald-600" }
+                ].map((item, idx) => (
+                  <div key={idx} className={`p-5 rounded-3xl bg-gradient-to-br ${item.bg} border ${item.border} flex flex-col justify-between hover:shadow-md transition-all`}>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-2 block">{item.label}</span>
+                    <div>
+                      <span className={`text-xl md:text-2xl font-black ${item.text}`}>৳ {item.revenue.toLocaleString()}</span>
+                      <span className="text-[10px] text-slate-500 font-bold block mt-1">{item.count} Orders</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* DAILY INCOME CHART & STATUS SPLIT */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Daily Income Line Chart */}
+            <div className="lg:col-span-2 bg-white p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 relative overflow-hidden">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h4 className="text-lg md:text-xl font-black text-slate-900 italic uppercase tracking-tighter flex items-center gap-2">
+                    <DollarSign className="w-5 h-5 text-emerald-500" /> Daily Income Trajectory (দৈনিক ইনকাম)
+                  </h4>
+                  <p className="text-slate-400 text-[10px] font-bold">Revenue generated per day in ৳</p>
+                </div>
+                <div className="bg-emerald-50 px-3 py-1.5 rounded-xl text-emerald-700 font-black text-[10px] uppercase border border-emerald-100">
+                  Revenue Track
+                </div>
+              </div>
+
               <div className="h-[300px] md:h-[350px] w-full">
-                {analyticsData && (
+                {detailedAnalytics && (
                   <Line
                     data={{
-                      labels: analyticsData.labels,
+                      labels: detailedAnalytics.dailyIncomeList.map(d => new Date(d.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })),
                       datasets: [{
-                        label: 'Orders',
-                        data: analyticsData.lineData,
-                        borderColor: '#4f46e5',
+                        label: 'Revenue (৳)',
+                        data: detailedAnalytics.dailyIncomeList.map(d => d.revenue),
+                        borderColor: '#10b981',
                         borderWidth: 4,
                         pointBackgroundColor: '#fff',
-                        pointBorderColor: '#4f46e5',
+                        pointBorderColor: '#10b981',
                         pointBorderWidth: 2,
                         pointRadius: 4,
                         pointHoverRadius: 6,
@@ -1243,19 +1718,35 @@ export default function OrderDashboard() {
                         fill: true,
                         backgroundColor: (context) => {
                           const ctx = context.chart.ctx;
-                          const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-                          gradient.addColorStop(0, 'rgba(79, 70, 229, 0.2)');
-                          gradient.addColorStop(1, 'rgba(79, 70, 229, 0)');
+                          const gradient = ctx.createLinearGradient(0, 0, 0, 350);
+                          gradient.addColorStop(0, 'rgba(16, 185, 129, 0.2)');
+                          gradient.addColorStop(1, 'rgba(16, 185, 129, 0)');
                           return gradient;
                         },
                       }]
                     }}
                     options={{
-                      ...lineChartOptions,
-                      plugins: { ...lineChartOptions.plugins, title: { display: false }, legend: { display: false } },
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                          backgroundColor: '#1e293b',
+                          padding: 12,
+                          callbacks: {
+                            label: (context) => `Revenue: ৳ ${context.raw.toLocaleString()}`
+                          }
+                        }
+                      },
                       scales: {
                         x: { grid: { display: false }, ticks: { font: { size: 10, weight: 'bold' } } },
-                        y: { grid: { color: '#f8fafc' }, ticks: { font: { size: 10 } } }
+                        y: {
+                          grid: { color: '#f8fafc' },
+                          ticks: {
+                            font: { size: 10, weight: 'bold' },
+                            callback: (val) => `৳ ${val.toLocaleString()}`
+                          }
+                        }
                       }
                     }}
                   />
@@ -1263,14 +1754,14 @@ export default function OrderDashboard() {
               </div>
             </div>
 
-            <div className="bg-slate-900 p-8 md:p-10 rounded-[2.5rem] md:rounded-[3.5rem] shadow-2xl flex flex-col items-center justify-center relative overflow-hidden group">
-              {/* Background Glow */}
+            {/* Status Distribution */}
+            <div className="bg-slate-900 p-8 md:p-10 rounded-[2.5rem] shadow-2xl flex flex-col items-center justify-center relative overflow-hidden group">
               <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full blur-3xl" />
               <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl" />
 
               <div className="text-center mb-8 relative z-10">
-                <h4 className="text-white text-xl font-black italic uppercase tracking-tighter">Status Split</h4>
-                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">Order Distribution</p>
+                <h4 className="text-white text-xl font-black italic uppercase tracking-tighter">Order Status Split</h4>
+                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mt-1">Delivery Fulfillment Ratio</p>
               </div>
 
               <div className="w-full max-w-[200px] md:max-w-[240px] relative z-10 transition-transform group-hover:scale-105 duration-500">
@@ -1301,7 +1792,7 @@ export default function OrderDashboard() {
                 )}
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                   <span className="text-white text-3xl font-black">{orders.length}</span>
-                  <span className="text-slate-500 text-[8px] font-black uppercase tracking-widest">Units</span>
+                  <span className="text-slate-500 text-[8px] font-black uppercase tracking-widest">Total Orders</span>
                 </div>
               </div>
 
@@ -1322,13 +1813,255 @@ export default function OrderDashboard() {
               </div>
             </div>
           </div>
+
+          {/* DISTRICT & PRODUCT BREAKDOWN SECTION */}
+          {detailedAnalytics && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+              {/* District Breakdown (কোন জেলার মানুষ বেশি নিয়েছে) */}
+              <div className="bg-white p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
+                      <MapPin className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-base md:text-lg font-black text-slate-900 uppercase tracking-tight italic">
+                        District Sales Breakdown (কোন জেলার মানুুষ বেশি নিয়েছে)
+                      </h4>
+                      <p className="text-[10px] md:text-xs font-bold text-slate-400">Top purchasing districts by order volume and revenue</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4 max-h-[380px] overflow-y-auto pr-2">
+                  {detailedAnalytics.topDistricts.length === 0 ? (
+                    <p className="text-center text-slate-400 text-xs font-bold py-6">No district data available</p>
+                  ) : (
+                    detailedAnalytics.topDistricts.map((d, idx) => {
+                      const percent = detailedAnalytics.totalOrders > 0 ? Math.round((d.count / detailedAnalytics.totalOrders) * 100) : 0;
+                      return (
+                        <div key={d.district} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-indigo-200 transition-all">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className={`w-6 h-6 rounded-full text-xs font-black flex items-center justify-center ${idx === 0 ? 'bg-amber-400 text-slate-900' : idx === 1 ? 'bg-slate-300 text-slate-800' : idx === 2 ? 'bg-amber-700 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                                {idx + 1}
+                              </span>
+                              <span className="font-bold text-sm text-slate-800">{d.district}</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-xs font-black text-indigo-600">৳ {d.revenue.toLocaleString()}</span>
+                              <span className="text-[10px] text-slate-400 font-bold block">{d.count} Orders ({percent}%)</span>
+                            </div>
+                          </div>
+                          <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                            <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 h-full rounded-full transition-all duration-500" style={{ width: `${percent}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Product Performance Breakdown (কোন প্রোডাক্ট বেশি নিয়েছে) */}
+              <div className="bg-white p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-pink-50 text-pink-600 rounded-2xl">
+                      <ShoppingBag className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-base md:text-lg font-black text-slate-900 uppercase tracking-tight italic">
+                        Product Performance (কোন প্রোডাক্ট বেশি নিয়েছে)
+                      </h4>
+                      <p className="text-[10px] md:text-xs font-bold text-slate-400">Best-selling products ranked by order count & revenue</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4 max-h-[380px] overflow-y-auto pr-2">
+                  {detailedAnalytics.topProducts.length === 0 ? (
+                    <p className="text-center text-slate-400 text-xs font-bold py-6">No product data available</p>
+                  ) : (
+                    detailedAnalytics.topProducts.map((p, idx) => {
+                      const percent = detailedAnalytics.totalOrders > 0 ? Math.round((p.count / detailedAnalytics.totalOrders) * 100) : 0;
+                      return (
+                        <div key={p.name} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 hover:border-pink-200 transition-all">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className={`w-6 h-6 rounded-full text-xs font-black flex items-center justify-center shrink-0 ${idx === 0 ? 'bg-pink-500 text-white' : idx === 1 ? 'bg-purple-500 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                                {idx + 1}
+                              </span>
+                              <span className="font-bold text-sm text-slate-800 truncate" title={p.name}>{p.name}</span>
+                            </div>
+                            <div className="text-right shrink-0 ml-2">
+                              <span className="text-xs font-black text-pink-600">৳ {p.revenue.toLocaleString()}</span>
+                              <span className="text-[10px] text-slate-400 font-bold block">{p.count} Orders | Qty: {p.quantity}</span>
+                            </div>
+                          </div>
+                          <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                            <div className="bg-gradient-to-r from-pink-500 to-purple-600 h-full rounded-full transition-all duration-500" style={{ width: `${percent}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* DAILY INCOME TABLE BREAKDOWN */}
+          {detailedAnalytics && (
+            <div className="bg-white p-6 md:p-8 rounded-[2.5rem] shadow-sm border border-slate-100 space-y-6">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                <div>
+                  <h4 className="text-base md:text-lg font-black text-slate-900 uppercase tracking-tight italic flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-indigo-600" /> Date-wise Income Breakdown (দৈনিক ইনকাম তালিকা)
+                  </h4>
+                  <p className="text-[10px] md:text-xs font-bold text-slate-400">Detailed list of income and orders for each day</p>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                      <th className="pb-3 px-4">Date (তারিখ)</th>
+                      <th className="pb-3 px-4 text-center">Total Orders</th>
+                      <th className="pb-3 px-4 text-right">Total Revenue (৳)</th>
+                      <th className="pb-3 px-4 text-right">Delivered Revenue (৳)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 text-xs font-bold text-slate-700">
+                    {detailedAnalytics.dailyIncomeList.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="py-6 text-center text-slate-400">No income history found</td>
+                      </tr>
+                    ) : (
+                      detailedAnalytics.dailyIncomeList.map((row) => (
+                        <tr key={row.date} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-3 px-4 font-black text-slate-900">
+                            {new Date(row.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <span className="bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-black text-[10px]">
+                              {row.count} Orders
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-right font-black text-slate-900">
+                            ৳ {row.revenue.toLocaleString()}
+                          </td>
+                          <td className="py-3 px-4 text-right font-black text-emerald-600">
+                            ৳ {row.deliveredRevenue.toLocaleString()}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
         </div>
       )}
 
       {/* ORDERS VIEW */}
       {viewMode === "orders" && (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="mb-4 md:mb-10 flex flex-col sm:flex-row gap-3">
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+
+          {/* Date Filter Bar */}
+          <div className="bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-gray-200 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold shrink-0">
+                <Filter className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm md:text-base font-black text-slate-800 uppercase tracking-tight">
+                  Order Date Filter
+                </h3>
+                <p className="text-[10px] md:text-xs font-semibold text-slate-400">
+                  Default: Current Day Orders. Filter by custom range or presets.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Presets */}
+              <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/80">
+                {[
+                  { id: "today", label: "Today" },
+                  { id: "7d", label: "7 Days" },
+                  { id: "30d", label: "30 Days" },
+                  { id: "month", label: "This Month" },
+                  { id: "all", label: "All Time" },
+                ].map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => handlePresetChange(p.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
+                      selectedPreset === p.id
+                        ? "bg-indigo-600 text-white shadow-md"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom Date Inputs */}
+              <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200 flex-wrap">
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider pl-1">Start:</span>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => {
+                      setStartDate(e.target.value);
+                      setSelectedPreset("custom");
+                    }}
+                    className="bg-white text-xs font-bold text-slate-700 px-2 py-1 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">End:</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => {
+                      setEndDate(e.target.value);
+                      setSelectedPreset("custom");
+                    }}
+                    className="bg-white text-xs font-bold text-slate-700 px-2 py-1 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <button
+                  onClick={handleCustomDateApply}
+                  className="px-3 py-1 bg-slate-900 text-white text-xs font-black rounded-lg hover:bg-slate-800 transition-colors shadow-sm"
+                >
+                  Apply
+                </button>
+              </div>
+
+              {/* Reset */}
+              {(startDate !== getTodayStr() || endDate !== getTodayStr() || selectedPreset !== "today") && (
+                <button
+                  onClick={() => handlePresetChange("today")}
+                  className="p-2 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors"
+                  title="Reset to Today"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Search & District Filter */}
+          <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
               <input
@@ -1343,10 +2076,11 @@ export default function OrderDashboard() {
             </select>
           </div>
 
-          <div className="sticky top-4 z-20 bg-white/80 backdrop-blur-md border border-gray-200 text-gray-800 p-3 sm:p-4 mb-6 rounded-2xl shadow-sm flex items-center justify-between gap-4">
+          {/* Bulk Select & Print Bar */}
+          <div className="sticky top-4 z-20 bg-white/80 backdrop-blur-md border border-gray-200 text-gray-800 p-3 sm:p-4 rounded-2xl shadow-sm flex items-center justify-between gap-4">
             <button onClick={toggleSelectAll} className="flex items-center gap-2 ml-1 text-sm font-bold text-gray-600 hover:text-indigo-600 transition-colors">
-              {selectedOrders.length === filteredOrders.length && filteredOrders.length > 0 ? <CheckSquare className="w-5 h-5 text-indigo-600" /> : <Square className="w-5 h-5" />}
-              <span>Select All</span>
+              {selectedOrders.length === allVisibleOrders.length && allVisibleOrders.length > 0 ? <CheckSquare className="w-5 h-5 text-indigo-600" /> : <Square className="w-5 h-5" />}
+              <span>Select All ({allVisibleOrders.length})</span>
             </button>
             {selectedOrders.length > 0 && (
               <button onClick={() => handlePrint()} className="flex items-center gap-2 bg-indigo-600 px-5 py-2.5 rounded-xl text-sm font-bold text-white shadow-md active:scale-95 hover:bg-indigo-700 transition-all">
@@ -1355,131 +2089,76 @@ export default function OrderDashboard() {
             )}
           </div>
 
-          <div className="grid grid-cols-1 gap-4">
-            {filteredOrders.map((order) => (
-              <div key={order.id} className={`bg-white border rounded-2xl p-4 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-5 transition-all hover:shadow-md ${selectedOrders.includes(order.id) ? 'border-indigo-500 ring-1 ring-indigo-500 bg-indigo-50/10' : 'border-gray-200 hover:border-indigo-300'}`}>
-
-                {/* Left Section: Checkbox & Customer Info */}
-                <div className="flex items-start lg:items-center gap-4 w-full lg:w-4/12">
-                  <div className="mt-1 lg:mt-0">
-                    <button onClick={() => toggleSelect(order.id)} className="text-gray-400 hover:text-indigo-600 transition-colors">
-                      {selectedOrders.includes(order.id) ? <CheckSquare className="w-6 h-6 text-indigo-600" /> : <Square className="w-6 h-6" />}
-                    </button>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <h3 className="font-bold text-gray-900 text-base sm:text-lg truncate">{order.customer_name}</h3>
-                      <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 flex-shrink-0">
-                        #{order.id}
-                      </span>
-                    </div>
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs text-gray-500 font-medium tracking-wide">
-                      <span className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-gray-400" /> {order.phone_number}</span>
-                      <span className="flex items-center gap-1.5 truncate"><MapPin className="w-3.5 h-3.5 text-gray-400" /> {order.district}, {order.upazila}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Middle Section: Product Details & Price */}
-                <div className="flex flex-col w-full lg:w-4/12 px-0 lg:px-6 border-t lg:border-t-0 lg:border-l lg:border-r border-gray-100 pt-4 lg:pt-0 pb-4 lg:pb-0">
-                  <div className="font-semibold text-gray-800 flex items-center gap-2 text-sm sm:text-base mb-1.5">
-                    <Package className="w-4.5 h-4.5 text-indigo-500 flex-shrink-0" />
-                    <span className="truncate">{order.product_name || "N/A"}</span>
-                  </div>
-                  <div className="flex items-center flex-wrap gap-3 mb-2">
-                    {order.price > 0 ? (
-                      <span className="text-sm font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100">
-                        ৳ {Number(order.price).toLocaleString()}
-                      </span>
-                    ) : (
-                      <span className="text-sm font-medium text-gray-400 italic">No price set</span>
-                    )}
-                    {order.extra_info && (
-                      <span className="text-xs font-medium text-gray-500 bg-gray-50 px-2 py-1 rounded-md border border-gray-200 truncate max-w-[150px]" title={order.extra_info}>
-                        Info: {order.extra_info}
-                      </span>
-                    )}
-                    {order.item_weight && (
-                      <span className="text-xs font-medium text-slate-500 bg-slate-50 px-2 py-1 rounded-md border border-slate-200">
-                        Weight: {order.item_weight} kg
-                      </span>
-                    )}
-                    {order.item_quantity && (
-                      <span className="text-xs font-medium text-slate-500 bg-slate-50 px-2 py-1 rounded-md border border-slate-200">
-                        Qty: {order.item_quantity}
-                      </span>
-                    )}
-                    {order.special_instruction && (
-                      <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-md border border-amber-100 truncate max-w-[180px]" title={order.special_instruction}>
-                        Note: {order.special_instruction}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-gray-500 line-clamp-2 leading-relaxed" title={order.address}>
-                    <span className="font-semibold text-gray-400 uppercase tracking-widest text-[9px] mr-1">Address:</span> {order.address}
-                  </div>
-                </div>
-
-                {/* Right Section: Actions & Status */}
-                <div className="flex flex-col sm:flex-row items-center justify-between lg:justify-end gap-4 w-full lg:w-3/12 pt-4 lg:pt-0 border-t lg:border-t-0 border-gray-100">
-                  <div className="text-left sm:text-right w-full sm:w-auto flex flex-row sm:flex-col justify-between sm:justify-start">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Date Added</p>
-                    <p className="text-xs font-bold text-gray-700">{new Date(order.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-                  </div>
-
-                  <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <button onClick={() => handlePrint([order])} className="p-2 sm:p-2.5 bg-white text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-200 hover:border-indigo-200 shadow-sm">
-                      <Printer className="w-4 h-4" />
-                    </button>
-
-                    {order.status === "pending" && (
-                      <button
-                        onClick={() => courierActive ? openBookingModal(order) : setCourierConfigModalOpen(true)}
-                        title={courierActive ? "Book Pathao Delivery" : "Configure Pathao Courier"}
-                        className={`p-2 sm:p-2.5 rounded-xl transition-all shadow-sm flex items-center justify-center active:scale-95 ${courierActive ? 'bg-indigo-600 text-white hover:bg-indigo-700 border-indigo-600 hover:border-indigo-700' : 'bg-slate-100 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200'}`}
-                      >
-                        <Truck className="w-4 h-4" />
-                      </button>
-                    )}
-
-                    {getConsignmentId(order.extra_info) && (
-                      <button
-                        onClick={() => handleTrackOrder(getConsignmentId(order.extra_info))}
-                        title="Track Pathao Delivery"
-                        className="p-2 sm:p-2.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl transition-all border border-indigo-100 shadow-sm flex items-center justify-center active:scale-95"
-                      >
-                        <Search className="w-4 h-4" />
-                      </button>
-                    )}
-
-                    <div className="relative flex-1 sm:flex-none">
-                      <select
-                        value={order.status}
-                        onChange={(e) => updateStatus(order.id, e.target.value)}
-                        className={`w-full appearance-none pl-4 pr-10 py-2 sm:py-2.5 rounded-xl font-bold text-xs uppercase tracking-wide cursor-pointer transition-colors border shadow-sm ${order.status === 'delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 focus:ring-2 focus:ring-emerald-500 focus:outline-none' :
-                            order.status === 'shipped' ? 'bg-indigo-50 text-indigo-700 border-indigo-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none' : 'bg-amber-50 text-amber-700 border-amber-200 focus:ring-2 focus:ring-amber-500 focus:outline-none'
-                          }`}
-                      >
-                        <option value="pending">Pending</option>
-                        <option value="shipped">Shipped</option>
-                        <option value="delivered">Delivered</option>
-                      </select>
-                      <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none rotate-90 opacity-50" />
-                    </div>
-                  </div>
-                </div>
-
+          {/* --- SECTION 1: Current Day / Filtered Date Range Orders --- */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between border-l-4 border-indigo-600 pl-4 py-1">
+              <div>
+                <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-indigo-600" />
+                  {selectedPreset === "today" ? "Current Day Orders (আজকের অর্ডার)" : "Filtered Orders (তারিখ পরিসীমার অর্ডার)"}
+                </h2>
+                <p className="text-xs text-slate-400 font-bold">
+                  {selectedPreset === "today" ? `Today's orders (${startDate})` : `Date range: ${startDate || 'Start'} to ${endDate || 'End'}`}
+                </p>
               </div>
-            ))}
+              <span className="px-3 py-1 bg-indigo-50 text-indigo-700 font-black text-xs rounded-full border border-indigo-100">
+                {rangeOrders.length} Orders
+              </span>
+            </div>
+
+            {rangeOrders.length > 0 ? (
+              <div className="grid grid-cols-1 gap-4">
+                {rangeOrders.map(renderOrderCard)}
+              </div>
+            ) : (
+              <div className="bg-white rounded-2xl border border-dashed border-gray-200 py-8 text-center">
+                <Package className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                <p className="text-gray-400 font-bold text-xs uppercase tracking-widest">
+                  No orders found for the selected date range
+                </p>
+              </div>
+            )}
           </div>
+
+          {/* --- SECTION 2: Undelivered Orders (Not Delivered Yet) --- */}
+          <div className="space-y-4 pt-6 border-t border-slate-200">
+            <div className="flex items-center justify-between border-l-4 border-amber-500 pl-4 py-1">
+              <div>
+                <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight flex items-center gap-2">
+                  <Truck className="w-5 h-5 text-amber-500 animate-bounce" />
+                  Undelivered Orders Queue (এখনো ডেলিভারি না হওয়া অর্ডারসমূহ)
+                </h2>
+                <p className="text-xs text-amber-600/80 font-bold">
+                  Pending & Shipped orders from prior dates needing delivery action
+                </p>
+              </div>
+              <span className="px-3 py-1 bg-amber-50 text-amber-700 font-black text-xs rounded-full border border-amber-200">
+                {undeliveredOrders.length} Undelivered
+              </span>
+            </div>
+
+            {undeliveredOrders.length > 0 ? (
+              <div className="grid grid-cols-1 gap-4">
+                {undeliveredOrders.map(renderOrderCard)}
+              </div>
+            ) : (
+              <div className="bg-emerald-50/60 rounded-2xl border border-emerald-200 py-8 text-center">
+                <Check className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+                <p className="text-emerald-700 font-bold text-xs uppercase tracking-widest">
+                  All previous orders are fully delivered!
+                </p>
+              </div>
+            )}
+          </div>
+
         </div>
       )}
 
       {/* Empty State */}
-      {!loading && filteredOrders.length === 0 && (
+      {!loading && allVisibleOrders.length === 0 && (
         <div className="bg-white rounded-3xl border-2 border-dashed border-gray-100 py-10 text-center mt-6">
           <Package className="w-10 h-10 text-gray-200 mx-auto mb-2" />
-          <p className="text-gray-400 font-bold text-xs uppercase tracking-widest">No orders</p>
+          <p className="text-gray-400 font-bold text-xs uppercase tracking-widest">No orders found</p>
         </div>
       )}
 

@@ -246,7 +246,7 @@ class TokenUsageAnalyticsSerializer(serializers.ModelSerializer):
         identifier_bare = identifier_val.replace('@s.whatsapp.net', '')
 
         qs = Contact.objects.filter(
-            agent=obj.ai_agent,
+            agent_id=obj.ai_agent_id,
             platform__iexact=platform_val
         )
 

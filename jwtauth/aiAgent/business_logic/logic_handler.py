@@ -93,7 +93,7 @@ def _default_direct_order_instructions():
     )
 
 
-def perform_rag_search(agent_config, text, post_context_text, order_instruction, existing_vector=None, vector_type='text', image_caption=None):
+def perform_rag_search(agent_config, text, post_context_text, order_instruction, existing_vector=None, vector_type='text', image_caption=None, sender_id=None):
     sheet_context = ""
     extra_instruction = ""
     query_vector = existing_vector  # Initialize query_vector for later reuse
@@ -355,6 +355,33 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                             pass
                     else:
                         is_ambiguous_match = True
+
+            # If product is already in memory, bypass ambiguity and filter hits to keep only the one matching the memory product name
+            product_already_in_memory = False
+            memory_product_name = None
+            if sender_id:
+                try:
+                    from aiAgent.models import UserMemory
+                    memory = UserMemory.objects.filter(ai_agent=agent_config, sender_id=str(sender_id).lower()).first()
+                    if memory and isinstance(memory.data, dict):
+                        internal = memory.data.get('_internal', {})
+                        order_fields = internal.get('order_fields', {})
+                        prod_data = order_fields.get('product_name', {})
+                        if prod_data.get('value') and prod_data.get('confidence', 0.0) >= 0.75:
+                            memory_product_name = str(prod_data.get('value')).strip().lower()
+                            product_already_in_memory = True
+                except Exception:
+                    pass
+
+            if product_already_in_memory and memory_product_name:
+                exact_hits = []
+                for h in filtered_hits:
+                    content_lower = h['content'].lower()
+                    if memory_product_name in content_lower:
+                        exact_hits.append(h)
+                if exact_hits:
+                    filtered_hits = exact_hits
+                    is_ambiguous_match = False
 
             if filtered_hits:
                 top_hit = filtered_hits[0]
@@ -1621,7 +1648,7 @@ def handle_ai_response(agent_id, sender_id, message_text, platform='web_widget')
         # 2. Context & RAG
         order_instr = get_order_instructions(agent_config.user)
         sheet_ctx, extra_instr, query_vector, _ = perform_rag_search(
-            agent_config, message_text, "", order_instr
+            agent_config, message_text, "", order_instr, sender_id=sender_id
         )
         system_instruction, history, current_msg = build_ai_context(
             agent_config, sender_id, message_text, extra_instr, sheet_ctx, platform=platform

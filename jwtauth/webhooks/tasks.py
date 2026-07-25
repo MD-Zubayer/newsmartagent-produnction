@@ -1476,9 +1476,18 @@ def _merge_order_data_with_conversation(agent_config, sender_id, request_type, c
             merged['product_name'] = inferred_product
 
     try:
+        from users.models import CustomerOrder
+        last_order = CustomerOrder.objects.filter(
+            user=agent_config.user,
+            source_contact_id=sender_id
+        ).order_by('-id').first()
+        last_order_time = last_order.created_at.timestamp() if last_order else 0
+
         history = get_last_message(agent_config, sender_id, limit=10, platform=request_type)
         for msg in history:
             if msg.get('role') != 'user':
+                continue
+            if msg.get('timestamp', 0) <= last_order_time:
                 continue
             history_text = str(msg.get('content') or '')
             merged = extract_order_data_from_text(history_text, merged, user_memory)
@@ -2082,6 +2091,103 @@ def process_ai_reply_task(self, data):
                     logger.info(f"Using token from TelegramBot model for {page_id}")
                 else:
                     logger.info(f"Falling back to AgentAI.access_token for {page_id}")
+
+        # 🎙️ Voice Message Processing (Transcription using Gemini)
+        is_audio = False
+        mimetype = data.get('mimetype') or data.get('mime_type') or ''
+        
+        if (message_type == 'audio' or 
+            mimetype.startswith('audio/') or 
+            (media_url and media_url.startswith('data:audio/')) or
+            data.get('audio_base64')):
+            is_audio = True
+        
+        attachments = data.get('attachments') or []
+        if isinstance(attachments, list) and len(attachments) > 0:
+            for attach in attachments:
+                if attach.get('type') == 'audio':
+                    is_audio = True
+                    media_url = attach.get('url') or attach.get('payload', {}).get('url') or media_url
+                    break
+        
+        if request_type == 'telegram' and data.get('voice_file_id'):
+            is_audio = True
+            file_id = data.get('voice_file_id')
+            try:
+                import requests
+                api_url = f"https://api.telegram.org/bot{effective_access_token}/getFile?file_id={file_id}"
+                resp = requests.get(api_url, timeout=10).json()
+                file_path = resp.get('result', {}).get('file_path')
+                if file_path:
+                    media_url = f"https://api.telegram.org/file/bot{effective_access_token}/{file_path}"
+                    logger.info(f"🎙️ Telegram voice media URL resolved: {media_url}")
+            except Exception as e:
+                logger.error(f"❌ Failed to resolve Telegram voice file: {e}")
+
+        if is_audio:
+            logger.info(f"🎙️ Voice message detected from {sender_id} on {request_type}. Attempting transcription.")
+            audio_bytes = None
+            audio_mime = mimetype or 'audio/ogg'
+            
+            audio_base64 = data.get('audio_base64') or data.get('image_base64')
+            
+            if media_url and media_url.startswith('data:'):
+                try:
+                    header, encoded = media_url.split(',', 1)
+                    audio_base64 = encoded
+                    mime_part = header.split(';')[0]
+                    audio_mime = mime_part.replace('data:', '')
+                except Exception as e:
+                    logger.error(f"Failed to parse data URL: {e}")
+
+            if audio_base64:
+                try:
+                    import base64
+                    audio_bytes = base64.b64decode(audio_base64)
+                    if mimetype:
+                        audio_mime = mimetype
+                except Exception as e:
+                    logger.error(f"Failed to decode audio base64: {e}")
+
+            if not audio_bytes and media_url and not media_url.startswith('data:'):
+                try:
+                    logger.info(f"Downloading remote audio: {media_url}")
+                    import requests
+                    resp = requests.get(media_url, timeout=15)
+                    if resp.status_code == 200:
+                        audio_bytes = resp.content
+                        audio_mime = resp.headers.get('content-type') or mimetype or 'audio/ogg'
+                    else:
+                        logger.error(f"Audio download failed with status {resp.status_code}")
+                except Exception as e:
+                    logger.error(f"Exception during remote audio download: {e}")
+
+            if audio_bytes:
+                clean_mime = audio_mime.split(';')[0].strip()
+                if not clean_mime.startswith('audio/'):
+                    clean_mime = 'audio/ogg'
+                try:
+                    from aiAgent.gemini import transcribe_audio_with_gemini
+                    transcription = transcribe_audio_with_gemini(audio_bytes, clean_mime, agent_config)
+                    if transcription:
+                        logger.info(f"🎙️ Gemini Transcribed Text: '{transcription}'")
+                        text = transcription
+                        data['message'] = text
+                    else:
+                        logger.warning("🎙️ Gemini transcription returned empty.")
+                except Exception as e:
+                    logger.error(f"Error during Gemini transcription call: {e}")
+            else:
+                logger.error("🎙️ No audio bytes could be retrieved for transcription.")
+
+            # Clear media fields so it doesn't fall through to image caption / search logic
+            media_url = None
+            message_type = 'text'
+            data['mediaUrl'] = None
+            data['media_url'] = None
+            data['message_type'] = 'text'
+            data.pop('image_base64', None)
+            data.pop('audio_base64', None)
 
         # ── WhatsApp Message Logging (Incoming) ──
         wa_msg_obj = None
@@ -2891,6 +2997,7 @@ def process_ai_reply_task(self, data):
                     existing_vector=query_vector,
                     vector_type=query_vector_type,
                     image_caption=image_caption,
+                    sender_id=sender_id,
                 )
                 system_instruction, history, current_msg = build_ai_context(
                     agent_config, sender_id, text, extra_instr, sheet_ctx,
@@ -2937,6 +3044,7 @@ def process_ai_reply_task(self, data):
                 existing_vector=query_vector,
                 vector_type=query_vector_type,
                 image_caption=image_caption,
+                sender_id=sender_id,
             )
             system_instruction, history, current_msg = build_ai_context(
                 agent_config, sender_id, text, extra_instr, sheet_ctx,
@@ -3029,24 +3137,11 @@ def process_ai_reply_task(self, data):
 
                             # If memory now has complete order fields, consider auto confirm
                             if _has_complete_order_fields(user_memory):
-                                # High confidence -> auto-create order
-                                if intent_conf >= 0.9:
-                                    order_obj = create_customer_order_from_memory(agent_config, sender_id, request_type, msg_id=msg_id)
-                                    if order_obj:
-                                        parsed_reply = f"✅ আপনার অর্ডার #{order_obj.id} নিশ্চিত করা হয়েছে। ইনভয়েস শীঘ্রই পাঠানো হবে।"
-                                        cache_type = 'no_cache'
-                                        # deliver immediate reply and return
-                                        _deliver_reply_with_buttons(request_type, data, parsed_reply, sender_id, page_id, effective_access_token, agent_config)
-                                        if msg_id:
-                                            r.set(f'processed_msg:{msg_id}', '1', ex=3600)
-                                            r.delete(f'processing_msg:{msg_id}')
-                                        return parsed_reply
-                                # Medium confidence -> prompt for explicit confirmation
-                                else:
-                                    confirmation = _get_confirmation_prompt(user_memory)
-                                    if confirmation:
-                                        parsed_reply = confirmation
-                                        cache_type = 'no_cache'
+                                _set_order_state(user_memory, 'awaiting_confirmation')
+                                confirmation = _get_confirmation_prompt(user_memory)
+                                if confirmation:
+                                    parsed_reply = confirmation
+                                    cache_type = 'no_cache'
                         except Exception as seed_err:
                             logger.error(f"Failed to seed AI order into memory: {seed_err}", exc_info=True)
                 else:
