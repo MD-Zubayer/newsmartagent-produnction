@@ -83,7 +83,8 @@ def _default_direct_order_instructions():
         "When you have enough information for a complete order, return a valid JSON object with keys: "
         "\"reply\", \"cache_type\", \"human_handoff\", \"order_intent\", and \"order_data\". "
         "\"order_intent\" should be \"create\". "
-        "\"order_data\" should be an object containing customer_name, phone_number, address, and extra_info when available. "
+        "\"order_data\" should be an object containing customer_name, phone_number, address, district, upazila, and extra_info when available. "
+        "Identify and extract the 'district' (district/জেলা name in English) and 'upazila' (upazila/thana name in English) from the customer address or chat text using your knowledge of Bangladesh geography, returning them as separate keys inside 'order_data'. "
         "CRITICAL: For products, \"order_data\" MUST include an \"items\" array. Each element in \"items\" must be an object with \"name\" and \"quantity\". "
         "Example: \"items\": [{\"name\": \"product 1\", \"quantity\": 1}, {\"name\": \"product 2\", \"quantity\": 2}]. "
         "Do not include price unless the user explicitly provided it; backend will merge catalog price. "
@@ -278,6 +279,31 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                         'confidence': _confidence_label(float(doc.distance))
                     })
 
+            # Fallback/Additional search: perform word-based icontains search in database
+            # This guarantees that if the user names a product, we will fetch the row even if the vector similarity is low!
+            words = [w.strip() for w in re.split(r'[\s,.\-\?\!]+', text) if len(w.strip()) >= 3]
+            fallback_query = Q()
+            for w in words:
+                # Check if word is not a common question word
+                if w.lower() not in ['koto', 'dam', 'how', 'much', 'price', 'what', 'please', 'know', 'info', 'price?', 'কত', 'দাম', 'কত?', 'টাকা', 'হবে']:
+                    fallback_query |= Q(content__icontains=w)
+                    
+            if fallback_query and valid_sheet_ids:
+                fallback_hits = SpreadsheetKnowledge.objects.filter(
+                    user=agent_config.user
+                ).filter(sheet_query).filter(fallback_query)[:TOP_K]
+                
+                existing_row_ids = {h['row_id'] for h in search_hits}
+                for row in fallback_hits:
+                    if row.row_id not in existing_row_ids:
+                        search_hits.append({
+                            'row_id': row.row_id,
+                            'content': row.content,
+                            'distance': 0.05,  # Give it a very high priority (low distance)
+                            'source_label': 'Spreadsheet Keyword Fallback',
+                            'confidence': '100% (Keyword Match)'
+                        })
+
             unique_hits = {}
             for hit in search_hits:
                 existing = unique_hits.get(hit['row_id'])
@@ -287,7 +313,7 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
             ordered_hits = sorted(unique_hits.values(), key=lambda x: x['distance'])
             overall_best_dist = ordered_hits[0]['distance'] if ordered_hits else 1.0
 
-            MIN_MATCH_DISTANCE = 0.6
+            MIN_MATCH_DISTANCE = 0.85
             filtered_hits = []
             for hit in ordered_hits[:TOP_K]:
                 if hit['distance'] >= MIN_MATCH_DISTANCE:
@@ -374,14 +400,25 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                     pass
 
             if product_already_in_memory and memory_product_name:
-                exact_hits = []
-                for h in filtered_hits:
-                    content_lower = h['content'].lower()
-                    if memory_product_name in content_lower:
-                        exact_hits.append(h)
-                if exact_hits:
-                    filtered_hits = exact_hits
-                    is_ambiguous_match = False
+                from aiAgent.utils import extract_catalog_product_names
+                all_catalog_products = extract_catalog_product_names(agent_config.user)
+                user_asking_different_product = False
+                text_lower = text.lower()
+                for p_name in all_catalog_products:
+                    p_name_clean = p_name.strip().lower()
+                    if p_name_clean != memory_product_name and p_name_clean in text_lower:
+                        user_asking_different_product = True
+                        break
+                
+                if not user_asking_different_product:
+                    exact_hits = []
+                    for h in filtered_hits:
+                        content_lower = h['content'].lower()
+                        if memory_product_name in content_lower:
+                            exact_hits.append(h)
+                    if exact_hits:
+                        filtered_hits = exact_hits
+                        is_ambiguous_match = False
 
             if filtered_hits:
                 top_hit = filtered_hits[0]

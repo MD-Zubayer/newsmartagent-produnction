@@ -84,7 +84,7 @@ class InvoiceImageGenerator:
             raise
     
     @staticmethod
-    def generate_invoice_html(order_data: dict, shop_name: str = "Smart Shop BD", profile_photo_url: str = None, website_url: str = None, business_email: str = None) -> str:
+    def generate_invoice_html(order_data: dict, shop_name: str = "Smart Shop BD", profile_photo_url: str = None) -> str:
         """
         Order data থেকে professional invoice HTML তৈরি করে
         
@@ -92,8 +92,6 @@ class InvoiceImageGenerator:
             order_data: CustomerOrder dictionary
             shop_name: Shop/Business name
             profile_photo_url: URL to business profile image
-            website_url: Custom website URL
-            business_email: Custom business email
         
         Returns:
             HTML string
@@ -110,10 +108,6 @@ class InvoiceImageGenerator:
         price = order_data.get('price', 0)
         status = order_data.get('status', 'pending').upper()
         created_at = order_data.get('created_at', datetime.now().isoformat())
-
-        # Fallbacks for website and email
-        footer_email = business_email if business_email else f"support@{shop_name.lower().replace(' ', '')}.com"
-        footer_website = website_url if website_url else f"www.{shop_name.lower().replace(' ', '')}.com"
         
         # Date formatting
         try:
@@ -555,8 +549,8 @@ class InvoiceImageGenerator:
                         Thank you for your business!
                     </div>
                     <div class="footer-contact">
-                        {footer_email}<br/>
-                        {footer_website}
+                        support@{shop_name.lower().replace(' ', '')}.com<br/>
+                        www.{shop_name.lower().replace(' ', '')}.com
                     </div>
                 </div>
             </div>

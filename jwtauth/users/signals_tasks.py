@@ -25,7 +25,7 @@ def generate_and_send_invoice_async_task(self, order_id):
     """
     
     try:
-        order = CustomerOrder.objects.select_related('user__profile').get(id=order_id)
+        order = CustomerOrder.objects.select_related('user').get(id=order_id)
         logger.info(f"🔄 Processing invoice for order #{order_id}")
 
         if order.invoice_sent:
@@ -57,27 +57,7 @@ def generate_and_send_invoice_async_task(self, order_id):
             shop_name = "New Smart Agent Shop "
         
         # Run async invoice generation with user_id for profile photo
-        # Get profile photo, website, and business email synchronously
-        profile_photo_url = None
-        website_url = None
-        business_email = None
-        try:
-            if hasattr(order.user, "profile"):
-                profile = order.user.profile
-                if profile.profile_photo:
-                    profile_photo_url = profile.profile_photo.url
-                website_url = profile.website_url
-                business_email = profile.business_email if profile.business_email else order.user.email
-                logger.info(f"Profile details found - Photo: {profile_photo_url}, Web: {website_url}, Email: {business_email}")
-        except Exception as e:
-            logger.warning(f"Could not get profile details: {e}")
-        success = asyncio.run(_generate_and_send_invoice_impl(
-            order_data, 
-            shop_name, 
-            profile_photo_url=profile_photo_url, 
-            website_url=website_url, 
-            business_email=business_email
-        ))
+        success = asyncio.run(_generate_and_send_invoice_impl(order_data, shop_name, user_id=order.user_id))
         
         # Handle special Baileys session-not-connected result
         if success == 'session_not_connected':
@@ -102,22 +82,14 @@ def generate_and_send_invoice_async_task(self, order_id):
         raise self.retry(countdown=300, exc=e)
 
 
-async def _generate_and_send_invoice_impl(
-    order_data: dict, 
-    shop_name: str, 
-    profile_photo_url: str = None, 
-    website_url: str = None, 
-    business_email: str = None
-) -> bool:
+async def _generate_and_send_invoice_impl(order_data: dict, shop_name: str, user_id: int = None) -> bool:
     """
     Async implementation - Invoice generate করে N8N এ পাঠায়
     
     Args:
         order_data: Prepared CustomerOrder data
         shop_name: Shop name for invoice header/footer
-        profile_photo_url: Profile photo url from user profile
-        website_url: Custom website URL
-        business_email: Custom business email
+        user_id: User ID to fetch profile photo
     
     Returns:
         Success status
@@ -126,15 +98,24 @@ async def _generate_and_send_invoice_impl(
     try:
         logger.info(f"📝 Generating invoice HTML for order #{order_data.get('id')}")
         
-
+        # Get profile photo URL from user
+        profile_photo_url = None
+        if user_id:
+            try:
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                user = User.objects.select_related('profile').get(id=user_id)
+                if user.profile.profile_photo:
+                    profile_photo_url = user.profile.profile_photo.url
+                    logger.info(f"✅ Profile photo found for user {user_id}")
+            except Exception as e:
+                logger.warning(f"⚠️ Could not fetch profile photo: {e}")
         
         # २. Invoice HTML generate করো
         invoice_html = InvoiceImageGenerator.generate_invoice_html(
             order_data=order_data,
             shop_name=shop_name,
-            profile_photo_url=profile_photo_url,
-            website_url=website_url,
-            business_email=business_email
+            profile_photo_url=profile_photo_url
         )
         
         logger.info(f"🖼️ Converting HTML to PNG image...")

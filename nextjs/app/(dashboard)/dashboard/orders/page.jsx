@@ -142,6 +142,7 @@ export default function OrderDashboard() {
   const [bookingCities, setBookingCities] = useState([]);
   const [bookingZones, setBookingZones] = useState([]);
   const [bookingAreas, setBookingAreas] = useState([]);
+  const [addressSuggestions, setAddressSuggestions] = useState(null);
   
   // Courier Config Modal States
   const [courierConfigModalOpen, setCourierConfigModalOpen] = useState(false);
@@ -434,7 +435,30 @@ export default function OrderDashboard() {
     setCourierProviderModalOpen(true);
   };
 
-  const startCourierBooking = () => {
+  const startCourierBooking = async () => {
+    const loadingToast = toast.loading("Fetching courier suggestions...");
+    let suggestedCity = "";
+    let suggestedZone = "";
+    let suggestedArea = "";
+    
+    try {
+      const res = await api.get(`/courier/suggested-address/?order_id=${bookingOrder.id}`);
+      const data = res.data || {};
+      setAddressSuggestions(data);
+      
+      const suggestions = selectedCourier === "pathao" ? data.pathao : data.steadfast;
+      if (suggestions) {
+        suggestedCity = suggestions.city_id ? String(suggestions.city_id) : "";
+        suggestedZone = suggestions.zone_id ? String(suggestions.zone_id) : "";
+        suggestedArea = suggestions.area_id ? String(suggestions.area_id) : "";
+      }
+      toast.success("Suggestions loaded!", { id: loadingToast });
+    } catch (err) {
+      console.error("Failed to fetch suggested address from Redis matcher:", err);
+      setAddressSuggestions(null);
+      toast.dismiss(loadingToast);
+    }
+
     setBookingDetails({
       recipient_name: bookingOrder.customer_name || "",
       recipient_phone: bookingOrder.phone_number || "",
@@ -444,9 +468,9 @@ export default function OrderDashboard() {
       amount_to_collect: bookingOrder.price || 0,
       item_description: bookingOrder.product_name || "Order Parcel",
       store_id: stores[0]?.store_id || "",
-      recipient_city: bookingOrder.city_id || "",
-      recipient_zone: bookingOrder.zone_id || "",
-      recipient_area: bookingOrder.area_id || "",
+      recipient_city: bookingOrder.city_id ? String(bookingOrder.city_id) : suggestedCity,
+      recipient_zone: bookingOrder.zone_id ? String(bookingOrder.zone_id) : suggestedZone,
+      recipient_area: bookingOrder.area_id ? String(bookingOrder.area_id) : suggestedArea,
       special_instruction: bookingOrder.special_instruction || ""
     });
     setCourierProviderModalOpen(false);
@@ -664,6 +688,21 @@ export default function OrderDashboard() {
       }
     }
   }, [bookingModalOpen, bookingOrder, bookingAreas]);
+
+  // Apply pre-matched address suggestions when switching courier in booking modal
+  useEffect(() => {
+    if (bookingModalOpen && addressSuggestions) {
+      const suggestions = selectedCourier === "pathao" ? addressSuggestions.pathao : addressSuggestions.steadfast;
+      if (suggestions) {
+        setBookingDetails(prev => ({
+          ...prev,
+          recipient_city: suggestions.city_id ? String(suggestions.city_id) : "",
+          recipient_zone: suggestions.zone_id ? String(suggestions.zone_id) : "",
+          recipient_area: suggestions.area_id ? String(suggestions.area_id) : ""
+        }));
+      }
+    }
+  }, [selectedCourier, bookingModalOpen, addressSuggestions]);
 
   useEffect(() => {
     if (selectedManualCity) {
@@ -1941,7 +1980,7 @@ export default function OrderDashboard() {
                         <td colSpan={4} className="py-6 text-center text-slate-400">No income history found</td>
                       </tr>
                     ) : (
-                      detailedAnalytics.dailyIncomeList.map((row) => (
+                      [...detailedAnalytics.dailyIncomeList].sort((a, b) => b.date.localeCompare(a.date)).map((row) => (
                         <tr key={row.date} className="hover:bg-slate-50/80 transition-colors">
                           <td className="py-3 px-4 font-black text-slate-900">
                             {new Date(row.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}

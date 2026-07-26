@@ -70,7 +70,7 @@ def generate_openai_reply(system_promt, messages, current_message, agent_config,
 
         # API কল
         logger.info(f"OpenAI History: {formatted_messages}")
-        response = client.chat.completions.create(**payload)
+        response = client.chat.completions.create(timeout=30.0, **payload)
         
         # --- রিপ্লাই এক্সট্রাক্ট করা ---
         message = response.choices[0].message

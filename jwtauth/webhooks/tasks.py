@@ -370,7 +370,7 @@ def _trigger_order_fallback_escalation(agent_config, sender_id, failed_field, la
     return contact_obj
 
 
-ORDER_FIELDS = ['customer_name', 'phone_number', 'address', 'product_name', 'quantity', 'price', 'extra_info']
+ORDER_FIELDS = ['customer_name', 'phone_number', 'address', 'product_name', 'quantity', 'price', 'extra_info', 'district', 'upazila']
 
 
 def _set_order_state(user_memory, state):
@@ -493,7 +493,7 @@ def _infer_catalog_product_from_text(user, text):
 def _has_complete_order_fields(user_memory):
     fields = _get_order_fields(user_memory)
     for key in ORDER_FIELDS:
-        if key in ['extra_info', 'price']:
+        if key in ['extra_info', 'price', 'district', 'upazila']:
             continue
         field_data = fields.get(key, {})
         if not field_data.get('value') or field_data.get('confidence', 1.0) < 0.75:
@@ -537,6 +537,8 @@ def _get_confirmation_prompt(user_memory):
     order_fields = _get_order_fields(user_memory)
     lines = ["আপনার অর্ডারের খসড়া নিচে দেখুন:"]
     for key in ORDER_FIELDS:
+        if key in ['district', 'upazila']:
+            continue
         label = key.replace('_', ' ').title()
         field_data = order_fields.get(key, {})
         value = field_data.get('value') or 'মৌলিক তথ্য প্রয়োজন'
@@ -787,7 +789,7 @@ def _get_missing_order_fields_prompt(user_memory):
     missing = [
         field.replace('_', ' ')
         for field in ORDER_FIELDS
-        if field not in ['extra_info', 'price'] and not order_fields.get(field, {}).get('value')
+        if field not in ['extra_info', 'price', 'district', 'upazila'] and not order_fields.get(field, {}).get('value')
     ]
     if not missing:
         return None
@@ -838,6 +840,75 @@ def _queue_order_for_confirmation(agent_config, sender_id, request_type, data, o
             logger.info(f"🔁 Resumed interrupted order flow for {sender_id}.")
 
     if _has_complete_order_fields(user_memory):
+        from courier.models import PathaoCourierConfig, SteadFastCourierConfig
+        pathao_active = PathaoCourierConfig.objects.filter(user=agent_config.user, is_active=True).exists()
+        steadfast_active = SteadFastCourierConfig.objects.filter(user=agent_config.user, is_active=True).exists()
+
+        if not (pathao_active or steadfast_active):
+            _set_order_state(user_memory, 'awaiting_confirmation')
+            return _get_confirmation_prompt(user_memory)
+
+        from courier.utils.redis_courier_cache import match_address_redis, query_autocomplete_zset, extract_location_from_address
+        order_fields = _get_order_fields(user_memory)
+        district_val = order_fields.get('district', {}).get('value')
+        upazila_val = order_fields.get('upazila', {}).get('value')
+        address_val = order_fields.get('address', {}).get('value')
+        
+        if not district_val or not upazila_val:
+            ext_district, ext_upazila = extract_location_from_address(address_val)
+            if not district_val:
+                district_val = ext_district
+            if not upazila_val:
+                upazila_val = ext_upazila
+
+        suggestions = match_address_redis(district_val, upazila_val, full_address=address_val)
+        pathao_matched = suggestions.get('pathao', {}).get('city_id') and suggestions.get('pathao', {}).get('area_id')
+        steadfast_matched = suggestions.get('steadfast', {}).get('city_id') and suggestions.get('steadfast', {}).get('area_id')
+
+        is_valid_address = True
+        suggest_from = []
+
+        if pathao_active and steadfast_active:
+            if not (pathao_matched or steadfast_matched):
+                is_valid_address = False
+                suggest_from = ["pathao", "steadfast"]
+        elif pathao_active:
+            if not pathao_matched:
+                is_valid_address = False
+                suggest_from = ["pathao"]
+        elif steadfast_active:
+            if not steadfast_matched:
+                is_valid_address = False
+                suggest_from = ["steadfast"]
+
+        if not is_valid_address:
+            prefix = str(upazila_val or "")[:4].strip().lower()
+            closest_names = []
+            if prefix:
+                results = []
+                if "pathao" in suggest_from:
+                    results += query_autocomplete_zset("pathao:areas:ac", prefix)
+                if "steadfast" in suggest_from:
+                    results += query_autocomplete_zset("steadfast:areas:ac", prefix)
+                for res in results:
+                    name = res.split(":")[0].title()
+                    if name not in closest_names:
+                        closest_names.append(name)
+                    if len(closest_names) >= 4:
+                        break
+            
+            if closest_names:
+                internal = user_memory.data.get('_internal', {})
+                internal['address_suggestions'] = closest_names
+                internal['order_state'] = 'awaiting_address_clarification'
+                user_memory.data['_internal'] = internal
+                user_memory.save(update_fields=['data'])
+                
+                suggest_prompt = f"আপনার কুরিয়ার এরিয়া নিশ্চিত করতে নিচের সঠিক নম্বরটি লিখুন:\n"
+                for idx, name in enumerate(closest_names, 1):
+                    suggest_prompt += f"{idx}: {name}\n"
+                return suggest_prompt
+
         _set_order_state(user_memory, 'awaiting_confirmation')
         return _get_confirmation_prompt(user_memory)
     return None
@@ -915,7 +986,10 @@ def create_customer_order_from_memory(agent_config, sender_id, request_type, msg
                 })
         
         if resolved_items:
-            product_name = f"Multi-item Order ({len(resolved_items)} items)"
+            if len(resolved_items) == 1:
+                product_name = resolved_items[0]['name']
+            else:
+                product_name = f"Multi-item Order ({len(resolved_items)} items)"
             price_value = total_price
             quantity_value = sum(i["quantity"] for i in resolved_items)
             order_items_payload = resolved_items
@@ -951,10 +1025,43 @@ def create_customer_order_from_memory(agent_config, sender_id, request_type, msg
     source_platform = request_type if request_type != 'web_widget' else 'web'
 
     try:
+        # Match courier details for active couriers to save on the order object
+        from courier.models import PathaoCourierConfig, SteadFastCourierConfig
+        from courier.utils.redis_courier_cache import match_address_redis, extract_location_from_address
+        
+        pathao_active = PathaoCourierConfig.objects.filter(user=agent_config.user, is_active=True).exists()
+        steadfast_active = SteadFastCourierConfig.objects.filter(user=agent_config.user, is_active=True).exists()
+        
+        district_val = input_fields.get('district')
+        upazila_val = input_fields.get('upazila')
+        address_val = input_fields.get('address')
+        
+        if not district_val or not upazila_val:
+            ext_district, ext_upazila = extract_location_from_address(address_val)
+            if not district_val:
+                district_val = ext_district
+            if not upazila_val:
+                upazila_val = ext_upazila
+        
+        suggestions = match_address_redis(district_val, upazila_val, full_address=address_val)
+        city_id = None
+        zone_id = None
+        area_id = None
+        
+        if pathao_active:
+            city_id = suggestions.get('pathao', {}).get('city_id')
+            zone_id = suggestions.get('pathao', {}).get('zone_id')
+            area_id = suggestions.get('pathao', {}).get('area_id')
+        elif steadfast_active:
+            city_id = suggestions.get('steadfast', {}).get('city_id')
+            area_id = suggestions.get('steadfast', {}).get('area_id')
+
         order = CustomerOrder.objects.create(
             user=agent_config.user,
             customer_name=customer_name,
             phone_number=phone_number,
+            district=district_val,
+            upazila=upazila_val,
             address=address,
             product_name=product_name,
             price=price_value,
@@ -962,7 +1069,10 @@ def create_customer_order_from_memory(agent_config, sender_id, request_type, msg
             items=order_items_payload,
             extra_info=extra_info,
             source_platform=source_platform,
-            source_contact_id=sender_id
+            source_contact_id=sender_id,
+            city_id=city_id,
+            zone_id=zone_id,
+            area_id=area_id
         )
         if msg_id:
             r.setex(f'order_created:{msg_id}', 86400, '1')
@@ -1291,16 +1401,21 @@ Extract ANY of these fields if mentioned or updated (return only non-empty field
 - quantity: Number (1-9999)
 - price: Price in BDT (number only)
 - extra_info: Special instructions or notes
+- district: District in Bangladesh (e.g. Faridpur, Dhaka) parsed from the address or text
+- upazila: Upazila/Thana in Bangladesh (e.g. Sadarpur, Mirpur) parsed from the address or text
 
 Return ONLY a JSON object with extracted fields. Example:
 {{
   "customer_name": "রহিম",
   "phone_number": "01712345678",
-  "quantity": "2"
+  "district": "Faridpur",
+  "upazila": "Sadarpur"
 }}
 
 If no fields are mentioned, return: {{}}
 Never return fields that weren't actually mentioned in the message."""
+        
+
         
         ai_response = generate_gemini_reply(prompt, [], text, agent_config)
         if ai_response.get('status') == 'error' or not ai_response.get('reply'):
@@ -1386,7 +1501,7 @@ def extract_order_data_from_text(text, order_data=None, user_memory=None):
 
     if not merged.get('address') or overwrite:
         address = _search([
-            r'\b(?:address|address is|located at|ঠিকানা|নতুন ঠিকানা|ঠিকানা পরিবর্তন)\s*[:\-]\s*([^,;\n]+)',
+            r'\b(?:address|address is|located at|ঠিকানা|নতুন ঠিকানা|ঠিকানা পরিবর্তন)\s*[:\-]\s*([^;\n]+)',
         ])
         _set_field('address', address)
         if not merged.get('address') and user_memory is not None and _get_next_missing_field(user_memory) == 'address':
@@ -2302,6 +2417,54 @@ def process_ai_reply_task(self, data):
         if not skip_order_resume_this_turn and current_state == 'ordering' and _is_order_interruption(text, user_memory):
             _set_interruption_buffer(user_memory, _get_next_missing_field(user_memory) or 'order')
             logger.info(f"🧠 Order interruption detected for {sender_id}, suspending order flow.")
+
+        if not skip_order_resume_this_turn and current_state == 'awaiting_address_clarification':
+            clean_text = text.strip()
+            suggestions = user_memory.data.get('_internal', {}).get('address_suggestions', [])
+            
+            selected_name = None
+            if clean_text.isdigit():
+                idx = int(clean_text) - 1
+                if 0 <= idx < len(suggestions):
+                    selected_name = suggestions[idx]
+            else:
+                for name in suggestions:
+                    if clean_text.lower() in name.lower() or name.lower() in clean_text.lower():
+                        selected_name = name
+                        break
+            
+            if selected_name:
+                order_fields = _get_order_fields(user_memory)
+                if 'address' in order_fields:
+                    order_fields['address']['value'] = f"{order_fields.get('address', {}).get('value', '')}, {selected_name}"
+                if 'upazila' in order_fields:
+                    order_fields['upazila'] = {'value': selected_name, 'confidence': 1.0}
+                
+                _save_order_fields_to_memory(user_memory, {k: v['value'] for k, v in order_fields.items() if v.get('value')})
+                
+                internal = user_memory.data.get('_internal', {})
+                internal['order_state'] = 'ordering'
+                if 'address_suggestions' in internal:
+                    del internal['address_suggestions']
+                user_memory.data['_internal'] = internal
+                user_memory.save(update_fields=['data'])
+                
+                confirmation = _queue_order_for_confirmation(agent_config, sender_id, request_type, data, {}, msg_id=msg_id, source='clarification')
+                if confirmation:
+                    _deliver_reply_with_buttons(request_type, data, confirmation, sender_id, page_id, effective_access_token, agent_config)
+                    if msg_id:
+                        r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                        r.delete(f'processing_msg:{msg_id}')
+                    return confirmation
+            else:
+                retry_prompt = "দুঃখিত, অনুগ্রহ করে সঠিক নম্বরটি লিখুন অথবা আপনার এরিয়ার নাম স্পষ্ট করে টাইপ করুন:\n"
+                for idx, name in enumerate(suggestions, 1):
+                    retry_prompt += f"{idx}: {name}\n"
+                _deliver_reply_with_buttons(request_type, data, retry_prompt, sender_id, page_id, effective_access_token, agent_config)
+                if msg_id:
+                    r.set(f'processed_msg:{msg_id}', '1', ex=3600)
+                    r.delete(f'processing_msg:{msg_id}')
+                return retry_prompt
 
         if not skip_order_resume_this_turn and _order_confirmation_pending(user_memory):
             if True:
