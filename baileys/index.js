@@ -1,3 +1,8 @@
+const dns = require('dns');
+if (dns.setDefaultResultOrder) {
+    dns.setDefaultResultOrder('ipv4first');
+}
+
 const Baileys = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
 const { downloadMediaMessage } = require('@whiskeysockets/baileys');

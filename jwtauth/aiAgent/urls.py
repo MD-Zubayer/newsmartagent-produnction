@@ -1,7 +1,7 @@
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from aiAgent.views import AgentAIViewSet, TokenUsageAnalyticsView, dashboard_chat_view, RankingAPIView, UserAvailableModelsView, AgentMetricsAPIView, DeleteRankingDataAPIView, UpdateCacheScopeAPIView, RequestSpecialAgentAPIView, ClearGlobalCacheAPIView, ToggleSharingAPIView, VisitorSubscribeView, VisitorTrackView, ConnectTelegramBotView
+from aiAgent.views import AgentAIViewSet, TokenUsageAnalyticsView, dashboard_chat_view, RankingAPIView, UserAvailableModelsView, AgentMetricsAPIView, DeleteRankingDataAPIView, UpdateCacheScopeAPIView, UpdateCacheTTLAPIView, RequestSpecialAgentAPIView, ClearGlobalCacheAPIView, ToggleSharingAPIView, VisitorSubscribeView, VisitorTrackView, ConnectTelegramBotView
 from aiAgent.contact_views import (
     ContactListView, ToggleAutoReplyView, ContactMessageHistoryView, ContactDetailView,
     UnifiedReplyView, ResolveHumanHandoffView, HumanHelpView, WhatsAppButtonClickView,
@@ -21,6 +21,7 @@ urlpatterns = [
     path('ranking/delete/<str:agent_id>/<str:msg_hash>/', DeleteRankingDataAPIView.as_view(), name='delete-ranking'),
     path('ranking/clear-global-cache/', ClearGlobalCacheAPIView.as_view(), name='clear-global-cache'),
     path('ranking/update-scope/<str:agent_id>/<str:msg_hash>/', UpdateCacheScopeAPIView.as_view(), name='update-cache-scope'),
+    path('ranking/update-ttl/<str:agent_id>/<str:msg_hash>/', UpdateCacheTTLAPIView.as_view(), name='update-cache-ttl'),
     path('ranking/toggle-sharing/<str:agent_id>/<str:msg_hash>/', ToggleSharingAPIView.as_view(), name='toggle-sharing'),
     path('ranking/request-special/<str:agent_id>/', RequestSpecialAgentAPIView.as_view(), name='request-special-agent'),
     path("metrics/<str:agent_id>/", AgentMetricsAPIView.as_view(), name='agent-metrics'),

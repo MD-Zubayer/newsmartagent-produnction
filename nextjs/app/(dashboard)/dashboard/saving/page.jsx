@@ -7,6 +7,106 @@ import api from "@/lib/api";
 import { toast } from "react-hot-toast";
 import { motion } from "framer-motion";
 
+function TTLController({ item, agentId, onUpdate }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [ttlValue, setTtlValue] = useState(30);
+  const [ttlUnit, setTtlUnit] = useState("minute");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const getFormattedTTL = (seconds) => {
+    if (seconds === undefined || seconds === null || seconds < 0) return "Indefinite";
+    if (seconds < 60) return `${seconds}s`;
+    const mins = Math.round(seconds / 60);
+    if (mins < 60) return `${mins}m`;
+    const hours = Math.round(seconds / 3600);
+    if (hours < 24) return `${hours}h`;
+    const days = Math.round(seconds / 86400);
+    return `${days}d`;
+  };
+
+  const handleSave = async () => {
+    setIsSubmitting(true);
+    try {
+      await api.post(`/AgentAI/ranking/update-ttl/${agentId}/${item.msg_hash}/`, {
+        ttl_value: ttlValue,
+        ttl_unit: ttlUnit
+      });
+      toast.success("TTL updated successfully");
+      setIsEditing(false);
+      onUpdate();
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to update TTL");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <div className="flex items-center justify-center gap-1 bg-white border border-gray-200 rounded-xl p-1 shadow-sm">
+        <input
+          type="number"
+          min="1"
+          value={ttlValue}
+          onChange={(e) => setTtlValue(parseInt(e.target.value) || 1)}
+          className="w-12 px-1 py-1 text-xs font-bold border border-gray-100 rounded outline-none"
+        />
+        <select
+          value={ttlUnit}
+          onChange={(e) => setTtlUnit(e.target.value)}
+          className="text-[10px] font-black uppercase tracking-wider bg-slate-50 px-1 py-1 rounded border-none outline-none"
+        >
+          <option value="minute">Min</option>
+          <option value="hour">Hr</option>
+          <option value="day">Day</option>
+        </select>
+        <button
+          onClick={handleSave}
+          disabled={isSubmitting}
+          className="bg-emerald-500 text-white text-[9px] font-bold px-2 py-1 rounded hover:bg-emerald-600 transition-colors"
+        >
+          Save
+        </button>
+        <button
+          onClick={() => setIsEditing(false)}
+          className="text-gray-400 hover:text-gray-600 text-[9px] px-1 py-1"
+        >
+          X
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-center gap-2">
+      <span className="text-xs font-black text-slate-700 tabular-nums">
+        {getFormattedTTL(item.ttl)}
+      </span>
+      <button
+        onClick={() => {
+          if (item.ttl && item.ttl > 0) {
+            if (item.ttl < 3600) {
+              setTtlValue(Math.round(item.ttl / 60));
+              setTtlUnit("minute");
+            } else if (item.ttl < 86400) {
+              setTtlValue(Math.round(item.ttl / 3600));
+              setTtlUnit("hour");
+            } else {
+              setTtlValue(Math.round(item.ttl / 86400));
+              setTtlUnit("day");
+            }
+          }
+          setIsEditing(true);
+        }}
+        className="text-slate-300 hover:text-pink-500 transition-colors p-1"
+      >
+        <Clock size={12} />
+      </button>
+    </div>
+  );
+}
+
 export default function RankingReportPage() {
   const [agents, setAgents] = useState([]);
   const [selectedAgent, setSelectedAgent] = useState(null);
@@ -307,6 +407,39 @@ export default function RankingReportPage() {
               </select>
             </div>
 
+            {/* ⚡ Redis Message Cache Toggle */}
+            <div className="mt-4 flex items-center gap-3">
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Redis Caching:</span>
+              <button
+                onClick={async () => {
+                  if (!selectedAgent) return;
+                  const newStatus = !selectedAgent.redis_cache_enabled;
+                  try {
+                    await api.patch(`/AgentAI/agents/${selectedAgent.id}/`, {
+                      redis_cache_enabled: newStatus
+                    });
+                    const updated = { ...selectedAgent, redis_cache_enabled: newStatus };
+                    setSelectedAgent(updated);
+                    setAgents(agents.map(a => a.id === selectedAgent.id ? updated : a));
+                    toast.success(newStatus ? "Redis message caching enabled!" : "Redis message caching disabled!");
+                  } catch (err) {
+                    console.error(err);
+                    toast.error("Failed to update cache settings");
+                  }
+                }}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ring-2 ring-offset-2 ring-pink-500/20
+                  ${selectedAgent?.redis_cache_enabled ? 'bg-pink-500' : 'bg-gray-200'}`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform
+                    ${selectedAgent?.redis_cache_enabled ? 'translate-x-6' : 'translate-x-1'}`}
+                />
+              </button>
+              <span className={`text-xs font-bold ${selectedAgent?.redis_cache_enabled ? 'text-pink-600' : 'text-gray-400'}`}>
+                {selectedAgent?.redis_cache_enabled ? 'ENABLED' : 'DISABLED'}
+              </span>
+            </div>
+
             {/* ⚡ নতুন: ক্যাশ শেয়ারিং ড্রপডাউন (Multi-select logic using simple tags) */}
             <div className="mt-4 flex flex-col gap-3">
               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
@@ -548,6 +681,11 @@ export default function RankingReportPage() {
                       {item.current_scope === 'sender_specific' && <option value="sender_specific">Sender Specific</option>}
                     </select>
                   </div>
+
+                  <div className="flex items-center justify-between gap-4 pt-2">
+                    <span className="text-[10px] font-black text-slate-400 uppercase">TTL:</span>
+                    <TTLController item={item} agentId={selectedAgent?.page_id} onUpdate={fetchData} />
+                  </div>
                 </div>
               ))
             ) : (
@@ -566,6 +704,7 @@ export default function RankingReportPage() {
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest text-center">Savings</th>
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest text-center">Sharing</th>
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest text-center">Cache Scope</th>
+                  <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest text-center">TTL</th>
                   <th className="px-8 py-5 text-[11px] font-black text-gray-400 uppercase tracking-widest text-right">Actions</th>
                 </tr>
               </thead>
@@ -650,6 +789,9 @@ export default function RankingReportPage() {
                           {isSpecialAgent && <option value="special">Specialized</option>}
                           {item.current_scope === 'sender_specific' && <option value="sender_specific">Sender Specific</option>}
                         </select>
+                      </td>
+                      <td className="px-8 py-6 text-center">
+                        <TTLController item={item} agentId={selectedAgent?.page_id} onUpdate={fetchData} />
                       </td>
                       <td className="px-8 py-6 text-right">
                         <button

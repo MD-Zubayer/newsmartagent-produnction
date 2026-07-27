@@ -183,6 +183,20 @@ def _extract_order_data_with_ai(agent_config, sender_id, text):
         return {}
 
 
+def _clean_caption_for_user(caption):
+    if not caption:
+        return "Product Image"
+    tags_to_remove = ["Clothing, ", "Electronics, ", "Primary Color: ", "Unique Visual Identifier: "]
+    cleaned = caption
+    for tag in tags_to_remove:
+        cleaned = cleaned.replace(tag, "")
+    # Keep it short (first 2 segments)
+    parts = [p.strip() for p in cleaned.split(',') if p.strip()]
+    if len(parts) >= 2:
+        return ", ".join(parts[:2])
+    return cleaned
+
+
 def _deliver_images_for_ai_response(request_type, data, parsed_ai, best_row_id, agent_config):
     if not parsed_ai or not isinstance(parsed_ai, dict):
         return False, None
@@ -193,10 +207,17 @@ def _deliver_images_for_ai_response(request_type, data, parsed_ai, best_row_id, 
     if not image_intent:
         return False, None
 
-    sheet_id, row_index = _parse_sheet_row_id(best_row_id)
-    if sheet_id is None or row_index is None:
-        logger.warning('Image intent requested but no valid matched sheet row available.')
-        return False, None
+    # 💥 DIRECT AI IMAGE ID SELECTION DELIVERY
+    image_ids = parsed_ai.get('image_ids') or []
+    if isinstance(image_ids, (int, str)):
+        try: image_ids = [int(image_ids)]
+        except: image_ids = []
+    elif isinstance(image_ids, list):
+        clean_ids = []
+        for item in image_ids:
+            try: clean_ids.append(int(item))
+            except: pass
+        image_ids = clean_ids
 
     platform = request_type if request_type in ['whatsapp', 'messenger', 'instagram', 'telegram', 'tiktok'] else None
     if not platform:
@@ -205,6 +226,46 @@ def _deliver_images_for_ai_response(request_type, data, parsed_ai, best_row_id, 
 
     if not agent_config or not getattr(agent_config, 'user', None):
         logger.warning('Image delivery failed: missing agent user context.')
+        return False, None
+
+    if image_ids:
+        try:
+            from embedding.models import RowImage
+            from datasheet.views import RowImagePresignedURLView
+            
+            selected_imgs = list(RowImage.objects.filter(id__in=image_ids, user=agent_config.user))
+            if selected_imgs:
+                view_obj = RowImagePresignedURLView()
+                presigned_data = []
+                for img in selected_imgs:
+                    p_url = view_obj._generate_presigned_url(img.image_url, expiration=60)
+                    presigned_data.append({
+                        'url': p_url,
+                        'caption': _clean_caption_for_user(img.image_caption),
+                        'image_id': img.id
+                    })
+                
+                image_urls = [i['url'] for i in presigned_data if i.get('url')]
+                captions = [i['caption'] for i in presigned_data if i.get('url')]
+                if image_urls:
+                    message_text = parsed_ai.get('reply', '').strip() or None
+                    route_result = route_images(
+                        platform=platform,
+                        recipient_id=str(data.get('delivery_jid') or data.get('sender_id') or data.get('chat_id') or ''),
+                        image_urls=image_urls,
+                        captions=captions,
+                        agent_config=agent_config,
+                        message_text=message_text
+                    )
+                    if route_result.get('status') == 'success':
+                        logger.info(f'✅ Direct AI Image ID delivery succeeded for {platform} IDs: {image_ids}')
+                        return True, route_result
+        except Exception as id_err:
+            logger.warning(f'Direct image_ids delivery failed: {id_err}')
+
+    sheet_id, row_index = _parse_sheet_row_id(best_row_id)
+    if sheet_id is None or row_index is None:
+        logger.warning('Image intent requested but no valid matched sheet row available.')
         return False, None
 
     try:
@@ -224,7 +285,7 @@ def _deliver_images_for_ai_response(request_type, data, parsed_ai, best_row_id, 
 
         images = tool_result.get('images', []) or []
         image_urls = [img.get('url') for img in images if img.get('url')]
-        captions = [img.get('caption') or '' for img in images if img.get('url')]
+        captions = [_clean_caption_for_user(img.get('caption') or '') for img in images if img.get('url')]
         if not image_urls:
             logger.warning('Image delivery tool returned no image URLs.')
             return False, None
@@ -2397,7 +2458,7 @@ def process_ai_reply_task(self, data):
 
         # ── Message Logging & Dashboard Sync (Always) ──
         # Save early so even if AI doesn't reply (Human Mode), message is in history & dashboard
-        save_message(agent_config, sender_id.lower(), text, 'user', platform=agent_config.platform)
+        user_msg_obj = save_message(agent_config, sender_id.lower(), text, 'user', platform=agent_config.platform)
         send_cache_update_ws(agent_config.user.id, page_id, sender_id=sender_id, contact_id=contact_obj.id)
         handle_smart_memory_update(agent_config, sender_id, text)
 
@@ -2703,6 +2764,8 @@ def process_ai_reply_task(self, data):
 
         if is_media_message:
             logger.info(f"🖼️ Media message detected for sender {sender_id}; bypassing fuzzy/global cache checks.")
+        elif agent_config and not agent_config.get_settings.redis_cache_enabled:
+            logger.info(f"🚫 Redis message caching is disabled for agent {page_id}; bypassing cache checks.")
         else:
             # --- Layer 1: Agent Exact ---
             cached_res = get_cached_reply(page_id, msg_text=user_real_message)
@@ -2765,35 +2828,35 @@ def process_ai_reply_task(self, data):
                             logger.info(f"🔗 SHARED CACHE HIT (Fuzzy) from Agent {shared_agent.name} for '{user_real_message[:20]}'")
                             break
 
-        # --- Layer 3: Global Exact ---
-        if not cached_res and not is_media_message:
-            cached_res = get_global_cached_reply(page_id, user_real_message)
-            if cached_res:
-                cache_hit_scope = "global_exact"
-
-        # --- Layer 4: Global Fuzzy ---
-        if not cached_res and not is_media_message:
-            cached_res = global_fuzzy_match(page_id, user_real_message, threshold=92)
-            if cached_res:
-                cache_hit_scope = "global_fuzzy"
-
-        # --- Layer 5: Sender Exact ---
-        if not cached_res and not is_media_message:
-            cached_res = get_sender_cached_reply(page_id, sender_id, user_real_message)
-            if cached_res:
-                cache_hit_scope = "sender_exact"
-
-        # --- Layer 6: Cluster Match ---
-        if not cached_res and not is_media_message:
-            cluster_map = get_cluster_map(page_id)
-            normalized = normalize_for_cache(user_real_message)
-            msg_hash = hashlib.md5(normalized.encode()).hexdigest()
-            cluster_id = cluster_map.get(msg_hash)
-            if cluster_id:
-                cached_res = get_cached_reply(page_id, msg_hash=cluster_id)
+            # --- Layer 3: Global Exact ---
+            if not cached_res:
+                cached_res = get_global_cached_reply(page_id, user_real_message)
                 if cached_res:
-                    cache_hit_scope = "cluster"
-                    logger.info(f"🧬 CLUSTER MATCH FOUND for '{user_real_message[:30]}' -> Cluster: {cluster_id}")
+                    cache_hit_scope = "global_exact"
+
+            # --- Layer 4: Global Fuzzy ---
+            if not cached_res:
+                cached_res = global_fuzzy_match(page_id, user_real_message, threshold=92)
+                if cached_res:
+                    cache_hit_scope = "global_fuzzy"
+
+            # --- Layer 5: Sender Exact ---
+            if not cached_res:
+                cached_res = get_sender_cached_reply(page_id, sender_id, user_real_message)
+                if cached_res:
+                    cache_hit_scope = "sender_exact"
+
+            # --- Layer 6: Cluster Match ---
+            if not cached_res:
+                cluster_map = get_cluster_map(page_id)
+                normalized = normalize_for_cache(user_real_message)
+                msg_hash = hashlib.md5(normalized.encode()).hexdigest()
+                cluster_id = cluster_map.get(msg_hash)
+                if cluster_id:
+                    cached_res = get_cached_reply(page_id, msg_hash=cluster_id)
+                    if cached_res:
+                        cache_hit_scope = "cluster"
+                        logger.info(f"🧬 CLUSTER MATCH FOUND for '{user_real_message[:30]}' -> Cluster: {cluster_id}")
 
         # --- Layer 7: Vector Similarity (Text + Image Embedding) ---
         if not cached_res:
@@ -2905,6 +2968,15 @@ def process_ai_reply_task(self, data):
                         
                         image_caption = get_image_caption(image_url, provider=selected_provider)
                         logger.info(f"📸 [Image Caption] Generated: {image_caption[:80] if image_caption else 'None'}")
+                        
+                        if 'user_msg_obj' in locals() and user_msg_obj and image_caption:
+                            orig_text = user_msg_obj.content or ""
+                            if orig_text and orig_text not in ('[Image received]', '[Image]'):
+                                user_msg_obj.content = f"{orig_text} [Image: {image_caption}]"
+                            else:
+                                user_msg_obj.content = f"[Image: {image_caption}]"
+                            user_msg_obj.save(update_fields=['content'])
+                            logger.info(f"💾 Saved updated user message content with visual description: {user_msg_obj.content[:100]}")
                         
                         if image_vector:
                             # Search image_embedding field in DB
@@ -3209,6 +3281,37 @@ def process_ai_reply_task(self, data):
                 image_caption=image_caption,
                 sender_id=sender_id,
             )
+            
+            if best_hit_row_id:
+                from embedding.models import SpreadsheetKnowledge
+                matched_row = SpreadsheetKnowledge.objects.filter(
+                    user=agent_config.user,
+                    row_id=best_hit_row_id
+                ).first()
+                if matched_row and matched_row.content:
+                    # Parse product name and price from the content text (e.g. "product name: tecno spark 40, price: 2222")
+                    import re
+                    prod_name = None
+                    price = None
+                    match_name = re.search(r'product name:\s*([^,|]+)', matched_row.content, re.IGNORECASE)
+                    if match_name:
+                        prod_name = match_name.group(1).strip()
+                    match_price = re.search(r'price:\s*([\d.]+)', matched_row.content, re.IGNORECASE)
+                    if match_price:
+                        try:
+                            price = float(match_price.group(1).strip())
+                        except ValueError:
+                            pass
+                    
+                    if prod_name:
+                        _save_recent_order_interest(
+                            user_memory,
+                            product_name=prod_name,
+                            price=price,
+                            source_text=text or image_caption
+                        )
+                        logger.info(f"🧠 [RAG Memory Sync] Updated recent_order_interest to matched product: '{prod_name}', price: {price}")
+            
             system_instruction, history, current_msg = build_ai_context(
                 agent_config, sender_id, text, extra_instr, sheet_ctx,
                 platform=request_type, message_type=message_type,
@@ -3217,7 +3320,7 @@ def process_ai_reply_task(self, data):
             # ---- Cache Classification Instruction (JSON suffix) ----
             classify_instruction = (
                 '\n\nReturn ONLY a valid JSON object: {"reply": "...", "cache_type": "...", "human_handoff": "..."}. '
-                'Use "no_cache" for context-dependent words (it/this/that/ঐটা/সেটা) or very specific conversation flow.'
+                'Use "no_cache" for context-dependent words (it/this/that/ঐটা/সেটা), short conversational fillers, greetings, affirmations, or denials (e.g., hum, hmm, yes, no, not, ok, okay, ha, na, ji, accha, thik ase, হুম, হ্যাঁ, না, জি, আচ্ছা, ঠিক আছে, ইত্যাদি), or very specific conversation flow.'
                 'Use "sender_specific" for user-only info (my,amar,etc any language, name/order/status/আমি/আমার/ব্যক্তিগত তথ্য). '
                 'Use "agent_specific" for information extracted from [KNOWLEDGE BASE DATA], business details like products/prices, or IF ASKED ABOUT YOUR IDENTITY (who you are, what you do). '
                 'Use "global" ONLY for general world facts, universal greetings (Salam/Hi), or general knowledge. NEVER use "global" for identity, personal info, or specific business details.'
@@ -3228,12 +3331,11 @@ def process_ai_reply_task(self, data):
                 'Order_data should include customer_name, phone_number, address, product_name, quantity, and extra_info when available. '
                 'Do not ask for price and do not invent price. Price is authoritative from merchant catalog/database and backend will merge it.'
                 '\nYour output MUST always strictly follow this JSON structure: '
-                '{"reply": "string", "cache_type": "string", "human_handoff": boolean, "image_intent": boolean, "image_style": "string", "order_intent": "string or null", "order_data": "object or null"}. '
-                'Always include "image_intent" and "image_style" in the JSON response. '
-                'If the user explicitly asks for photos/images (for example, "ছবি দেন", "পিকচার দেখান", "image please"), set "image_intent": true and "image_style": "image_with_caption". '
-                'If the user does not ask for images, set "image_intent": false and "image_style": "none" or "".'
-                '\nWhen the user asks for product images, do NOT say "I do not have images" even if [KNOWLEDGE BASE DATA] does not contain image URLs. '
-                'Instead, reply naturally that you are providing product images and set "image_intent": true so backend can deliver them.'
+                '{"reply": "string", "cache_type": "string", "human_handoff": boolean, "image_intent": boolean, "image_ids": [integer], "image_style": "string", "order_intent": "string or null", "order_data": "object or null"}. '
+                'Always include "image_intent", "image_ids", and "image_style" in the JSON response. '
+                'If the user explicitly asks for photos/images, inspect [KNOWLEDGE BASE DATA] for "Available Image Attachments". '
+                'If matching image attachments exist for the user\'s requested color/variant, set "image_intent": true, "image_style": "image_with_caption", and put their numeric IDs in "image_ids": [ID1, ID2]. '
+                'If no matching image attachments exist for the requested color/variant, set "image_intent": false, "image_ids": [], and inform the customer politely that the requested color image is unavailable.'
                 '\nIf the user has already provided a field earlier in the conversation, do not ask for that field again. '
                 'If the user gives multiple fields in one message, extract them and proceed. '
                 '\nSTRICT: No markdown blocks, no preamble, and ensure JSON syntax is perfect.'
@@ -3394,9 +3496,31 @@ def process_ai_reply_task(self, data):
                     )
                     if image_delivered:
                         logger.info(f'AI image delivery performed: {image_route}')
+                        try:
+                            # Charge 500 extra tokens flat surcharge for image delivery
+                            deduct_user_tokens(user_profile, 500, effective_model)
+                            # Create a TokenUsageLog entry for the image delivery surcharge
+                            from aiAgent.models import TokenUsageLog
+                            TokenUsageLog.objects.create(
+                                user=agent_config.user,
+                                ai_agent=agent_config,
+                                sender_id=sender_id,
+                                model_name=effective_model,
+                                input_tokens=0,
+                                output_tokens=0,
+                                total_tokens=500,
+                                platform=request_type or "messenger",
+                                request_type='image_delivery',
+                                success=True
+                            )
+                        except Exception as charge_err:
+                            logger.error(f"Failed to charge image delivery surcharge: {charge_err}")
 
                 # ---- 3-Tier Grouped Cache Save ----
-                if cache_type == 'global':
+                redis_cache_enabled = agent_config.get_settings.redis_cache_enabled if agent_config else False
+                if not redis_cache_enabled:
+                    logger.info(f"🚫 Cache SKIPPED (redis_cache_enabled=False) for: '{text[:30]}'")
+                elif cache_type == 'global':
                     set_global_cached_reply(
                         text, reply, model=effective_model,
                         input_tokens=ai_data.get('input_tokens', 0),

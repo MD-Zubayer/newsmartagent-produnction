@@ -39,6 +39,7 @@ class AgentAIListSerializer(serializers.ModelSerializer):
     skip_history = serializers.BooleanField(source='get_settings.skip_history', read_only=True)
     history_skip_keywords = serializers.CharField(source='get_settings.history_skip_keywords', read_only=True)
     shared_cache_agents = serializers.PrimaryKeyRelatedField(source='get_settings.shared_cache_agents', many=True, read_only=True)
+    redis_cache_enabled = serializers.BooleanField(source='get_settings.redis_cache_enabled', read_only=True)
     widget_settings = WidgetSettingsSerializer(read_only=True)
     
     class Meta:
@@ -66,6 +67,7 @@ class AgentAIListSerializer(serializers.ModelSerializer):
             'is_special_agent',
             'special_agent_status',
             'shared_cache_agents',
+            'redis_cache_enabled',
             'widget_key',
             'widget_settings'
         ]
@@ -89,6 +91,7 @@ class AgentAISerializer(serializers.ModelSerializer):
     skip_history = serializers.BooleanField(required=False)
     history_skip_keywords = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     shared_cache_agents = serializers.PrimaryKeyRelatedField(queryset=AgentAI.objects.all(), many=True, required=False)
+    redis_cache_enabled = serializers.BooleanField(required=False)
     widget_settings = WidgetSettingsSerializer(required=False, allow_null=True)
 
     class Meta:
@@ -116,6 +119,7 @@ class AgentAISerializer(serializers.ModelSerializer):
             'is_special_agent',
             'special_agent_status',
             'shared_cache_agents',
+            'redis_cache_enabled',
             'widget_key',
             'widget_settings'
         ]
@@ -147,6 +151,7 @@ class AgentAISerializer(serializers.ModelSerializer):
         skip_history = validated_data.pop('skip_history', False)
         history_skip_keywords = validated_data.pop('history_skip_keywords', '')
         shared_cache_agents = validated_data.pop('shared_cache_agents', [])
+        redis_cache_enabled = validated_data.pop('redis_cache_enabled', False)
         widget_settings_data = validated_data.pop('widget_settings', {}) or {}
         
         # Generate widget key if platform is web_widget
@@ -166,7 +171,8 @@ class AgentAISerializer(serializers.ModelSerializer):
                 'temperature': temperature,
                 'max_tokens': max_tokens,
                 'skip_history': skip_history,
-                'history_skip_keywords': history_skip_keywords
+                'history_skip_keywords': history_skip_keywords,
+                'redis_cache_enabled': redis_cache_enabled
             }
         )
         
@@ -184,7 +190,7 @@ class AgentAISerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         settings_data = {}
-        for field in ['history_limit', 'temperature', 'max_tokens', 'skip_history', 'history_skip_keywords', 'shared_cache_agents']:
+        for field in ['history_limit', 'temperature', 'max_tokens', 'skip_history', 'history_skip_keywords', 'shared_cache_agents', 'redis_cache_enabled']:
             if field in validated_data:
                 settings_data[field] = validated_data.pop(field)
         

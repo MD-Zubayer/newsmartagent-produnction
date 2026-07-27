@@ -169,9 +169,23 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                         break
         
             if not skip_embedding:
-                logger.info(f"Generating Gemini Embedding inside perform_rag_search for '{text[:20]}'")
                 query_vector = get_gemini_embedding(rag_query)
                 logger.info(f"DEBUG: Vector Generated: {True if query_vector else False}")
+                try:
+                    TokenUsageLog.objects.create(
+                        user=agent_config.user,
+                        ai_agent=agent_config,
+                        sender_id=str(sender_id or 'unknown'),
+                        model_name='text-embedding-004',
+                        input_tokens=len(rag_query) // 4 if rag_query else 0,
+                        output_tokens=0,
+                        total_tokens=0,
+                        platform=getattr(agent_config, 'platform', 'messenger') or 'messenger',
+                        request_type='rag_embedding',
+                        success=True if query_vector else False
+                    )
+                except Exception as log_err:
+                    logger.debug(f"Failed to log rag embedding token usage: {log_err}")
         else:
             logger.info(f"✅ Using existing query_vector passed to perform_rag_search (image embedding reuse, skipping text embedding)")
 
@@ -323,20 +337,90 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
 
             # 🔍 AMBIGUITY DETECTION + TWO-STAGE RANKING
             # 1) If top vs second gap > 5% -> hard-filter to top only
-            # 2) If gap <= 5% -> apply a lightweight lexical reranker using the image caption/text
-            def _lexical_similarity(a: str, b: str) -> float:
+            # 2) If gap <= 5% -> apply a semantic Gemini-based reranker to resolve color/variant details
+            def _ai_semantic_rerank(query_text, candidate_hits, config):
+                if not query_text or not candidate_hits:
+                    return candidate_hits
+                
                 try:
-                    from aiAgent.cache.utils import normalize_text
-                except Exception:
-                    def normalize_text(x):
-                        return ''.join(ch.lower() if ch.isalnum() or ch.isspace() else ' ' for ch in (x or '')).split()
-
-                toks_a = set(normalize_text(a)) if a else set()
-                toks_b = set(normalize_text(b)) if b else set()
-                if not toks_a or not toks_b:
-                    return 0.0
-                inter = toks_a.intersection(toks_b)
-                return float(len(inter)) / float(max(1, min(len(toks_a), len(toks_b))))
+                    from django.conf import settings
+                    from google import genai
+                    from google.genai import types
+                    import json
+                    import re
+                    
+                    if not getattr(settings, 'GEMINI_API_KEY', None):
+                        return candidate_hits
+                        
+                    client = genai.Client(api_key=settings.GEMINI_API_KEY)
+                    
+                    # Prepare candidate text descriptions for the prompt
+                    candidates_str = ""
+                    for idx, h in enumerate(candidate_hits):
+                        candidates_str += f"{idx}: [Row ID: {h['row_id']}] {h['content']}\n"
+                        
+                    prompt = (
+                        "You are a semantic product search ranker. The customer is asking for a product matching this query:\n"
+                        f"Customer Query: \"{query_text}\"\n\n"
+                        "Here are the product candidate descriptions from our catalog database:\n"
+                        f"{candidates_str}\n"
+                        "Task: Select and rank all the candidate Row IDs that are a valid match for the customer's request, from best match to worst match.\n"
+                        "CRITICAL: Pay extremely close attention to specific color variants (e.g., if query is 'black shirt', prioritize pure black shirt over white shirt with black stripes).\n"
+                        "Return ONLY a valid JSON list of matched Row IDs in ranked order. Example:\n"
+                        "[\"sheet_63_row_5\", \"sheet_63_row_2\"]\n"
+                        "Do not return any extra explanation, markdown fences, or text outside the JSON list."
+                    )
+                    
+                    # Call Gemini
+                    response = client.models.generate_content(
+                        model='gemini-3.1-flash-lite',
+                        contents=[types.Content(role='user', parts=[types.Part.from_text(text=query_text)])],
+                        config=types.GenerateContentConfig(system_instruction=prompt)
+                    )
+                    
+                    try:
+                        input_tok = response.usage_metadata.prompt_token_count if hasattr(response, 'usage_metadata') else 400
+                        output_tok = response.usage_metadata.candidates_token_count if hasattr(response, 'usage_metadata') else 30
+                        # Log token usage for admin panel
+                        TokenUsageLog.objects.create(
+                            user=config.user,
+                            ai_agent=config,
+                            sender_id=str(sender_id or 'unknown'),
+                            model_name='gemini-3.1-flash-lite',
+                            input_tokens=input_tok,
+                            output_tokens=output_tok,
+                            total_tokens=0,
+                            platform=getattr(config, 'platform', 'messenger') or 'messenger',
+                            request_type='semantic_rerank',
+                            success=True
+                        )
+                    except Exception as log_err:
+                        logger.debug(f"Failed to log rerank token usage: {log_err}")
+                    
+                    reply = response.text.strip() if response.text else ""
+                    json_match = re.search(r'\[[^\[\]]*\]', reply)
+                    if json_match:
+                        ordered_ids = json.loads(json_match.group())
+                        if isinstance(ordered_ids, list) and ordered_ids:
+                            # Reorder candidate_hits based on ordered_ids
+                            id_to_hit = {h['row_id']: h for h in candidate_hits}
+                            sorted_hits = []
+                            for r_id in ordered_ids:
+                                if r_id in id_to_hit:
+                                    hit_item = id_to_hit.pop(r_id)
+                                    # Adjust distance/score to reflect the ranked order
+                                    hit_item['adjusted_distance'] = 0.05 + (0.50 * len(sorted_hits))
+                                    hit_item['lexical_sim'] = 1.0 - hit_item['adjusted_distance']
+                                    sorted_hits.append(hit_item)
+                                    
+                            # Discard remaining unmatched hits (since AI reranker determined they are not valid matches)
+                            pass
+                                
+                            logger.info(f"🔮 AI Semantic Reranking ordered: {[h['row_id'] for h in sorted_hits]}")
+                            return sorted_hits
+                except Exception as ex:
+                    logger.warning(f"⚠️ AI semantic rerank failed: {ex}")
+                return candidate_hits
 
             is_ambiguous_match = False
             ambiguity_warning = ""
@@ -351,19 +435,10 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                     logger.info(f"🔒 Top match ahead by {score_diff}%. Hard-filtering to top match {filtered_hits[0]['row_id']}")
                     filtered_hits = [filtered_hits[0]]
                 else:
-                    # Apply lightweight reranker using image_caption (preferred) or the incoming text
+                    # Apply semantic reranker using image_caption (preferred) or the incoming text
                     rerank_basis = image_caption or text or post_context_text or ""
                     if rerank_basis:
-                        # compute lexical sim and adjust distance (smaller better)
-                        alpha = 0.15
-                        for h in filtered_hits:
-                            lex = _lexical_similarity(rerank_basis, h['content'])
-                            # adjusted distance: prefer hits with higher lexical similarity
-                            h['adjusted_distance'] = h['distance'] - (alpha * lex)
-                            h['lexical_sim'] = lex
-
-                        # sort by adjusted_distance
-                        filtered_hits = sorted(filtered_hits, key=lambda x: x.get('adjusted_distance', x['distance']))
+                        filtered_hits = _ai_semantic_rerank(rerank_basis, filtered_hits, agent_config)
 
                         # re-evaluate gap after rerank
                         if len(filtered_hits) >= 2:
@@ -420,6 +495,49 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                         filtered_hits = exact_hits
                         is_ambiguous_match = False
 
+            # Check if user query contains any product catalog keywords
+            from aiAgent.utils import extract_catalog_product_names
+            all_catalog_products = extract_catalog_product_names(agent_config.user)
+            query_contains_product_kw = False
+            text_lower = text.lower()
+            for p_name in all_catalog_products:
+                p_name_clean = p_name.strip().lower()
+                words = [w for w in p_name_clean.split() if len(w) >= 3]
+                if p_name_clean in text_lower or any(w in text_lower for w in words):
+                    query_contains_product_kw = True
+                    break
+
+            # Lock product context based on conversation history if query is generic
+            recent_product_lock = None
+            if sender_id and not query_contains_product_kw:
+                try:
+                    from chat.models import Conversation
+                    convo = Conversation.objects.filter(agentAi=agent_config, contact_id=str(sender_id).strip()).first()
+                    if convo:
+                        recent_msgs = list(convo.messages.exclude(content__startswith='[System:').order_by('-id')[:4])
+                        for msg in recent_msgs:
+                            msg_content_lower = msg.content.lower()
+                            for p_name in all_catalog_products:
+                                p_name_clean = p_name.strip().lower()
+                                if p_name_clean in msg_content_lower:
+                                    recent_product_lock = p_name_clean
+                                    break
+                            if recent_product_lock:
+                                break
+                except Exception as hist_err:
+                    logger.debug(f"History product extraction failed: {hist_err}")
+
+            if recent_product_lock:
+                logger.info(f"🔒 Locking RAG hits to product from recent history: '{recent_product_lock}'")
+                history_hits = []
+                for h in filtered_hits:
+                    content_lower = h['content'].lower()
+                    if recent_product_lock in content_lower:
+                        history_hits.append(h)
+                if history_hits:
+                    filtered_hits = history_hits
+                    is_ambiguous_match = False
+
             if filtered_hits:
                 top_hit = filtered_hits[0]
                 if isinstance(top_hit.get('row_id'), str) and top_hit['row_id'].startswith('sheet_'):
@@ -428,12 +546,17 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
 
             matched_content = []
             if is_ambiguous_match:
+                if not query_contains_product_kw:
+                    is_ambiguous_match = False
+
+            if is_ambiguous_match:
                 ambiguity_warning = (
                     "[⚠️ CRITICAL SYSTEM NOTE - READ FIRST]:\n"
                     "The image search returned multiple close matches; please ask the user to clarify which product they mean.\n"
                 )
                 matched_content.append(ambiguity_warning)
 
+            filtered_hits = filtered_hits[:3]
             for hit in filtered_hits:
                 # show lexical sim when available for easier debugging
                 lex_info = f" (lex:{hit.get('lexical_sim'):.2f})" if hit.get('lexical_sim') is not None else ""
@@ -442,23 +565,47 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                 effective_dist = hit.get('adjusted_distance', hit['distance'])
                 image_match_rate = max(0, min(100, round((1.0 - effective_dist) * 100)))
                 logger.debug(f"📊 [ImageMatchRate] row={hit['row_id']} dist={effective_dist:.4f} → {image_match_rate}%")
+
+                row_images_info = ""
+                try:
+                    from embedding.models import RowImage
+                    r_id = hit.get('row_id')
+                    if r_id and isinstance(r_id, str) and r_id.startswith('sheet_'):
+                        row_imgs = list(RowImage.objects.filter(user=agent_config.user, row_id=r_id).order_by('position'))
+                        if row_imgs:
+                            prod_name = "this product"
+                            content_parts = hit['content'].split(',')
+                            for part in content_parts:
+                                if 'product name:' in part.lower():
+                                    prod_name = part.split(':', 1)[1].strip()
+                                    break
+                            
+                            img_descs = [
+                                f"[ID: {img.id}] [Spreadsheet Product: '{prod_name}'] | [Image Visual Description: '{img.image_caption or 'No description'}']"
+                                for img in row_imgs
+                            ]
+                            row_images_info = f"\n  📷 Available Image Attachments for {r_id}: " + ", ".join(img_descs)
+                except Exception as ex:
+                    logger.debug(f"RowImage fetch for context failed: {ex}")
+
                 matched_content.append(
-                    f"[Source: {hit['source_label']}] {hit['content']} | Match Confidence: {hit['confidence']}{lex_info} | Image Match Rate: {image_match_rate}%"
+                    f"[Source: {hit['source_label']}] {hit['content']} | Match Confidence: {hit['confidence']}{lex_info} | Image Match Rate: {image_match_rate}%{row_images_info}"
                 )
 
             if matched_content:
                 unique_content = list(dict.fromkeys(matched_content))
                 clean_data = "\n".join(unique_content)
-                # Inject AI instruction about Image Match Rate so the AI understands the field
+                # Inject AI instruction about Direct Image ID selection (optimized for tokens)
                 image_rate_rule = (
-                    "\n[SYSTEM NOTE — Image Match Rate & Color Policy]: "
-                    "Each knowledge base entry includes an 'Image Match Rate'. "
-                    "CRITICAL: If the Image Match Rate is 70% or above, the product image is highly accurate and available. "
-                    "Even if the user asks for a specific color (e.g., 'কমলা', 'orange') that is NOT explicitly written in the product details text below, "
-                    "as long as the Image Match Rate is >= 70%, you MUST consider the product and color available. "
-                    "Do NOT reply that the specific color or product is unavailable. "
-                    "Instead, reply naturally that you are providing the images, and strictly set 'image_intent': true, "
-                    "translating the requested color into English inside 'image_query' (e.g., 'orange')."
+                    "\n[Direct Image ID Selection Policy]:"
+                    "\n- If photos requested/similar product matched, check 'Available Image Attachments' for Image IDs and descriptions."
+                    "\n- If match found, set 'image_intent': true and include Image IDs in 'image_ids' (e.g., [901])."
+                    "\n- If variant unavailable, set 'image_intent': false, 'image_ids': [], state it's unavailable, and list what options are available (e.g. 'লাল রঙের ছবি নেই, তবে সাদা রঙের ছবি আছে।')."
+                    "\n- CRITICAL: Do NOT print raw ID/caption texts verbatim. Describe features naturally in Bengali."
+                    "\n- CRITICAL: Spreadsheet Product name is the main authority. Describe images as that product variant (e.g. 'এখানে [Product Name] এর সাদা রঙের ছবি দেওয়া হলো।')."
+                    "\n- CRITICAL (Visual Check): Compare incoming image caption with 'Available Image Attachments' captions:"
+                    "\n  * If details differ (collar patterns, cuffs, prints) despite same color, do NOT say we have the exact design. Politely state: 'আপনার ছবির সাথে ডিজাইনে কিছুটা অমিল আছে। আমাদের স্টকে থাকা পাঞ্জাবির ডিজাইন হলো: [আমাদের প্রোডাক্টের বিবরণ]। দেখতে চান?'"
+                    "\n  * If exact match, confirm availability. In both cases, set 'image_intent': true and include Image IDs."
                 )
                 sheet_context = f"\n[KNOWLEDGE BASE DATA]:\n{clean_data}{image_rate_rule}"
                 post_info = f"User commented on this post: '{post_context_text}'. " if post_context_text else ""
