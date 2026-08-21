@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import DocumentKnowledge, Document
+from .models import DocumentKnowledge, Document, RowSimilarity
 
 @admin.register(DocumentKnowledge)
 class DocumentKnowledgeAdmin(admin.ModelAdmin):
@@ -57,3 +57,10 @@ class DocumentAdmin(admin.ModelAdmin):
     
     # শুধু রিড-অনলি হিসেবে রাখার জন্য (অপশনাল)
     readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(RowSimilarity)
+class RowSimilarityAdmin(admin.ModelAdmin):
+    list_display = ('id', 'user', 'source_row_id', 'target_row_id', 'distance')
+    list_filter = ('user', 'distance')
+    search_fields = ('source_row_id', 'target_row_id', 'user__email')

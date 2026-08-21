@@ -16,7 +16,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('name', models.CharField(help_text='e.g. GPT-4o Mini, Gemini Pro', max_length=100)),
-                ('model_id', models.CharField(help_text='e.g. gpt-4o-mini, gemini-2.0-flash', max_length=100)),
+                ('model_id', models.CharField(help_text='e.g. gpt-4o-mini, gemini-3.1-flash-lite', max_length=100)),
                 ('provider', models.CharField(choices=[('gemini', 'Google Gemini'), ('openai', 'OpenAI'), ('grok', 'xAI Grok'), ('openrouter', 'OpenRouter')], max_length=20)),
                 ('is_active', models.BooleanField(default=True)),
             ],

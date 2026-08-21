@@ -50,6 +50,10 @@ export default function Navbar() {
     { name: l.community, path: '/community' },
   ];
 
+  const mobileNavItems = [
+    { name: 'Dashboard', path: '/dashboard' },
+  ];
+
   const toolsItems = [
     {
       name: tl.name,
@@ -169,6 +173,12 @@ export default function Navbar() {
           {/* Mobile Menu Button */}
           <div className="md:hidden flex items-center gap-2">
             <LangToggle />
+            <Link
+              href="/dashboard"
+              className="px-3 py-2 rounded-xl bg-indigo-600 text-white text-xs font-black hover:bg-indigo-700 transition shadow-lg shadow-indigo-100 active:scale-95"
+            >
+              Dashboard
+            </Link>
             <button
               className="p-2 rounded-xl text-gray-900 hover:bg-gray-100 transition-colors"
               onClick={() => setOpen(true)}
@@ -203,7 +213,7 @@ export default function Navbar() {
           </div>
 
           <div className="space-y-1 flex-1">
-            {navItems.map((item) => (
+            {mobileNavItems.map((item) => (
               <Link
                 key={item.path}
                 href={item.path}
@@ -214,27 +224,6 @@ export default function Navbar() {
                 <FaChevronRight size={12} className="opacity-30" />
               </Link>
             ))}
-
-            {/* Mobile Tools Section */}
-            <div className="pt-2">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-4 py-2">{l.tools}</p>
-              {toolsItems.map((item) => (
-                <Link
-                  key={item.path}
-                  href={item.path}
-                  onClick={() => setOpen(false)}
-                  className="flex items-center gap-3 p-4 rounded-2xl text-gray-700 font-bold hover:bg-indigo-50 hover:text-indigo-600 transition-all"
-                >
-                  <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
-                    {item.icon}
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold">{item.name}</p>
-                    <p className="text-xs text-gray-400 font-normal">{item.desc}</p>
-                  </div>
-                </Link>
-              ))}
-            </div>
           </div>
 
           <div className="pt-6 space-y-3">

@@ -7,13 +7,8 @@ from aiAgent.models import UserMemory
 
 
 def count_openai_tokens(text, model="gpt-4o-mini"):
-
-    try:
-        encoding = tiktoken.encoding_for_model(model)
-        return len(encoding.encode(text))
-    except Exception:
-        encoding = tiktoken.get_encoding('cl100k_base')
-        return len(encoding.encode(text))
+    # Safely estimate tokens by character length to avoid any external network/download hangs
+    return len(text) // 3
 
 def count_gemini_tokens(model_instance, text_or_messages):
 

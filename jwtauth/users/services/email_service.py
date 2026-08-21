@@ -464,32 +464,23 @@ def send_push_approval_email(to_email: str, approve_link: str, reject_link: str,
 
 
 def send_whatsapp_alert(phone_number: str, message_text: str):
-    """Send Security Alert or Push Authentication message to WhatsApp."""
-    import os
-    import requests
+    """Send Security Alert or Push Authentication message to WhatsApp via Baileys directly."""
     import logging
+    from integrations.services.whatsapp import WhatsAppService
     logger = logging.getLogger(__name__)
-    
-    webhook_url = os.getenv("N8N_WHATSAPP_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/whatsapp-delivery")
+
     if not phone_number.startswith('+'):
         phone_number = '+' + phone_number.lstrip('0')
-        
-    formatted_phone = phone_number.replace('+', '')
-    
-    payload = {
-        "to": formatted_phone + "@s.whatsapp.net",
-        "phone": formatted_phone,
-        "sender_id": formatted_phone,
-        "message": message_text,
-        "reply": message_text,
-        "sessionId": "system",
-        "type": "whatsapp",
-        "system_alert": True
-    }
-    
+    formatted_phone = phone_number.replace('+', '') + '@s.whatsapp.net'
+
     try:
-        requests.post(webhook_url, json=payload, timeout=10)
+        WhatsAppService.send_message(
+            session_id='system',
+            to=formatted_phone,
+            message_text=message_text,
+        )
         logger.info(f"WhatsApp security alert sent to {formatted_phone}")
     except Exception as e:
         logger.error(f"Failed to send WhatsApp security alert: {e}")
+
 

@@ -371,6 +371,7 @@ class RowImagesListCreateView(APIView):
                 'is_primary': img.is_primary,
                 'position': img.position,
                 'source': img.source,
+                'source_url': img.source_url,
                 'created_at': img.created_at.isoformat(),
             })
         
@@ -579,6 +580,7 @@ class RowImageDetailView(APIView):
             'filename': image.image_filename,
             'caption': image.image_caption,
             'is_primary': image.is_primary,
+            'source_url': image.source_url,
         })
 
     def delete(self, request, sheet_id, image_id):

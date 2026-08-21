@@ -114,13 +114,26 @@ export default function ImageGallery({
               {image.caption && (
                 <p className="truncate text-xs text-slate-500 dark:text-slate-400">{image.caption}</p>
               )}
-              <button
-                onClick={() => handleCopyUrl(image.url, image.id)}
-                title="Copy URL"
-                className="inline-flex items-center gap-2 text-xs font-semibold text-cyan-600 hover:text-cyan-800 dark:text-cyan-300 dark:hover:text-cyan-100 transition"
-              >
-                <Copy className="w-3 h-3 sm:w-4 sm:h-4" /> {copiedId === image.id ? 'Copied!' : 'Copy URL'}
-              </button>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button
+                  onClick={() => handleCopyUrl(image.url, image.id)}
+                  title="Copy URL"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-cyan-600 hover:text-cyan-800 dark:text-cyan-300 dark:hover:text-cyan-100 transition"
+                >
+                  <Copy className="w-3 h-3" /> {copiedId === image.id ? 'Copied!' : 'Copy URL'}
+                </button>
+                {image.source_url && (
+                  <a
+                    href={image.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200 transition"
+                    title="Visit original source website to download image"
+                  >
+                    🌐 Source Website
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         ))}

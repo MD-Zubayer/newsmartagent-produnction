@@ -6,8 +6,6 @@ ingress:
     service: http://nginx:80
   - hostname: dev-api.newsmartagent.com
     service: http://nginx:80
-  - hostname: dev-n8n.newsmartagent.com
-    service: http://n8n:5678
   - hostname: dev-minio.newsmartagent.com
     service: http://nginx:80
   - hostname: dev-s3.newsmartagent.com

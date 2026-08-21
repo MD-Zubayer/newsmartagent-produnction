@@ -42,11 +42,75 @@ def generate_openai_reply(system_promt, messages, current_message, agent_config,
             or 'your entire output must start with "{" and end with "}"' in system_lower
             or 'ensure json syntax is perfect' in system_lower
             or 'do not include any conversational text' in system_lower
+            or 'return only a valid json object starting with' in system_lower
         )
 
         if force_json_output:
-            payload["response_format"] = {"type": "json_object"}
-            logger.info("OpenAI JSON enforcement enabled: response_format=json_object")
+            model_lower = agent_config.ai_model.lower()
+            supports_structured = ("gpt-4o" in model_lower) or ("gpt-4-o" in model_lower) or ("o1-" in model_lower) or ("o3-" in model_lower)
+            if supports_structured:
+                payload["response_format"] = {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "classification_response",
+                        "strict": True,
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "reply": {"type": "string"},
+                                "cache_type": {"type": "string"},
+                                "human_handoff": {"type": "boolean"},
+                                "image_intent": {"type": "boolean"},
+                                "image_ids": {
+                                    "type": "array",
+                                    "items": {"type": "integer"}
+                                },
+                                "image_style": {"type": "string"},
+                                "order_intent": {
+                                    "type": ["string", "null"]
+                                },
+                                "order_data": {
+                                    "type": "object",
+                                    "properties": {
+                                        "customer_name": {"type": ["string", "null"]},
+                                        "phone_number": {"type": ["string", "null"]},
+                                        "address": {"type": ["string", "null"]},
+                                        "district": {"type": ["string", "null"]},
+                                        "upazila": {"type": ["string", "null"]},
+                                        "product_name": {"type": ["string", "null"]},
+                                        "quantity": {"type": ["integer", "null"]},
+                                        "price": {"type": ["number", "null"]},
+                                        "extra_info": {"type": ["string", "null"]},
+                                        "items": {
+                                            "type": ["array", "null"],
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "name": {"type": "string"},
+                                                    "quantity": {"type": "integer"}
+                                                },
+                                                "required": ["name", "quantity"],
+                                                "additionalProperties": False
+                                            }
+                                        }
+                                    },
+                                    "required": [
+                                        "customer_name", "phone_number", "address", 
+                                        "district", "upazila", "product_name", 
+                                        "quantity", "price", "extra_info", "items"
+                                    ],
+                                    "additionalProperties": False
+                                }
+                            },
+                            "required": ["reply", "cache_type", "human_handoff", "image_intent", "image_ids", "image_style", "order_intent", "order_data"],
+                            "additionalProperties": False
+                        }
+                    }
+                }
+                logger.info("OpenAI JSON Schema enforcement enabled: response_format=json_schema")
+            else:
+                payload["response_format"] = {"type": "json_object"}
+                logger.info("OpenAI JSON enforcement enabled: response_format=json_object")
 
         model_lower = agent_config.ai_model.lower()
         new_models = ["gpt-5", "o1", "o3", "gpt-4.1"]
@@ -62,7 +126,7 @@ def generate_openai_reply(system_promt, messages, current_message, agent_config,
             payload["temperature"] = ai_settings.temperature if ai_settings.temperature is not None else 0.7
 
         # ২. টোকেন লিমিট সেট করা
-        max_t = ai_settings.max_tokens if ai_settings.max_tokens else 500
+        max_t = ai_settings.max_tokens if ai_settings.max_tokens else 1024
         if is_new_model:
             payload["max_completion_tokens"] = max_t
         else:
@@ -70,7 +134,7 @@ def generate_openai_reply(system_promt, messages, current_message, agent_config,
 
         # API কল
         logger.info(f"OpenAI History: {formatted_messages}")
-        response = client.chat.completions.create(**payload)
+        response = client.chat.completions.create(timeout=30.0, **payload)
         
         # --- রিপ্লাই এক্সট্রাক্ট করা ---
         message = response.choices[0].message
@@ -78,7 +142,7 @@ def generate_openai_reply(system_promt, messages, current_message, agent_config,
         print(f"\n--- [DEBUG] Raw AI Reply Length: {len(raw_reply) if raw_reply else 0} ---")
         
         if raw_reply:
-            reply = raw_reply.replace("\n", " ").replace("\r", " ").strip()
+            reply = raw_reply.strip()
             
             result_status = "success"
         else:

@@ -56,8 +56,8 @@ def generate_and_send_invoice_async_task(self, order_id):
         except Exception:
             shop_name = "New Smart Agent Shop "
         
-        # Run async invoice generation
-        success = asyncio.run(_generate_and_send_invoice_impl(order_data, shop_name))
+        # Run async invoice generation with user_id for profile photo
+        success = asyncio.run(_generate_and_send_invoice_impl(order_data, shop_name, user_id=order.user_id))
         
         # Handle special Baileys session-not-connected result
         if success == 'session_not_connected':
@@ -82,13 +82,14 @@ def generate_and_send_invoice_async_task(self, order_id):
         raise self.retry(countdown=300, exc=e)
 
 
-async def _generate_and_send_invoice_impl(order_data: dict, shop_name: str) -> bool:
+async def _generate_and_send_invoice_impl(order_data: dict, shop_name: str, user_id: int = None) -> bool:
     """
     Async implementation - Invoice generate করে N8N এ পাঠায়
     
     Args:
         order_data: Prepared CustomerOrder data
         shop_name: Shop name for invoice header/footer
+        user_id: User ID to fetch profile photo
     
     Returns:
         Success status
@@ -97,10 +98,24 @@ async def _generate_and_send_invoice_impl(order_data: dict, shop_name: str) -> b
     try:
         logger.info(f"📝 Generating invoice HTML for order #{order_data.get('id')}")
         
+        # Get profile photo URL from user
+        profile_photo_url = None
+        if user_id:
+            try:
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                user = User.objects.select_related('profile').get(id=user_id)
+                if user.profile.profile_photo:
+                    profile_photo_url = user.profile.profile_photo.url
+                    logger.info(f"✅ Profile photo found for user {user_id}")
+            except Exception as e:
+                logger.warning(f"⚠️ Could not fetch profile photo: {e}")
+        
         # २. Invoice HTML generate করো
         invoice_html = InvoiceImageGenerator.generate_invoice_html(
             order_data=order_data,
-            shop_name=shop_name
+            shop_name=shop_name,
+            profile_photo_url=profile_photo_url
         )
         
         logger.info(f"🖼️ Converting HTML to PNG image...")

@@ -185,7 +185,6 @@ services:
       - media_volume:/app/media
     environment:
       - MAIN_DOMAIN=${MAIN_DOMAIN}
-      - N8N_DOMAIN=${N8N_DOMAIN}
       - MINIO_CONSOLE_DOMAIN=${MINIO_CONSOLE_DOMAIN}
       - MINIO_API_DOMAIN=${MINIO_API_DOMAIN}
       - FLOWER_DOMAIN=${FLOWER_DOMAIN}
@@ -271,49 +270,7 @@ services:
       update_config:
         order: start-first
 
-  
-  n8n:
-    image: n8nio/n8n:latest
-    container_name: ${PROJECT_NAME}-n8n
-    environment:
-      N8N_HOST: ${N8N_DOMAIN}
-      N8N_URL: https://${N8N_DOMAIN}
-      WEBHOOK_URL: https://${N8N_DOMAIN}
-      N8N_TRUST_PROXY: "true"
-      TRUST_PROXY: "1"
-      N8N_LOG_LEVEL: "debug"
-      N8N_EXPRESS_TRUST_PROXY: "true"
-   
-      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "false"
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
-      N8N_PROTOCOL: https
-      N8N_DISABLE_UI_RATE_LIMITING_DISABLED: "true"
-      GENERIC_TIMEZONE: Asia/Dhaka
-      NODE_OPTIONS: --max-old-space-size=${N8N_NODE_MEMORY_LIMIT:-2048}
-      DB_TYPE: postgresdb
-      DB_POSTGRESDB_HOST: db
-      DB_POSTGRESDB_PORT: ${DB_POSTGRESDB_PORT}
-      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
-      DB_POSTGRESDB_USER: ${POSTGRES_USER}
-      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - n8n_data:/home/node/.n8n
-    depends_on:
-      - backend
-      - redis
-      - pgbouncer
-    deploy:
-      update_config:
-        order: start-first
-    restart: always 
-    dns:
-      - 1.1.1.1
-      - 8.8.8.8
-    logging: *default-logging
-    hostname: newsmartagent-n8n
-    networks:
-      - smart-network
-  
+
   flower:
     image: mher/flower
     container_name: ${PROJECT_NAME}-flower
@@ -359,7 +316,6 @@ services:
       - .env
     environment:
       - PORT=${BAILEYS_PORT}
-      - N8N_WEBHOOK_URL=${N8N_WHATSAPP_WEBHOOK_URL}
       - DJANGO_WHATSAPP_WEBHOOK_URL=${DJANGO_WHATSAPP_WEBHOOK_URL}
       - SYNC_AGENT_URL=${SYNC_AGENT_URL}
       - BAILEYS_API_SECRET=${BAILEYS_API_SECRET}
@@ -369,7 +325,7 @@ services:
     volumes:
       - baileys_auth:/app/auth_info_baileys
     depends_on:
-      - n8n
+      - backend
     restart: always
     logging: *default-logging
     deploy:
@@ -409,8 +365,6 @@ volumes:
     name: ${VOLUME_PREFIX:-production}-static
   media_volume:
     name: ${VOLUME_PREFIX:-production}-media
-  n8n_data:
-    name: ${VOLUME_PREFIX:-production}_n8n_data
   baileys_auth:
     name: ${VOLUME_PREFIX:-production}-baileys-auth
   minio_data:

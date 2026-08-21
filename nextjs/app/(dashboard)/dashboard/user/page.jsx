@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import {
   Zap, Activity, BarChart3, MessageSquare, TrendingUp,
-  Cpu, Globe, Info, Calendar, CreditCard, Hourglass
+  Cpu, Globe, Info, Calendar, CreditCard, Hourglass, Filter, RotateCcw
 } from "lucide-react";
 import AnalyticsCharts from "app/(main)/components/AnalyticsCharts";
 import PlatformTokenChart from "app/(main)/components/PlatformTokenChart";
@@ -125,7 +125,70 @@ const DashboardSkeleton = () => (
 export default function UserDashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [error, setError] = useState(false);
+
+  // Date Filter State
+  const [selectedPreset, setSelectedPreset] = useState("30d"); // "7d" | "30d" | "month" | "all" | "custom"
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
+  const fetchAnalytics = async (sDate, eDate) => {
+    setAnalyticsLoading(true);
+    try {
+      const params = {};
+      if (sDate) params.start_date = sDate;
+      if (eDate) params.end_date = eDate;
+      const res = await api.get("/AgentAI/tokens/analytics/", { params });
+      setData(prev => prev ? { ...prev, analytics: res.data } : null);
+    } catch (err) {
+      console.error("Fetch Analytics Error:", err);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
+  const handlePresetChange = (preset) => {
+    setSelectedPreset(preset);
+    const today = new Date();
+    const formatDateStr = (d) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
+    let sStr = "";
+    let eStr = "";
+
+    if (preset === "7d") {
+      const past = new Date();
+      past.setDate(today.getDate() - 7);
+      sStr = formatDateStr(past);
+      eStr = formatDateStr(today);
+    } else if (preset === "30d") {
+      const past = new Date();
+      past.setDate(today.getDate() - 30);
+      sStr = formatDateStr(past);
+      eStr = formatDateStr(today);
+    } else if (preset === "month") {
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+      sStr = formatDateStr(firstDay);
+      eStr = formatDateStr(today);
+    } else if (preset === "all") {
+      sStr = "all";
+      eStr = "all";
+    }
+
+    setStartDate(sStr === "all" ? "" : sStr);
+    setEndDate(eStr === "all" ? "" : eStr);
+    fetchAnalytics(sStr, eStr);
+  };
+
+  const handleCustomDateApply = () => {
+    setSelectedPreset("custom");
+    fetchAnalytics(startDate, endDate);
+  };
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -271,6 +334,97 @@ export default function UserDashboard() {
           )}
         </div>
 
+        {/* Date Filter Bar */}
+        <div className="bg-white p-4 md:p-6 rounded-[2.5rem] shadow-xl border border-gray-100 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-pink-50 flex items-center justify-center text-pink-500 font-bold shrink-0 shadow-sm">
+              <Filter size={22} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm md:text-lg font-black text-slate-800 uppercase tracking-tight italic">
+                  Analytics & Graph Date Filter
+                </h3>
+                {analyticsLoading && (
+                  <span className="inline-block w-4 h-4 border-2 border-pink-500 border-t-transparent rounded-full animate-spin"></span>
+                )}
+              </div>
+              <p className="text-[10px] md:text-xs font-bold text-slate-400">
+                Filter token usage trends, engine distribution, and platform analytics by date
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Quick Presets */}
+            <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200/80">
+              {[
+                { id: "7d", label: "7 Days" },
+                { id: "30d", label: "30 Days" },
+                { id: "month", label: "This Month" },
+                { id: "all", label: "All Time" },
+              ].map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => handlePresetChange(p.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+                    selectedPreset === p.id
+                      ? "bg-gradient-to-r from-pink-500 to-indigo-600 text-white shadow-md scale-105"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Custom Range Inputs */}
+            <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-200/80 flex-wrap">
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider pl-1">Start:</span>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    setSelectedPreset("custom");
+                  }}
+                  className="bg-white text-xs font-bold text-slate-700 px-2 py-1 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-pink-500"
+                />
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">End:</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => {
+                    setEndDate(e.target.value);
+                    setSelectedPreset("custom");
+                  }}
+                  className="bg-white text-xs font-bold text-slate-700 px-2 py-1 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-pink-500"
+                />
+              </div>
+              <button
+                onClick={handleCustomDateApply}
+                className="px-3 py-1 bg-slate-900 text-white text-xs font-black rounded-xl hover:bg-slate-800 transition-colors shadow-sm"
+              >
+                Apply
+              </button>
+            </div>
+
+            {/* Reset Button */}
+            {(startDate || endDate || selectedPreset !== "30d") && (
+              <button
+                onClick={() => handlePresetChange("30d")}
+                className="p-2 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
+                title="Reset to Default (30 Days)"
+              >
+                <RotateCcw size={16} />
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Stats Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 md:gap-6">
           {[
@@ -288,7 +442,15 @@ export default function UserDashboard() {
         </div>
 
         {/* Chart & Engine Usage */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 relative">
+          {analyticsLoading && (
+            <div className="absolute inset-0 bg-white/60 backdrop-blur-sm z-20 flex items-center justify-center rounded-[2.5rem]">
+              <div className="flex items-center gap-3 bg-slate-900 text-white px-5 py-2.5 rounded-2xl shadow-xl">
+                <span className="w-5 h-5 border-2 border-pink-500 border-t-transparent rounded-full animate-spin"></span>
+                <span className="text-xs font-black uppercase tracking-wider">Updating Analytics...</span>
+              </div>
+            </div>
+          )}
           <div className="lg:col-span-2 bg-white px-2 py-8 rounded-[2.5rem] shadow-2xl border border-gray-100">
             <h3 className="text-lg md:text-xl font-black text-gray-800 mb-8 flex items-center gap-2 italic uppercase">
               <TrendingUp size={24} className="text-pink-500" /> Token Usage Trend
@@ -301,23 +463,35 @@ export default function UserDashboard() {
               <Cpu size={24} className="text-purple-600" /> Engine Distribution
             </h3>
             <div className="space-y-6">
-              {charts.model_distribution.map((m, idx) => (
-                <div key={idx}>
-                  <div className="flex justify-between mb-2">
-                    <span className="text-[10px] font-black text-gray-400 uppercase">{m.model_name}</span>
-                    <span className="text-xs font-black text-gray-700">{m.count} Req</span>
+              {charts.model_distribution.length === 0 ? (
+                <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest text-center py-10">No engine usage data found</p>
+              ) : (
+                charts.model_distribution.map((m, idx) => (
+                  <div key={idx}>
+                    <div className="flex justify-between mb-2">
+                      <span className="text-[10px] font-black text-gray-400 uppercase">{m.model_name}</span>
+                      <span className="text-xs font-black text-gray-700">{m.count} Req</span>
+                    </div>
+                    <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-purple-500 to-blue-500" style={{ width: `${summary.total_messages > 0 ? (m.count / summary.total_messages) * 100 : 0}%` }}></div>
+                    </div>
                   </div>
-                  <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-purple-500 to-blue-500" style={{ width: `${(m.count / summary.total_messages) * 100}%` }}></div>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
 
         {/* Platform Analytics */}
-        <div className="bg-white py-8 px-5 rounded-[2.5rem] shadow-xl border border-gray-100">
+        <div className="bg-white py-8 px-5 rounded-[2.5rem] shadow-xl border border-gray-100 relative">
+          {analyticsLoading && (
+            <div className="absolute inset-0 bg-white/60 backdrop-blur-sm z-20 flex items-center justify-center rounded-[2.5rem]">
+              <div className="flex items-center gap-3 bg-slate-900 text-white px-5 py-2.5 rounded-2xl shadow-xl">
+                <span className="w-5 h-5 border-2 border-pink-500 border-t-transparent rounded-full animate-spin"></span>
+                <span className="text-xs font-black uppercase tracking-wider">Updating...</span>
+              </div>
+            </div>
+          )}
            <h3 className="text-lg md:text-xl font-black text-gray-800 mb-8 flex items-center gap-2 italic uppercase px-4">
               <BarChart3 size={24} className="text-cyan-500" /> Platform Wise Analytics
             </h3>

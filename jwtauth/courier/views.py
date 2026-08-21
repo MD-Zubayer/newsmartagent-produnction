@@ -1014,3 +1014,22 @@ class SteadFastPriceCalculatorView(APIView):
                     }, status=status.HTTP_200_OK)
 
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CourierSuggestedAddressView(APIView):
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        order_id = request.query_params.get("order_id")
+        if not order_id:
+            return Response({"error": "order_id query param is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        order = get_object_or_404(CustomerOrder, id=order_id, user=request.user)
+        from .utils.redis_courier_cache import match_address_redis, extract_location_from_address
+        district = order.district
+        upazila = order.upazila
+        if not district or not upazila:
+            district, upazila = extract_location_from_address(order.address)
+        suggestions = match_address_redis(district, upazila, full_address=order.address)
+        return Response(suggestions, status=status.HTTP_200_OK)

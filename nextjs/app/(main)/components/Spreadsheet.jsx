@@ -29,7 +29,8 @@ import {
   List as ListIcon,
   Globe,
   User,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Terminal
 } from "lucide-react";
 
 /* ================= CONFIG ================= */
@@ -336,6 +337,7 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [selectedRowForImageModal, setSelectedRowForImageModal] = useState(null);
   const [hoveredRow, setHoveredRow] = useState(null);
+  const [showLogsDrawer, setShowLogsDrawer] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -484,6 +486,39 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
       await api.put(`/datasheet/spreadsheets/${sheetId}/`, { ...sheet, is_dark_mode: dark });
     } catch (err) { console.error(err); } 
     finally { setTimeout(() => setSaving(false), 800); }
+  };
+
+  const handleAutoImageSearchToggle = async (checked) => {
+    const updatedSheet = { ...sheet, auto_image_search: checked };
+    setSheet(updatedSheet);
+    try {
+      await api.put(`/datasheet/spreadsheets/${sheetId}/`, { ...updatedSheet, is_dark_mode: dark });
+      toast.success(checked ? 'Auto Image Search Enabled' : 'Auto Image Search Disabled');
+    } catch (err) {
+      console.error('Failed to update auto image search setting:', err);
+      toast.error('Failed to update setting');
+    }
+  };
+
+  const handleSourceUrlBlur = async () => {
+    try {
+      await api.put(`/datasheet/spreadsheets/${sheetId}/`, { ...sheet, is_dark_mode: dark });
+      toast.success('Source website link saved');
+    } catch (err) {
+      console.error('Failed to save source URL:', err);
+      toast.error('Failed to save source website');
+    }
+  };
+
+  const refreshLogs = async () => {
+    try {
+      const res = await api.get(`/datasheet/spreadsheets/${sheetId}/`);
+      setSheet(prev => ({ ...prev, image_search_log: res.data.image_search_log || '' }));
+      toast.success('Logs updated');
+    } catch (err) {
+      console.error('Failed to reload logs:', err);
+      toast.error('Failed to reload logs');
+    }
   };
 
   const updateCell = useCallback((r, c, value) => {
@@ -1011,11 +1046,33 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
                 <input
                   type="checkbox"
                   checked={sheet.auto_image_search || false}
-                  onChange={(e) => setSheet({...sheet, auto_image_search: e.target.checked})}
+                  onChange={(e) => handleAutoImageSearchToggle(e.target.checked)}
                   className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                 />
                 Auto Image Search
             </label>
+            {sheet.auto_image_search && (
+              <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-3 duration-300">
+                <input
+                  type="text"
+                  placeholder="Website Source (e.g. daraz.com.bd)"
+                  value={sheet.image_search_source_url || ""}
+                  onChange={(e) => setSheet({...sheet, image_search_source_url: e.target.value})}
+                  onBlur={handleSourceUrlBlur}
+                  className={`px-3 py-2 rounded-xl text-xs font-semibold outline-none border transition-all w-48 sm:w-56 focus:ring-2 focus:ring-indigo-500/50 
+                    ${dark ? "bg-slate-850 border-slate-700 text-slate-100 placeholder-slate-500" : "bg-slate-50 border-slate-200 text-slate-700 placeholder-slate-400"}`}
+                />
+                <button
+                  onClick={() => setShowLogsDrawer(true)}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border
+                    ${dark ? "bg-slate-800 border-slate-700 hover:bg-slate-700 text-slate-300" : "bg-indigo-50 border-indigo-100 hover:bg-indigo-100 text-indigo-600"}`}
+                  title="View Auto Image Search Logs"
+                >
+                  <Terminal size={14} />
+                  <span>Logs</span>
+                </button>
+              </div>
+            )}
             <button onClick={handleManualSave} disabled={saving} className={`flex items-center gap-2 px-3 sm:px-6 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 active:scale-95 ${dark ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-900/50" : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-500/30"} disabled:opacity-70 disabled:cursor-not-allowed`}>
                 {saving ? <div className="w-4 h-4 border-[2.5px] border-white/30 border-t-white rounded-full animate-spin"/> : <Save size={16} strokeWidth={2.5} />}
                 <span className="hidden sm:inline">Save</span>
@@ -1197,6 +1254,63 @@ export default function Spreadsheet({ sheetId: initialSheetId }) {
           }
         }}
       />
+      {/* 📋 Auto Image Search Logs Drawer */}
+      {showLogsDrawer && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          {/* Overlay */}
+          <div 
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
+            onClick={() => setShowLogsDrawer(false)}
+          />
+
+          {/* Drawer Container */}
+          <div className={`relative w-full max-w-lg h-full flex flex-col shadow-2xl transition-transform duration-300 animate-in slide-in-from-right 
+            ${dark ? "bg-slate-900 border-l border-slate-800 text-slate-100" : "bg-white border-l border-slate-200 text-slate-800"}`}>
+            
+            {/* Drawer Header */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/80">
+              <div className="flex items-center gap-2">
+                <Terminal className="text-indigo-600 dark:text-indigo-400 w-5 h-5" />
+                <h3 className="text-sm font-black uppercase tracking-wider">Image Search Logs</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={refreshLogs}
+                  className="px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 active:scale-95 transition-all"
+                  title="Reload Logs"
+                >
+                  Refresh
+                </button>
+                <button
+                  onClick={() => setShowLogsDrawer(false)}
+                  className="p-1.5 rounded-lg bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Terminal View */}
+            <div className="flex-1 overflow-y-auto p-4 bg-slate-950 text-emerald-400 font-mono text-[11px] leading-relaxed p-4 whitespace-pre-wrap select-text">
+              {sheet.image_search_log ? sheet.image_search_log : "No logs available. The logs will appear here when the auto image search runs."}
+            </div>
+
+            {/* Drawer Footer */}
+            <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/50 flex justify-between items-center text-[10px] font-semibold text-slate-500">
+              <span>Spreadsheet ID: {sheetId}</span>
+              <button 
+                onClick={() => {
+                  navigator.clipboard.writeText(sheet.image_search_log || '');
+                  toast.success('Logs copied to clipboard');
+                }}
+                className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200"
+              >
+                Copy Logs
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
