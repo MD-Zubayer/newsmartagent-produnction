@@ -189,7 +189,7 @@ class OfferSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Offer
-        fields = ["id", "name","allowed_platforms", "allowed_models", "tokens", "schedule_messages", "description", "price", "duration_days", "is_active", 'target_audience']
+        fields = ["id", "name","allowed_platforms", "allowed_models", "tokens", "schedule_messages", "description", "price", "duration_days", "is_active", 'target_audience', 'image_support']
 
 
 class SubscriptionSerializer(serializers.ModelSerializer):

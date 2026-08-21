@@ -80,9 +80,11 @@ def _default_direct_order_instructions():
         "Never ask for the same field twice. Always remember details already collected from earlier messages in this conversation. "
         "If the user gives multiple details in one message, use them immediately. "
         "If any required detail is missing, ask only for that missing detail. "
-        "When you have enough information for a complete order, return a valid JSON object with keys: "
-        "\"reply\", \"cache_type\", \"human_handoff\", \"order_intent\", and \"order_data\". "
-        "\"order_intent\" should be \"create\". "
+        "ALWAYS return a valid JSON object containing ALL of the following keys in every response: "
+        "\"reply\", \"cache_type\", \"human_handoff\", \"order_intent\", \"order_data\", \"image_intent\", and \"image_ids\". "
+        "If there is no order intent, set \"order_intent\": null and \"order_data\": {}. "
+        "If there is no image request or recommendation, set \"image_intent\": false and \"image_ids\": []. "
+        "\"order_intent\" should be \"create\" when the user confirms interest, wants to order, or provides order details. "
         "\"order_data\" should be an object containing customer_name, phone_number, address, district, upazila, and extra_info when available. "
         "Identify and extract the 'district' (district/জেলা name in English) and 'upazila' (upazila/thana name in English) from the customer address or chat text using your knowledge of Bangladesh geography, returning them as separate keys inside 'order_data'. "
         "CRITICAL: For products, \"order_data\" MUST include an \"items\" array. Each element in \"items\" must be an object with \"name\" and \"quantity\". "
@@ -102,6 +104,18 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
     RAG_TOP_K = int(os.getenv('RAG_TOP_K', '5'))
     TOP_K = min(max(3, RAG_TOP_K), 10)
     rag_query = f"{post_context_text} {text}" if post_context_text else text
+    try:
+        from aiAgent.models import UserMemory
+        memory = UserMemory.objects.filter(ai_agent=agent_config, sender_id=str(sender_id).lower()).first()
+        if memory and isinstance(memory.data, dict):
+            internal = memory.data.get('_internal', {})
+            recent_interest = internal.get('recent_order_interest') or {}
+            prod_name = recent_interest.get('product_name')
+            if prod_name:
+                rag_query = f"{rag_query} {prod_name}"
+                logger.info(f"✨ Appended recent interest product '{prod_name}' to RAG query. New query: '{rag_query}'")
+    except Exception as e:
+        logger.error(f"Error appending recent interest to RAG query: {e}")
     
     def _confidence_label(distance):
         if distance is None:
@@ -398,6 +412,7 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                         logger.debug(f"Failed to log rerank token usage: {log_err}")
                     
                     reply = response.text.strip() if response.text else ""
+                    logger.info(f"🔮 [Reranker Raw Response]: {reply}")
                     json_match = re.search(r'\[[^\[\]]*\]', reply)
                     if json_match:
                         ordered_ids = json.loads(json_match.group())
@@ -594,20 +609,77 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
 
             if matched_content:
                 unique_content = list(dict.fromkeys(matched_content))
-                clean_data = "\n".join(unique_content)
+                
+                clean_data = ""
+                if best_hit_row_id:
+                    clean_data += "\n[CURRENT ACTIVE PRODUCT]\n" + "\n".join(unique_content)
+                else:
+                    clean_data += "\n" + "\n".join(unique_content)
+                
+                similar_products_context = ""
+                recommendation_policy = ""
+                if best_hit_row_id:
+                    try:
+                        from embedding.models import RowSimilarity, RowImage
+                        sims = RowSimilarity.objects.filter(user=agent_config.user, source_row_id=best_hit_row_id).order_by('distance')[:2]
+                        sim_lines = []
+                        for idx, sim in enumerate(sims, start=1):
+                            target_knowledge = SpreadsheetKnowledge.objects.filter(user=agent_config.user, row_id=sim.target_row_id).first()
+                            if target_knowledge:
+                                content = target_knowledge.content
+                                parts = [p.strip() for p in content.split(',') if p.strip()]
+                                p_name, p_price, p_discount = None, None, None
+                                for part in parts:
+                                    if ':' in part:
+                                        k, v = part.split(':', 1)
+                                        k_clean = k.strip().lower()
+                                        v_clean = v.strip()
+                                        if 'product name' in k_clean:
+                                            p_name = v_clean
+                                        elif 'price' in k_clean and 'discount' not in k_clean and 'dicount' not in k_clean:
+                                            p_price = v_clean
+                                        elif 'discount' in k_clean or 'dicount' in k_clean:
+                                            p_discount = v_clean
+                                if p_name:
+                                    price_str = f"Price: {p_price}" if p_price else "Price: N/A"
+                                    if p_discount:
+                                        price_str += f" (Discount: {p_discount})"
+                                    
+                                    target_imgs = list(RowImage.objects.filter(user=agent_config.user, row_id=sim.target_row_id).order_by('position'))
+                                    img_ids_str = f"[{', '.join([str(img.id) for img in target_imgs])}]" if target_imgs else "[]"
+                                    
+                                    sim_lines.append(f"{idx}. Product: {p_name} | {price_str} | Image IDs: {img_ids_str}")
+                        
+                        if sim_lines:
+                            similar_products_context = (
+                                "\n\n[SIMILAR/ALTERNATIVE PRODUCTS FOR RECOMMENDATION]"
+                                "\n" + "\n".join(sim_lines)
+                            )
+                            
+                            recommendation_policy = (
+                                "\n\n[AI Product Recommendation Policy]:"
+                                "\n- If the customer is actively discussing, inquiring about, or ordering the [CURRENT ACTIVE PRODUCT], do NOT proactively recommend or list other products. Focus solely on answering their query or finalizing their order."
+                                "\n- You MUST only suggest or list the [SIMILAR/ALTERNATIVE PRODUCTS FOR RECOMMENDATION] when:"
+                                "\n  1. The customer explicitly asks for recommendations, other options, colors, styles, or alternatives."
+                                "\n  2. The [CURRENT ACTIVE PRODUCT] is out of stock or unavailable."
+                                "\n  3. There is a design/style mismatch with the image provided by the user."
+                            )
+                    except Exception as sim_err:
+                        logger.debug(f"RowSimilarity context retrieval failed: {sim_err}")
+
                 # Inject AI instruction about Direct Image ID selection (optimized for tokens)
                 image_rate_rule = (
                     "\n[Direct Image ID Selection Policy]:"
                     "\n- If photos requested/similar product matched, check 'Available Image Attachments' for Image IDs and descriptions."
                     "\n- If match found, set 'image_intent': true and include Image IDs in 'image_ids' (e.g., [901])."
-                    "\n- If variant unavailable, set 'image_intent': false, 'image_ids': [], state it's unavailable, and list what options are available (e.g. 'লাল রঙের ছবি নেই, তবে সাদা রঙের ছবি আছে।')."
+                    "\n- If the user asks to see photos/images of the product (including asking for different colors, styles, designs, or all options), you MUST check all 'Available Image Attachments' for that product, set 'image_intent': true, and include the Image IDs of ALL available variants (colors/styles/images) in 'image_ids'. Tell the user what options are available based on the visual descriptions. If a specific variant, color, or style is requested and it is not in the attachments, set 'image_intent': false, 'image_ids': [], state that it is unavailable, and list what other variants/colors/styles are available in the attachments."
+                    "\n- CRITICAL: All images listed under 'Available Image Attachments for sheet_X_row_Y' belong to that product row. Even if the image caption describes it as something else (e.g. 'Men's Dress Shirt' or 'Men's Kurta'), they are correct images representing the various colors, styles, or designs of that product. You MUST treat them as variants/images of that product and send them when requested."
                     "\n- CRITICAL: Do NOT print raw ID/caption texts verbatim. Describe features naturally in Bengali."
                     "\n- CRITICAL: Spreadsheet Product name is the main authority. Describe images as that product variant (e.g. 'এখানে [Product Name] এর সাদা রঙের ছবি দেওয়া হলো।')."
-                    "\n- CRITICAL (Visual Check): Compare incoming image caption with 'Available Image Attachments' captions:"
-                    "\n  * If details differ (collar patterns, cuffs, prints) despite same color, do NOT say we have the exact design. Politely state: 'আপনার ছবির সাথে ডিজাইনে কিছুটা অমিল আছে। আমাদের স্টকে থাকা পাঞ্জাবির ডিজাইন হলো: [আমাদের প্রোডাক্টের বিবরণ]। দেখতে চান?'"
-                    "\n  * If exact match, confirm availability. In both cases, set 'image_intent': true and include Image IDs."
+                    "\n- CRITICAL (Visual Check - ALWAYS PERFORM THIS): If the user uploaded an image/screenshot (either in the current message as [Image: ...] or as a recently sent image in the conversation history that we are discussing), you MUST compare that image description/caption with the 'Available Image Attachments' captions. If details differ (collar patterns, cuffs, prints, borders) despite being the same color, you MUST state the mismatch first (e.g. 'আপনার ছবির সাথে ডিজাইনে কিছুটা অমিল আছে। আমাদের স্টকে থাকা পাঞ্জাবির ডিজাইন হলো: [আমাদের প্রোডাক্টের বিবরণ]।') AND immediately set 'image_intent': true and include the Image IDs of our correct version and/or the [SIMILAR/ALTERNATIVE PRODUCTS FOR RECOMMENDATION] in 'image_ids' so the user receives the correct/alternative product images in the chat instantly. Never ignore the design mismatch of the discussed image under any circumstances."
+                    "\n- CRITICAL: If the user uploaded an image/screenshot recently, they have already seen it. Do NOT ask if they want to 'see' it. Ask if they want to order it ('অর্ডার করতে চান?')."
                 )
-                sheet_context = f"\n[KNOWLEDGE BASE DATA]:\n{clean_data}{image_rate_rule}"
+                sheet_context = f"\n[KNOWLEDGE BASE DATA]:\n{clean_data}{similar_products_context}{image_rate_rule}{recommendation_policy}"
                 post_info = f"User commented on this post: '{post_context_text}'. " if post_context_text else ""
 
                 if is_ambiguous_match:
@@ -676,7 +748,7 @@ def check_token_availability(user_profile, ai_model_name):
         offer__allowed_models__model_id=ai_model_name
     ).exists()
 
-def deduct_user_tokens(user_profile, total_tokens, ai_model_name):
+def deduct_user_tokens(user_profile, total_tokens, ai_model_name, is_image_query=False):
     if total_tokens > 0:
         try:
             from users.models import Subscription
@@ -684,14 +756,21 @@ def deduct_user_tokens(user_profile, total_tokens, ai_model_name):
             
             remaining_to_deduct = total_tokens
             
-            # Fetch all matching active subscriptions ordered by end_date (earliest first)
+            # Fetch all matching active subscriptions
             subs = Subscription.objects.filter(
                 profile=user_profile,
                 is_active=True,
                 end_date__gt=timezone.now(),
                 remaining_tokens__gt=0,
                 offer__allowed_models__model_id=ai_model_name
-            ).order_by('end_date')
+            )
+            
+            if is_image_query:
+                # Prioritize plans WITH image support
+                subs = subs.order_by('-offer__image_support', 'end_date')
+            else:
+                # Prioritize plans WITHOUT image support
+                subs = subs.order_by('offer__image_support', 'end_date')
 
             for sub in subs:
                 if remaining_to_deduct <= 0:
@@ -828,7 +907,7 @@ def restore_schedule_quota(user_profile, subscription, count=1):
 def build_ai_context(agent_config, sender_id, text, extra_instruction=None, sheet_context=None, platform='messenger', message_type=None):
     from aiAgent.utils import get_memory_context
     from chat.services import get_last_message
-    from aiAgent.memory_handler import calculate_context_score, check_keyword_match, detect_interruption_intent
+    from aiAgent.memory_handler import calculate_context_score, check_keyword_match
 
     lower_text = text.lower()
     memory_context = ""
@@ -899,50 +978,59 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
             failed_attempts = internal.get('failed_attempts', {})
             interruption_buffer = internal.get('interruption_buffer', {})
             recent_interest = internal.get('recent_order_interest') or {}
+            
+            last_img = internal.get('last_image_caption')
+            if last_img:
+                order_context += f"\n[ACTIVE DISCUSSION IMAGE CAPTION]:\n[Image: {last_img}]\n"
 
-            if recent_interest.get('product_name') and order_state == 'idle':
-                order_context = (
-                    "\n[RECENT ORDER INTEREST]:\n"
-                    f"product_name={recent_interest.get('product_name')}\n"
-                    f"price={recent_interest.get('price') or 'catalog/database'}\n"
-                    "Directive: The customer recently discussed this product. If they now say yes/confirm/order, reuse this product instead of asking product_name again. "
-                    "Still ask for missing customer details and wait for final confirmation before creating an order."
-                )
-
-            if order_state in ['ordering', 'editing', 'awaiting_confirmation']:
-                collected = []
-                missing = []
-                for field_name in ['customer_name', 'phone_number', 'address', 'product_name', 'quantity']:
-                    field_data = order_fields.get(field_name, {})
-                    if field_data.get('value') and field_data.get('confidence', 1.0) >= 0.75:
-                        collected.append(f"{field_name}={field_data.get('value')}")
+            collected = []
+            missing = []
+            for field_name in ['customer_name', 'phone_number', 'address', 'product_name', 'quantity']:
+                field_data = order_fields.get(field_name, {})
+                if field_data.get('value') and field_data.get('confidence', 1.0) >= 0.75:
+                    collected.append(f"{field_name}={field_data.get('value')}")
+                else:
+                    if field_name == 'product_name' and recent_interest.get('product_name'):
+                        collected.append(f"product_name={recent_interest.get('product_name')}")
                     else:
                         missing.append(field_name)
 
-                strike_lines = []
-                for field_name, stats in failed_attempts.items():
-                    strike = stats.get('strike_context') or stats.get('count')
-                    if strike:
-                        strike_lines.append(f"{field_name}: strike {strike}")
+            strike_lines = []
+            for field_name, stats in failed_attempts.items():
+                strike = stats.get('strike_context') or stats.get('count')
+                if strike:
+                    strike_lines.append(f"{field_name}: strike {strike}")
 
+            if order_state in ['ordering', 'editing', 'awaiting_confirmation'] or recent_interest.get('product_name'):
                 order_context = (
                     "\n[ORDER MEMORY STATE]:\n"
                     f"state={order_state}\n"
                     f"collected={'; '.join(collected) if collected else 'none'}\n"
                     f"missing={', '.join(missing) if missing else 'none'}\n"
                     f"failed_attempts={'; '.join(strike_lines) if strike_lines else 'none'}\n"
-                    "Directive: Use collected order fields as truth. Do not fill missing order fields from knowledge-base text. "
-                    "Do not ask the customer for price; backend/catalog validation supplies product price. "
-                    "Ask only for the next missing field, unless the user asks a separate policy/product question."
                 )
+
+                if order_state == 'idle' and recent_interest.get('product_name'):
+                    order_context += (
+                        "\nDirective: The customer recently discussed or showed interest in this product but hasn't placed the order yet. "
+                        "If they now confirm, say yes, or express intent to order/buy (e.g. saying 'Hum', 'Ha', 'yes', 'ok', 'korte cai'), "
+                        "you MUST set order_intent to 'create' and proceed to collect the missing details: "
+                        f"{', '.join(missing)}. Ask for them politely. Do not repeat mismatch warnings or design details."
+                    )
+                else:
+                    order_context += (
+                        "\nDirective: Use collected order fields as truth. Do not fill missing order fields from knowledge-base text. "
+                        "Do not ask the customer for price; backend/catalog validation supplies product price. "
+                        "Ask only for the next missing field, unless the user asks a separate policy/product question."
+                    )
+
                 if is_simple_greeting:
                     order_context += "\nDirective: The user only greeted. Reply with a warm greeting only; do not push order progress or ask missing order fields in this reply."
 
                 if order_state == 'awaiting_confirmation':
                     order_context += "\nDirective: Wait for confirmation, edit, or cancellation. Do not create an order without confirmation."
 
-                interruption = detect_interruption_intent(text, order_state)
-                if interruption.get('interrupted') or interruption_buffer.get('active'):
+                if interruption_buffer.get('active'):
                     order_context += (
                         "\nDirective: This is an order side-track. Answer the side question only. "
                         "Suppress order ticks, summaries, and field prompts in this reply."
@@ -1161,146 +1249,91 @@ def get_ai_response(agent_config, system_instruction, history, current_message):
         }
 
 def deliver_whatsapp_reply(data, reply):
-    """Deliver final reply for WhatsApp via n8n webhook"""
-    import os
-    webhook_url = os.getenv("N8N_WHATSAPP_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/whatsapp-delivery")
+    """Deliver final reply for WhatsApp via Baileys directly"""
+    from integrations.services.whatsapp import WhatsAppService
+
+    final_target = data.get('delivery_jid') or data.get('sender_id', '')
+    session_id = data.get('sessionId') or data.get('session_id')
+    if not session_id:
+        logger.error('[Logic] WhatsApp delivery blocked: sessionId is empty')
+        return False
+    if not final_target:
+        logger.error('[Logic] WhatsApp delivery blocked: to/delivery_jid is empty')
+        return False
+
     buttons = [
         {"id": "human_help" if not data.get('human_mode') else "resolve_human",
          "title": "🙋 Human Help" if not data.get('human_mode') else "✅ Resolve Human Mode"},
         {"id": "toggle_ai",
          "title": "🔊 On AI Reply" if data.get('stop_ai') else "🔇 Stop AI Reply"},
     ]
-    final_target = data.get('delivery_jid') or data.get('sender_id', '')
-    payload = {
-        "to": str(final_target),
-        "delivery_jid": str(data.get('delivery_jid', '')),
-        "phone": str(data.get('sender_id', '')),
-        "sender_id": str(data.get('sender_id', '')),
-        "message": str(reply),
-        "reply": str(reply),
-        "type": "whatsapp",
-        "message_id": str(data.get('message_id', '')),
-        "sessionId": str(data.get('sessionId', '')),
-        "buttons": buttons  # only option labels, no URLs
-    }
-    try:
-        logger.info(f'[Logic] Routing WhatsApp reply via n8n | to={final_target} | url={webhook_url}')
-        response = requests.post(
-            webhook_url,
-            json=payload,
-            timeout=15
-        )
-        if response.status_code != 200:
-            logger.error(f'[Logic] n8n WhatsApp delivery error: {response.status_code} - {response.text}')
-            return False
-        logger.info(f'[Logic] n8n WhatsApp delivery ok: {response.status_code}')
-        return True
-    except Exception as e:
-        logger.error(f"❌ [Logic] n8n WhatsApp delivery critical failure: {e}")
-        return False
+
+    logger.info(f'[Logic] Routing WhatsApp reply via Baileys | to={final_target} | session={session_id}')
+    return WhatsAppService.send_message(
+        session_id=session_id,
+        to=str(final_target),
+        message_text=str(reply),
+        buttons=buttons,
+    )
 
 
 def deliver_instagram_reply(data, reply, page_id, access_token):
-    """Deliver final reply for Instagram via n8n webhook (Separate Workflow)"""
-    import os
-    webhook_url = os.getenv("N8N_INSTAGRAM_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/instagram-delivery")
-    payload = {
-        "sender_id": str(data.get('sender_id', '')),
-        "reply": str(reply),
-        "message": str(reply),
-        "text": str(reply),
-        "page_id": str(page_id),
-        "page_access_token": str(access_token),
-        "type": "instagram",
-        "message_id": str(data.get('message_id', '')),
-    }
+    """Deliver final reply for Instagram via MetaService directly"""
+    from integrations.services.meta import MetaService
 
-    try:
-        logger.info(f'[Logic] Routing Instagram reply via n8n | page_id={page_id} | url={webhook_url}')
-        response = requests.post(
-            webhook_url,
-            json=payload,
-            timeout=15
-        )
-        if response.status_code != 200:
-            logger.error(f'[Logic] n8n Instagram delivery error: {response.status_code} - {response.text}')
-            return False
-        logger.info(f'[Logic] n8n Instagram delivery ok: {response.status_code}')
-        return True
-    except Exception as e:
-        logger.error(f"❌ [Logic] n8n Instagram delivery critical failure: {e}")
-        return False
+    sender_id = data.get('sender_id', '')
+    logger.info(f'[Logic] Routing Instagram reply via MetaService | page_id={page_id}')
+    return MetaService.send_message(
+        access_token=access_token,
+        recipient_id=str(sender_id),
+        message_text=str(reply),
+        msg_type='text',
+    )
 
 
 def deliver_facebook_reply(data, reply, page_id, access_token):
-    """Deliver final reply for Facebook (Messenger / Comment) via n8n webhook"""
-    import os
-    webhook_url = os.getenv("N8N_FACEBOOK_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/fb-comment-message-delivery")
-    request_type = str(data.get('type', 'messenger'))
-    payload = {
-        "sender_id": str(data.get('sender_id', '')),
-        "reply": str(reply),
-        "page_id": str(page_id),
-        "page_access_token": str(access_token),
-        "type": request_type,
-        "comment_id": str(data.get('comment_id', '')),
-        "post_id": str(data.get('post_id', ''))
-    }
+    """Deliver final reply for Facebook (Messenger / Comment) via MetaService directly"""
+    from integrations.services.meta import MetaService
 
-    try:
-        logger.info(f'[Logic] Routing Facebook reply via n8n | page_id={page_id} | url={webhook_url}')
-        response = requests.post(
-            webhook_url,
-            json=payload,
-            timeout=15
+    sender_id = data.get('sender_id', '')
+    request_type = str(data.get('type', 'messenger'))
+
+    if request_type == 'facebook_comment':
+        comment_id = data.get('comment_id', '')
+        logger.info(f'[Logic] Routing Facebook comment reply via MetaService | comment_id={comment_id}')
+        return MetaService.send_comment_reply(
+            access_token=access_token,
+            comment_id=str(comment_id),
+            message_text=str(reply),
         )
-        if response.status_code != 200:
-            logger.error(f'[Logic] n8n Facebook delivery error: {response.status_code} - {response.text}')
-            return False
-        logger.info(f'[Logic] n8n Facebook delivery ok: {response.status_code}')
-        return True
-    except Exception as e:
-        logger.error(f"n8n Facebook delivery critical failure: {e}")
-        return False
+    else:
+        logger.info(f'[Logic] Routing Messenger reply via MetaService | page_id={page_id}')
+        return MetaService.send_message(
+            access_token=access_token,
+            recipient_id=str(sender_id),
+            message_text=str(reply),
+            msg_type='text',
+        )
 
 def deliver_telegram_reply(data, reply, token):
-    """Deliver final reply for Telegram via n8n webhook (Separate Workflow)"""
-    import os
-    webhook_url = os.getenv("N8N_TELEGRAM_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/telegram-delivery")
+    """Deliver final reply for Telegram via TelegramService directly"""
+    from integrations.services.telegram import TelegramService
+
     chat_id = data.get('chat_id') or data.get('sender_id')
-    
     if not chat_id:
         logger.error("❌ [Logic] Missing chat_id for Telegram reply")
         return False
-    
     if not token:
         logger.error("❌ [Logic] Missing bot token for Telegram reply")
         return False
 
-    payload = {
-        "chat_id": str(chat_id),
-        "sender_id": str(data.get('sender_id', '')),
-        "reply": str(reply),
-        "access_token": str(token),  # Consistent with other delivery functions
-        "platform": "telegram",
-        "message_id": str(data.get('message_id', ''))
-    }
-
-    try:
-        logger.info(f'[Logic] Routing Telegram reply via n8n | chat={chat_id} | url={webhook_url}')
-        response = requests.post(
-            webhook_url,
-            json=payload,
-            timeout=15
-        )
-        if response.status_code != 200:
-            logger.error(f'[Logic] n8n Telegram delivery error: {response.status_code} - {response.text}')
-            return False
-        logger.info(f'[Logic] n8n Telegram delivery ok: {response.status_code}')
-        return True
-    except Exception as e:
-        logger.error(f'[Logic] n8n Telegram delivery critical failure: {e}')
-        return False
+    logger.info(f'[Logic] Routing Telegram reply via TelegramService | chat={chat_id}')
+    return TelegramService.send_message(
+        token=token,
+        chat_id=str(chat_id),
+        message_text=str(reply),
+        msg_type='text',
+    )
 
 def get_button_payload(contact):
     """Generate button text and payload based on current contact state"""
@@ -1338,45 +1371,32 @@ def get_button_payload(contact):
     return buttons
 
 def send_telegram_buttons(chat_id, token, contact, reply_text="\u200e"):
-    """Send inline keyboard buttons after Telegram reply"""
+    """Send inline keyboard buttons after Telegram reply via TelegramService"""
+    from integrations.services.telegram import TelegramService
+
     if not token or not chat_id:
         return False
-        
-    import os
-    # We can reuse the telegram delivery webhook, but send buttons
-    webhook_url = os.getenv("N8N_TELEGRAM_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/telegram-delivery")
-    
+
     buttons = get_button_payload(contact)
-    inline_keyboard = [
-        [
-            {"text": b["text"], "callback_data": b["action"]} for b in buttons
-        ]
-    ]
-    
-    payload = {
-        "chat_id": str(chat_id),
-        "access_token": str(token),
-        "platform": "telegram",
-        "reply": reply_text, # Minimal text as Telegram requires text with buttons
-        "reply_markup": {"inline_keyboard": inline_keyboard}
-    }
-    
-    try:
-        logger.info(f'[Logic] Sending Telegram buttons to {chat_id}')
-        requests.post(webhook_url, json=payload, timeout=10)
-        return True
-    except Exception as e:
-        logger.error(f"Telegram button delivery error: {e}")
-        return False
+    inline_keyboard = [[{"text": b["text"], "callback_data": b["action"]} for b in buttons]]
+    reply_markup = {"inline_keyboard": inline_keyboard}
+
+    logger.info(f'[Logic] Sending Telegram buttons to {chat_id}')
+    return TelegramService.send_message(
+        token=token,
+        chat_id=str(chat_id),
+        message_text=reply_text,
+        reply_markup=reply_markup,
+        msg_type='text',
+    )
 
 def send_messenger_buttons(sender_id, page_id, access_token, contact, reply_text="\u200e"):
-    """Send quick_reply buttons after Messenger reply"""
+    """Send quick_reply buttons after Messenger reply via MetaService"""
+    from integrations.services.meta import MetaService
+
     if not access_token or not sender_id:
         return False
-        
-    import os
-    webhook_url = os.getenv("N8N_FACEBOOK_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/fb-comment-message-delivery")
-    
+
     buttons = get_button_payload(contact)
     short_titles = {
         "HUMAN_HELP": "🙋 Human Mode",
@@ -1384,122 +1404,86 @@ def send_messenger_buttons(sender_id, page_id, access_token, contact, reply_text
         "STOP_AI_REPLY": "🔇 Stop AI",
         "ON_AI_REPLY": "🔊 On AI"
     }
-    quick_replies = []
-    for b in buttons:
-        title = short_titles.get(b["action"], b["text"])[:20]  # keep it short to avoid oversized bubbles
-        quick_replies.append({
+    quick_replies = [
+        {
             "content_type": "text",
-            "title": title,
+            "title": short_titles.get(b["action"], b["text"])[:20],
             "payload": b["action"]
-        })
-    
-    payload = {
-        "sender_id": str(sender_id),
-        "page_id": str(page_id),
-        "page_access_token": str(access_token),
-        "type": "messenger",
-        "reply": str(reply_text),
-        "quick_replies": quick_replies
-    }
-    
-    try:
-        logger.info(f'[Logic] Sending Messenger buttons to {sender_id}')
-        requests.post(webhook_url, json=payload, timeout=10)
-        return True
-    except Exception as e:
-        logger.error(f"Messenger button delivery error: {e}")
-        return False
+        } for b in buttons
+    ]
+
+    logger.info(f'[Logic] Sending Messenger buttons to {sender_id}')
+    return MetaService.send_message(
+        access_token=access_token,
+        recipient_id=str(sender_id),
+        message_text=reply_text,
+        quick_replies=quick_replies,
+        msg_type='text',
+    )
 
 def send_instagram_buttons(sender_id, page_id, access_token, contact, reply_text="\u200e"):
-    """Send quick_reply buttons after Instagram reply"""
+    """Send quick_reply buttons after Instagram reply via MetaService"""
+    from integrations.services.meta import MetaService
+
     if not access_token or not sender_id:
         return False
-        
-    import os
-    webhook_url = os.getenv("N8N_INSTAGRAM_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/instagram-delivery")
-    
+
     buttons = get_button_payload(contact)
     quick_replies = [
         {
             "content_type": "text",
-            "title": b["text"][:20], # Instagram limit
+            "title": b["text"][:20],
             "payload": b["action"]
         } for b in buttons
     ]
-    
-    payload = {
-        "sender_id": str(sender_id),
-        "page_id": str(page_id),
-        "page_access_token": str(access_token),
-        "type": "instagram",
-        "reply": reply_text,
-        "quick_replies": quick_replies
-    }
-    
-    try:
-        logger.info(f'[Logic] Sending Instagram buttons to {sender_id}')
-        requests.post(webhook_url, json=payload, timeout=10)
-        return True
-    except Exception as e:
-        logger.error(f"Instagram button delivery error: {e}")
-        return False
+
+    logger.info(f'[Logic] Sending Instagram buttons to {sender_id}')
+    return MetaService.send_message(
+        access_token=access_token,
+        recipient_id=str(sender_id),
+        message_text=reply_text,
+        quick_replies=quick_replies,
+        msg_type='text',
+    )
 
 def send_whatsapp_buttons(data, contact, reply_text="\u200e"):
-    """Send button message via n8n for WhatsApp"""
-    import os
-    webhook_url = os.getenv("N8N_WHATSAPP_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/whatsapp-delivery")
-    
+    """Send button message via Baileys directly for WhatsApp"""
+    from integrations.services.whatsapp import WhatsAppService
+
     final_target = data.get('delivery_jid') or data.get('sender_id', '')
-    if not final_target:
+    session_id = data.get('sessionId') or data.get('session_id')
+    if not final_target or not session_id:
+        logger.error(
+            f"[Logic] WhatsApp button delivery blocked: "
+            f"to={final_target!r}, sessionId={session_id!r}"
+        )
         return False
-        
+
     buttons_data = get_button_payload(contact)
-    
     has_order_buttons = any(b['action'] in ["CONFIRM_ORDER", "EDIT_ORDER", "CANCEL_ORDER"] for b in buttons_data)
-    
+
     menu_text = f"{reply_text}\n\n"
     if has_order_buttons:
         labels = []
         for i, b in enumerate(buttons_data, 1):
-            label = b['text']
-            label = ''.join(ch for ch in label if ch.isalnum() or ch.isspace())
-            label = label.strip()
+            label = ''.join(ch for ch in b['text'] if ch.isalnum() or ch.isspace()).strip()
             labels.append(f"{i}: {label}")
         menu_text += "  |  ".join(labels)
     else:
         opt1 = "1: Human Mode"
         if contact.is_human_needed:
             opt1 = "1: Resolve Human"
-            
         opt2 = "2: Off AI"
         if not contact.is_auto_reply_enabled:
             opt2 = "2: On AI"
-            
         menu_text += f"{opt1}          {opt2}"
-    
 
-    payload = {
-        "to": str(final_target),
-        "number": str(final_target),
-        "delivery_jid": str(data.get('delivery_jid', '')),
-        "phone": str(data.get('sender_id', '')),
-        "sender_id": str(data.get('sender_id', '')),
-        "message": menu_text,
-        "reply": menu_text,
-        "text": menu_text,
-        "type": "whatsapp",
-        "message_id": str(data.get('message_id', '')),
-        "sessionId": str(data.get('sessionId', '')),
-        "is_button_message": False
-    }
-    
-    try:
-        logger.info(f'[Logic] Sending WhatsApp buttons to {final_target}')
-        requests.post(webhook_url, json=payload, timeout=10)
-        return True
-    except Exception as e:
-        logger.error(f"WhatsApp button delivery error: {e}")
-        return False
+    logger.info(f'[Logic] Sending WhatsApp buttons to {final_target}')
+    return WhatsAppService.send_message(
+        session_id=session_id,
+        to=str(final_target),
+        message_text=menu_text,
+    )
 
 
 # ============================================================================
@@ -1579,137 +1563,73 @@ def get_voice_media_url(voice_file, platform=None):
 
 
 def _send_whatsapp_voice(sender_id, voice_file, data):
-    """Send voice file via WhatsApp through n8n webhook"""
-    import os
-    webhook_url = os.getenv("N8N_WHATSAPP_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/whatsapp-delivery")
-    
-    final_target = data.get('delivery_jid') or sender_id
-    
-    payload = {
-        "to": str(final_target),
-        "delivery_jid": str(data.get('delivery_jid', final_target)),
-        "phone": str(sender_id),
-        "sender_id": str(sender_id),
-        "sessionId": str(data.get('sessionId', '')),
-        "type": "whatsapp",
-        "message_type": "audio",  # Important: Tell n8n this is audio
-        "voice_file": str(voice_file),
-        "media_url": get_voice_media_url(voice_file, platform='whatsapp'),
-    }
+    """Send voice file via WhatsApp through Baileys directly"""
+    from integrations.services.whatsapp import WhatsAppService
 
-    try:
-        logger.info(f'🎤 [Logic] Sending WhatsApp voice: {voice_file} to {sender_id}')
-        response = requests.post(webhook_url, json=payload, timeout=15)
-        if response.status_code == 200:
-            logger.info(f'🎤 [Logic] WhatsApp voice delivery success: {voice_file}')
-            return True
-        else:
-            logger.error(f'🎤 [Logic] WhatsApp voice delivery failed: {response.status_code} - {response.text}')
-            return False
-    except Exception as e:
-        logger.error(f"🎤 WhatsApp voice delivery error: {e}")
-        return False
+    final_target = data.get('delivery_jid') or sender_id
+    session_id = data.get('sessionId') or data.get('session_id', '')
+    media_url = get_voice_media_url(voice_file, platform='whatsapp')
+
+    logger.info(f'🎤 [Logic] Sending WhatsApp voice: {voice_file} to {sender_id}')
+    return WhatsAppService.send_message(
+        session_id=session_id,
+        to=str(final_target),
+        message_text='',
+        msg_type='audio',
+        media_url=media_url,
+    )
 
 
 def _send_messenger_voice(sender_id, voice_file, page_id, access_token):
-    """Send voice file via Messenger/Facebook through n8n webhook"""
-    import os
-    webhook_url = os.getenv("N8N_FACEBOOK_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/fb-comment-message-delivery")
-    
+    """Send voice file via Messenger/Facebook through MetaService directly"""
+    from integrations.services.meta import MetaService
+
     if not page_id or not access_token:
         logger.error("🎤 Messenger voice send failed: Missing page_id or access_token")
         return False
-    
-    payload = {
-        "sender_id": str(sender_id),
-        "page_id": str(page_id),
-        "page_access_token": str(access_token),
-        "type": "messenger",
-        "message_type": "audio",  # Important: Tell n8n this is audio
-        "voice_file": str(voice_file),
-        "media_url": get_voice_media_url(voice_file, platform='messenger'),
-    }
-    
-    try:
-        logger.info(f'🎤 [Logic] Sending Messenger voice: {voice_file} to {sender_id}')
-        response = requests.post(webhook_url, json=payload, timeout=15)
-        if response.status_code == 200:
-            logger.info(f'🎤 [Logic] Messenger voice delivery success: {voice_file}')
-            return True
-        else:
-            logger.error(f'🎤 [Logic] Messenger voice delivery failed: {response.status_code} - {response.text}')
-            return False
-    except Exception as e:
-        logger.error(f"🎤 Messenger voice delivery error: {e}")
-        return False
+
+    media_url = get_voice_media_url(voice_file, platform='messenger')
+    logger.info(f'🎤 [Logic] Sending Messenger voice: {voice_file} to {sender_id}')
+    return MetaService.send_message(
+        access_token=access_token,
+        recipient_id=str(sender_id),
+        message_text='',
+        msg_type='audio',
+        media_url=media_url,
+    )
 
 
 def _send_instagram_voice(sender_id, voice_file, page_id, access_token):
-    """Send voice file via Instagram through n8n webhook"""
-    import os
-    webhook_url = os.getenv("N8N_INSTAGRAM_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/instagram-delivery")
-    
+    """Send voice file via Instagram through MetaService directly"""
+    from integrations.services.meta import MetaService
+
     if not page_id or not access_token:
         logger.error("🎤 Instagram voice send failed: Missing page_id or access_token")
         return False
-    
-    payload = {
-        "sender_id": str(sender_id),
-        "page_id": str(page_id),
-        "page_access_token": str(access_token),
-        "type": "instagram",
-        "message_type": "audio",  # Important: Tell n8n this is audio
-        "voice_file": str(voice_file),
-        "media_url": get_voice_media_url(voice_file, platform='instagram'),
-    }
-    
-    try:
-        logger.info(f'🎤 [Logic] Sending Instagram voice: {voice_file} to {sender_id}')
-        response = requests.post(webhook_url, json=payload, timeout=15)
-        if response.status_code == 200:
-            logger.info(f'🎤 [Logic] Instagram voice delivery success: {voice_file}')
-            return True
-        else:
-            logger.error(f'🎤 [Logic] Instagram voice delivery failed: {response.status_code} - {response.text}')
-            return False
-    except Exception as e:
-        logger.error(f"🎤 Instagram voice delivery error: {e}")
-        return False
+
+    media_url = get_voice_media_url(voice_file, platform='instagram')
+    logger.info(f'🎤 [Logic] Sending Instagram voice: {voice_file} to {sender_id}')
+    return MetaService.send_message(
+        access_token=access_token,
+        recipient_id=str(sender_id),
+        message_text='',
+        msg_type='audio',
+        media_url=media_url,
+    )
 
 
 def _send_telegram_voice(sender_id, voice_file, token, data):
-    """Send voice file via Telegram through n8n webhook"""
-    import os
-    webhook_url = os.getenv("N8N_TELEGRAM_DELIVERY_URL", "https://n8n.newsmartagent.com/webhook/telegram-delivery")
-    
+    """Send voice file via Telegram through TelegramService directly"""
+    from integrations.services.telegram import TelegramService
+
     chat_id = data.get('chat_id') or sender_id
-    
     if not chat_id or not token:
         logger.error("🎤 Telegram voice send failed: Missing chat_id or token")
         return False
-    
-    payload = {
-        "chat_id": str(chat_id),
-        "sender_id": str(sender_id),
-        "access_token": str(token),
-        "platform": "telegram",
-        "message_type": "audio",  # Important: Tell n8n this is audio
-        "voice_file": str(voice_file),
-        "media_url": get_voice_media_url(voice_file, platform='telegram'),
-    }
-    
-    try:
-        logger.info(f'🎤 [Logic] Sending Telegram voice: {voice_file} to {chat_id}')
-        response = requests.post(webhook_url, json=payload, timeout=15)
-        if response.status_code == 200:
-            logger.info(f'🎤 [Logic] Telegram voice delivery success: {voice_file}')
-            return True
-        else:
-            logger.error(f'🎤 [Logic] Telegram voice delivery failed: {response.status_code} - {response.text}')
-            return False
-    except Exception as e:
-        logger.error(f"🎤 Telegram voice delivery error: {e}")
-        return False
+
+    media_url = get_voice_media_url(voice_file, platform='telegram')
+    logger.info(f'🎤 [Logic] Sending Telegram voice: {voice_file} to {chat_id}')
+    return TelegramService.send_voice(token=token, chat_id=str(chat_id), media_url=media_url)
 
 def deliver_dashboard_reply(user_id, reply_text, message_id):
     """Deliver final reply to the dashboard via WebSocket and update the log"""

@@ -173,3 +173,16 @@ class DocumentKnowledge(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.doc_title} (Chunk {self.chunk_index})"
+
+
+class RowSimilarity(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='row_similarities')
+    source_row_id = models.CharField(max_length=50, db_index=True)
+    target_row_id = models.CharField(max_length=50, db_index=True)
+    distance = models.FloatField()
+
+    class Meta:
+        unique_together = [['user', 'source_row_id', 'target_row_id']]
+
+    def __str__(self):
+        return f"{self.source_row_id} -> {self.target_row_id} ({self.distance:.4f})"

@@ -15,8 +15,6 @@ const fs = require('fs');
 
 // ─── CONFIG ───────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3001;
-const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL || process.env.N8N_WHATSAPP_WEBHOOK_URL || '';
-const N8N_WEBHOOK_INTERNAL_URL = process.env.N8N_WEBHOOK_INTERNAL_URL || 'http://n8n:5678';
 const DJANGO_WHATSAPP_WEBHOOK_URL = process.env.DJANGO_WHATSAPP_WEBHOOK_URL || process.env.DJANGO_WHATSAPP_INCOMING_URL || '';
 const SYNC_AGENT_URL = process.env.SYNC_AGENT_URL || 'http://newsmartagent-django:8000/api/whatsapp/sync-agent/';
 const API_SECRET = process.env.BAILEYS_API_SECRET || 'nsa-baileys-secret-2024';
@@ -222,60 +220,24 @@ async function processQueue(sessionId) {
     }
 }
 
-async function forwardToN8n(payload) {
-    const targetWebhook = DJANGO_WHATSAPP_WEBHOOK_URL || N8N_WEBHOOK_URL || `${N8N_WEBHOOK_INTERNAL_URL}/webhook/whatsapp-incoming`;
+async function forwardToIngress(payload) {
+    const targetWebhook = DJANGO_WHATSAPP_WEBHOOK_URL;
     if (!targetWebhook) {
-        logger.warn(`⚠️ [Baileys→Ingress] No webhook configured, skipping forward`);
+        logger.warn(`⚠️ [Baileys→Ingress] No webhook configured (DJANGO_WHATSAPP_WEBHOOK_URL), skipping forward`);
         return;
     }
 
-    const tryPost = async (url) => {
-        logger.info(`📤 [Baileys→Ingress] Forwarding message from ${payload.phone} to ${url}: "${payload.message.substring(0, 50)}..."`);
-        logger.debug(`📦 [Baileys→Ingress] Payload: ${JSON.stringify(payload)}`);
-        return axios.post(url, payload, { timeout: 15000 });
-    };
-
     try {
-        const response = await tryPost(targetWebhook);
+        logger.info(`📤 [Baileys→Ingress] Forwarding message from ${payload.phone} to ${targetWebhook}: "${payload.message.substring(0, 50)}..."`);
+        logger.debug(`📦 [Baileys→Ingress] Payload: ${JSON.stringify(payload)}`);
+        const response = await axios.post(targetWebhook, payload, { timeout: 15000 });
         logger.info(`✅ [Baileys→Ingress] Message forwarded successfully. Status: ${response.status}`);
         logger.debug(`📄 [Baileys→Ingress] Response: ${JSON.stringify(response.data).substring(0, 200)}`);
-        return;
     } catch (err) {
-        logger.error(`❌ [Baileys→Ingress] Primary webhook forward failed: ${err.message}`);
+        logger.error(`❌ [Baileys→Ingress] Webhook forward failed: ${err.message}`);
         logger.error(`   URL: ${targetWebhook}`);
         logger.error(`   Error Code: ${err.code || err.response?.status}`);
         logger.error(`   Detail: ${err.response?.data ? JSON.stringify(err.response.data) : err.stack}`);
-
-        if (targetWebhook !== N8N_WEBHOOK_URL && N8N_WEBHOOK_URL) {
-            try {
-                logger.info(`🔁 [Baileys→Ingress] Trying configured N8N webhook fallback: ${N8N_WEBHOOK_URL}`);
-                const response = await tryPost(N8N_WEBHOOK_URL);
-                logger.info(`✅ [Baileys→Ingress] N8N fallback forwarded successfully. Status: ${response.status}`);
-                logger.debug(`📄 [Baileys→Ingress] N8N fallback response: ${JSON.stringify(response.data).substring(0, 200)}`);
-                return;
-            } catch (fallbackErr) {
-                logger.error(`❌ [Baileys→Ingress] N8N fallback failed: ${fallbackErr.message}`);
-                logger.error(`   URL: ${N8N_WEBHOOK_URL}`);
-                logger.error(`   Error Code: ${fallbackErr.code || fallbackErr.response?.status}`);
-                logger.error(`   Detail: ${fallbackErr.response?.data ? JSON.stringify(fallbackErr.response.data) : fallbackErr.stack}`);
-            }
-        }
-
-        const internalUrl = `${N8N_WEBHOOK_INTERNAL_URL}/webhook/whatsapp-incoming`;
-        if (internalUrl !== targetWebhook && internalUrl !== N8N_WEBHOOK_URL) {
-            try {
-                logger.info(`🔁 [Baileys→Ingress] Trying internal fallback URL: ${internalUrl}`);
-                const response = await tryPost(internalUrl);
-                logger.info(`✅ [Baileys→Ingress] Internal fallback forwarded successfully. Status: ${response.status}`);
-                logger.debug(`📄 [Baileys→Ingress] Internal response: ${JSON.stringify(response.data).substring(0, 200)}`);
-                return;
-            } catch (fallbackErr) {
-                logger.error(`❌ [Baileys→Ingress] Internal webhook fallback failed: ${fallbackErr.message}`);
-                logger.error(`   URL: ${internalUrl}`);
-                logger.error(`   Error Code: ${fallbackErr.code || fallbackErr.response?.status}`);
-                logger.error(`   Detail: ${fallbackErr.response?.data ? JSON.stringify(fallbackErr.response.data) : fallbackErr.stack}`);
-            }
-        }
     }
 }
 
@@ -573,10 +535,11 @@ async function initSession(sessionId, phoneNumber = null) {
 
                 const payload = {
                     from,
-                    phone: resolvedPhone, // এটি n8n এ আসল নম্বর হিসেবে যাবে
+                    phone: resolvedPhone,
                     raw_phone: from.split('@')[0],
                     receiver: sessionData.phone || sock.user?.id?.split(':')[0]?.split('@')[0],
                     sessionId: sessionId,
+                    session_id: sessionId,
                     message: messageContent,
                     message_type: mediaPayload.message_type || messageType,
                     message_id: msg.key.id,
@@ -585,7 +548,7 @@ async function initSession(sessionId, phoneNumber = null) {
                 };
                 
                 logger.info(`📤 [Baileys] Attempting to forward message from ${resolvedPhone}...`);
-                await forwardToN8n(payload);
+                await forwardToIngress(payload);
             }
         });
 

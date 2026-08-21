@@ -178,9 +178,10 @@ def deliver_youtube_final(data, ai_reply, agent):
 
 def deliver_youtube_reply_to_n8n(channel, agent, comment_item, ai_reply):
     """
-    Sends the comment and AI-generated reply to the n8n webhook.
+    Directly replies to the YouTube comment using YouTubeService.
     """
     from users.models import YouTubeCommentLog
+    from integrations.services.youtube import YouTubeService
     
     snippet = comment_item.get("snippet", {}).get("topLevelComment", {}).get("snippet", {})
     comment_id = comment_item.get("id")
@@ -196,33 +197,20 @@ def deliver_youtube_reply_to_n8n(channel, agent, comment_item, ai_reply):
         status='pending'
     )
 
-    webhook_url = getattr(settings, 'N8N_YOUTUBE_WEBHOOK_URL', None)
-    if not webhook_url:
-        logger.warning("N8N_YOUTUBE_WEBHOOK_URL not configured")
-        log_entry.status = 'failed'
-        log_entry.save()
-        return
-
-    payload = {
-        "platform": "youtube",
-        "channel_id": channel.channel_id,
-        "channel_title": channel.channel_title,
-        "agent_name": agent.name,
-        "video_id": snippet.get("videoId"),
-        "comment_id": comment_id,
-        "author_name": snippet.get("authorDisplayName"),
-        "comment_text": snippet.get("textDisplay"),
-        "generated_reply": ai_reply,
-        "access_token": channel.access_token,
-        "timestamp": timezone.now().isoformat()
-    }
-    
     try:
-        requests.post(webhook_url, json=payload, timeout=10)
-        logger.info(f"YouTube comment reply delivered to n8n for channel {channel.channel_id}")
-        log_entry.status = 'success'
+        success = YouTubeService.send_comment_reply(
+            access_token=channel.access_token,
+            parent_id=comment_id,
+            message_text=ai_reply
+        )
+        if success:
+            logger.info(f"YouTube comment reply delivered DIRECTLY for channel {channel.channel_id}")
+            log_entry.status = 'success'
+        else:
+            logger.error(f"Failed to directly deliver YouTube reply for comment {comment_id}")
+            log_entry.status = 'failed'
         log_entry.save()
     except Exception as e:
-        logger.error(f"Failed to deliver YouTube reply to n8n: {e}")
+        logger.error(f"Failed to directly deliver YouTube reply: {e}")
         log_entry.status = 'failed'
         log_entry.save()

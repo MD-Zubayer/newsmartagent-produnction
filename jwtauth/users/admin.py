@@ -117,6 +117,7 @@ class PlatformInline(admin.TabularInline):
 class OfferAdmin(ModelAdmin):
     list_display = ['name', 'tokens', 'schedule_messages', 'price', 'duration_days', 'is_active', 'platform_count', 'target_audience']
     inlines = [PlatformInline]
+    exclude = ('allowed_platforms',)
 
     @admin.display(description="Count platforms")
     def platform_count(self, obj):

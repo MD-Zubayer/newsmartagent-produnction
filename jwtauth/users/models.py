@@ -297,6 +297,7 @@ class Offer(models.Model):
     price = models.IntegerField()
     duration_days = models.IntegerField(default=30)
     is_active = models.BooleanField(default=True)
+    image_support = models.BooleanField(default=False, help_text="ইমেজ সাপোর্ট সচল করতে এটি সিলেক্ট করুন")
     target_audience = models.CharField(max_length=20, choices=TAGET_AUDIENCE, default='all')
     created_at = models.DateTimeField(auto_now_add=True)
 

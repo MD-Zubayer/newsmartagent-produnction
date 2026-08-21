@@ -237,7 +237,7 @@ def dashboard_chat_view(request):
             'name': f"Dashboard AI - {user.username}",
             'platform': 'messenger',
             'system_prompt': "You are an expert dashboard assistant for New Smart Agent BD. Help users with their dashboard and account questions.",
-            'ai_model': 'gemini-2.5-flash',
+            'ai_model': 'gemini-3.1-flash-lite',
             'is_active': True
         }
     )

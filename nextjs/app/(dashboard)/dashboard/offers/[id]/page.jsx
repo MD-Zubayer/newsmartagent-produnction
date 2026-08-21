@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import api from "@/lib/api";
-import { FaCheckCircle, FaChevronLeft, FaShoppingCart, FaInfoCircle, FaCube, FaCoins, FaCrown, FaStar, FaTag, FaTicketAlt, FaGift } from "react-icons/fa";
+import { FaCheckCircle, FaChevronLeft, FaShoppingCart, FaInfoCircle, FaCube, FaCoins, FaCrown, FaStar, FaTag, FaTicketAlt, FaGift, FaImage } from "react-icons/fa";
 import { motion } from 'framer-motion';
 
 function getOfferIcon(name) {
@@ -83,6 +83,15 @@ export default function OfferDetailsPage() {
                 <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider italic">
                     {offer.schedule_messages?.toLocaleString?.() ?? offer.schedule_messages} Scheduled Messages
                 </span>
+                {offer.image_support ? (
+                  <span className="bg-teal-50 text-teal-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider italic flex items-center gap-1">
+                      <FaImage /> Image Support Enabled
+                  </span>
+                ) : (
+                  <span className="bg-rose-50 text-rose-500 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider italic line-through flex items-center gap-1">
+                      <FaImage /> No Image Support
+                  </span>
+                )}
             </div>
           </div>
           <div className="text-3xl md:text-5xl font-black text-slate-900 tracking-tighter">

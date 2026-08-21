@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import api from "@/lib/api";
-import { FaHashtag, FaArrowRight, FaTag, FaGift, FaTicketAlt, FaCoins, FaCrown, FaStar, FaShoppingCart } from "react-icons/fa";
+import { FaHashtag, FaArrowRight, FaTag, FaGift, FaTicketAlt, FaCoins, FaCrown, FaStar, FaShoppingCart, FaImage } from "react-icons/fa";
 function getOfferIcon(name){
   if(!name) return FaHashtag;
   const n = String(name).toLowerCase();
@@ -130,6 +130,12 @@ export default function OffersPage() {
                       <div className="relative z-10 flex-1">
                         <h2 className="text-2xl font-black text-slate-900 mb-2 tracking-tight group-hover:text-slate-800 transition-colors">{offer.tokens} Tokens</h2>
                         <p className="text-sm text-slate-500 font-medium leading-relaxed">Schedule Messages: {offer.schedule_messages?.toLocaleString?.() ?? offer.schedule_messages}</p>
+                        <div className="flex items-center gap-1.5 mt-2">
+                          <FaImage className={offer.image_support ? "text-emerald-500" : "text-slate-300"} />
+                          <span className={`text-[11px] font-bold ${offer.image_support ? "text-emerald-600" : "text-slate-400 line-through"}`}>
+                            {offer.image_support ? "Image Features Enabled" : "No Image Support"}
+                          </span>
+                        </div>
                       </div>
 
                       <div className="mt-6 flex items-center justify-between relative z-10">
