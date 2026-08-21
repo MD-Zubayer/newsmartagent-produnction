@@ -9,7 +9,8 @@ from decimal import Decimal
 from django.test import TestCase
 from django.utils import timezone
 from datetime import timedelta
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
+User = get_user_model()
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'newsmartagent.settings')
 django.setup()
@@ -57,8 +58,12 @@ class OrderFallbackRegressionTests(TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
+        from users.models import UniqueIDPool
+        UniqueIDPool.objects.bulk_create([
+            UniqueIDPool(uid=f"TESTID_{i}", is_used=False)
+            for i in range(1, 10)
+        ])
         self.user = User.objects.create_user(
-            username='test_merchant',
             email='merchant@test.com',
             password='testpass123'
         )
@@ -255,7 +260,7 @@ class OrderFallbackRegressionTests(TestCase):
             ('01712345678', '01712345678'),  # Valid, clean
             ('০১৭-১২৩৪-৫৬৭৮', None),  # Bangla digits (unsupported)
             ('01812345678', '01812345678'),  # Valid Bangla 01 series
-            ('+880171234567', '01712345678'),  # Valid with country code
+            ('+8801712345678', '01712345678'),  # Valid with country code
             ('123456', None),  # Too short
             ('017 1234 5678', '01712345678'),  # Valid with spaces
         ]
@@ -325,8 +330,7 @@ class OrderFallbackRegressionTests(TestCase):
         """
         user_memory = _get_or_create_user_memory(self.agent_config, self.sender_id)
         
-        # Step 1: Extract with invalid phone (should fail validation and increment strike)
-        text_invalid_phone = "আমার নাম জুবায়ের, নাম্বার: invalid123"
+        text_invalid_phone = "আমার নাম জুবায়ের, নম্বর: 123456789"
         
         extracted_1 = extract_order_data_from_text(text_invalid_phone, {}, user_memory)
         
@@ -340,9 +344,8 @@ class OrderFallbackRegressionTests(TestCase):
         self.assertEqual(phone_stats.get('count'), 1)
         self.assertEqual(phone_stats.get('strike_context'), 1)
         
-        # Step 3: Repeat invalid input 2 more times
         for i in range(2):
-            text_invalid = f"নাম্বার {['bad1', 'bad2'][i]}"
+            text_invalid = f"নম্বর {['123456780', '123456781'][i]}"
             extracted_n = extract_order_data_from_text(text_invalid, {}, user_memory)
         
         # Step 4: Verify strike is now 3
@@ -432,11 +435,8 @@ class OrderFallbackRegressionTests(TestCase):
 
         print("✅ TEST 6B PASSED: WhatsApp numeric button replies map to pending order actions correctly.")
 
-    # ============================================================
-    # TEST 7: Catalog Product Validation for Memory Orders
-    # ============================================================
     def test_7_catalog_product_validation_for_memory_order(self):
-        order_form = OrderForm.objects.create(user=self.user)
+        order_form, _ = OrderForm.objects.get_or_create(user=self.user)
         SpreadsheetKnowledge.objects.create(
             user=self.user,
             row_id='sheet_1_row_1',
@@ -470,11 +470,8 @@ class OrderFallbackRegressionTests(TestCase):
 
         print("✅ TEST 7 PASSED: Catalog product validation enforces price and stock checks for memory orders.")
 
-    # ============================================================
-    # TEST 8: Serializer Product Catalog Enforcement
-    # ============================================================
-    def test_8_serializer_rejects_unknown_catalog_product(self):
-        order_form = OrderForm.objects.create(user=self.user)
+    def test_8_serializer_product_catalog_enforcement(self):
+        order_form, _ = OrderForm.objects.get_or_create(user=self.user)
         SpreadsheetKnowledge.objects.create(
             user=self.user,
             row_id='sheet_1_row_1',

@@ -273,6 +273,12 @@ class PlatformImageRouter:
                 'allowed': self.PLATFORMS
             }
         
+        if not recipient_id or not str(recipient_id).strip():
+            return {
+                'status': 'error',
+                'message': 'Recipient ID is required'
+            }
+        
         if not image_urls:
             return {
                 'status': 'error',

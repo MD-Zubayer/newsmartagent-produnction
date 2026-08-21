@@ -93,6 +93,7 @@ def detect_interruption_intent(text, order_state=None):
     if not text or order_state != "ordering":
         return {"interrupted": False, "confidence": 0.0}
 
+    # 1. Fallback keyword check logic
     lower = str(text).lower()
     question_words = ["?", "কত", "কি", "কী", "কখন", "কেন", "how", "when", "why", "what", "where"]
     policy_words = [
@@ -104,10 +105,46 @@ def detect_interruption_intent(text, order_state=None):
     has_question = any(word in lower for word in question_words)
     has_policy = any(word in lower for word in policy_words)
     continues_order = any(word in lower for word in order_words)
+    keyword_interrupted = (has_question or has_policy) and not continues_order
 
-    if (has_question or has_policy) and not continues_order:
+    # 2. AI-driven Gemini check
+    from aiAgent.gemini import GENAI_CLIENT
+    from google.genai import types
+    if GENAI_CLIENT:
+        try:
+            prompt = (
+                "You are an AI intent classifier. Analyze the user's message during an active product order process. "
+                "Determine if the user is asking a side-track/policy/business query (like delivery charge, shipping time, warranty, return policy, office location, or asking details about products/prices) "
+                "instead of proceeding directly with ordering steps (e.g. providing customer name, phone, address, or confirming quantity/purchase).\n\n"
+                "Return ONLY a JSON object: {\"interrupted\": true, \"confidence\": 0.9} or {\"interrupted\": false, \"confidence\": 0.0}."
+            )
+            response = GENAI_CLIENT.models.generate_content(
+                model='models/gemini-3.1-flash-lite',
+                contents=[f"User message: {text}"],
+                config=types.GenerateContentConfig(
+                    system_instruction=prompt,
+                    temperature=0.0,
+                    max_output_tokens=100,
+                    response_mime_type="application/json"
+                )
+            )
+            if response.text:
+                result = json.loads(response.text.strip())
+                return {
+                    "interrupted": bool(result.get("interrupted")),
+                    "confidence": float(result.get("confidence", 0.0))
+                }
+        except Exception:
+            pass
+
+    # 3. Fallback
+    if keyword_interrupted:
         return {"interrupted": True, "confidence": 0.9 if has_policy else 0.76}
     return {"interrupted": False, "confidence": 0.0}
+
+
+
+
 
 def calculate_context_score(text):
     """

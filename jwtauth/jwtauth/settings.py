@@ -46,27 +46,16 @@ DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
 
 MAIN_DOMAIN = os.environ.get('MAIN_DOMAIN', 'newsmartagent.com')
-N8N_DOMAIN = os.environ.get('N8N_DOMAIN', 'n8n.newsmartagent.com')
 PROJECT_NAME = os.environ.get('PROJECT_NAME', 'newsmartagent')
 REDIS_URL = _normalize_redis_url(os.environ.get('REDIS_URL', f"redis://{os.environ.get('REDIS_HOST', f'{PROJECT_NAME}-redis')}:{os.environ.get('REDIS_PORT', 6379)}/0"))
 REDIS_HOST = os.environ.get('REDIS_HOST', f'{PROJECT_NAME}-redis')
 REDIS_PORT = int(os.environ.get('REDIS_PORT', 6379))
 
-# N8N webhook URLs for invoice delivery
-N8N_WHATSAPP_WEBHOOK_URL = os.environ.get('N8N_WHATSAPP_WEBHOOK_URL', '')
-N8N_WHATSAPP_DELIVERY_URL = os.environ.get('N8N_WHATSAPP_DELIVERY_URL', '')
-N8N_MESSENGER_WEBHOOK_URL = os.environ.get('N8N_MESSENGER_WEBHOOK_URL', '')
-N8N_INSTAGRAM_WEBHOOK_URL = os.environ.get('N8N_INSTAGRAM_WEBHOOK_URL', '')
-N8N_TELEGRAM_WEBHOOK_URL = os.environ.get('N8N_TELEGRAM_WEBHOOK_URL', '')
-N8N_TELEGRAM_DELIVERY_URL = os.environ.get('N8N_TELEGRAM_DELIVERY_URL', '')
-N8N_FACEBOOK_WEBHOOK_URL = os.environ.get('N8N_FACEBOOK_WEBHOOK_URL', '')
 
 ALLOWED_HOSTS = [
     MAIN_DOMAIN,
     f'api.{MAIN_DOMAIN}',
-    N8N_DOMAIN,
     f'{PROJECT_NAME}-django',
-    f'{PROJECT_NAME}-n8n',
     'localhost',
     '127.0.0.1',
     'backend',
@@ -81,7 +70,6 @@ if extra_hosts:
 CSRF_TRUSTED_ORIGINS = [
     f'https://{MAIN_DOMAIN}',
     f'https://api.{MAIN_DOMAIN}',
-    f'https://{N8N_DOMAIN}',
     f'http://{PROJECT_NAME}-django:8000',
     'http://localhost:3000',
     'http://localhost:3001'
@@ -116,7 +104,6 @@ INSTALLED_APPS = [
     'allauth.account',
     # 'allauth.socialaccount.providers.google',
     'payments',
-    'n8n',
     'webhooks',
 
     'chat',
@@ -353,11 +340,9 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     f"https://{MAIN_DOMAIN}",
     f"https://api.{MAIN_DOMAIN}",
-    f"https://{N8N_DOMAIN}",
     f"https://monitor.{MAIN_DOMAIN}",
     f"https://dev.{MAIN_DOMAIN}",
     f"https://dev-api.{MAIN_DOMAIN}",
-    f"https://dev-n8n.{MAIN_DOMAIN}",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:3001",
@@ -424,7 +409,6 @@ FB_REDIRECT_URI = os.environ.get('FB_REDIRECT_URI')
 YOUTUBE_CLIENT_ID = os.environ.get('YOUTUBE_CLIENT_ID')
 YOUTUBE_CLIENT_SECRET = os.environ.get('YOUTUBE_CLIENT_SECRET')
 YOUTUBE_REDIRECT_URI = os.environ.get('YOUTUBE_REDIRECT_URI')
-N8N_YOUTUBE_WEBHOOK_URL = os.environ.get('N8N_YOUTUBE_WEBHOOK_URL')
 
 TIKTOK_CLIENT_KEY = os.environ.get('TIKTOK_CLIENT_KEY')
 TIKTOK_CLIENT_SECRET = os.environ.get('TIKTOK_CLIENT_SECRET')
@@ -614,7 +598,6 @@ UNFOLD = {
                 "separator": True,
                 "items": [
                     {"title": _("AI Agents"), "icon": "psychology", "link": "/admin/aiAgent/aiagent/"},
-                    {"title": _("Workflows (n8n)"), "icon": "account_tree", "link": f"https://{N8N_DOMAIN}", "external": True},
                 ],
             },
         ],

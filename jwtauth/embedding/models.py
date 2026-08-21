@@ -66,6 +66,7 @@ class RowImage(models.Model):
     image_caption = models.TextField(blank=True, default='')
     image_embedding = VectorField(dimensions=768, null=True, blank=True)
     caption_embedding = VectorField(dimensions=768, null=True, blank=True)
+    source_url = models.TextField(blank=True, default='')
     
     # Metadata
     source = models.CharField(max_length=20, choices=IMAGE_SOURCE_CHOICES, default='manual')
@@ -172,3 +173,16 @@ class DocumentKnowledge(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.doc_title} (Chunk {self.chunk_index})"
+
+
+class RowSimilarity(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='row_similarities')
+    source_row_id = models.CharField(max_length=50, db_index=True)
+    target_row_id = models.CharField(max_length=50, db_index=True)
+    distance = models.FloatField()
+
+    class Meta:
+        unique_together = [['user', 'source_row_id', 'target_row_id']]
+
+    def __str__(self):
+        return f"{self.source_row_id} -> {self.target_row_id} ({self.distance:.4f})"

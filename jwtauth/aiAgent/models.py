@@ -16,7 +16,7 @@ class AIProviderModel(models.Model):
         ('openrouter', 'OpenRouter'),
     ]
     name = models.CharField(max_length=100, help_text="e.g. GPT-4o Mini, Gemini Pro")
-    model_id = models.CharField(max_length=100, help_text="e.g. gpt-4o-mini, gemini-2.0-flash")
+    model_id = models.CharField(max_length=100, help_text="e.g. gpt-4o-mini, gemini-3.1-flash-lite")
     provider = models.CharField(max_length=20, choices=PROVIDER_CHOICES)
     is_active = models.BooleanField(default=True)
 

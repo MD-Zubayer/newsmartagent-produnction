@@ -206,7 +206,57 @@ def sync_spreadsheet_to_knowledge(user, grid_data, sheet_id):
         obj.save()
         updated_count += 1
 
+    if updated_count > 0:
+        recalculate_row_similarities(user, sheet_id)
+
     return updated_count
+
+
+def recalculate_row_similarities(user, sheet_id):
+    from embedding.models import SpreadsheetKnowledge, RowSimilarity
+    from pgvector.django import CosineDistance
+    import logging
+    logger = logging.getLogger(__name__)
+
+    try:
+        sheet_rows = list(SpreadsheetKnowledge.objects.filter(user=user, row_id__startswith=f"sheet_{sheet_id}_"))
+        if not sheet_rows:
+            return
+
+        similarities_to_create = []
+
+        for obj in sheet_rows:
+            if obj.embedding is None:
+                continue
+
+            nearest = SpreadsheetKnowledge.objects.filter(
+                user=user
+            ).exclude(
+                row_id=obj.row_id
+            ).annotate(
+                dist=CosineDistance('embedding', obj.embedding)
+            ).filter(
+                dist__lt=0.65
+            ).order_by('dist')[:5]
+
+            for target in nearest:
+                similarities_to_create.append(
+                    RowSimilarity(
+                        user=user,
+                        source_row_id=obj.row_id,
+                        target_row_id=target.row_id,
+                        distance=float(target.dist)
+                    )
+                )
+
+        source_ids = [obj.row_id for obj in sheet_rows]
+        RowSimilarity.objects.filter(user=user, source_row_id__in=source_ids).delete()
+        if similarities_to_create:
+            RowSimilarity.objects.bulk_create(similarities_to_create, ignore_conflicts=True)
+            logger.info(f"📊 [RowSimilarity] Recalculated similarities for sheet {sheet_id}, created {len(similarities_to_create)} mappings.")
+
+    except Exception as e:
+        logger.error(f"Error recalculating row similarities: {e}", exc_info=True)
 
 
 def detect_image_format_from_bytes(image_data):
@@ -409,14 +459,32 @@ def get_gemini_image_caption(image_url, fallback_text=None):
         # ৫. মডেল কল করা (ইমেজ বাইটস সহ - proper SDK types)
         print(f"[DEBUG] Calling Gemini Vision API with image data...")
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-3.1-flash-lite',
             contents=[
                 prompt,
                 types.Part.from_bytes(data=image_data, mime_type=mime_type)
             ],
             config=types.GenerateContentConfig(
                 temperature=0.4,
-                max_output_tokens=100
+                max_output_tokens=100,
+                safety_settings=[
+                    types.SafetySetting(
+                        category=types.HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                        threshold=types.HarmBlockThreshold.BLOCK_NONE,
+                    ),
+                    types.SafetySetting(
+                        category=types.HarmCategory.HARM_CATEGORY_HARASSMENT,
+                        threshold=types.HarmBlockThreshold.BLOCK_NONE,
+                    ),
+                    types.SafetySetting(
+                        category=types.HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                        threshold=types.HarmBlockThreshold.BLOCK_NONE,
+                    ),
+                    types.SafetySetting(
+                        category=types.HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                        threshold=types.HarmBlockThreshold.BLOCK_NONE,
+                    ),
+                ]
             )
         )
 
@@ -572,8 +640,19 @@ def get_image_caption(image_url, provider='gemini', fallback_text=None):
     if provider and str(provider).lower() == 'openai':
         print(f"[DEBUG] Using OpenAI provider for caption generation")
         return get_openai_image_caption(image_url, fallback_text=fallback_text)
+    
     print(f"[DEBUG] Using Gemini provider for caption generation (default or explicit)")
-    return get_gemini_image_caption(image_url, fallback_text=fallback_text)
+    caption = get_gemini_image_caption(image_url, fallback_text=fallback_text)
+    if not caption or caption == "Product Image" or "sorry" in caption.lower() or "unable" in caption.lower():
+        print(f"⚠️ [Fallback] Gemini failed or returned refusal ('{caption}'). Retrying with OpenAI gpt-4o...")
+        try:
+            openai_caption = get_openai_image_caption(image_url, fallback_text=fallback_text)
+            if openai_caption and openai_caption != "Product Image":
+                print(f"✅ [Fallback] OpenAI successfully captioned: {openai_caption[:100]}")
+                return openai_caption
+        except Exception as oai_err:
+            print(f"❌ [Fallback] OpenAI fallback failed: {oai_err}")
+    return caption
 
 
 def _get_image_bytes_from_source(image_url: str):
@@ -801,7 +880,7 @@ def rerank_images_with_llm(query: str, images: list) -> list:
 
     try:
         response = client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-3.1-flash-lite',
             contents=[prompt],
             config=types.GenerateContentConfig(temperature=0.0, max_output_tokens=100)
         )

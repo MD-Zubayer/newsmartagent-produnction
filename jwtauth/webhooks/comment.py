@@ -1,19 +1,29 @@
-from django.conf import settings
+"""
+Facebook Public Comment Reply — Direct Graph API (n8n-মুক্ত)
+
+পূর্বে n8n webhook-এ পাঠানো হত। এখন সরাসরি MetaService-এর মাধ্যমে
+Facebook Graph API-তে public comment reply করা হয়।
+"""
+
+from integrations.services.meta import MetaService
+import logging
+
+logger = logging.getLogger('aiAgent')
+
 
 def deliver_public_comment_reply(comment_id, reply_text, page_access_token):
-    """কমেন্টের নিচেই পাবলিক রিপ্লাই দেওয়ার জন্য n8n-এ পাঠানো"""
-    webhook_url = f"https://{settings.N8N_DOMAIN}/webhook/fb-public-comment-delivery"
-    
-    payload = {
-        "comment_id": str(comment_id),
-        "message": str(reply_text), # যেমন: "ইনবক্স চেক করুন প্রিয়"
-        "page_access_token": str(page_access_token)
-    }
-
+    """কমেন্টের নিচেই পাবলিক রিপ্লাই দেওয়ার জন্য সরাসরি Graph API ব্যবহার।"""
     try:
-        requests.post(webhook_url, json=payload, timeout=10)
-        print(f"✅ Replied to comment {comment_id}")
-        return True
+        success = MetaService.send_comment_reply(
+            access_token=page_access_token,
+            comment_id=str(comment_id),
+            message_text=str(reply_text),
+        )
+        if success:
+            logger.info(f"✅ [Comment] Replied to comment {comment_id}")
+        else:
+            logger.error(f"❌ [Comment] Failed to reply to comment {comment_id}")
+        return success
     except Exception as e:
-        print(f"Public reply failed: {e}")
+        logger.error(f"❌ [Comment] Public reply failed: {e}")
         return False

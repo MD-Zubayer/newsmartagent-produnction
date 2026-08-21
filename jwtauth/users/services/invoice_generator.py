@@ -84,13 +84,14 @@ class InvoiceImageGenerator:
             raise
     
     @staticmethod
-    def generate_invoice_html(order_data: dict, shop_name: str = "Smart Shop BD") -> str:
+    def generate_invoice_html(order_data: dict, shop_name: str = "Smart Shop BD", profile_photo_url: str = None) -> str:
         """
         Order data থেকে professional invoice HTML তৈরি করে
         
         Args:
             order_data: CustomerOrder dictionary
             shop_name: Shop/Business name
+            profile_photo_url: URL to business profile image
         
         Returns:
             HTML string
@@ -206,6 +207,25 @@ class InvoiceImageGenerator:
                     border-bottom: 3px solid #e5e7eb;
                     padding-bottom: 30px;
                     margin-bottom: 40px;
+                }}
+                
+                .company-header {{
+                    display: flex;
+                    gap: 20px;
+                    align-items: flex-start;
+                }}
+                
+                .profile-logo {{
+                    flex-shrink: 0;
+                }}
+                
+                .profile-photo {{
+                    width: 80px;
+                    height: 80px;
+                    border-radius: 50%;
+                    object-fit: cover;
+                    border: 3px solid #3b82f6;
+                    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
                 }}
                 
                 .company-info h1 {{
@@ -444,9 +464,12 @@ class InvoiceImageGenerator:
         <body>
             <div class="invoice-page">
                 <div class="invoice-header">
-                    <div class="company-info">
-                        <h1>{shop_name}</h1>
-                        <p>Your Trusted Shopping Partner</p>
+                    <div class="company-header">
+                        {f'<div class="profile-logo"><img src="{profile_photo_url}" alt="Business Logo" class="profile-photo"></div>' if profile_photo_url else ''}
+                        <div class="company-info">
+                            <h1>{shop_name}</h1>
+                            <p>Your Trusted Shopping Partner</p>
+                        </div>
                     </div>
                     <div class="invoice-title-block">
                         <div class="invoice-title">INVOICE</div>

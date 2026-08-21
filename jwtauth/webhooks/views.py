@@ -477,9 +477,20 @@ def instagram_webhook(request):
     if isinstance(is_echo, str):
         is_echo = is_echo.lower() == 'true'
 
-    if is_echo or not text:
-        logger.info(f"⏭️ [instagram_webhook] View Filter: Ignoring echo or missing text. sender={sender_id}, page={page_id}")
+    attachments = data.get('attachments') or []
+    media_present = bool(
+        data.get('mediaUrl') or data.get('media_url') or attachments or data.get('image_url')
+        or data.get('image_base64') or data.get('video_base64') or data.get('audio_base64') or data.get('document_base64')
+    )
+
+    if is_echo or (not text and not media_present):
+        logger.info(f"⏭️ [instagram_webhook] View Filter: Ignoring echo or missing text/media. sender={sender_id}, page={page_id}")
         return Response({'status': 'ignored'}, status=200)
+
+    if not text and media_present:
+        text = data.get('caption') or f"[{str(data.get('message_type') or data.get('type') or 'Media').capitalize()} received]"
+        data['message'] = text
+
 
     if not all([sender_id, page_id]):
         logger.error(f"❌ [instagram_webhook] Missing core data: sender={sender_id}, page={page_id}")
@@ -580,13 +591,20 @@ def telegram_webhook(request):
             except ValueError:
                 pass
 
+    voice_info = message.get('voice') or message.get('audio')
+    is_voice = bool(voice_info)
+
     if not any([message, sender_id, chat_id]):
         print("⏭️ Ignoring empty payload")
         return Response({'status': 'ignored'}, status=200)
     
-    if not all([sender_id, chat_id, text]):
-        print(f"❌ Missing core data: sender={sender_id}, chat={chat_id}, text='{text[:20]}'")
+    if not all([sender_id, chat_id]) or (not text and not is_voice):
+        print(f"❌ Missing core data: sender={sender_id}, chat={chat_id}, text='{text[:20]}', is_voice={is_voice}")
         return Response({'error': 'Missing core data'}, status=400)
+
+    if not text and is_voice:
+        text = f"[Voice message received]"
+
 
     # Resolve Agent (page_id)
     # If bot_username is provided, check if it's actually the user's username
@@ -701,10 +719,14 @@ def telegram_webhook(request):
         data['type'] = 'telegram'
         data['platform'] = 'telegram'
         data['chat_id'] = chat_id
-        
+        if is_voice:
+            data['voice_file_id'] = voice_info.get('file_id')
+            data['mimetype'] = voice_info.get('mime_type') or 'audio/ogg'
+
         print(f"📦 Message accepted. Routing to AI. sender={sender_id}, page={page_id}")
         process_ai_reply_task.delay(data)
         return Response({'status': 'accepted'}, status=202)
     except Exception as e:
         print(f"❌ Celery error: {e}")
         return Response({'error': str(e)}, status=500)
+

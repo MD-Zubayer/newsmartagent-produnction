@@ -24,6 +24,8 @@ class Spreadsheet(models.Model):
     colors = models.JSONField(default=dict, help_text="Stores cell colors as {'0-1': '#ffffff'}", blank=True, null=True)
     styles = models.JSONField(default=dict, help_text="Stores cell styles as {'0-1': {'fontWeight': 'bold'}}", blank=True, null=True)
     auto_image_search = models.BooleanField(default=False, help_text="Run optional row-based image auto-search when enabled")
+    image_search_source_url = models.TextField(blank=True, default='', help_text="Target website URL to restrict image search")
+    image_search_log = models.TextField(blank=True, default='', help_text="Logs of the latest auto image search execution")
 
     is_dark_mode = models.BooleanField(default=False)
     zoom_level = models.PositiveIntegerField(default=100)

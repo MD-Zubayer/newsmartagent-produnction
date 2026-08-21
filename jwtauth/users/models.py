@@ -150,9 +150,9 @@ class User(AbstractUser):
             }
 
         def score_candidate(item):
-            score = 0
+            score = item.get('overlap_score', 0)
             if normalized_name.lower() == item['name'].lower():
-                score += 2
+                score += 5
             if item['stock'] is not None and item['stock'] >= quantity:
                 score += 1
             return score
@@ -164,7 +164,32 @@ class User(AbstractUser):
         for hit in list(spreadsheet_hits) + list(document_hits):
             parsed = parse_product_info(hit.content)
             if parsed and parsed.get('price') is not None:
+                parsed['overlap_score'] = 5
                 candidates.append(parsed)
+
+        if not candidates:
+            # Fallback: try word-by-word intersection or partial matches
+            words = [w for w in re.split(r'\s+', normalized_name.lower()) if len(w) > 1 and w not in ['pro', 'max', 'plus', 'gb', 'tb', '128gb', '256gb', '64gb', 'color', 'colour']]
+            if words:
+                all_spreadsheet = SpreadsheetKnowledge.objects.filter(user=self)
+                all_document = DocumentKnowledge.objects.filter(user=self)
+                for hit in list(all_spreadsheet) + list(all_document):
+                    content_lower = str(hit.content).lower()
+                    if any(w in content_lower for w in words):
+                        name_match = re.search(r'\b(?:product|item|brand|name)\s*[:=]\s*([^,;\n]+)', hit.content, re.IGNORECASE)
+                        candidate_name = name_match.group(1).strip() if name_match else normalized_name
+                        
+                        orig_normalized = normalized_name
+                        normalized_name = candidate_name
+                        parsed = parse_product_info(hit.content)
+                        normalized_name = orig_normalized
+                        
+                        if parsed and parsed.get('price') is not None:
+                            hit_words = set(re.split(r'\s+', parsed['name'].lower()))
+                            overlap = sum(1 for w in words if w in hit_words)
+                            if overlap > 0:
+                                parsed['overlap_score'] = overlap
+                                candidates.append(parsed)
 
         if not candidates:
             return None
@@ -206,6 +231,8 @@ class Profile(models.Model):
     two_factor_enabled = models.BooleanField(default=False)
     recovery_email = models.EmailField(blank=True, null=True)
     recovery_whatsapp = models.CharField(max_length=20, blank=True, null=True, help_text="Enter number with country code")
+    website_url = models.CharField(max_length=255, blank=True, null=True)
+    business_email = models.EmailField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -270,6 +297,7 @@ class Offer(models.Model):
     price = models.IntegerField()
     duration_days = models.IntegerField(default=30)
     is_active = models.BooleanField(default=True)
+    image_support = models.BooleanField(default=False, help_text="ইমেজ সাপোর্ট সচল করতে এটি সিলেক্ট করুন")
     target_audience = models.CharField(max_length=20, choices=TAGET_AUDIENCE, default='all')
     created_at = models.DateTimeField(auto_now_add=True)
 

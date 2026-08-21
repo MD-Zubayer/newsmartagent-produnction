@@ -41,6 +41,10 @@ class AgentAISettings(models.Model):
         related_name='shared_by_settings',
         help_text="অন্য কোনো এজেন্টদের ক্যাশ শেয়ার করতে চাইলে সেই এজেন্টগুলো সিলেক্ট করুন।"
     )
+    redis_cache_enabled = models.BooleanField(
+        default=False,
+        help_text="রেডিস মেসেজ ক্যাশিং চালু করতে চান কি না?"
+    )
 
     def __str__(self):
         return f"Settings for Agent: {self.agent.id}"

@@ -80,27 +80,55 @@ def search_similar_vectors(agent_id, query_vector, top_k=3):
             "DIALECT", 2
         )
 
-        if res[0] == 0:
-            return []
-
         results = []
-        for i in range(1, len(res), 2):
-            doc_fields = res[i+1]
-            
-            # বাইটস থেকে পাইথন ডিকশনারিতে রূপান্তর (ডিকোডিং সহ)
-            data = {
-                (doc_fields[j].decode() if isinstance(doc_fields[j], bytes) else doc_fields[j]): 
-                (doc_fields[j+1].decode() if isinstance(doc_fields[j+1], bytes) else doc_fields[j+1])
-                for j in range(0, len(doc_fields), 2)
-            }
-            
-            results.append({
-                "text": data.get("text"),
-                "msg_hash": data.get("msg_hash"), # ⚡ এটি দিয়ে DB 2 থেকে আসল উত্তর পাবেন
-                "score": float(data.get("vector_score", 1.0))
-            })
-            
-        return results
+        
+        # 1. If res is a dictionary (newer redis-py parsing format)
+        if isinstance(res, dict):
+            results_list = res.get(b'results') or res.get('results') or []
+            for doc in results_list:
+                doc_fields = doc.get(b'extra_attributes') or doc.get('extra_attributes') or {}
+                data = {
+                    (k.decode() if isinstance(k, bytes) else k):
+                    (v.decode() if isinstance(v, bytes) else v)
+                    for k, v in doc_fields.items()
+                }
+                results.append({
+                    "text": data.get("text"),
+                    "msg_hash": data.get("msg_hash"),
+                    "score": float(data.get("vector_score", 1.0))
+                })
+            return results
+
+        # 2. If res is a list/tuple (raw Redis response format)
+        if isinstance(res, (list, tuple)):
+            if not res or res[0] == 0:
+                return []
+            for i in range(1, len(res), 2):
+                doc_fields = res[i+1]
+                if isinstance(doc_fields, dict):
+                    data = {
+                        (k.decode() if isinstance(k, bytes) else k):
+                        (v.decode() if isinstance(v, bytes) else v)
+                        for k, v in doc_fields.items()
+                    }
+                elif isinstance(doc_fields, (list, tuple)):
+                    data = {
+                        (doc_fields[j].decode() if isinstance(doc_fields[j], bytes) else doc_fields[j]): 
+                        (doc_fields[j+1].decode() if isinstance(doc_fields[j+1], bytes) else doc_fields[j+1])
+                        for j in range(0, len(doc_fields), 2)
+                    }
+                else:
+                    data = {}
+                results.append({
+                    "text": data.get("text"),
+                    "msg_hash": data.get("msg_hash"),
+                    "score": float(data.get("vector_score", 1.0))
+                })
+            return results
+
+        return []
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"❌ Search Error: {e}")
         return []

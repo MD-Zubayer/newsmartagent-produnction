@@ -20,7 +20,11 @@ def generate_gemini_reply(prompt, history, current_message, agent_config):
     if not GENAI_CLIENT:
         return {"reply": "Gemini client not configured.", "total_tokens": 0, "status": "error"}
 
-    model_name = agent_config.ai_model if agent_config and getattr(agent_config, 'ai_model', None) else 'gemini-2.5-flash'
+    model_name = 'gemini-3.1-flash-lite'
+    if agent_config and getattr(agent_config, 'ai_model', None):
+        configured_model = agent_config.ai_model
+        if 'gemini' in configured_model.lower():
+            model_name = configured_model
 
     formatted_history = []
     for m in history:
@@ -46,7 +50,7 @@ def generate_quick_summary(raw_text):
     try:
         if not GENAI_CLIENT:
             return None
-        model_name = 'models/gemini-2.5-flash'
+        model_name = 'models/gemini-3.1-flash-lite'
         prompt = f"Summarize: {raw_text}"
         response = GENAI_CLIENT.models.generate_content(
             model=model_name,
@@ -65,7 +69,7 @@ def generate_dashboard_help(user_query, page_context, chat_history=[]):
         if not GENAI_CLIENT:
             return {"reply": "AI client not configured", "status": "error"}
 
-        model_name = 'models/gemini-2.5-flash'
+        model_name = 'models/gemini-3.1-flash-lite'
         system_prompt = f"You are a dashboard assistant. Context: {page_context}"
         formatted_history = []
         for m in chat_history:
@@ -102,7 +106,10 @@ def generate_gemini_reply_with_tools(
     # Build simple formatted history for providers
     provider = 'gemini'
     try:
-        provider = (agent_config.selected_model.provider or 'gemini') if agent_config and getattr(agent_config, 'selected_model', None) else 'gemini'
+        if agent_config and agent_config.selected_model:
+            provider = agent_config.selected_model.provider or 'gemini'
+        elif agent_config and agent_config.ai_model:
+            provider = 'openai' if 'gpt' in agent_config.ai_model.lower() else 'gemini'
     except Exception:
         provider = 'gemini'
 
@@ -178,7 +185,11 @@ def generate_gemini_reply_with_tools(
             if not GENAI_CLIENT:
                 return {'reply': 'Gemini not configured', 'status': 'error'}
 
-            model_name = agent_config.ai_model if agent_config and getattr(agent_config, 'ai_model', None) else 'gemini-2.5-flash'
+            model_name = 'gemini-3.1-flash-lite'
+            if agent_config and getattr(agent_config, 'ai_model', None):
+                configured_model = agent_config.ai_model
+                if 'gemini' in configured_model.lower():
+                    model_name = configured_model
             contents = []
             for m in history:
                 role = 'model' if m.get('role') == 'assistant' else 'user'
@@ -201,3 +212,48 @@ def generate_gemini_reply_with_tools(
     except Exception as e:
         logger.error(f"LLM with tools error: {e}")
         return {'reply': 'Error processing request', 'status': 'error', 'error': str(e)}
+
+
+def transcribe_audio_with_gemini(audio_bytes: bytes, mime_type: str, agent_config=None) -> str:
+    """
+    Transcribes audio bytes into text using Gemini API.
+    Returns the transcribed text or empty string on failure.
+    """
+    if not GENAI_CLIENT:
+        logger.error("Gemini client not configured for transcription.")
+        return ""
+    
+    model_name = 'gemini-3.1-flash-lite'
+    if agent_config and getattr(agent_config, 'ai_model', None):
+        configured_model = agent_config.ai_model
+        if configured_model and 'gemini' in configured_model.lower():
+            model_name = configured_model
+
+    try:
+        logger.info(f"🎙️ Transcribing audio with Gemini model {model_name}. Mime type: {mime_type}")
+        
+        prompt = (
+            "You are a highly accurate audio transcriber. Listen to the audio and transcribe "
+            "exactly what is said. Respond ONLY with the transcribed text in the language "
+            "spoken (which is likely Bengali or English). Do not translate, do not add any "
+            "explanations, notes, metadata or formatting. If there is no speech or it is quiet, "
+            "return an empty string."
+        )
+        
+        audio_part = types.Part.from_bytes(
+            data=audio_bytes,
+            mime_type=mime_type
+        )
+        
+        response = GENAI_CLIENT.models.generate_content(
+            model=model_name,
+            contents=[audio_part, prompt],
+        )
+        
+        transcription = response.text.strip() if response.text else ""
+        logger.info(f"✅ Audio transcription completed: '{transcription[:100]}'")
+        return transcription
+    except Exception as e:
+        logger.error(f"❌ Audio transcription failed: {e}", exc_info=True)
+        return ""
+

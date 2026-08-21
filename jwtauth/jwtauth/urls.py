@@ -101,9 +101,9 @@ urlpatterns = [
     path('api/datasheet/', include("datasheet.urls")),
     path('api/embedding/', include("embedding.urls")),
     path('api/whatsapp/', include('openwa.urls')),
-    path('api/n8n/', include('n8n.urls')),
     path('api/agent-state/', AgentDashboardStatsView.as_view(), name='agent-stats'),
-    path('api/courier/', include('courier.urls'))
+    path('api/courier/', include('courier.urls')),
+    path('api/integrations/', include('integrations.urls')),
 ]
 
 if settings.DEBUG:

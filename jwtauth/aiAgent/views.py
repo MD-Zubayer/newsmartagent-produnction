@@ -112,15 +112,26 @@ class TokenUsageAnalyticsView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request):
 
-        today = timezone.now().date()
-        start_date = today - timedelta(days=30)
+        start_date_param = request.query_params.get('start_date')
+        end_date_param = request.query_params.get('end_date')
 
         # <! -------- Setting the base query -------------!>
 
         user_logs = TokenUsageLog.objects.filter(
-            user=request.user,
-            created_at__date__gte=start_date
+            user=request.user
         ).exclude(request_type='dashboard')
+
+        if start_date_param:
+            if start_date_param.strip().lower() != 'all':
+                user_logs = user_logs.filter(created_at__date__gte=start_date_param.strip())
+        else:
+            today = timezone.now().date()
+            start_date = today - timedelta(days=30)
+            user_logs = user_logs.filter(created_at__date__gte=start_date)
+
+        if end_date_param and end_date_param.strip().lower() != 'all':
+            user_logs = user_logs.filter(created_at__date__lte=end_date_param.strip())
+
 
 
         #<!------------- 1. Daily Trend (Line Chart) --------------!>
@@ -226,7 +237,7 @@ def dashboard_chat_view(request):
             'name': f"Dashboard AI - {user.username}",
             'platform': 'messenger',
             'system_prompt': "You are an expert dashboard assistant for New Smart Agent BD. Help users with their dashboard and account questions.",
-            'ai_model': 'gemini-2.5-flash',
+            'ai_model': 'gemini-3.1-flash-lite',
             'is_active': True
         }
     )
@@ -301,9 +312,19 @@ class RankingAPIView(APIView):
             
             # ক. নিজের ডাটা
             my_redis_id = _get_redis_id(agent)
-            for msg_hash, frequency in get_top_message(my_redis_id, top_n=50):
+            r_db4 = get_redis_client(db=4)
+            my_ranking_key = f"agent:{my_redis_id}:ranking"
+            
+            pattern_my = f"agent:{my_redis_id}:reply:*"
+            for key in redis_conn.scan_iter(match=pattern_my, count=100):
+                key_str = key.decode() if isinstance(key, bytes) else key
+                msg_hash = key_str.split(":")[-1]
+                
+                score = r_db4.zscore(my_ranking_key, msg_hash)
+                frequency = int(score) if score is not None else 1
+                
                 all_raw_messages[msg_hash] = {
-                    'frequency': int(frequency),
+                    'frequency': frequency,
                     'is_shared': False,
                     'origin_agent_id': my_redis_id
                 }
@@ -311,13 +332,20 @@ class RankingAPIView(APIView):
             # খ. শেয়ারড এজেন্টদের ডাটা
             for s_agent in shared_agents:
                 s_redis_id = _get_redis_id(s_agent)
-                # শেয়ারড এজেন্টের ক্ষেত্রে আমরা একটু কম টপ মেসেজ নিচ্ছি যাতে ওভারলোড না হয়
-                for msg_hash, frequency in get_top_message(s_redis_id, top_n=30):
+                s_ranking_key = f"agent:{s_redis_id}:ranking"
+                pattern_s = f"agent:{s_redis_id}:reply:*"
+                for key in redis_conn.scan_iter(match=pattern_s, count=100):
+                    key_str = key.decode() if isinstance(key, bytes) else key
+                    msg_hash = key_str.split(":")[-1]
+                    
+                    score = r_db4.zscore(s_ranking_key, msg_hash)
+                    frequency = int(score) if score is not None else 1
+                    
                     if msg_hash in all_raw_messages:
-                        all_raw_messages[msg_hash]['frequency'] += int(frequency)
+                        all_raw_messages[msg_hash]['frequency'] += frequency
                     else:
                         all_raw_messages[msg_hash] = {
-                            'frequency': int(frequency),
+                            'frequency': frequency,
                             'is_shared': True,
                             'origin_agent_id': s_redis_id
                         }
@@ -370,6 +398,10 @@ class RankingAPIView(APIView):
                 cache_key = f"agent:{origin_redis_id}:reply:{msg_hash}"
                 raw_data = redis_conn.get(cache_key)
                 source = 'shared_agent' if is_shared else 'agent'
+                remaining_ttl = -1
+                
+                if raw_data:
+                    remaining_ttl = redis_conn.ttl(cache_key)
                 
                 # যদি অরিজিন এজেন্টের ক্যাশে না থাকে, তবে অন্য সব শেয়ারড এজেন্টদের ক্যাশে খুঁজো
                 if not raw_data:
@@ -377,7 +409,9 @@ class RankingAPIView(APIView):
                     if origin_redis_id != my_redis_id:
                         my_cache_key = f"agent:{my_redis_id}:reply:{msg_hash}"
                         raw_data = redis_conn.get(my_cache_key)
-                        if raw_data: source = 'agent'
+                        if raw_data:
+                            source = 'agent'
+                            remaining_ttl = redis_conn.ttl(my_cache_key)
 
                     # ২. সব শেয়ারড এজেন্টদের ক্যাশে খুঁজো (এটি সব সময় করা হবে যেন Unknown Message না আসে)
                     if not raw_data:
@@ -442,6 +476,7 @@ class RankingAPIView(APIView):
                     'is_shareable': is_shareable,
                     'is_shared': is_shared,
                     'is_blocked': is_blocked,
+                    'ttl': remaining_ttl,
                 }
                 if request.user.is_staff or request.user.is_superuser:
                     item_data['raw_reply_json'] = parsed_json
@@ -657,6 +692,64 @@ class UpdateCacheScopeAPIView(APIView):
                 
             return Response({"status": "success", "message": f"Cache scope updated to {new_scope}"}, status=status.HTTP_200_OK)
             
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class UpdateCacheTTLAPIView(APIView):
+    """
+    মেসেজের ক্যাশ TTL (Time To Live) আপডেট করে।
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, agent_id, msg_hash):
+        try:
+            # ১. ওনারশিপ ভেরিফিকেশন
+            agent = AgentAI.objects.filter(page_id=agent_id, user=request.user).first()
+            if not agent:
+                return Response({"error": "Agent not found or unauthorized"}, status=status.HTTP_404_NOT_FOUND)
+            
+            ttl_value = request.data.get('ttl_value') # int
+            ttl_unit = request.data.get('ttl_unit') # 'minute', 'hour', 'day'
+            
+            if ttl_value is None or ttl_unit not in ['minute', 'hour', 'day']:
+                return Response({"error": "Invalid TTL value or unit"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Convert to seconds
+            multiplier = 60
+            if ttl_unit == 'hour':
+                multiplier = 3600
+            elif ttl_unit == 'day':
+                multiplier = 86400
+                
+            seconds = int(ttl_value) * multiplier
+            
+            # Update TTL in DB 2 and DB 6 depending on where it exists
+            agent_key = f"agent:{agent_id}:reply:{msg_hash}"
+            global_key = f"global:reply:{msg_hash}"
+            
+            updated = False
+            
+            # DB 2
+            if redis_conn.exists(agent_key):
+                redis_conn.expire(agent_key, seconds)
+                updated = True
+                
+            # DB 6 Global
+            if r_grouped.exists(global_key):
+                r_grouped.expire(global_key, seconds)
+                updated = True
+                
+            # DB 6 Sender specific
+            sender_pattern = f"agent:{agent_id}:sender:*:reply:{msg_hash}"
+            for key in r_grouped.scan_iter(match=sender_pattern):
+                r_grouped.expire(key, seconds)
+                updated = True
+                
+            if updated:
+                return Response({"status": "success", "message": f"Cache TTL updated to {ttl_value} {ttl_unit}(s)"}, status=status.HTTP_200_OK)
+            else:
+                return Response({"error": "Cached message not found or expired"}, status=status.HTTP_404_NOT_FOUND)
+                
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
