@@ -2355,22 +2355,23 @@ def process_ai_reply_task(self, data):
             page_id = agent_config.page_id
 
         # ---- Image Support Check ----
+        from users.models import Subscription
+        from django.utils import timezone
+        
+        has_image_support = Subscription.objects.filter(
+            profile=agent_config.user.profile,
+            is_active=True,
+            end_date__gt=timezone.now(),
+            remaining_tokens__gt=0,
+            offer__image_support=True
+        ).exists()
+
         is_image_msg = (
             message_type == 'image' or 
             data.get('image_base64') or 
             (media_url and message_type == 'image')
         )
         if is_image_msg:
-            from users.models import Subscription
-            from django.utils import timezone
-            
-            has_image_support = Subscription.objects.filter(
-                profile=agent_config.user.profile,
-                is_active=True,
-                end_date__gt=timezone.now(),
-                remaining_tokens__gt=0,
-                offer__image_support=True
-            ).exists()
             
             if not has_image_support:
                 msg = "দুঃখিত, এই মুহূর্তে আমাদের পেজে ছবি পাঠানোর সুবিধাটি বন্ধ রয়েছে। অনুগ্রহ করে বিস্তারিত টেক্সট লিখে আমাদের জানান।"
@@ -3337,6 +3338,26 @@ def process_ai_reply_task(self, data):
             redis_cache_enabled = agent_config.get_settings.redis_cache_enabled if (agent_config and hasattr(agent_config, 'get_settings')) else False
             settings_obj = agent_config.get_settings if (agent_config and hasattr(agent_config, 'get_settings')) else None
             
+            # dynamically build format schema
+            format_dict = {
+                '"reply"': '"string"',
+                '"human_handoff"': 'boolean',
+                '"order_intent"': '"string or null"',
+                '"order_data"': '"object or null"'
+            }
+            if redis_cache_enabled:
+                format_dict['"cache_type"'] = '"string"'
+            if has_image_support:
+                format_dict['"image_intent"'] = 'boolean'
+                format_dict['"image_ids"'] = '[integer]'
+                format_dict['"image_style"'] = '"string"'
+                
+            format_schema_str = ", ".join([f"{k}: {v}" for k, v in format_dict.items()])
+            
+            classify_instruction_parts = []
+            classify_instruction_parts.append('\n\nReturn ONLY a valid JSON object starting with "{" and ending with "}". No markdown, preamble, or explanations outside the JSON.')
+            classify_instruction_parts.append(f'\nFormat: {{{format_schema_str}}}.')
+            
             if redis_cache_enabled and settings_obj:
                 cache_types_desc = []
                 cache_types_desc.append('  * "no_cache": For context-dependent references, short conversational fillers, greetings, affirmations, and denials.')
@@ -3349,35 +3370,22 @@ def process_ai_reply_task(self, data):
                     cache_types_desc.append('  * "global": For general facts and universal greetings.')
                 
                 cache_types_str = "\n".join(cache_types_desc)
+                classify_instruction_parts.append('\n- cache_type values:')
+                classify_instruction_parts.append(f'\n{cache_types_str}')
                 
-                classify_instruction = (
-                    '\n\nReturn ONLY a valid JSON object starting with "{" and ending with "}". No markdown, preamble, or explanations outside the JSON.'
-                    '\nFormat: {"reply": "string", "cache_type": "string", "human_handoff": boolean, "image_intent": boolean, "image_ids": [integer], "image_style": "string", "order_intent": "string or null", "order_data": "object or null"}.'
-                    '\n- cache_type values:'
-                    f'\n{cache_types_str}'
-                    '\n- human_handoff: Set true ONLY if the customer explicitly requests to speak to a human representative.'
-                    '\n- order_intent: Set "create" if the customer expresses interest in placing a new order, confirms interest in ordering, or provides details to start an order. Set "confirm" if they explicitly accept, agree with, or confirm the draft details shown in history (meaning they are satisfied with the draft or done editing). Set "cancel" if they reject or cancel the order. Set "interrupted" if they ask a side question (e.g. delivery fee, office hours, product policies) instead of confirming. Otherwise null. If order_intent is "create", always extract "price" inside "order_data" by searching [KNOWLEDGE BASE DATA] for discount price or offer price columns, and generate a reply asking for the missing fields (customer_name, phone_number, address, quantity).'
-                    '\n- image_intent: Set true and fill "image_ids" (e.g., [901]) and "image_style": "image_with_caption" if the user asks for photos, OR if you are suggesting/recommending alternative/similar products from [KNOWLEDGE BASE DATA] due to a query or a slight product mismatch (so the user can see them). Else false/empty list.'
-                    '\n- STRICT: Do not ask for fields already provided. Extract multiple fields if given. Perfect JSON syntax is required.'
-                    '\n- CRITICAL: If the user uploaded an image/screenshot (i.e. message content has [Image: ...]), they have already seen the product. Do NOT ask them if they want to "see" or "view" it. Confirm availability and directly ask if they want to order it ("অর্ডার করতে চান?").'
-                    '\n- CRITICAL: Always populate "order_data": {"product_name": "string or null"} based on the user\'s message and conversation history to track what product is currently discussed/requested, even if order_intent is null.'
-                    '\n- CRITICAL: Always check [KNOWLEDGE BASE DATA] for any discount/offer columns, including spelling variations (e.g. "discount price", "dicount price", "offer price", "sale price", "ছাড়"). If a discount price is present in the sheet, you MUST inform the user about it when they ask for discounts/offers or when showing product details, and set the price in "order_data" to this discount price. Do NOT say there is no discount if a discount/offer price exists.'
-                    '\n- CRITICAL: Never refer to products by their raw visual captions (like "সাদা রঙের ড্রেস শার্ট" or "Men\'s Dress Shirt"). You MUST map these visual captions back to the authority product name from [KNOWLEDGE BASE DATA] (which is "Premium China Spandex Fabric pangabi") and use that official product name and its corresponding discount price (1300 instead of 1600) in your response and "order_data".'
-                )
-            else:
-                classify_instruction = (
-                    '\n\nReturn ONLY a valid JSON object starting with "{" and ending with "}". No markdown, preamble, or explanations outside the JSON.'
-                    '\nFormat: {"reply": "string", "human_handoff": boolean, "image_intent": boolean, "image_ids": [integer], "image_style": "string", "order_intent": "string or null", "order_data": "object or null"}.'
-                    '\n- human_handoff: Set true ONLY if the customer explicitly requests to speak to a human representative.'
-                    '\n- order_intent: Set "create" if the customer expresses interest in placing a new order, confirms interest in ordering, or provides details to start an order. Set "confirm" if they explicitly accept, agree with, or confirm the draft details shown in history (meaning they are satisfied with the draft or done editing). Set "cancel" if they reject or cancel the order. Set "interrupted" if they ask a side question (e.g. delivery fee, office hours, product policies) instead of confirming. Otherwise null. If order_intent is "create", always extract "price" inside "order_data" by searching [KNOWLEDGE BASE DATA] for discount price or offer price columns, and generate a reply asking for the missing fields (customer_name, phone_number, address, quantity).'
-                    '\n- image_intent: Set true and fill "image_ids" (e.g., [901]) and "image_style": "image_with_caption" if the user asks for photos, OR if you are suggesting/recommending alternative/similar products from [KNOWLEDGE BASE DATA] due to a query or a slight product mismatch (so the user can see them). Else false/empty list.'
-                    '\n- STRICT: Do not ask for fields already provided. Extract multiple fields if given. Perfect JSON syntax is required.'
-                    '\n- CRITICAL: If the user uploaded an image/screenshot (i.e. message content has [Image: ...]), they have already seen the product. Do NOT ask them if they want to "see" or "view" it. Confirm availability and directly ask if they want to order it ("অর্ডার করতে চান?").'
-                    '\n- CRITICAL: Always populate "order_data": {"product_name": "string or null"} based on the user\'s message and conversation history to track what product is currently discussed/requested, even if order_intent is null.'
-                    '\n- CRITICAL: Always check [KNOWLEDGE BASE DATA] for any discount/offer columns, including spelling variations (e.g. "discount price", "dicount price", "offer price", "sale price", "ছাড়"). If a discount price is present in the sheet, you MUST inform the user about it when they ask for discounts/offers or when showing product details, and set the price in "order_data" to this discount price. Do NOT say there is no discount if a discount/offer price exists.'
-                    '\n- CRITICAL: Never refer to products by their raw visual captions (like "সাদা রঙের ড্রেস শার্ট" or "Men\'s Dress Shirt"). You MUST map these visual captions back to the authority product name from [KNOWLEDGE BASE DATA] (which is "Premium China Spandex Fabric pangabi") and use that official product name and its corresponding discount price (1300 instead of 1600) in your response and "order_data".'
-                )
-
+            classify_instruction_parts.append('\n- human_handoff: Set true ONLY if the customer explicitly requests to speak to a human representative.')
+            classify_instruction_parts.append('\n- order_intent: Set "create" if the customer expresses interest in placing a new order, confirms interest in ordering, or provides details to start an order. Set "confirm" if they explicitly accept, agree with, or confirm the draft details shown in history (meaning they are satisfied with the draft or done editing). Set "cancel" if they reject or cancel the order. Set "interrupted" if they ask a side question (e.g. delivery fee, office hours, product policies) instead of confirming. Otherwise null. If order_intent is "create", always extract "price" inside "order_data" by searching [KNOWLEDGE BASE DATA] for discount price or offer price columns, and generate a reply asking for the missing fields (customer_name, phone_number, address, quantity).')
+            
+            if has_image_support:
+                classify_instruction_parts.append('\n- image_intent: Set true and fill "image_ids" (e.g., [901]) and "image_style": "image_with_caption" if the user asks for photos, OR if you are suggesting/recommending alternative/similar products from [KNOWLEDGE BASE DATA] due to a query or a slight product mismatch (so the user can see them). Else false/empty list.')
+                classify_instruction_parts.append('\n- CRITICAL: If the user uploaded an image/screenshot (i.e. message content has [Image: ...]), they have already seen the product. Do NOT ask them if they want to "see" or "view" it. Confirm availability and directly ask if they want to order it ("অর্ডার করতে চান?").')
+                
+            classify_instruction_parts.append('\n- STRICT: Do not ask for fields already provided. Extract multiple fields if given. Perfect JSON syntax is required.')
+            classify_instruction_parts.append('\n- CRITICAL: Always populate "order_data": {"product_name": "string or null"} based on the user\'s message and conversation history to track what product is currently discussed/requested, even if order_intent is null.')
+            classify_instruction_parts.append('\n- CRITICAL: Always check [KNOWLEDGE BASE DATA] for any discount/offer columns, including spelling variations (e.g. "discount price", "dicount price", "offer price", "sale price", "ছাড়"). If a discount price is present in the sheet, you MUST inform the user about it when they ask for discounts/offers or when showing product details, and set the price in "order_data" to this discount price. Do NOT say there is no discount if a discount/offer price exists.')
+            classify_instruction_parts.append('\n- CRITICAL: Never refer to products by their raw visual captions (like "সাদা রঙের ড্রেস শার্ট" or "Men\'s Dress Shirt"). You MUST map these visual captions back to the authority product name from [KNOWLEDGE BASE DATA] (which is "Premium China Spandex Fabric pangabi") and use that official product name and its corresponding discount price (1300 instead of 1600) in your response and "order_data".')
+            
+            classify_instruction = "".join(classify_instruction_parts)
             system_instruction = system_instruction + classify_instruction
 
             # --- AI Call ---
