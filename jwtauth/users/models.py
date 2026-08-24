@@ -298,6 +298,7 @@ class Offer(models.Model):
     duration_days = models.IntegerField(default=30)
     is_active = models.BooleanField(default=True)
     image_support = models.BooleanField(default=False, help_text="ইমেজ সাপোর্ট সচল করতে এটি সিলেক্ট করুন")
+    max_agents_per_platform = models.PositiveIntegerField(default=1, help_text="এই অফারের অধীনে প্রতিটি প্ল্যাটফর্মে সর্বোচ্চ কয়টি এজেন্ট তৈরি করা যাবে।")
     target_audience = models.CharField(max_length=20, choices=TAGET_AUDIENCE, default='all')
     created_at = models.DateTimeField(auto_now_add=True)
 

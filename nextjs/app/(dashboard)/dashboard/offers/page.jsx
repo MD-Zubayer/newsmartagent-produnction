@@ -130,12 +130,54 @@ export default function OffersPage() {
                       <div className="relative z-10 flex-1">
                         <h2 className="text-2xl font-black text-slate-900 mb-2 tracking-tight group-hover:text-slate-800 transition-colors">{offer.tokens} Tokens</h2>
                         <p className="text-sm text-slate-500 font-medium leading-relaxed">Schedule Messages: {offer.schedule_messages?.toLocaleString?.() ?? offer.schedule_messages}</p>
+                        <p className="text-[11px] text-slate-500 font-bold mt-0.5 leading-none">Agents Per Platform: {offer.max_agents_per_platform ?? 1}</p>
                         <div className="flex items-center gap-1.5 mt-2">
                           <FaImage className={offer.image_support ? "text-emerald-500" : "text-slate-300"} />
                           <span className={`text-[11px] font-bold ${offer.image_support ? "text-emerald-600" : "text-slate-400 line-through"}`}>
                             {offer.image_support ? "Image Features Enabled" : "No Image Support"}
                           </span>
                         </div>
+                        
+                        {offer.allowed_platforms && offer.allowed_platforms.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-slate-100">
+                            {offer.allowed_platforms.map((plat) => {
+                              const platformMap = {
+                                1: 'Messenger',
+                                2: 'FB Comment',
+                                3: 'WhatsApp',
+                                4: 'Instagram',
+                                5: 'Telegram',
+                                6: 'GBP',
+                                7: 'YouTube'
+                              };
+                              const platId = typeof plat === 'object' ? plat.id : plat;
+                              const rawName = typeof plat === 'object' ? (plat.name || '') : (platformMap[platId] || '');
+                              const name = String(rawName).toLowerCase();
+                              
+                              let colorClass = "bg-slate-100 text-slate-600";
+                              if (name.includes('whatsapp')) colorClass = "bg-emerald-50 text-emerald-600 border border-emerald-100";
+                              if (name.includes('messanger') || name.includes('messenger')) colorClass = "bg-blue-50 text-blue-600 border border-blue-100";
+                              if (name.includes('comment')) colorClass = "bg-indigo-50 text-indigo-600 border border-indigo-100";
+                              
+                              let displayName = rawName;
+                              if (name === 'whatsapp') displayName = 'WhatsApp';
+                              else if (name === 'messanger' || name === 'messenger') displayName = 'Messenger';
+                              else if (name === 'facebook comment' || name === 'fb comment') displayName = 'FB Comment';
+                              else if (name === 'instagram') displayName = 'Instagram';
+                              else if (name === 'telegram') displayName = 'Telegram';
+                              else if (name === 'gbp') displayName = 'GBP';
+                              else if (name === 'youtube') displayName = 'YouTube';
+                              
+                              if (!displayName) displayName = `Platform ${platId}`;
+                              
+                              return (
+                                <span key={platId} className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ${colorClass}`}>
+                                  {displayName}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
 
                       <div className="mt-6 flex items-center justify-between relative z-10">

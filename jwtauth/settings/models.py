@@ -45,6 +45,18 @@ class AgentAISettings(models.Model):
         default=False,
         help_text="রেডিস মেসেজ ক্যাশিং চালু করতে চান কি না?"
     )
+    global_cache_enabled = models.BooleanField(
+        default=True,
+        help_text="গ্লোবাল ক্যাশিং (সবার জন্য প্রযোজ্য সাধারণ উত্তর) চালু রাখতে চান কি না?"
+    )
+    sender_cache_enabled = models.BooleanField(
+        default=True,
+        help_text="সেন্ডার-স্পেসিফিক ক্যাশিং (ইউজার ভিত্তিক উত্তর) চালু রাখতে চান কি না?"
+    )
+    agent_cache_enabled = models.BooleanField(
+        default=True,
+        help_text="এজেন্ট-স্পেসিফিক ক্যাশিং (মার্চেন্ট তথ্য সংক্রান্ত উত্তর) চালু রাখতে চান কি না?"
+    )
 
     def __str__(self):
         return f"Settings for Agent: {self.agent.id}"
@@ -76,6 +88,12 @@ class GlobalSettings(models.Model):
     youtube_check_interval = models.PositiveIntegerField(
         default=1,
         help_text="How often to check for new YouTube comments (in minutes)."
+    )
+    payment_verify_threshold = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=2000.00,
+        help_text="Automatic payment verification maximum threshold (BDT). Submissions above this will go to pending manual review."
     )
     
     class Meta:

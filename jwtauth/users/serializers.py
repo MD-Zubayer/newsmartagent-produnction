@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from users.models import User, Subscription, Offer, Profile, Payment, NSATransfer, WithdrawMethod, CashoutRequest
+from users.models import User, Subscription, Offer, Profile, Payment, NSATransfer, WithdrawMethod, CashoutRequest, Platform
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.exceptions import InvalidToken
 from users.models import CustomerOrder, OrderForm
@@ -184,12 +184,19 @@ class UserRegisterSerializer(serializers.ModelSerializer[User]):
 
 
 
+class PlatformSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Platform
+        fields = ["id", "name", "is_active"]
+
+
 class OfferSerializer(serializers.ModelSerializer):
     allowed_models = AIProviderModelSerializer(many=True, read_only=True)
+    allowed_platforms = PlatformSerializer(many=True, read_only=True)
     
     class Meta:
         model = Offer
-        fields = ["id", "name","allowed_platforms", "allowed_models", "tokens", "schedule_messages", "description", "price", "duration_days", "is_active", 'target_audience', 'image_support']
+        fields = ["id", "name","allowed_platforms", "allowed_models", "tokens", "schedule_messages", "description", "price", "duration_days", "is_active", 'target_audience', 'image_support', 'max_agents_per_platform']
 
 
 class SubscriptionSerializer(serializers.ModelSerializer):

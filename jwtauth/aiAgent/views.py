@@ -44,9 +44,36 @@ class AgentAIViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """
         Automatically add the currently logged in user when creating a new Agent,
-        Saving data about the user from the request
+        Saving data about the user from the request, while enforcing agent limits per platform.
         """
-        serializer.save(user=self.request.user)
+        user = self.request.user
+        platform = serializer.validated_data.get('platform')
+        
+        from aiAgent.models import AgentAI
+        existing_count = AgentAI.objects.filter(user=user, platform=platform).exclude(page_id__startswith='dashboard_').count()
+        
+        from users.models import Subscription
+        from django.utils import timezone
+        
+        active_sub = Subscription.objects.filter(
+            profile=user.profile,
+            is_active=True,
+            end_date__gt=timezone.now(),
+            remaining_tokens__gt=0
+        ).order_by('-id').first()
+        
+        max_allowed = 1
+        if active_sub and active_sub.offer:
+            max_allowed = getattr(active_sub.offer, 'max_agents_per_platform', 1)
+            
+        if existing_count >= max_allowed:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError(
+                f"আপনি আপনার বর্তমান প্ল্যানে প্রতিটি প্ল্যাটফর্মে সর্বোচ্চ {max_allowed}টি এজেন্ট তৈরি করতে পারবেন। "
+                f"আরও এজেন্ট তৈরি করতে অনুগ্রহ করে লিমিট বাড়ানো সম্বলিত একটি অফার প্ল্যান সাবস্ক্রাইব করুন।"
+            )
+            
+        serializer.save(user=user)
 
     def get_queryset(self):
 
