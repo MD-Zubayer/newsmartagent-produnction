@@ -3337,6 +3337,7 @@ def process_ai_reply_task(self, data):
             # ---- Cache Classification Instruction (JSON suffix) ----
             redis_cache_enabled = agent_config.get_settings.redis_cache_enabled if (agent_config and hasattr(agent_config, 'get_settings')) else False
             settings_obj = agent_config.get_settings if (agent_config and hasattr(agent_config, 'get_settings')) else None
+            should_include_image_prompt = has_image_support and is_image_msg
             
             # dynamically build format schema
             format_dict = {
@@ -3347,7 +3348,7 @@ def process_ai_reply_task(self, data):
             }
             if redis_cache_enabled:
                 format_dict['"cache_type"'] = '"string"'
-            if has_image_support:
+            if should_include_image_prompt:
                 format_dict['"image_intent"'] = 'boolean'
                 format_dict['"image_ids"'] = '[integer]'
                 format_dict['"image_style"'] = '"string"'
@@ -3376,7 +3377,7 @@ def process_ai_reply_task(self, data):
             classify_instruction_parts.append('\n- human_handoff: Set true ONLY if the customer explicitly requests to speak to a human representative.')
             classify_instruction_parts.append('\n- order_intent: Set "create" if the customer expresses interest in placing a new order, confirms interest in ordering, or provides details to start an order. Set "confirm" if they explicitly accept, agree with, or confirm the draft details shown in history (meaning they are satisfied with the draft or done editing). Set "cancel" if they reject or cancel the order. Set "interrupted" if they ask a side question (e.g. delivery fee, office hours, product policies) instead of confirming. Otherwise null. If order_intent is "create", always extract "price" inside "order_data" by searching [KNOWLEDGE BASE DATA] for discount price or offer price columns, and generate a reply asking for the missing fields (customer_name, phone_number, address, quantity).')
             
-            if has_image_support:
+            if should_include_image_prompt:
                 classify_instruction_parts.append('\n- image_intent: Set true and fill "image_ids" (e.g., [901]) and "image_style": "image_with_caption" if the user asks for photos, OR if you are suggesting/recommending alternative/similar products from [KNOWLEDGE BASE DATA] due to a query or a slight product mismatch (so the user can see them). Else false/empty list.')
                 classify_instruction_parts.append('\n- CRITICAL: If the user uploaded an image/screenshot (i.e. message content has [Image: ...]), they have already seen the product. Do NOT ask them if they want to "see" or "view" it. Confirm availability and directly ask if they want to order it ("অর্ডার করতে চান?").')
                 
