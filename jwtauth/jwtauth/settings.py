@@ -120,6 +120,7 @@ INSTALLED_APPS = [
     "aiAgent.apps.AiagentConfig",
     'ckeditor',
     'log_service',
+    'assunnah',
     
 
     'ckeditor_uploader',
@@ -467,6 +468,10 @@ CELERY_BEAT_SCHEDULE = {
     'sync-cached-pathao-prices-every-3-days': {
         'task': 'courier.tasks.sync_cached_pathao_prices',
         'schedule': timedelta(days=3),
+    },
+    'cleanup-expired-assunnah-collections': {
+        'task': 'assunnah.cleanup_expired_collections',
+        'schedule': crontab(hour=3, minute=15),
     },
     'sync-steadfast-locations-every-3-days': {
         'task': 'courier.tasks.sync_steadfast_locations',

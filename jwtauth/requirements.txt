@@ -87,6 +87,7 @@ rapidfuzz
 django-unfold
 django-ckeditor
 pillow
+python-docx==1.1.2
 django-storages
 boto3
 playwright

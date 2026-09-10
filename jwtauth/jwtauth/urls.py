@@ -104,6 +104,7 @@ urlpatterns = [
     path('api/agent-state/', AgentDashboardStatsView.as_view(), name='agent-stats'),
     path('api/courier/', include('courier.urls')),
     path('api/integrations/', include('integrations.urls')),
+    path('api/assunnah/', include('assunnah.urls')),
 ]
 
 if settings.DEBUG:
