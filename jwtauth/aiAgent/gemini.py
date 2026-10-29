@@ -70,7 +70,7 @@ def generate_gemini_reply(prompt, history, current_message, agent_config, _skip_
                     'district': {'type': 'STRING', 'description': 'District name in English'},
                     'upazila': {'type': 'STRING', 'description': 'Upazila or thana in English'},
                     'address': {'type': 'STRING', 'description': 'Full address'},
-                    'sub_area_hint': {'type': 'STRING', 'description': 'Village, bazar, or landmark'}
+                    'sub_area_hint': {'type': 'STRING', 'description': 'Specific village, union, bazar, or landmark translated to English (e.g. Shahmollikdi, Pirerchor)'}
                 },
                 'required': ['district', 'upazila', 'address']
             }

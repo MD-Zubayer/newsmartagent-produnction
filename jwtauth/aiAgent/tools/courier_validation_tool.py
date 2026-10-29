@@ -45,7 +45,7 @@ def get_courier_validation_tool_definition() -> Dict[str, Any]:
                 },
                 "sub_area_hint": {
                     "type": "string",
-                    "description": "Specific union, bazar, or landmark extracted by AI if identified in context"
+                    "description": "Specific union, bazar, village, or landmark translated/transliterated to English (e.g. 'Shahmollikdi', 'Pirerchor', 'Bazar', 'College Road') if mentioned"
                 }
             },
             "required": ["district", "upazila", "address"]
@@ -153,6 +153,11 @@ def validate_and_suggest_courier_area(
     except Exception as e:
         logger.warning(f"Error matching address via Redis: {e}")
         prov_match = {}
+
+    # Guard: Never blindly accept an area_id from cache fallback if sub-area was not explicitly matched
+    if active_provider == 'pathao' and prov_match.get('area_id'):
+        # Verify area_id against provided hint/address before trusting cache
+        prov_match['area_id'] = None
 
     if active_provider == 'pathao':
         return _validate_pathao(district_clean, upazila_clean, full_addr_clean, hint_clean, prov_match, result, address_fail_count)

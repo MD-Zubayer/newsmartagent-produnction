@@ -1372,6 +1372,7 @@ def _get_ai_response_base(agent_config, system_instruction, history, current_mes
                 success = (status == 'success') or (len(reply) > 5 and "System busy" not in reply)
                 
             error_info = ai_response.get('error_message') if not success else ""
+            tool_data = ai_response.get('tool_execution_data')
             
             return {
                 'reply': reply, 
@@ -1379,7 +1380,8 @@ def _get_ai_response_base(agent_config, system_instruction, history, current_mes
                 'success': success,
                 'input_tokens': input_tokens, 
                 'output_tokens': output_tokens, 
-                'error': error_info
+                'error': error_info,
+                'tool_execution_data': tool_data
             }
         else:
             if isinstance(ai_response, tuple):

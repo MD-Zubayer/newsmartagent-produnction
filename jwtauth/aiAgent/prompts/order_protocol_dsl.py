@@ -68,7 +68,7 @@ def build_order_protocol_dsl(user=None, custom_slots: Optional[List[str]] = None
         '\n'
         '    RULE_4_1_COURIER_AREA_VALIDATION:\n'
         '      WHEN customer provides address, upazila, or district in chat:\n'
-        '      ACTION: Invoke the "validate_courier_coverage" tool live. If tool returns status="needs_clarification", present the suggested nearby hubs to customer and ask which is closest. If status="valid", proceed to order draft. Keep customer raw full address intact.\n'
+        '      ACTION: Invoke the "validate_courier_coverage" tool live with English district, English upazila, raw address, and if a village, bazar, or landmark is named (e.g. শাহমল্লিকদি, পেরেচার), translate or romanize it into English for sub_area_hint (e.g. "Shahmollikdi", "Pirerchor"). If tool returns status="needs_clarification", present the suggested nearby hubs to customer and ask which is closest. If status="valid", proceed to order draft. Keep customer raw full address intact.\n'
         '\n'
         '    RULE_5_IMAGE_DELIVERY:\n'
         '      IF customer asks for photos or appearance of a catalog product:\n'

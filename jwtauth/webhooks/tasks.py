@@ -779,7 +779,7 @@ def _infer_catalog_product_from_text(user, text):
 def _has_complete_order_fields(user_memory):
     fields = _get_order_fields(user_memory)
     for key in ORDER_FIELDS:
-        if key in ['extra_info', 'price', 'district', 'upazila']:
+        if key in ['extra_info', 'price', 'district', 'upazila', 'product_id']:
             continue
         field_data = fields.get(key, {})
         if not field_data.get('value') or field_data.get('confidence', 1.0) < 0.75:
@@ -1334,18 +1334,26 @@ def create_customer_order_from_memory(agent_config, sender_id, request_type, msg
             if not upazila_val:
                 upazila_val = ext_upazila
         
-        suggestions = match_address_redis(district_val, upazila_val, full_address=address_val)
-        city_id = None
-        zone_id = None
-        area_id = None
-        
-        if pathao_active:
-            city_id = suggestions.get('pathao', {}).get('city_id')
-            zone_id = suggestions.get('pathao', {}).get('zone_id')
-            area_id = suggestions.get('pathao', {}).get('area_id')
-        elif steadfast_active:
-            city_id = suggestions.get('steadfast', {}).get('city_id')
-            area_id = suggestions.get('steadfast', {}).get('area_id')
+        # Read locked courier IDs from memory first (locked during live courier validation)
+        from aiAgent.tools.courier_validation_tool import get_active_courier_for_merchant
+        active_provider = get_active_courier_for_merchant(agent_config.user)
+        internal_mem = (user_memory.data or {}).get('_internal', {})
+        saved_loc_ids = (internal_mem.get('courier_location_ids') or {}).get(active_provider) or {}
+
+        city_id = saved_loc_ids.get('city_id')
+        zone_id = saved_loc_ids.get('zone_id')
+        area_id = saved_loc_ids.get('area_id')
+
+        # Fallback to cache matcher only if not locked in memory
+        if not city_id:
+            suggestions = match_address_redis(district_val, upazila_val, full_address=address_val)
+            if active_provider == 'pathao' and pathao_active:
+                city_id = suggestions.get('pathao', {}).get('city_id')
+                zone_id = suggestions.get('pathao', {}).get('zone_id')
+                area_id = suggestions.get('pathao', {}).get('area_id')
+            elif active_provider == 'steadfast' and steadfast_active:
+                city_id = suggestions.get('steadfast', {}).get('city_id')
+                area_id = suggestions.get('steadfast', {}).get('area_id')
 
         # Unified Customer storefront account linking
         contact_obj = None
@@ -1390,6 +1398,7 @@ def create_customer_order_from_memory(agent_config, sender_id, request_type, msg
             item_quantity=quantity_value,
             items=order_items_payload,
             extra_info=extra_info,
+            courier=active_provider,
             source_platform=source_platform,
             source_contact_id=sender_id,
             city_id=city_id,
@@ -1397,6 +1406,14 @@ def create_customer_order_from_memory(agent_config, sender_id, request_type, msg
             area_id=area_id,
             call_status='uncalled'
         )
+
+        # Trigger auto-courier dispatch if enabled for merchant
+        try:
+            from courier.services.auto_dispatcher import attempt_auto_courier_booking
+            auto_book_res = attempt_auto_courier_booking(order)
+            logger.info("📦 [AutoCourierDispatch] Order #%s booking status: %s", order.id, auto_book_res.get('status'))
+        except Exception as courier_book_err:
+            logger.warning("Error attempting auto courier booking for Order #%s: %s", order.id, courier_book_err)
 
         if msg_id:
             r.setex(f'order_created:{msg_id}', 86400, '1')
