@@ -8,3 +8,4 @@ __all__ = [
     'validate_and_suggest_courier_area',
     'get_active_courier_for_merchant',
 ]
+
