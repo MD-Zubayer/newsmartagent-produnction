@@ -26,6 +26,7 @@ def build_classification_dsl(
         '"human_handoff": "boolean (true ONLY if user explicitly requests human representative)"',
         '"order_intent": "enum[\'create\', \'confirm\', \'cancel\', \'interrupted\', null]"',
         '"order_data": "object or null (Contains product_name, price, customer details, items array)"',
+        '"courier_check": "object or null (When customer mentions district/upazila/thana, set {\'district\': \'DistrictInEnglish\', \'upazila\': \'UpazilaInEnglish\', \'address\': \'raw address\'})"',
     ]
     if redis_cache_enabled:
         format_fields.append('"cache_type": "enum[\'no_cache\', \'sender_specific\', \'agent_specific\', \'global\']"')
@@ -90,6 +91,9 @@ def build_classification_dsl(
         '      - Always populate "order_data": {"product_name": "string or null"} tracking active product from conversation, even if order_intent is null.\n'
         '      - If discount/offer price exists in catalog, inform customer and set discount price in "order_data".\n'
         '      - Map raw visual descriptions back to authoritative catalog product name; never invent names or prices.\n'
+        '\n'
+        '    COURIER_CHECK_INTENT:\n'
+        '      - Whenever customer provides or updates address with district and/or upazila/thana (even in Bengali e.g. "ফরিদপুর ভাঙ্গা বটতলা"), populate "courier_check": {"district": "Faridpur", "upazila": "Bhanga", "address": "ফরিদপুর ভাঙ্গা বটতলা"}. The system invokes live courier coverage validation for these parameters.\n'
         '  </intent_rules>'
         f'{image_rules}\n'
         '</response_classification_dsl>'

@@ -17,6 +17,38 @@ from courier.utils.redis_courier_cache import match_address_redis
 logger = logging.getLogger('aiAgent')
 
 
+def get_courier_validation_tool_definition() -> Dict[str, Any]:
+    """
+    OpenAI & Gemini Function Calling Tool Specification for Courier Validation.
+    """
+    return {
+        "name": "validate_courier_coverage",
+        "description": (
+            "Validates customer delivery address against the merchant's active courier provider (Pathao or Steadfast). "
+            "Call this tool whenever customer provides district, upazila/thana, or address. "
+            "Returns matched location IDs or nearby available sub-areas/unions if the sub-area is ambiguous."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "district": {
+                    "type": "string",
+                    "description": "District name in English (e.g. 'Faridpur', 'Dhaka', 'Chattogram')"
+                },
+                "upazila": {
+                    "type": "string",
+                    "description": "Thana or Upazila name in English (e.g. 'Bhanga', 'Mirpur', 'Dhanmondi')"
+                },
+                "address": {
+                    "type": "string",
+                    "description": "Full Bengali or English address including village, road, or landmarks"
+                }
+            },
+            "required": ["district"]
+        }
+    }
+
+
 def get_active_courier_for_merchant(merchant) -> str:
     """
     Determine the primary active courier provider for the merchant ('pathao' or 'steadfast').

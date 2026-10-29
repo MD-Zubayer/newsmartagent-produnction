@@ -3632,6 +3632,38 @@ def process_ai_reply_task(self, data):
                             if intent_conf is None:
                                 intent_conf = 1.0
 
+                            # If AI called courier_check intent directly, execute native courier validation tool immediately
+                            ai_courier_call = parsed.get('courier_check')
+                            if isinstance(ai_courier_call, dict) and (ai_courier_call.get('district') or ai_courier_call.get('upazila')):
+                                try:
+                                    from aiAgent.tools.courier_validation_tool import validate_and_suggest_courier_area
+                                    call_dist = ai_courier_call.get('district')
+                                    call_upz = ai_courier_call.get('upazila')
+                                    call_addr = ai_courier_call.get('address') or order_data.get('address')
+                                    logger.info("🤖 AI directly triggered courier_check tool: district=%s, upazila=%s, address=%s", call_dist, call_upz, call_addr)
+                                    direct_res = validate_and_suggest_courier_area(
+                                        merchant=agent_config.user,
+                                        district=call_dist,
+                                        upazila=call_upz,
+                                        full_address=call_addr
+                                    )
+                                    loc_ids = direct_res.get('location_ids') or {}
+                                    if any(loc_ids.values()):
+                                        mem_d = user_memory.data or {}
+                                        mem_d.setdefault('_internal', {})['courier_location_ids'] = {direct_res.get('provider'): loc_ids}
+                                        user_memory.data = mem_d
+                                        user_memory.save(update_fields=['data'])
+                                    if direct_res.get('status') == 'needs_clarification' and direct_res.get('suggested_areas'):
+                                        suggestions = direct_res.get('suggested_areas')[:5]
+                                        sugg_text = "\n".join([f"• {a}" for a in suggestions])
+                                        area_clarification = (
+                                            f"\n\nআপনার এলাকাটি কুরিয়ারে নিখুঁতভাবে ডেলিভারির জন্য নিচের এরিয়াগুলোর মধ্যে কোনটি আপনার সবচেয়ে কাছে?\n{sugg_text}\n"
+                                            "অনুগ্রহ করে শুধু আপনার এরিয়ার নামটি জানান।"
+                                        )
+                                        parsed_reply = (parsed_reply or "").strip() + area_clarification
+                                except Exception as direct_tool_err:
+                                    logger.warning("Error running AI-triggered courier check: %s", direct_tool_err)
+
                             # If memory now has complete order fields, validate with active courier tool before confirmation
                             if _has_complete_order_fields(user_memory):
                                 # Validate against merchant's active courier provider (Pathao or Steadfast)
