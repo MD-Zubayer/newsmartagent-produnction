@@ -151,11 +151,52 @@ def generate_openai_reply(system_promt, messages, current_message, agent_config,
         # API কল
         logger.info(f"OpenAI History: {formatted_messages}")
         provider_started = monotonic()
+
+        # Wire live courier validation tool
+        from aiAgent.tools.courier_validation_tool import (
+            get_courier_validation_tool_definition,
+            validate_and_suggest_courier_area
+        )
+        courier_tool_def = get_courier_validation_tool_definition()
+        payload["tools"] = [{"type": "function", "function": courier_tool_def}]
+
         with provider_call("openai", "chat_completion"):
             response = client.chat.completions.create(timeout=30.0, **payload)
         
-        # --- রিপ্লাই এক্সট্রাক্ট করা ---
+        # --- রিপ্লাই এক্সট্রাক্ট করা ও ফাংশন কল লুপ ---
         message = response.choices[0].message
+        executed_tool_data = None
+
+        if getattr(message, 'tool_calls', None):
+            for tc in message.tool_calls:
+                fn_name = tc.function.name
+                if fn_name == 'validate_courier_coverage':
+                    try:
+                        args = json.loads(tc.function.arguments) if isinstance(tc.function.arguments, str) else tc.function.arguments
+                    except Exception:
+                        args = {}
+                    logger.info("🤖 [OpenAI Native Function Call] AI executing %s with args: %s", fn_name, args)
+                    tool_result = validate_and_suggest_courier_area(
+                        merchant=getattr(agent_config, 'user', None),
+                        district=args.get('district'),
+                        upazila=args.get('upazila'),
+                        full_address=args.get('address'),
+                        sub_area_hint=args.get('sub_area_hint')
+                    )
+                    executed_tool_data = tool_result
+                    formatted_messages.append(message)
+                    formatted_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": json.dumps(tool_result, ensure_ascii=False)
+                    })
+                    payload["messages"] = formatted_messages
+                    # Follow-up turn with tool result
+                    with provider_call("openai", "chat_completion"):
+                        response = client.chat.completions.create(timeout=30.0, **payload)
+                    message = response.choices[0].message
+                    break
+
         raw_reply = message.content
         print(f"\n--- [DEBUG] Raw AI Reply Length: {len(raw_reply) if raw_reply else 0} ---")
         
@@ -184,7 +225,8 @@ def generate_openai_reply(system_promt, messages, current_message, agent_config,
             "output_tokens": output_tokens,
             "total_tokens": total_tokens,
             "model_name": model_name,
-            "status": result_status
+            "status": result_status,
+            "tool_execution_data": executed_tool_data
         }
 
     except Exception as e:

@@ -3464,6 +3464,24 @@ def process_ai_reply_task(self, data):
                 int((time.time() - start_time) * 1000)
             )
 
+            # Ingest executed native tool results from live AI turn
+            live_tool_data = ai_data.get('tool_execution_data') if isinstance(ai_data, dict) else None
+            if live_tool_data and isinstance(live_tool_data, dict):
+                logger.info("📦 [AI Live Tool Return Ingested]: %s", live_tool_data.get('status'))
+                loc_ids = live_tool_data.get('location_ids') or {}
+                if any(loc_ids.values()):
+                    user_memory = _get_or_create_user_memory(agent_config, sender_id)
+                    mem_d = user_memory.data or {}
+                    mem_d.setdefault('_internal', {})['courier_location_ids'] = {live_tool_data.get('provider'): loc_ids}
+                    user_memory.data = mem_d
+                    user_memory.save(update_fields=['data'])
+                if live_tool_data.get('status') == 'needs_clarification' and live_tool_data.get('suggested_areas'):
+                    user_memory = _get_or_create_user_memory(agent_config, sender_id)
+                    mem_d = user_memory.data or {}
+                    mem_d.setdefault('_internal', {})['pending_courier_area_suggestions'] = live_tool_data.get('suggested_areas')[:8]
+                    user_memory.data = mem_d
+                    user_memory.save(update_fields=['data'])
+
             # ---- Parse JSON from AI reply (Using clean_ai_response to fix broken JSON & type mismatches) ----
             raw_ai_reply = ai_data.get('reply', '')
             cache_type = 'agent_specific' if redis_cache_enabled else 'no_cache'

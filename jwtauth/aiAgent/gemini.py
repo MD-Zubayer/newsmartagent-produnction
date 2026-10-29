@@ -57,16 +57,65 @@ def generate_gemini_reply(prompt, history, current_message, agent_config, _skip_
         if force_json:
             gen_config_kwargs["response_mime_type"] = "application/json"
 
+        # Tool integration for live native courier validation
+        from aiAgent.tools.courier_validation_tool import (
+            validate_and_suggest_courier_area
+        )
+        fd = types.FunctionDeclaration(
+            name='validate_courier_coverage',
+            description='Validates customer delivery address against active courier coverage. Call this whenever customer provides district, upazila, or address.',
+            parameters={
+                'type': 'OBJECT',
+                'properties': {
+                    'district': {'type': 'STRING', 'description': 'District name in English'},
+                    'upazila': {'type': 'STRING', 'description': 'Upazila or thana in English'},
+                    'address': {'type': 'STRING', 'description': 'Full address'},
+                    'sub_area_hint': {'type': 'STRING', 'description': 'Village, bazar, or landmark'}
+                },
+                'required': ['district']
+            }
+        )
+        gen_config_kwargs["tools"] = [types.Tool(function_declarations=[fd])]
+
+        executed_tool_data = None
         with provider_call("gemini", "generate_reply"):
             response = GENAI_CLIENT.models.generate_content(
                 model=model_name,
                 contents=formatted_history,
                 config=types.GenerateContentConfig(**gen_config_kwargs)
             )
+
+            # Native tool execution loop if Gemini requested a function call
+            if getattr(response, 'function_calls', None):
+                for fc in response.function_calls:
+                    if fc.name == 'validate_courier_coverage':
+                        args = dict(fc.args or {})
+                        logger.info("🤖 [Gemini Native Function Call] AI executing %s with args: %s", fc.name, args)
+                        tool_result = validate_and_suggest_courier_area(
+                            merchant=getattr(agent_config, 'user', None),
+                            district=args.get('district'),
+                            upazila=args.get('upazila'),
+                            full_address=args.get('address'),
+                            sub_area_hint=args.get('sub_area_hint')
+                        )
+                        executed_tool_data = tool_result
+                        formatted_history.append(response.candidates[0].content)
+                        formatted_history.append(types.Content(
+                            role='user',
+                            parts=[types.Part.from_function_response(name=fc.name, response={'result': tool_result})]
+                        ))
+                        # Follow-up turn with function response
+                        response = GENAI_CLIENT.models.generate_content(
+                            model=model_name,
+                            contents=formatted_history,
+                            config=types.GenerateContentConfig(**gen_config_kwargs)
+                        )
+                        break
+
         reply = response.text.strip() if response.text else ""
         total_tokens = response.usage_metadata.total_token_count or 0
         record_provider_usage("gemini", "generate_reply", model_name, total_tokens, 0, "success", (monotonic() - provider_started) * 1000)
-        return {"reply": reply or "", "total_tokens": total_tokens, "status": "success"}
+        return {"reply": reply or "", "total_tokens": total_tokens, "status": "success", "tool_execution_data": executed_tool_data}
     except Exception as e:
         logger.error(f"Gemini generate error: {e}")
         return {"reply": "Error calling Gemini", "total_tokens": 0, "status": "error", "error": str(e)}
