@@ -750,8 +750,10 @@ class CheckoutSubmitView(APIView):
 
         backfill_orders_for_customer(customer, contact=session.contact, phone=phone)
 
-        # Save address if requested
+        # Save address as default so future checkouts use the latest chat/order address
         if save_address:
+            # First set previous addresses to is_default=False so the new address becomes primary
+            CustomerAddress.objects.filter(customer=customer).update(is_default=False)
             CustomerAddress.objects.update_or_create(
                 customer=customer,
                 full_address=full_address,

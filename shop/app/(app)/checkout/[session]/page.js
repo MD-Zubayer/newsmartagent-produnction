@@ -166,9 +166,22 @@ export default function SmartCheckoutPage() {
       .then((data) => {
         if (Array.isArray(data) && data.length > 0) {
           setAddresses(data);
-          const defaultAddr = data.find((a) => a.is_default) || data[0];
-          setSelectedAddressId(defaultAddr.id);
-          applySavedAddress(defaultAddr);
+          // If the checkout session already has fresh prefill from chat draft/metadata,
+          // DO NOT blindly overwrite the user's fresh chat input with an old saved address!
+          const hasChatPrefill = Boolean(
+            session?.checkout_prefill?.address ||
+            session?.checkout_prefill?.phone ||
+            session?.checkout_prefill?.district
+          );
+
+          if (!hasChatPrefill) {
+            const defaultAddr = data.find((a) => a.is_default) || data[0];
+            setSelectedAddressId(defaultAddr.id);
+            applySavedAddress(defaultAddr);
+          } else {
+            // Keep chat draft in form and show addresses as option
+            setIsAddingNewAddress(false);
+          }
         } else {
           setIsAddingNewAddress(true);
         }
@@ -177,7 +190,7 @@ export default function SmartCheckoutPage() {
         setIsAddingNewAddress(true);
         console.error("Error authenticating/fetching addresses:", err);
       });
-  }, [sessionCode, authLoading]);
+  }, [sessionCode, authLoading, session]);
 
   const loadCourierLocations = async (provider, level, parentId = '') => {
     const query = new URLSearchParams({ session: sessionCode, provider, level });

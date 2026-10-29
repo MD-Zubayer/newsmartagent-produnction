@@ -3632,17 +3632,64 @@ def process_ai_reply_task(self, data):
                             if intent_conf is None:
                                 intent_conf = 1.0
 
-                            # If memory now has complete order fields, consider auto confirm
+                            # If memory now has complete order fields, validate with active courier tool before confirmation
                             if _has_complete_order_fields(user_memory):
-                                _set_order_state(user_memory, 'awaiting_confirmation')
-                                confirmation = _get_confirmation_prompt(user_memory)
-                                if confirmation:
-                                    ai_natural_reply = (parsed_reply or "").strip()
-                                    if ai_natural_reply:
-                                        parsed_reply = f"{ai_natural_reply}\n\n{confirmation}"
+                                # Validate against merchant's active courier provider (Pathao or Steadfast)
+                                try:
+                                    from aiAgent.tools.courier_validation_tool import validate_and_suggest_courier_area
+                                    plain_slots = _get_plain_order_values(user_memory)
+                                    val_res = validate_and_suggest_courier_area(
+                                        merchant=agent_config.user,
+                                        district=plain_slots.get('district'),
+                                        upazila=plain_slots.get('upazila'),
+                                        full_address=plain_slots.get('address')
+                                    )
+
+                                    if val_res.get('status') == 'needs_clarification' and val_res.get('suggested_areas'):
+                                        # Save resolved IDs if any were found
+                                        loc_ids = val_res.get('location_ids') or {}
+                                        if any(loc_ids.values()):
+                                            mem_d = user_memory.data or {}
+                                            mem_d.setdefault('_internal', {})['courier_location_ids'] = {val_res.get('provider'): loc_ids}
+                                            user_memory.data = mem_d
+                                            user_memory.save(update_fields=['data'])
+
+                                        suggestions = val_res.get('suggested_areas')[:5]
+                                        sugg_text = "\n".join([f"• {a}" for a in suggestions])
+                                        area_clarification = (
+                                            f"\n\nআপনার এলাকাটি কুরিয়ারে নিখুঁতভাবে ডেলিভারির জন্য নিচের এরিয়াগুলোর মধ্যে কোনটি আপনার সবচেয়ে কাছে?\n{sugg_text}\n"
+                                            "অনুগ্রহ করে শুধু আপনার এরিয়ার নামটি জানান।"
+                                        )
+                                        parsed_reply = (parsed_reply or "").strip() + area_clarification
+                                        _set_order_state(user_memory, 'collecting_details')
                                     else:
-                                        parsed_reply = confirmation
-                                    cache_type = 'no_cache'
+                                        # Area valid or accepted, transition to draft confirmation
+                                        loc_ids = val_res.get('location_ids') or {}
+                                        if any(loc_ids.values()):
+                                            mem_d = user_memory.data or {}
+                                            mem_d.setdefault('_internal', {})['courier_location_ids'] = {val_res.get('provider'): loc_ids}
+                                            user_memory.data = mem_d
+                                            user_memory.save(update_fields=['data'])
+
+                                        _set_order_state(user_memory, 'awaiting_confirmation')
+                                        confirmation = _get_confirmation_prompt(user_memory)
+                                        if confirmation:
+                                            ai_natural_reply = (parsed_reply or "").strip()
+                                            if ai_natural_reply:
+                                                parsed_reply = f"{ai_natural_reply}\n\n{confirmation}"
+                                            else:
+                                                parsed_reply = confirmation
+                                except Exception as courier_tool_err:
+                                    logger.warning(f"Courier validation tool error: {courier_tool_err}")
+                                    _set_order_state(user_memory, 'awaiting_confirmation')
+                                    confirmation = _get_confirmation_prompt(user_memory)
+                                    if confirmation:
+                                        ai_natural_reply = (parsed_reply or "").strip()
+                                        if ai_natural_reply:
+                                            parsed_reply = f"{ai_natural_reply}\n\n{confirmation}"
+                                        else:
+                                            parsed_reply = confirmation
+                                cache_type = 'no_cache'
                             else:
                                 prev_order_state = _get_order_state(user_memory)
                                 _set_order_state(user_memory, 'collecting_details')
