@@ -240,7 +240,7 @@ export default function UserDashboard() {
   const now = new Date();
   const trulyActiveSubs = subscriptions?.filter(sub => sub.is_active && new Date(sub.end_date) > now) || [];
   const activeSubs = trulyActiveSubs.filter(s => s.offer);
-  
+
   const totalAvailableBalance = trulyActiveSubs.length > 0
     ? trulyActiveSubs.reduce((acc, sub) => acc + (sub.remaining_tokens || 0), 0)
     : 0;
@@ -367,11 +367,10 @@ export default function UserDashboard() {
                 <button
                   key={p.id}
                   onClick={() => handlePresetChange(p.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
-                    selectedPreset === p.id
-                      ? "bg-gradient-to-r from-pink-500 to-indigo-600 text-white shadow-md scale-105"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${selectedPreset === p.id
+                    ? "bg-gradient-to-r from-pink-500 to-indigo-600 text-white shadow-md scale-105"
+                    : "text-slate-500 hover:text-slate-800"
+                    }`}
                 >
                   {p.label}
                 </button>
@@ -492,9 +491,9 @@ export default function UserDashboard() {
               </div>
             </div>
           )}
-           <h3 className="text-lg md:text-xl font-black text-gray-800 mb-8 flex items-center gap-2 italic uppercase px-4">
-              <BarChart3 size={24} className="text-cyan-500" /> Platform Wise Analytics
-            </h3>
+          <h3 className="text-lg md:text-xl font-black text-gray-800 mb-8 flex items-center gap-2 italic uppercase px-4">
+            <BarChart3 size={24} className="text-cyan-500" /> Platform Wise Analytics
+          </h3>
           <PlatformTokenChart data={charts.platform_distribution} />
         </div>
 
@@ -621,7 +620,7 @@ export default function UserDashboard() {
                 const isMessenger = platformSlug.includes("messenger");
 
                 const platformLabel = platformSlug ? platformSlug.replace(/_/g, " ") : "Unknown Platform";
-                
+
                 // --- Platform Branding Colors ---
                 const getPlatformColor = (slug) => {
                   if (!slug) return "bg-gray-600";
@@ -659,24 +658,24 @@ export default function UserDashboard() {
                       <div className="flex items-center gap-4 flex-1 min-w-0">
                         <div className={`relative w-12 h-12 md:w-16 md:h-16 shrink-0 rounded-2xl flex items-center justify-center font-black text-xl text-white shadow-xl ${platformColorClass} group-hover:scale-110 transition-transform duration-500 overflow-hidden`}>
                           {log.contact_profile ? (
-                             <>
-                               <img 
-                                 src={log.contact_profile} 
-                                 alt={displayName} 
-                                 className="w-full h-full object-cover" 
-                                 onError={(e) => {
-                                   e.currentTarget.style.display = 'none';
-                                   if (e.currentTarget.nextElementSibling) {
-                                     e.currentTarget.nextElementSibling.style.display = 'flex';
-                                   }
-                                 }} 
-                               />
-                               <span className="hidden w-full h-full items-center justify-center font-black text-xl text-white">
-                                 {avatarLabel}
-                               </span>
-                             </>
+                            <>
+                              <img
+                                src={log.contact_profile}
+                                alt={displayName}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = 'none';
+                                  if (e.currentTarget.nextElementSibling) {
+                                    e.currentTarget.nextElementSibling.style.display = 'flex';
+                                  }
+                                }}
+                              />
+                              <span className="hidden w-full h-full items-center justify-center font-black text-xl text-white">
+                                {avatarLabel}
+                              </span>
+                            </>
                           ) : (
-                             avatarLabel
+                            avatarLabel
                           )}
                         </div>
                         <div className="min-w-0">

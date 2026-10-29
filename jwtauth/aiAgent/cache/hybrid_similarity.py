@@ -39,6 +39,30 @@ def normalize_for_cache(text):
     if text and normalized:
         logger.debug("🧪 Cache normalize | raw='%s' | normalized='%s'", text[:120], normalized[:120])
     return normalized
+def extension_cache_fingerprint(agent_id=None, user_id=None):
+    """Use active global/agent/user extension versions as a cache namespace."""
+    try:
+        from aiAgent.models import AgentAI
+        from ai_extensions.models import ExtensionAssignment
+        agent = AgentAI.objects.filter(page_id=agent_id).first() if agent_id else None
+        if not agent and str(agent_id or "").isdigit():
+            agent = AgentAI.objects.filter(pk=int(agent_id)).first()
+        if not agent:
+            return "base"
+        from django.db.models import Q
+        scope_filter = Q(scope="global")
+        if agent:
+            scope_filter |= Q(scope="agent", agent=agent)
+        if user_id:
+            scope_filter |= Q(scope="user", user_id=user_id)
+        assignments = ExtensionAssignment.objects.filter(
+            Q(extension__is_enabled=True, is_enabled=True, version__status__in=("stable", "testing")) & scope_filter
+        ).select_related("extension", "version").order_by("scope", "extension__key", "version__version")
+        parts = [f"{item.scope}:{item.extension.key}@{item.version.version}:{item.config}" for item in assignments]
+        return hashlib.sha256("|".join(parts).encode()).hexdigest()[:12] if parts else "base"
+    except Exception:
+        return "base"
+
 
 
 def _normalize_cached_data(data, default_scope):
@@ -56,11 +80,11 @@ def _normalize_cached_data(data, default_scope):
 
 def get_cached_reply(agent_id, msg_text=None, msg_hash=None, track_hit=True):                
     if msg_hash:
-        key = f"agent:{agent_id}:reply:{msg_hash}"
+        key = f"agent:{agent_id}:ext:{extension_cache_fingerprint(agent_id)}:reply:{msg_hash}"
     elif msg_text:
         normalized = normalize_for_cache(msg_text)
         msg_hash = hashlib.md5(normalized.encode()).hexdigest()
-        key = f"agent:{agent_id}:reply:{msg_hash}"
+        key = f"agent:{agent_id}:ext:{extension_cache_fingerprint(agent_id)}:reply:{msg_hash}"
     else:
         return None
 
@@ -85,7 +109,7 @@ def set_cached_reply(agent_id, msg_text, reply, model, input_tokens=0, output_to
                      order_intent=None, order_data=None, best_row_id=None):
     normalized = normalize_for_cache(msg_text)
     msg_hash = hashlib.md5(normalized.encode()).hexdigest()
-    key = f"agent:{agent_id}:reply:{msg_hash}"
+    key = f"agent:{agent_id}:ext:{extension_cache_fingerprint(agent_id)}:reply:{msg_hash}"
     
     # TTL নির্ধারণ
     if ttl is None:
@@ -115,7 +139,7 @@ def fuzzy_match(agent_id, msg_text, threshold=85, track_hit=True): # ⚡ RapidFu
     normalized_input = normalize_for_cache(msg_text)
     
     # ১. r.keys() এর বদলে r.scan_iter() ব্যবহার করা হয়েছে (Non-blocking approach)
-    pattern = f"agent:{agent_id}:reply:*"
+    pattern = f"agent:{agent_id}:ext:{extension_cache_fingerprint(agent_id)}:reply:*"
 
     # Tracking variables
     best_score = 0
@@ -256,7 +280,7 @@ def normalize_with_map(text):
 
 def find_best_cached_hash(agent_id, msg_text, threshold=70):                
     # ১. r.keys() এর বদলে r.scan_iter() ব্যবহার (নিরাপদ উপায়)
-    pattern = f"agent:{agent_id}:reply:*"                
+    pattern = f"agent:{agent_id}:ext:{extension_cache_fingerprint(agent_id)}:reply:*"                
     keys = r.scan_iter(match=pattern, count=100)                
     
     best_hash = None                
@@ -296,7 +320,7 @@ def get_global_cached_reply(agent_id, msg_text, track_hit=True):
         return None
     normalized = normalize_for_cache(msg_text)
     msg_hash = hashlib.md5(normalized.encode()).hexdigest()
-    key = f"global:reply:{msg_hash}"
+    key = f"global:ext:base:reply:{msg_hash}"
     try:
         cached = r_grouped.get(key)
         if cached:
@@ -319,7 +343,7 @@ def set_global_cached_reply(msg_text, reply, model, input_tokens=0, output_token
     """AI reply-কে global cache-এ save করে।"""
     normalized = normalize_for_cache(msg_text)
     msg_hash = hashlib.md5(normalized.encode()).hexdigest()
-    key = f"global:reply:{msg_hash}"
+    key = f"global:ext:base:reply:{msg_hash}"
     try:
         r_grouped.set(key, json.dumps({
             "reply": reply,
@@ -350,7 +374,7 @@ def global_fuzzy_match(agent_id, msg_text, threshold=92, track_hit=True):
     if not msg_text:
         return None
     normalized_input = normalize_for_cache(msg_text)
-    pattern = "global:reply:*"
+    pattern = "global:ext:base:reply:*"
     best_score = 0
     best_data = None
     best_hash = None
@@ -446,7 +470,7 @@ def clear_agent_cache(agent_id):
     দেওয়া agent_id-এর জন্য agent-specific cache এবং sender-specific cache ডিলিট করে।
     """
     # ১. Agent-specific cache (DB 2) মুছে দেওয়া
-    pattern_agent = f"agent:{agent_id}:reply:*"
+    pattern_agent = f"agent:{agent_id}:ext:{extension_cache_fingerprint(agent_id)}:reply:*"
     count_agent = 0
     for key in r.scan_iter(match=pattern_agent, count=100):
         r.delete(key)
@@ -466,7 +490,7 @@ def clear_global_cache():
     """
     Global cache (DB 6) থেকে সব global reply ডিলিট করে।
     """
-    pattern_global = "global:reply:*"
+    pattern_global = "global:ext:base:reply:*"
     count_global = 0
     for key in r_grouped.scan_iter(match=pattern_global, count=100):
         r_grouped.delete(key)
@@ -493,7 +517,7 @@ def delete_by_message_text(agent_id, text, is_global=False):
     msg_hash = hashlib.md5(normalized.encode()).hexdigest()
     
     if is_global:
-        r_grouped.delete(f"global:reply:{msg_hash}")
+        r_grouped.delete(f"global:ext:base:reply:{msg_hash}")
         logger.info(f"🗑️ Global cache entry deleted for text: {text[:30]}")
         return True
     
@@ -509,7 +533,7 @@ def delete_specific_cache_entry(agent_id, msg_hash):
     r_ranking.hdel(f"agent:{agent_id}:clusters", msg_hash)
     
     # ২. এজেন্ট ক্যাশ (DB 2)
-    r.delete(f"agent:{agent_id}:reply:{msg_hash}")
+    r.delete(f"agent:{agent_id}:ext:{extension_cache_fingerprint(agent_id)}:reply:{msg_hash}")
     
     # ৩. সেন্ডার ক্যাশ (DB 6)
     pattern_sender = f"agent:{agent_id}:sender:*:reply:{msg_hash}"

@@ -1,5 +1,9 @@
 from rest_framework import serializers
-from users.models import User, Subscription, Offer, Profile, Payment, NSATransfer, WithdrawMethod, CashoutRequest
+from users.models import (
+    User, Subscription, Offer, Profile, Payment, NSATransfer,
+    WithdrawMethod, CashoutRequest, Platform, CustomTeamRole, TeamMember,
+    get_full_owner_permissions, TEAM_ROLE_PRESETS,
+)
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.exceptions import InvalidToken
 from users.models import CustomerOrder, OrderForm
@@ -29,12 +33,19 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profile
-        fields = ["user", "id_type", "unique_id", "profile_photo", "created_at", "updated_at", "two_factor_enabled", "word_balance", "schedule_balance", 'acount_balance', 'commission_balance', "website_url", "business_email"]
+        fields = [
+            "user", "id_type", "unique_id", "profile_photo", "created_at", "updated_at",
+            "two_factor_enabled", "word_balance", "schedule_balance", "acount_balance",
+            "commission_balance", "website_url", "business_email",
+            "auto_courier_booking", "default_courier_provider",
+            "ai_voice_enabled", "voice_preference", "default_voice_audio"
+        ]
 
 
 class UserSerializer(serializers.ModelSerializer[User]):
     profile = ProfileSerializer(required=False) # nested serializer
     two_factor_enabled = serializers.SerializerMethodField(read_only=True)
+    team_context = serializers.SerializerMethodField(read_only=True)
 
     man_agent_unique_id = serializers.CharField(write_only=True, required=False,allow_blank=True, allow_null=True)
     man_agent_otp_key = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
@@ -64,6 +75,7 @@ class UserSerializer(serializers.ModelSerializer[User]):
             'is_staff',
             'is_superuser',
             'two_factor_enabled',
+            'team_context',
         ]
 
 
@@ -79,6 +91,54 @@ class UserSerializer(serializers.ModelSerializer[User]):
             return getattr(obj.profile, "two_factor_enabled", False)
         except Exception:
             return False
+
+    def get_team_context(self, obj):
+        try:
+            tm = obj.get_active_team_member()
+            if tm:
+                owner = tm.owner
+                team_count = TeamMember.objects.filter(owner=owner, is_active=True).count()
+                return {
+                    "is_team_member": True,
+                    "is_owner": False,
+                    "workspace_owner_id": owner.id,
+                    "workspace_name": owner.name or owner.email.split("@")[0],
+                    "member_id": tm.id,
+                    "role_title": tm.custom_role.name if tm.custom_role else tm.role_title,
+                    "custom_role_id": tm.custom_role_id,
+                    "department": tm.department,
+                    "availability_status": tm.availability_status,
+                    "permissions": tm.get_effective_permissions(),
+                    "team_members_count": team_count,
+                }
+            team_count = TeamMember.objects.filter(owner=obj, is_active=True).count()
+            return {
+                "is_team_member": False,
+                "is_owner": True,
+                "workspace_owner_id": obj.id,
+                "workspace_name": obj.name or obj.email.split("@")[0],
+                "member_id": None,
+                "role_title": "Owner / Admin",
+                "custom_role_id": None,
+                "department": "general",
+                "availability_status": "online",
+                "permissions": get_full_owner_permissions(),
+                "team_members_count": team_count,
+            }
+        except Exception:
+            return {
+                "is_team_member": False,
+                "is_owner": True,
+                "workspace_owner_id": obj.id,
+                "workspace_name": obj.name or "",
+                "member_id": None,
+                "role_title": "Owner / Admin",
+                "custom_role_id": None,
+                "department": "general",
+                "availability_status": "online",
+                "permissions": get_full_owner_permissions(),
+                "team_members_count": 0,
+            }
 
     def create(self, validated_data):
 
@@ -184,12 +244,19 @@ class UserRegisterSerializer(serializers.ModelSerializer[User]):
 
 
 
+class PlatformSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Platform
+        fields = ["id", "name", "is_active"]
+
+
 class OfferSerializer(serializers.ModelSerializer):
     allowed_models = AIProviderModelSerializer(many=True, read_only=True)
+    allowed_platforms = PlatformSerializer(many=True, read_only=True)
     
     class Meta:
         model = Offer
-        fields = ["id", "name","allowed_platforms", "allowed_models", "tokens", "schedule_messages", "description", "price", "duration_days", "is_active", 'target_audience', 'image_support']
+        fields = ["id", "name","allowed_platforms", "allowed_models", "tokens", "schedule_messages", "description", "price", "duration_days", "is_active", 'target_audience', 'image_support', 'max_agents_per_platform']
 
 
 class SubscriptionSerializer(serializers.ModelSerializer):
@@ -218,29 +285,275 @@ class CustomerOrderSerializer(serializers.ModelSerializer):
     
     form_id = serializers.UUIDField(write_only=True, required=False)
     customer_profile_photo = serializers.SerializerMethodField()
+    customer_info = serializers.SerializerMethodField()
+    product_info = serializers.SerializerMethodField()
+    order_items = serializers.SerializerMethodField()
+    courier_booking_info = serializers.SerializerMethodField()
 
     class Meta:
         model = CustomerOrder
         fields = [
-            'id', 'form_id', 'customer_name', 'customer_profile_photo', 
+            'id', 'public_id', 'form_id', 'customer_name', 'customer_profile_photo', 
+            'customer_info', 'product_info', 'order_items', 'items',
             'phone_number', 'district', 'upazila', 'address', 
-            'product_name', 'price', 'status', 'extra_info', 
+            'product_name', 'price', 'delivery_charge', 'cod_charge', 'cod_bearer', 'courier', 'courier_booking_info',
+            'source_platform', 'status', 'call_status', 'call_notes', 'call_confirmed_at', 'extra_info', 
             'city_id', 'zone_id', 'area_id', 'item_weight', 
             'item_quantity', 'special_instruction', 'created_at', 'updated_at'
         ]
-        read_only_fields = ['id', 'created_at', 'customer_profile_photo']
+        read_only_fields = ['id', 'public_id', 'created_at', 'customer_profile_photo', 'customer_info', 'product_info', 'order_items', 'courier_booking_info', 'call_confirmed_at', 'cod_charge', 'cod_bearer']
 
-    def get_customer_profile_photo(self, obj):
+    def get_courier_booking_info(self, obj):
         try:
-            request = self.context.get('request')
-            if obj.user.profile.profile_photo:
-                url = obj.user.profile.profile_photo.url
-                if request:
-                    return request.build_absolute_uri(url)
-                return url
+            from courier.models import PathaoBookingLog, SteadFastBookingLog, CourierTimelineEvent
+            latest_event = CourierTimelineEvent.objects.filter(order=obj).order_by('-created_at').first()
+            event_history = [
+                {
+                    'event_name': ev.event_name,
+                    'status_label': ev.status_label,
+                    'reason': ev.reason,
+                    'created_at': ev.created_at.isoformat() if ev.created_at else None
+                }
+                for ev in CourierTimelineEvent.objects.filter(order=obj).order_by('-created_at')[:15]
+            ]
+
+            pathao_log = PathaoBookingLog.objects.filter(order=obj).order_by('-id').first()
+            if pathao_log:
+                is_cancelled = str(pathao_log.status).lower() in ('cancelled', 'deleted')
+                return {
+                    'is_booked': not is_cancelled,
+                    'provider': 'pathao',
+                    'provider_label': 'Pathao Courier',
+                    'consignment_id': pathao_log.consignment_id,
+                    'merchant_order_id': pathao_log.merchant_order_id,
+                    'booking_status': pathao_log.status or 'pending',
+                    'latest_status_label': latest_event.status_label if latest_event else (pathao_log.status or 'Pending'),
+                    'latest_reason': latest_event.reason if latest_event else None,
+                    'events': event_history,
+                    'booked_at': pathao_log.created_at.isoformat() if pathao_log.created_at else None,
+                    'error': None,
+                }
+            steadfast_log = SteadFastBookingLog.objects.filter(order=obj).order_by('-id').first()
+            if steadfast_log:
+                is_cancelled = str(steadfast_log.status).lower() in ('cancelled', 'deleted')
+                return {
+                    'is_booked': not is_cancelled,
+                    'provider': 'steadfast',
+                    'provider_label': 'SteadFast Courier',
+                    'consignment_id': steadfast_log.consignment_id,
+                    'merchant_order_id': steadfast_log.merchant_order_id,
+                    'booking_status': steadfast_log.status or 'pending',
+                    'latest_status_label': latest_event.status_label if latest_event else (steadfast_log.status or 'Pending'),
+                    'latest_reason': latest_event.reason if latest_event else None,
+                    'events': event_history,
+                    'booked_at': steadfast_log.created_at.isoformat() if steadfast_log.created_at else None,
+                    'error': None,
+                }
         except Exception:
             pass
-        return None
+
+        # Check if extra_info has a tracking ID or auto-booking error note
+        extra = str(obj.extra_info or '')
+        error_note = None
+        if 'Courier Auto-Booking Error:' in extra:
+            error_note = extra.split('Courier Auto-Booking Error:')[-1].strip().split('\n')[0]
+
+        profile = getattr(obj.user, 'profile', None)
+        default_provider = getattr(profile, 'default_courier_provider', 'steadfast') if profile else 'steadfast'
+        selected_courier = obj.courier if obj.courier and obj.courier != 'manual' else default_provider
+
+        return {
+            'is_booked': False,
+            'provider': None,
+            'selected_provider': selected_courier,
+            'provider_label': 'Pathao Courier' if selected_courier == 'pathao' else 'SteadFast Courier',
+            'consignment_id': None,
+            'booking_status': 'unbooked',
+            'error': error_note,
+        }
+
+    def get_customer_info(self, obj):
+        request = self.context.get('request')
+        cust = getattr(obj, 'customer', None)
+        contact = getattr(obj, 'contact', None)
+        
+        platforms = set()
+        if obj.source_platform:
+            platforms.add(str(obj.source_platform).lower())
+        if contact and getattr(contact, 'platform', None):
+            platforms.add(str(contact.platform).lower())
+            
+        avatar_url = None
+        has_account = False
+        email = None
+        display_name = obj.customer_name
+        
+        if cust:
+            has_account = True
+            if cust.avatar_url:
+                avatar_url = cust.avatar_url
+            if cust.name:
+                display_name = cust.name
+            if cust.email:
+                email = cust.email
+            try:
+                for ident in cust.identities.all():
+                    if ident.platform:
+                        platforms.add(str(ident.platform).lower())
+            except Exception:
+                pass
+        elif contact:
+            if contact.profile_photo_url:
+                avatar_url = contact.profile_photo_url
+            elif contact.profile_photo:
+                try:
+                    url = contact.profile_photo.url
+                    avatar_url = request.build_absolute_uri(url) if request else url
+                except Exception:
+                    pass
+            if contact.name or contact.push_name:
+                display_name = contact.name or contact.push_name
+
+        if not has_account and obj.phone_number:
+            try:
+                from storefront.models import Customer
+                matched_cust = Customer.objects.filter(primary_phone=obj.phone_number).first()
+                if matched_cust:
+                    has_account = True
+                    if not avatar_url and matched_cust.avatar_url:
+                        avatar_url = matched_cust.avatar_url
+                    if not email and matched_cust.email:
+                        email = matched_cust.email
+                    for ident in matched_cust.identities.all():
+                        if ident.platform:
+                            platforms.add(str(ident.platform).lower())
+            except Exception:
+                pass
+
+        if not platforms:
+            platforms.add('web')
+
+        return {
+            'has_account': has_account,
+            'name': display_name or obj.customer_name,
+            'email': email,
+            'avatar_url': avatar_url,
+            'platforms': sorted(list(platforms)),
+            'source_platform': obj.source_platform or 'web',
+        }
+
+    def get_customer_profile_photo(self, obj):
+        info = self.get_customer_info(obj)
+        return info.get('avatar_url')
+
+    def get_product_info(self, obj):
+        request = self.context.get('request')
+        prod_name = (obj.product_name or '').strip()
+        if not prod_name and obj.items and isinstance(obj.items, list) and len(obj.items) > 0:
+            first_item = obj.items[0]
+            if isinstance(first_item, dict):
+                prod_name = (first_item.get('name') or first_item.get('title') or '').strip()
+                
+        if not prod_name:
+            return None
+            
+        try:
+            from datasheet.models import Product
+            catalog_prod = Product.objects.filter(
+                user=obj.user,
+                name__iexact=prod_name
+            ).prefetch_related('gallery', 'variants').first()
+            
+            if not catalog_prod:
+                catalog_prod = Product.objects.filter(
+                    user=obj.user,
+                    name__icontains=prod_name
+                ).prefetch_related('gallery', 'variants').first()
+                
+            if catalog_prod:
+                image_url = None
+                primary_gallery = catalog_prod.gallery.filter(is_primary=True).first() or catalog_prod.gallery.first()
+                if primary_gallery and primary_gallery.image:
+                    try:
+                        url = primary_gallery.image.url
+                        image_url = request.build_absolute_uri(url) if request else url
+                    except Exception:
+                        pass
+                if not image_url and catalog_prod.gallery_images and isinstance(catalog_prod.gallery_images, list) and len(catalog_prod.gallery_images) > 0:
+                    img_item = catalog_prod.gallery_images[0]
+                    url = img_item.get('image') if isinstance(img_item, dict) else str(img_item)
+                    if url:
+                        image_url = request.build_absolute_uri(url) if (request and not url.startswith('http')) else url
+                        
+                effective_stock = sum(float(v.stock or 0) for v in catalog_prod.variants.all()) if catalog_prod.variants.exists() else float(catalog_prod.initial_stock or 0)
+                
+                return {
+                    'id': catalog_prod.id,
+                    'name': catalog_prod.name,
+                    'sku': catalog_prod.base_sku,
+                    'category': catalog_prod.category,
+                    'image': image_url,
+                    'price': str(catalog_prod.sale_price if catalog_prod.sale_price is not None else catalog_prod.base_price),
+                    'stock': effective_stock,
+                    'is_catalog': True,
+                }
+        except Exception:
+            pass
+            
+        return {
+            'id': None,
+            'name': prod_name,
+            'sku': None,
+            'category': None,
+            'image': None,
+            'price': str(obj.price),
+            'stock': None,
+            'is_catalog': False,
+        }
+
+    def get_order_items(self, obj):
+        request = self.context.get('request')
+        items = []
+        if obj.items and isinstance(obj.items, list) and len(obj.items) > 0:
+            for item in obj.items:
+                if not isinstance(item, dict):
+                    continue
+                name = item.get('name') or item.get('title') or 'Item'
+                qty = item.get('quantity') or item.get('qty') or 1
+                price = item.get('price') or 0
+                image = item.get('image') or item.get('image_url')
+                sku = item.get('sku') or item.get('variant_sku')
+                
+                if not image and obj.user_id:
+                    try:
+                        from datasheet.models import Product
+                        p = Product.objects.filter(user=obj.user, name__iexact=name).prefetch_related('gallery').first()
+                        if p:
+                            g = p.gallery.filter(is_primary=True).first() or p.gallery.first()
+                            if g and g.image:
+                                url = g.image.url
+                                image = request.build_absolute_uri(url) if request else url
+                    except Exception:
+                        pass
+                        
+                items.append({
+                    'name': name,
+                    'quantity': qty,
+                    'price': price,
+                    'image': image,
+                    'sku': sku,
+                })
+        else:
+            prod_info = self.get_product_info(obj)
+            items.append({
+                'name': obj.product_name or 'N/A',
+                'quantity': obj.item_quantity or 1,
+                'price': obj.price,
+                'image': prod_info.get('image') if prod_info else None,
+                'sku': prod_info.get('sku') if prod_info else None,
+                'category': prod_info.get('category') if prod_info else None,
+            })
+        return items
 
     def create(self, validated_data):
         form_id = validated_data.pop('form_id', None)
@@ -392,3 +705,60 @@ class CashoutRequestSerializer(serializers.ModelSerializer):
             cashout_request = super().create(validated_data)
             
         return cashout_request
+
+
+class CustomTeamRoleSerializer(serializers.ModelSerializer):
+    members_count = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = CustomTeamRole
+        fields = ['id', 'name', 'description', 'preset_key', 'permissions', 'members_count', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'members_count', 'created_at', 'updated_at']
+
+    def get_members_count(self, obj):
+        return obj.members.filter(is_active=True).count()
+
+
+class TeamMemberSerializer(serializers.ModelSerializer):
+    user_id = serializers.IntegerField(source='user.id', read_only=True)
+    name = serializers.CharField(source='user.name', read_only=True)
+    email = serializers.EmailField(source='user.email', read_only=True)
+    phone_number = serializers.CharField(source='user.phone_number', read_only=True)
+    custom_role_name = serializers.SerializerMethodField(read_only=True)
+    effective_permissions = serializers.SerializerMethodField(read_only=True)
+    active_chats_count = serializers.SerializerMethodField(read_only=True)
+    resolved_today_count = serializers.SerializerMethodField(read_only=True)
+    allowed_agent_ids = serializers.PrimaryKeyRelatedField(
+        many=True,
+        read_only=False,
+        queryset=TeamMember.allowed_agents.field.related_model.objects.all(),
+        source='allowed_agents',
+        required=False,
+    )
+
+    class Meta:
+        model = TeamMember
+        fields = [
+            'id', 'user_id', 'name', 'email', 'phone_number',
+            'custom_role', 'custom_role_name', 'role_title', 'department',
+            'availability_status', 'permissions_override', 'effective_permissions',
+            'allowed_agent_ids', 'max_concurrent_chats', 'is_active',
+            'active_chats_count', 'resolved_today_count',
+            'last_assigned_at', 'created_at',
+        ]
+        read_only_fields = ['id', 'user_id', 'name', 'email', 'phone_number', 'last_assigned_at', 'created_at']
+
+    def get_custom_role_name(self, obj):
+        return obj.custom_role.name if obj.custom_role else obj.role_title
+
+    def get_effective_permissions(self, obj):
+        return obj.get_effective_permissions()
+
+    def get_active_chats_count(self, obj):
+        return obj.assigned_contacts.filter(support_status__in=['waiting_human', 'in_progress']).count()
+
+    def get_resolved_today_count(self, obj):
+        from django.utils import timezone
+        today_start = timezone.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        return obj.user.resolved_contacts.filter(resolved_at__gte=today_start).count()
+

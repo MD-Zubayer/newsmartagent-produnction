@@ -440,6 +440,97 @@ export default function RankingReportPage() {
               </span>
             </div>
 
+            {selectedAgent?.redis_cache_enabled && (
+              <div className="mt-3 ml-6 pl-4 border-l border-slate-100 flex flex-col gap-3">
+                {/* 1. Global Cache Toggle */}
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest w-24">Global Cache:</span>
+                  <button
+                    onClick={async () => {
+                      const newStatus = selectedAgent.global_cache_enabled === false;
+                      try {
+                        await api.patch(`/AgentAI/agents/${selectedAgent.id}/`, {
+                          global_cache_enabled: newStatus
+                        });
+                        const updated = { ...selectedAgent, global_cache_enabled: newStatus };
+                        setSelectedAgent(updated);
+                        setAgents(agents.map(a => a.id === selectedAgent.id ? updated : a));
+                        toast.success(newStatus ? "Global cache enabled!" : "Global cache disabled!");
+                      } catch (err) {
+                        toast.error("Failed to update global cache setting");
+                      }
+                    }}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ring-2 ring-offset-2 ring-pink-500/10
+                      ${selectedAgent?.global_cache_enabled !== false ? 'bg-pink-500' : 'bg-gray-200'}`}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform
+                        ${selectedAgent?.global_cache_enabled !== false ? 'translate-x-5' : 'translate-x-0.5'}`}
+                    />
+                  </button>
+                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">(Common replies)</span>
+                </div>
+
+                {/* 2. Sender Cache Toggle */}
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest w-24">Sender Cache:</span>
+                  <button
+                    onClick={async () => {
+                      const newStatus = selectedAgent.sender_cache_enabled === false;
+                      try {
+                        await api.patch(`/AgentAI/agents/${selectedAgent.id}/`, {
+                          sender_cache_enabled: newStatus
+                        });
+                        const updated = { ...selectedAgent, sender_cache_enabled: newStatus };
+                        setSelectedAgent(updated);
+                        setAgents(agents.map(a => a.id === selectedAgent.id ? updated : a));
+                        toast.success(newStatus ? "Sender cache enabled!" : "Sender cache disabled!");
+                      } catch (err) {
+                        toast.error("Failed to update sender cache setting");
+                      }
+                    }}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ring-2 ring-offset-2 ring-pink-500/10
+                      ${selectedAgent?.sender_cache_enabled !== false ? 'bg-pink-500' : 'bg-gray-200'}`}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform
+                        ${selectedAgent?.sender_cache_enabled !== false ? 'translate-x-5' : 'translate-x-0.5'}`}
+                    />
+                  </button>
+                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">(User-specific context)</span>
+                </div>
+
+                {/* 3. Agent Cache Toggle */}
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest w-24">Agent Cache:</span>
+                  <button
+                    onClick={async () => {
+                      const newStatus = selectedAgent.agent_cache_enabled === false;
+                      try {
+                        await api.patch(`/AgentAI/agents/${selectedAgent.id}/`, {
+                          agent_cache_enabled: newStatus
+                        });
+                        const updated = { ...selectedAgent, agent_cache_enabled: newStatus };
+                        setSelectedAgent(updated);
+                        setAgents(agents.map(a => a.id === selectedAgent.id ? updated : a));
+                        toast.success(newStatus ? "Agent cache enabled!" : "Agent cache disabled!");
+                      } catch (err) {
+                        toast.error("Failed to update agent cache setting");
+                      }
+                    }}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ring-2 ring-offset-2 ring-pink-500/10
+                      ${selectedAgent?.agent_cache_enabled !== false ? 'bg-pink-500' : 'bg-gray-200'}`}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform
+                        ${selectedAgent?.agent_cache_enabled !== false ? 'translate-x-5' : 'translate-x-0.5'}`}
+                    />
+                  </button>
+                  <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">(Merchant Catalog Info)</span>
+                </div>
+              </div>
+            )}
+
             {/* ⚡ নতুন: ক্যাশ শেয়ারিং ড্রপডাউন (Multi-select logic using simple tags) */}
             <div className="mt-4 flex flex-col gap-3">
               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">

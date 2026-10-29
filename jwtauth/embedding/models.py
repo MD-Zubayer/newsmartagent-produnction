@@ -186,3 +186,23 @@ class RowSimilarity(models.Model):
 
     def __str__(self):
         return f"{self.source_row_id} -> {self.target_row_id} ({self.distance:.4f})"
+
+
+class ProductSearchDocument(models.Model):
+    product = models.OneToOneField("datasheet.Product", on_delete=models.CASCADE, related_name="search_document")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="product_search_documents")
+    content = models.TextField()
+    embedding = VectorField(dimensions=768, null=True, blank=True)
+    content_hash = models.CharField(max_length=64, db_index=True, blank=True, default="")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            HnswIndex(
+                name="product_search_vector_hnsw_idx",
+                fields=["embedding"],
+                m=16,
+                ef_construction=64,
+                opclasses=["vector_cosine_ops"],
+            )
+        ]

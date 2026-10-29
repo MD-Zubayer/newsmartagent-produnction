@@ -22,6 +22,81 @@ def sync_spreadsheet_to_knowledge_task(self, user_id, grid_data, sheet_id):
     return updated_rows
 
 
+@shared_task(bind=True, max_retries=4, default_retry_delay=20, retry_backoff=True)
+def process_product_gallery_image_task(self, image_id):
+    """Create caption and Gemini vectors for one Product gallery image."""
+    from django.core.files.storage import default_storage
+    from django.utils import timezone
+    from datasheet.models import ProductGalleryImage
+    from embedding.utils import get_gemini_embedding, get_gemini_image_embedding, get_image_caption
+    from settings.models import GlobalSettings
+
+    try:
+        gallery_image = ProductGalleryImage.objects.select_related("product", "variant").get(pk=image_id)
+    except ProductGalleryImage.DoesNotExist:
+        logger.warning("product_gallery_image_missing image_id=%s", image_id)
+        return False
+
+    gallery_image.processing_status = "processing"
+    gallery_image.processing_error = ""
+    gallery_image.save(update_fields=["processing_status", "processing_error", "updated_at"])
+
+    try:
+        image_url = default_storage.url(gallery_image.image.name)
+        image_vector = get_gemini_image_embedding(image_url)
+        settings_obj = GlobalSettings.get_settings()
+        provider = getattr(settings_obj, "image_caption_provider", "gemini") or "gemini"
+        fallback = (
+            f"Product: {gallery_image.product.name}. "
+            f"Variant: {gallery_image.variant.attributes if gallery_image.variant_id else 'General product image'}"
+        )
+        caption = get_image_caption(image_url, provider=provider, fallback_text=fallback) or fallback
+        caption_vector = get_gemini_embedding(caption)
+
+        gallery_image.image_caption = caption
+        gallery_image.image_embedding = image_vector
+        gallery_image.caption_embedding = caption_vector
+        gallery_image.embedding_version = "gemini-embedding-2:768"
+        gallery_image.processing_status = "ready" if image_vector else "failed"
+        gallery_image.processing_error = "" if image_vector else "image_embedding_empty"
+        gallery_image.save(update_fields=[
+            "image_caption", "image_embedding", "caption_embedding",
+            "embedding_version", "processing_status", "processing_error",
+            "updated_at",
+        ])
+        # 🔄 Sync embeddings and caption back to corresponding ProductImageAsset in Image Gallery
+        try:
+            from datasheet.models import ProductImageAsset
+            ProductImageAsset.objects.filter(
+                user=gallery_image.product.user,
+                image=gallery_image.image.name
+            ).update(
+                image_caption=gallery_image.image_caption,
+                image_embedding=gallery_image.image_embedding,
+                caption_embedding=gallery_image.caption_embedding,
+                embedding_version=gallery_image.embedding_version,
+                processing_status=gallery_image.processing_status,
+                processing_error=gallery_image.processing_error,
+            )
+        except Exception as sync_back_err:
+            logger.warning("Failed to sync embedding from ProductGalleryImage to ProductImageAsset: %s", sync_back_err)
+
+        logger.info(
+            "product_image_indexed product_id=%s variant_id=%s image_id=%s status=%s",
+            gallery_image.product_id,
+            gallery_image.variant_id,
+            gallery_image.id,
+            gallery_image.processing_status,
+        )
+        return bool(image_vector)
+    except Exception as exc:
+        gallery_image.processing_status = "failed"
+        gallery_image.processing_error = type(exc).__name__
+        gallery_image.save(update_fields=["processing_status", "processing_error", "updated_at"])
+        logger.exception("product_image_index_failed image_id=%s", image_id)
+        raise self.retry(exc=exc)
+
+
 def calculate_match_score(product_name, title):
     import re
     prod_words = set(re.findall(r'[a-zA-Z0-9]+', product_name.lower()))
@@ -707,3 +782,144 @@ def process_row_image_task(self, row_image_id):
 
     return True
 
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=30, name="datasheet.index_product_vector")
+def index_product_vector_task(self, product_id):
+    """Refresh one Product catalog text and build its vector off-request."""
+    try:
+        from datasheet.models import Product
+        from datasheet.services import sync_product_search_document
+        from embedding.utils import get_gemini_embedding
+
+        product = Product.objects.prefetch_related("variants").get(pk=product_id)
+        document = sync_product_search_document(product)
+        vector = get_gemini_embedding(document.content)
+        if not vector:
+            raise RuntimeError("embedding provider returned no vector")
+        document.embedding = vector
+        document.save(update_fields=["embedding", "updated_at"])
+        logger.info("product_vector_indexed_async product_id=%s", product_id)
+        return {"product_id": product_id, "status": "indexed"}
+    except Exception as exc:
+        logger.exception("product_vector_index_failed_async product_id=%s error=%s", product_id, type(exc).__name__)
+        raise self.retry(exc=exc)
+
+
+
+@shared_task(bind=True, max_retries=4, default_retry_delay=30, retry_backoff=True)
+def process_product_image_asset_task(self, asset_id):
+    """Create Gemini image and caption vectors for one reusable gallery asset."""
+    from django.core.files.storage import default_storage
+    from datasheet.models import ProductImageAsset
+    from embedding.utils import get_gemini_embedding, get_gemini_image_embedding, get_image_caption
+    try:
+        asset = ProductImageAsset.objects.get(pk=asset_id)
+    except ProductImageAsset.DoesNotExist:
+        logger.warning("product_image_asset_missing asset_id=%s", asset_id)
+        return False
+    asset.processing_status = "processing"
+    asset.processing_error = ""
+    asset.save(update_fields=["processing_status", "processing_error", "updated_at"])
+    try:
+        image_url = default_storage.url(asset.image.name)
+        image_vector = get_gemini_image_embedding(image_url)
+        fallback = f"Reusable product image: {asset.filename}"
+        caption = get_image_caption(image_url, fallback_text=fallback) or fallback
+        caption_vector = get_gemini_embedding(caption)
+        asset.image_caption = caption
+        asset.image_embedding = image_vector
+        asset.caption_embedding = caption_vector
+        asset.embedding_version = "gemini-embedding-2:768"
+        asset.processing_status = "ready" if image_vector else "failed"
+        asset.processing_error = "" if image_vector else "image_embedding_empty"
+        asset.save(update_fields=["image_caption", "image_embedding", "caption_embedding", "embedding_version", "processing_status", "processing_error", "updated_at"])
+        from datasheet.models import ProductGalleryImage
+        from datasheet.product_search import invalidate_product_cache
+        for link in asset.links.select_related("product"):
+            ProductGalleryImage.objects.filter(
+                product=link.product,
+                variant=link.variant,
+                image=asset.image.name,
+            ).update(
+                image_caption=asset.image_caption,
+                image_embedding=asset.image_embedding,
+                caption_embedding=asset.caption_embedding,
+                embedding_version=asset.embedding_version,
+                processing_status=asset.processing_status,
+                processing_error=asset.processing_error,
+            )
+        invalidate_product_cache(asset.user_id)
+        logger.info("product_image_asset_indexed asset_id=%s status=%s", asset.id, asset.processing_status)
+        return bool(image_vector)
+    except Exception as exc:
+        asset.processing_status = "failed"
+        asset.processing_error = f"{type(exc).__name__}: {str(exc)[:180]}"
+        asset.save(update_fields=["processing_status", "processing_error", "updated_at"])
+        from datasheet.models import ProductGalleryImage
+        for link in asset.links.select_related("product"):
+            ProductGalleryImage.objects.filter(
+                product=link.product,
+                variant=link.variant,
+                image=asset.image.name,
+            ).update(
+                processing_status="failed",
+                processing_error=asset.processing_error,
+            )
+        logger.exception("product_image_asset_index_failed asset_id=%s", asset_id)
+        raise self.retry(exc=exc)
+
+
+@shared_task(bind=True)
+def auto_embed_user_images_task(self, user_id):
+    """
+    Auto-embed all pending/unembedded images for a user when an offer/subscription is purchased/activated.
+    Covers ProductGalleryImage, ProductImageAsset, and Spreadsheet RowImage.
+    """
+    from django.db.models import Q
+    from datasheet.models import ProductGalleryImage, ProductImageAsset
+    from embedding.models import RowImage
+
+    logger.info("🚀 [AutoEmbed] Starting auto-embed task for user_id=%s", user_id)
+    
+    # 1. ProductGalleryImage
+    gallery_imgs = list(
+        ProductGalleryImage.objects.filter(
+            product__user_id=user_id
+        ).filter(
+            Q(image_embedding__isnull=True) | Q(processing_status__in=['pending', 'failed'])
+        ).values_list('id', flat=True)
+    )
+    for idx, g_id in enumerate(gallery_imgs):
+        process_product_gallery_image_task.apply_async(args=[g_id], countdown=idx * 3)
+
+    # 2. ProductImageAsset
+    asset_imgs = list(
+        ProductImageAsset.objects.filter(
+            user_id=user_id
+        ).filter(
+            Q(image_embedding__isnull=True) | Q(processing_status__in=['pending', 'failed'])
+        ).values_list('id', flat=True)
+    )
+    for idx, a_id in enumerate(asset_imgs):
+        process_product_image_asset_task.apply_async(args=[a_id], countdown=idx * 3)
+
+    # 3. RowImage (Spreadsheet)
+    row_imgs = list(
+        RowImage.objects.filter(
+            user_id=user_id,
+            image_embedding__isnull=True
+        ).values_list('id', flat=True)
+    )
+    for idx, r_id in enumerate(row_imgs):
+        process_row_image_task.apply_async(args=[r_id], countdown=idx * 3)
+
+    logger.info(
+        "✅ [AutoEmbed] Queued auto-embed for user_id=%s: gallery=%s, assets=%s, row_images=%s",
+        user_id, len(gallery_imgs), len(asset_imgs), len(row_imgs)
+    )
+    return {
+        'gallery_count': len(gallery_imgs),
+        'assets_count': len(asset_imgs),
+        'row_images_count': len(row_imgs)
+    }

@@ -46,20 +46,41 @@ DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
 
 MAIN_DOMAIN = os.environ.get('MAIN_DOMAIN', 'newsmartagent.com')
+_default_shop_domain = 'shop-dev.newsmartagent.com' if MAIN_DOMAIN.startswith('dev.') else 'shop.newsmartagent.com'
+SHOP_DOMAIN = os.environ.get('SHOP_DOMAIN', _default_shop_domain)
+SHOP_DOMAIN = os.environ.get('SHOP_DOMAIN', 'shop.newsmartagent.com')
 PROJECT_NAME = os.environ.get('PROJECT_NAME', 'newsmartagent')
+
+# The development site is hosted at dev.<domain>, while the API is shared
+# at api.<domain>. Build both host variants from MAIN_DOMAIN so a dev deploy
+# does not accidentally omit the shared production API host.
+_domain_variants = {MAIN_DOMAIN}
+if MAIN_DOMAIN.startswith('dev.'):
+    _domain_variants.add(MAIN_DOMAIN[4:])
+
+_shop_domain_variants = {
+    SHOP_DOMAIN,
+    'shop.newsmartagent.com',
+    'dev-shop.newsmartagent.com',
+    'shop-dev.newsmartagent.com'
+}
+
 REDIS_URL = _normalize_redis_url(os.environ.get('REDIS_URL', f"redis://{os.environ.get('REDIS_HOST', f'{PROJECT_NAME}-redis')}:{os.environ.get('REDIS_PORT', 6379)}/0"))
 REDIS_HOST = os.environ.get('REDIS_HOST', f'{PROJECT_NAME}-redis')
 REDIS_PORT = int(os.environ.get('REDIS_PORT', 6379))
 
 
 ALLOWED_HOSTS = [
-    MAIN_DOMAIN,
-    f'api.{MAIN_DOMAIN}',
+    host
+    for domain in _domain_variants
+    for host in (domain, f'api.{domain}')
+] + list(_shop_domain_variants) + [
     f'{PROJECT_NAME}-django',
     'localhost',
     '127.0.0.1',
     'backend',
-    f'{PROJECT_NAME}-baileys'
+    f'{PROJECT_NAME}-baileys',
+    'shop',
 ]
 
 # Allow any additional hosts provided via .env
@@ -68,12 +89,17 @@ if extra_hosts:
     ALLOWED_HOSTS.extend(h.strip() for h in extra_hosts.split(',') if h.strip())
 
 CSRF_TRUSTED_ORIGINS = [
-    f'https://{MAIN_DOMAIN}',
-    f'https://api.{MAIN_DOMAIN}',
+    origin
+    for domain in _domain_variants
+    for origin in (f'https://{domain}', f'https://api.{domain}')
+] + [
+    f'https://{d}' for d in _shop_domain_variants
+] + [
     f'http://{PROJECT_NAME}-django:8000',
     'http://localhost:3000',
     'http://localhost:3001'
 ]
+
 
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 USE_X_FORWARDED_HOST = True
@@ -120,6 +146,7 @@ INSTALLED_APPS = [
     "aiAgent.apps.AiagentConfig",
     'ckeditor',
     'log_service',
+    'assunnah',
     
 
     'ckeditor_uploader',
@@ -127,6 +154,8 @@ INSTALLED_APPS = [
     'minio_management',
     'community',
     'courier',
+    'ai_extensions',
+    'storefront',
 ]
 
 CKEDITOR_UPLOAD_PATH = "uploads/"
@@ -145,6 +174,7 @@ CKEDITOR_CONFIGS = {
 }
 
 MIDDLEWARE = [
+    'jwtauth.observability.RequestObservabilityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -190,7 +220,14 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [os.environ.get("REDIS_URL", "redis://redis:6379/0")],
+            "hosts": [
+                {
+                    "address": os.environ.get("REDIS_URL", "redis://redis:6379/0"),
+                    "socket_timeout": None,
+                    "socket_connect_timeout": 5,
+                    "health_check_interval": 30,
+                }
+            ],
             "capacity": 1500,
             "expiry": 10,
         },
@@ -338,16 +375,24 @@ JWT_AUTH_SECURE = False
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
-    f"https://{MAIN_DOMAIN}",
-    f"https://api.{MAIN_DOMAIN}",
-    f"https://monitor.{MAIN_DOMAIN}",
-    f"https://dev.{MAIN_DOMAIN}",
-    f"https://dev-api.{MAIN_DOMAIN}",
+    origin
+    for domain in _domain_variants
+    for origin in (
+        f"https://{domain}",
+        f"https://api.{domain}",
+        f"https://monitor.{domain}",
+        f"https://dev.{domain}",
+        f"https://dev-api.{domain}",
+    )
+] + [
+    f"https://{d}" for d in _shop_domain_variants
+] + [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:3001",
     "http://127.0.0.1:3001",
 ]
+
 
 CSRF_COOKIE_DOMAIN = f'.{MAIN_DOMAIN}'
 SESSION_COOKIE_SECURE = True
@@ -400,18 +445,29 @@ SITE_URL = os.environ.get('SITE_URL', f'https://{MAIN_DOMAIN}')
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+ASSUNNAH_AI_MODEL = os.environ.get('ASSUNNAH_AI_MODEL', 'gpt-4o')
+ASSUNNAH_ADMIN_PASSWORD = os.environ.get('ASSUNNAH_ADMIN_PASSWORD', '')
 GROK_API_KEY = os.environ.get('GROK_API_KEY')
 
 FB_APP_ID = os.environ.get('FB_APP_ID')
 FB_APP_SECRET = os.environ.get('FB_APP_SECRET')
+# Public base URL of the dashboard for THIS deployment. Derived from MAIN_DOMAIN so
+# dev (dev.newsmartagent.com) redirects to dev, production to the main domain.
+# Explicit env value still wins; empty strings fall back to the derived value.
+NEXT_PUBLIC_BASE_URL = (os.environ.get('NEXT_PUBLIC_BASE_URL') or f"https://{MAIN_DOMAIN}").rstrip('/')
+FB_REDIRECT_URI = os.environ.get('FB_REDIRECT_URI') or f"{NEXT_PUBLIC_BASE_URL}/api/facebook/callback/"
 FB_REDIRECT_URI = os.environ.get('FB_REDIRECT_URI')
+# Meta (Messenger/Instagram) webhook verification token
+META_VERIFY_TOKEN = os.environ.get('META_VERIFY_TOKEN', 'nsa-meta-verify-2024')
 
 YOUTUBE_CLIENT_ID = os.environ.get('YOUTUBE_CLIENT_ID')
 YOUTUBE_CLIENT_SECRET = os.environ.get('YOUTUBE_CLIENT_SECRET')
+YOUTUBE_REDIRECT_URI = os.environ.get('YOUTUBE_REDIRECT_URI') or f"{NEXT_PUBLIC_BASE_URL}/api/youtube/callback/"
 YOUTUBE_REDIRECT_URI = os.environ.get('YOUTUBE_REDIRECT_URI')
 
 TIKTOK_CLIENT_KEY = os.environ.get('TIKTOK_CLIENT_KEY')
 TIKTOK_CLIENT_SECRET = os.environ.get('TIKTOK_CLIENT_SECRET')
+TIKTOK_REDIRECT_URI = os.environ.get('TIKTOK_REDIRECT_URI') or f"{NEXT_PUBLIC_BASE_URL}/api/tiktok/callback/"
 TIKTOK_REDIRECT_URI = os.environ.get('TIKTOK_REDIRECT_URI')
 
 
@@ -468,9 +524,21 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'courier.tasks.sync_cached_pathao_prices',
         'schedule': timedelta(days=3),
     },
+    'cleanup-expired-assunnah-collections': {
+        'task': 'assunnah.cleanup_expired_collections',
+        'schedule': crontab(hour=3, minute=15),
+    },
     'sync-steadfast-locations-every-3-days': {
         'task': 'courier.tasks.sync_steadfast_locations',
         'schedule': timedelta(days=3),
+    },
+    'sync-persistent-platform-risk-every-6-hours': {
+        'task': 'storefront.tasks.sync_stale_platform_risk_profiles',
+        'schedule': timedelta(hours=6),
+    },
+    'sync-persistent-steadfast-risk-every-6-hours': {
+        'task': 'storefront.tasks.sync_stale_steadfast_risk_profiles',
+        'schedule': timedelta(hours=6),
     },
     'sync-cached-steadfast-prices-every-3-days': {
         'task': 'courier.tasks.sync_cached_steadfast_prices',
@@ -541,6 +609,11 @@ LOGGING = {
             "propagate": True,
         },
         "log_service": {
+            "handlers": ["console", "file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "products": {
             "handlers": ["console", "file"],
             "level": "INFO",
             "propagate": False,

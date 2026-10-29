@@ -5,21 +5,144 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import api from "../../lib/api";
 
+// SVG Google Icon
+function GoogleIcon({ className = "w-5 h-5" }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24">
+      <path
+        fill="#4285F4"
+        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+      />
+    </svg>
+  );
+}
+
 export default function LoginPage() {
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [otpCode, setOtpCode] = useState("");
   const [trustDevice, setTrustDevice] = useState(false);
-  
+
   // Auth States: 'password' | 'email_otp' | 'mobile_approval' | 'recovery_code' | 'try_another_way'
-  const [viewState, setViewState] = useState("password"); 
+  const [viewState, setViewState] = useState("password");
   const [availableMethods, setAvailableMethods] = useState([]);
   const [sessionToken, setSessionToken] = useState("");
-  
+
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
 
   const pollIntervalRef = useRef(null);
+  const googleBtnRef = useRef(null);
+  const [googleClientId, setGoogleClientId] = useState(
+    process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ""
+  );
+
+  // Load Google Client ID dynamically if not bundled in build
+  useEffect(() => {
+    if (!googleClientId) {
+      api
+        .get("/settings/public/")
+        .then((res) => {
+          if (res.data?.google_client_id) {
+            setGoogleClientId(res.data.google_client_id);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [googleClientId]);
+
+  const handleGoogleCredentialResponse = async (response) => {
+    if (!response?.credential) return;
+    setGoogleLoading(true);
+    setError("");
+    try {
+      const res = await api.post("/users/google-auth/", {
+        credential: response.credential,
+      });
+      if (res.status === 200) {
+        if (res.data.is_new_user && !res.data.profile_completed) {
+          window.location.href = "/signup";
+        } else {
+          window.location.href = "/dashboard";
+        }
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || "Google Sign-In ব্যর্থ হয়েছে।");
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (viewState !== "password") return;
+    const clientId = googleClientId || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (!clientId) return;
+
+    const initGoogle = () => {
+      if (window.google?.accounts?.id) {
+        try {
+          window.google.accounts.id.initialize({
+            client_id: clientId,
+            callback: handleGoogleCredentialResponse,
+            auto_select: false,
+            cancel_on_tap_outside: true,
+          });
+          if (googleBtnRef.current) {
+            googleBtnRef.current.innerHTML = "";
+            window.google.accounts.id.renderButton(googleBtnRef.current, {
+              theme: "outline",
+              size: "large",
+              width: "100%",
+              text: "continue_with",
+              shape: "pill",
+              logo_alignment: "left",
+            });
+          }
+        } catch (e) {
+          console.warn("Google login init notice:", e);
+        }
+      }
+    };
+
+    if (!window.google?.accounts?.id) {
+      const script = document.createElement("script");
+      script.src = "https://accounts.google.com/gsi/client";
+      script.async = true;
+      script.defer = true;
+      script.onload = initGoogle;
+      document.body.appendChild(script);
+    } else {
+      initGoogle();
+    }
+  }, [viewState, googleClientId]);
+
+  const triggerGooglePrompt = () => {
+    if (window.google?.accounts?.id) {
+      window.google.accounts.id.prompt((notification) => {
+        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+          const btn = googleBtnRef.current?.querySelector('div[role="button"]');
+          if (btn) btn.click();
+        }
+      });
+      const btn = googleBtnRef.current?.querySelector('div[role="button"]');
+      if (btn) btn.click();
+    } else {
+      setError("গুগল সার্ভিস লোড হচ্ছে, অনুগ্রহ করে কয়েক সেকেন্ড পর আবার চেষ্টা করুন।");
+    }
+  };
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -44,7 +167,7 @@ export default function LoginPage() {
         if (res.data.two_factor_required) {
           setViewState(res.data.auth_method === 'mobile_approval' ? 'mobile_approval' : 'email_otp');
           setAvailableMethods(res.data.available_methods || ['email_otp', 'mobile_approval', 'recovery_code']);
-          
+
           if (res.data.auth_method === 'mobile_approval' && res.data.session_token) {
             setSessionToken(res.data.session_token);
             startPolling(res.data.session_token);
@@ -120,10 +243,10 @@ export default function LoginPage() {
   // Sync trustDevice state to LoginSession for Mobile Approval
   useEffect(() => {
     if (viewState === 'mobile_approval' && sessionToken) {
-        api.post(`/auth/session-status/`, {
-            session_token: sessionToken,
-            trust_device: trustDevice
-        }).catch(() => {});
+      api.post(`/auth/session-status/`, {
+        session_token: sessionToken,
+        trust_device: trustDevice
+      }).catch(() => { });
     }
   }, [trustDevice, viewState, sessionToken]);
 
@@ -146,9 +269,9 @@ export default function LoginPage() {
       <div className="w-full max-w-md bg-white p-10 rounded-3xl shadow-xl">
         <div className="text-center mb-10">
           <h1 className="text-3xl font-bold text-gray-900">
-            {viewState === 'password' ? "Welcome Back" : 
-             viewState === 'try_another_way' ? "Choose how to sign in" :
-             "2-Step Verification"}
+            {viewState === 'password' ? "Welcome Back" :
+              viewState === 'try_another_way' ? "Choose how to sign in" :
+                "2-Step Verification"}
           </h1>
           <p className="text-gray-500 mt-2 text-sm">
             {viewState === 'password' && "Log in securely to your dashboard"}
@@ -182,6 +305,34 @@ export default function LoginPage() {
             <button type="submit" disabled={loading} className={`w-full py-4 rounded-xl font-bold text-white shadow-lg transition-all ${loading ? "bg-blue-300" : "bg-blue-600 hover:bg-blue-700"}`}>
               {loading ? "Verifying..." : "Login"}
             </button>
+
+            <div className="relative flex items-center justify-center my-4">
+              <div className="border-t border-gray-200 w-full"></div>
+              <span className="bg-white px-3 text-xs font-bold text-gray-400 uppercase">OR</span>
+              <div className="border-t border-gray-200 w-full"></div>
+            </div>
+
+            <div className="w-full flex flex-col items-center gap-2.5">
+              <button
+                type="button"
+                onClick={triggerGooglePrompt}
+                disabled={googleLoading}
+                className="w-full py-3.5 px-4 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-bold text-sm rounded-xl shadow-xs transition-all flex items-center justify-center gap-3 active:scale-[0.98] cursor-pointer"
+              >
+                <GoogleIcon className="w-5 h-5" />
+                <span>{googleLoading ? "কানেক্ট হচ্ছে..." : "Continue with Google"}</span>
+              </button>
+              <div ref={googleBtnRef} className="hidden" />
+
+              {googleLoading && (
+                <p className="text-xs font-bold text-indigo-600 animate-pulse">
+                  গুগল অ্যাকাউন্ট যাচাই করা হচ্ছে...
+                </p>
+              )}
+              <p className="text-[11px] text-gray-400 text-center">
+                টিম মেম্বার ও মার্চেন্টগণ গুগল দিয়ে ১-ক্লিকেই সাইন ইন করতে পারবেন
+              </p>
+            </div>
           </form>
         )}
 
@@ -194,7 +345,7 @@ export default function LoginPage() {
               <h3 className="text-xl font-bold mb-2">Check your device</h3>
               <p className="text-gray-500 text-sm">We sent a notification to your Email and WhatsApp. Tap <strong>Yes, it's me</strong> to sign in.</p>
             </div>
-            
+
             <div className="flex items-center mt-4 mb-4">
               <input type="checkbox" id="trustDevice" checked={trustDevice} onChange={(e) => setTrustDevice(e.target.checked)} className="h-4 w-4 text-blue-600 border-gray-300 rounded" />
               <label htmlFor="trustDevice" className="ml-2 block text-sm text-gray-900">Don't ask again on this device (30 days)</label>
@@ -258,7 +409,7 @@ export default function LoginPage() {
                 <div className="text-left"><p className="font-bold text-gray-900">Enter 8-digit backup code</p><p className="text-xs text-gray-500">Use one of your saved recovery codes</p></div>
               </button>
             )}
-            
+
             <button onClick={() => setViewState('password')} className="w-full p-4 text-sm font-bold text-gray-500 hover:text-gray-700 mt-4">
               Cancel
             </button>

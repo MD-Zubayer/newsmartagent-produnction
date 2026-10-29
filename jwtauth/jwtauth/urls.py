@@ -13,7 +13,8 @@ from users.views import (
     WithdrawMethodViewSet, CashoutRequestViewSet, FinancialSummaryView,
     Verify2FALoginView, Toggle2FAView,
     LoginSessionStatusView, ApproveLoginSessionView,
-    SecuritySettingsView, LoginHistoryView
+    SecuritySettingsView, LoginHistoryView,
+    GoogleAuthLoginView
 )
 from payments.views import PaymentViewSet
 from webhooks import views as webhook_views
@@ -25,6 +26,7 @@ from users import oauth_views
 from blog import views as blog_views
 from community.views import CommunityReportViewSet
 from . import health
+from .observability import metrics_view
 
 
 router = DefaultRouter()
@@ -49,6 +51,9 @@ urlpatterns = [
     path('api/send-transfer-otp/', SendTransferOTPView.as_view(), name='send-transfer-otp'),
     path('api/financial-summary/', FinancialSummaryView.as_view(), name='financial-summary'),
     path('api/health/', health.health_view, name='health'),
+    path('metrics/', metrics_view, name='metrics'),
+    path('metrics', metrics_view),
+    path('api/users/google-auth/', GoogleAuthLoginView.as_view(), name='google-auth-login'),
     path('api/', include(router.urls)),
     path('api/', include('chat.urls')),
     path('api/', include('payments.urls')),
@@ -104,7 +109,12 @@ urlpatterns = [
     path('api/agent-state/', AgentDashboardStatsView.as_view(), name='agent-stats'),
     path('api/courier/', include('courier.urls')),
     path('api/integrations/', include('integrations.urls')),
+    path('api/assunnah/', include('assunnah.urls')),
+    path('api/ai-extensions/', include('ai_extensions.urls')),
+    path('api/storefront/v1/', include('storefront.urls')),
+    path('api/team/', include('users.team_urls')),
 ]
+
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

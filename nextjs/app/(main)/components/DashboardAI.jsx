@@ -10,6 +10,7 @@ import {
   Image as ImageIcon, 
   Smile, 
   PlusCircle,
+  Sparkles,
 } from "lucide-react";
 import api from "@/lib/api";
 import Image from "next/image";
@@ -62,6 +63,15 @@ export default function DashboardAI() {
     return () => {
       if (socket) socket.close();
     };
+  }, []);
+
+  useEffect(() => {
+    const handleOpen = () => {
+      setIsHidden(false);
+      setIsOpen(true);
+    };
+    window.addEventListener("open-dashboard-ai", handleOpen);
+    return () => window.removeEventListener("open-dashboard-ai", handleOpen);
   }, []);
 
   useEffect(() => {
@@ -146,24 +156,18 @@ export default function DashboardAI() {
               {/* Animated Glow Effect */}
               <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500 to-cyan-400 rounded-full blur-lg opacity-40 group-hover:opacity-70 transition-opacity duration-300 pointer-events-none"></div>
               
-              {/* Main Button Container */}
+              {/* Main Button Container - Ultra-Modern AI Icon */}
               <div 
                 onClick={(e) => {
                    // Only open if not dragging
                    if (e.defaultPrevented) return;
                    setIsOpen(true);
                 }}
-                className="w-16 h-16 sm:w-18 sm:h-18 md:w-20 md:h-20 bg-gradient-to-tr from-[#E0E7FF] to-[#F3E8FF] rounded-full flex items-center justify-center shadow-[0_8px_30px_rgb(0,0,0,0.12)] border-[3px] border-white overflow-hidden relative z-10 p-0.5 cursor-pointer"
+                className="w-14 h-14 sm:w-16 sm:h-16 bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 rounded-full flex items-center justify-center shadow-[0_8px_30px_rgba(99,102,241,0.35)] border-[3px] border-white overflow-hidden relative z-10 p-0.5 cursor-pointer hover:scale-105 active:scale-95 transition-transform duration-300"
               >
-                <div className="relative w-full h-full rounded-full overflow-hidden shadow-inner bg-white">
-                  <Image 
-                     src="/newsmartagent_ai_logo.jpeg" 
-                     alt="New Smart Agent AI" 
-                     fill
-                     sizes="(max-width: 768px) 64px, 80px"
-                     style={{ objectFit: 'cover' }}
-                     className="hover:scale-110 transition-transform duration-500 ease-out"
-                  />
+                <div className="relative w-full h-full rounded-full flex items-center justify-center bg-gradient-to-tr from-slate-950 via-indigo-950 to-purple-900 overflow-hidden shadow-inner">
+                  <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/20 to-transparent pointer-events-none" />
+                  <Sparkles size={24} className="text-amber-300 relative z-10 drop-shadow-[0_0_10px_rgba(251,191,36,0.9)] animate-pulse" />
                 </div>
               </div>
 

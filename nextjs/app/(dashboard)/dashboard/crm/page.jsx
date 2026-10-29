@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { 
-  FunnelIcon, 
-  PhoneIcon, 
-  EnvelopeIcon, 
+import {
+  FunnelIcon,
+  PhoneIcon,
+  EnvelopeIcon,
   EllipsisHorizontalIcon,
   ChevronRightIcon,
   QueueListIcon,
@@ -108,7 +108,7 @@ export default function SmartCRMPage() {
     }
     if (eDate) {
       const ed = new Date(eDate);
-      ed.setHours(23,59,59,999);
+      ed.setHours(23, 59, 59, 999);
       filtered = filtered.filter(c => new Date(c.created_at) <= ed);
     }
     setContacts(filtered);
@@ -153,10 +153,10 @@ export default function SmartCRMPage() {
       selectedAgentId !== "all"
         ? selectedAgentId
         : (() => {
-            const firstId = selectedContacts[0];
-            const first = contacts.find((c) => c.id === firstId);
-            return first?.agent || null;
-          })();
+          const firstId = selectedContacts[0];
+          const first = contacts.find((c) => c.id === firstId);
+          return first?.agent || null;
+        })();
     if (!agentId) {
       toast.error("একটি নির্দিষ্ট এজেন্ট নির্বাচন করুন");
       return;
@@ -293,8 +293,8 @@ export default function SmartCRMPage() {
 
         {/* Filters Row */}
         <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-          <select 
-            value={selectedAgentId} 
+          <select
+            value={selectedAgentId}
             onChange={e => setSelectedAgentId(e.target.value)}
             className="flex-1 min-w-[100px] sm:min-w-[120px] max-w-[200px] px-2 sm:px-3 py-1.5 sm:py-2 bg-gray-50/80 border border-gray-200/60 rounded-lg text-[10px] sm:text-sm focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-400 outline-none transition-all font-semibold text-gray-700"
           >
@@ -354,11 +354,10 @@ export default function SmartCRMPage() {
             <button
               key={stage.id}
               onClick={() => setActiveStage(stage.id)}
-              className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${
-                isActive 
-                  ? `${stage.color} text-white shadow-sm ring-1 ring-black/5` 
-                  : 'bg-white text-gray-600 hover:text-gray-900 border border-gray-200'
-              }`}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 shrink-0 ${isActive
+                ? `${stage.color} text-white shadow-sm ring-1 ring-black/5`
+                : 'bg-white text-gray-600 hover:text-gray-900 border border-gray-200'
+                }`}
             >
               <span>{stage.label}</span>
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
@@ -378,11 +377,10 @@ export default function SmartCRMPage() {
         ) : (
           <div className="flex h-full gap-4 sm:gap-6 px-1 sm:px-2 w-full sm:w-auto sm:min-w-max pb-4">
             {currentBoard.map((col) => (
-              <div 
-                key={col.id} 
-                className={`w-full sm:w-[320px] shrink-0 flex flex-col rounded-xl overflow-hidden shadow-sm border border-gray-200 bg-white ${
-                  activeStage === col.id ? 'flex' : 'hidden sm:flex'
-                }`}
+              <div
+                key={col.id}
+                className={`w-full sm:w-[320px] shrink-0 flex flex-col rounded-xl overflow-hidden shadow-sm border border-gray-200 bg-white ${activeStage === col.id ? 'flex' : 'hidden sm:flex'
+                  }`}
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, col.id)}
               >
@@ -413,9 +411,9 @@ export default function SmartCRMPage() {
                             className="mt-1 h-4 w-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 cursor-pointer shrink-0"
                           />
                           {card.profile_picture ? (
-                            <img 
-                              src={card.profile_picture} 
-                              alt={card.name || card.identifier} 
+                            <img
+                              src={card.profile_picture}
+                              alt={card.name || card.identifier}
                               className="w-10 h-10 rounded-full object-cover shadow-sm bg-white border border-gray-100 shrink-0"
                               onError={(e) => {
                                 e.currentTarget.style.display = 'none';
@@ -435,17 +433,17 @@ export default function SmartCRMPage() {
                               {card.name || card.identifier}
                             </h4>
                             <p className="text-[10px] uppercase font-bold text-gray-400 tracking-wider flex items-center gap-1 min-w-0">
-                              <span className="truncate shrink-0">{card.platform}</span> 
+                              <span className="truncate shrink-0">{card.platform}</span>
                               {card.agent_name && (
                                 <>
-                                  <ChevronRightIcon className="w-2 h-2 shrink-0" /> 
+                                  <ChevronRightIcon className="w-2 h-2 shrink-0" />
                                   <span className="truncate">{card.agent_name}</span>
                                 </>
                               )}
                             </p>
                           </div>
                         </div>
-                        <button 
+                        <button
                           onClick={() => setSelectedCard(card)}
                           className="text-gray-400 hover:text-blue-600 transition-colors p-1 bg-gray-50 hover:bg-blue-50 rounded shrink-0"
                           title="View all details"
@@ -478,7 +476,7 @@ export default function SmartCRMPage() {
                       )}
                     </div>
                   ))}
-                  
+
                   {col.cards.length === 0 && (
                     <div className="h-24 border-2 border-dashed border-gray-200 rounded-lg flex items-center justify-center text-gray-400 text-sm font-medium">
                       Drop leads here
@@ -510,14 +508,14 @@ export default function SmartCRMPage() {
               <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                 Deep Insights <span className="text-sm font-normal text-gray-500 px-2 py-0.5 bg-gray-200 rounded-full">{selectedCard.name || selectedCard.identifier}</span>
               </h2>
-              <button 
+              <button
                 onClick={() => setSelectedCard(null)}
                 className="text-gray-400 hover:text-gray-600 bg-white shadow-sm border border-gray-200 rounded-full w-8 h-8 flex items-center justify-center"
               >
                 ✕
               </button>
             </div>
-            
+
             <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
               {/* Lead Stage Selector */}
               <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-100">
@@ -542,11 +540,10 @@ export default function SmartCRMPage() {
                             toast.error("Failed to update lead stage");
                           }
                         }}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                          isCurrent 
-                            ? `${s.color} text-white shadow-sm ring-2 ring-offset-1 ring-cyan-500` 
-                            : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
-                        }`}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${isCurrent
+                          ? `${s.color} text-white shadow-sm ring-2 ring-offset-1 ring-cyan-500`
+                          : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                          }`}
                       >
                         {s.label}
                       </button>
@@ -558,12 +555,12 @@ export default function SmartCRMPage() {
               <p className="text-sm text-gray-500 mb-4">
                 The AI automatically extracted the following dynamic traits and facts from the conversation:
               </p>
-              
+
               <div className="grid grid-cols-1 gap-3">
                 {selectedCard.crm_data?.raw_data && Object.keys(selectedCard.crm_data.raw_data).length > 0 ? (
                   Object.entries(selectedCard.crm_data.raw_data).map(([key, value]) => {
                     if (["lead_stage", "phone_number", "email"].includes(key) && !value) return null;
-                    
+
                     return (
                       <div key={key} className="bg-white border border-gray-100 rounded-lg p-3 shadow-sm flex flex-col break-words">
                         <span className="text-[11px] uppercase font-bold text-cyan-600 tracking-wider mb-1">
@@ -578,7 +575,7 @@ export default function SmartCRMPage() {
                             <div className="flex flex-col gap-1 mt-1 border-l-2 border-gray-200 pl-3">
                               {Object.entries(value).map(([k, v]) => (
                                 <div key={k} className="text-xs">
-                                  <span className="text-gray-500 capitalize">{k.replace(/_/g, ' ')}:</span> 
+                                  <span className="text-gray-500 capitalize">{k.replace(/_/g, ' ')}:</span>
                                   <span className="ml-1 text-gray-800 font-semibold">{v?.toString()}</span>
                                 </div>
                               ))}
@@ -619,7 +616,7 @@ export default function SmartCRMPage() {
                   </span>
                 )}
               </h2>
-              <button 
+              <button
                 onClick={() => setIsScheduleModal(false)}
                 className="text-gray-400 hover:text-gray-600 bg-white shadow-sm border border-gray-200 rounded-full w-8 h-8 flex items-center justify-center"
               >
@@ -779,7 +776,7 @@ export default function SmartCRMPage() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 z-10 overflow-hidden flex flex-col">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h2 className="text-lg font-bold text-gray-900">Schedule Details</h2>
-              <button 
+              <button
                 onClick={() => setViewSchedule(null)}
                 className="text-gray-400 hover:text-gray-600 bg-white shadow-sm border border-gray-200 rounded-full w-8 h-8 flex items-center justify-center"
               >

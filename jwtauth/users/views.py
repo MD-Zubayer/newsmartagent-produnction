@@ -113,7 +113,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
 
     def get_permissions(self):
-        if self.action in ['create_user', 'verify_email']:
+        if self.action in ['create_user', 'verify_email', 'google_auth']:
             return [AllowAny()]
         elif self.action in ['me', 'get_form_id', 'update_me']:
             return [IsAuthenticated()]
@@ -123,19 +123,32 @@ class UserViewSet(viewsets.ModelViewSet):
     def me(self, request):
         print(f"Authenticated User: {request.user}")
         user = request.user
+        owner = user.get_workspace_owner()
         serializer = self.get_serializer(user)
 
-        first_sheet = Spreadsheet.objects.filter(user=user).first()
+        first_sheet = Spreadsheet.objects.filter(user=owner).order_by('id').first()
+        if first_sheet is None:
+            first_sheet = Spreadsheet.objects.create(
+                user=owner,
+                title=f'{owner.name or "User"} s Workspace',
+                rows=100,
+                cols=26,
+                data={},
+            )
+            import logging
+            logging.getLogger(__name__).info(
+                'Created missing initial spreadsheet for user_id=%s sheet_id=%s',
+                owner.id, first_sheet.id,
+            )
 
         data = serializer.data
-        data['sheet_id'] = first_sheet.id if first_sheet else None
+        data['sheet_id'] = first_sheet.id
 
         return Response(data)
     @action(detail=False, methods=['get'], url_path='get-form-id')
     def get_form_id(self, request):
-        # OneToOneField থাকলে সরাসরি অ্যাক্সেস করা যায়
-        # যদি order_form না থাকে তবে create হবে
-        order_form, created = OrderForm.objects.get_or_create(user=request.user)
+        owner = request.user.get_workspace_owner()
+        order_form, created = OrderForm.objects.get_or_create(user=owner)
         return Response({'form_id': str(order_form.form_id)})   
 
     @action(detail=False, methods=['post'], url_path='create_user', permission_classes=[AllowAny] )
@@ -163,6 +176,10 @@ class UserViewSet(viewsets.ModelViewSet):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
+    @action(detail=False, methods=['post'], url_path='google-auth', permission_classes=[AllowAny])
+    def google_auth(self, request):
+        return GoogleAuthLoginView.as_view()(request._request)
+
     @action(detail=False, methods=['patch', 'put'], url_path='update-me', permission_classes=[IsAuthenticated])
     def update_me(self, request):
         user = request.user
@@ -410,7 +427,6 @@ class LoginView(APIView):
         )
         response.set_cookie(key='trusted_device', value=_device_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/', max_age=30*24*60*60)
         return response
-    
 
 
 class LogoutView(APIView):
@@ -577,7 +593,8 @@ class OrderSubmitView(viewsets.ModelViewSet):
 
     def get_queryset(self):
         if self.request.user.is_authenticated:
-            return CustomerOrder.objects.filter(user=self.request.user).order_by('-created_at')
+            owner = self.request.user.get_workspace_owner()
+            return CustomerOrder.objects.filter(user=owner).select_related('customer', 'contact').prefetch_related('customer__identities').order_by('-created_at')
         return CustomerOrder.objects.none()
 
     def perform_create(self, serializer):
@@ -1451,3 +1468,424 @@ class LoginHistoryView(APIView):
             "created_at": h.created_at
         } for h in history]
         return Response(data)
+
+
+class TeamRoleManageView(APIView):
+    """CRUD for merchant custom roles & permission presets."""
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def _ensure_default_roles(self, owner):
+        from users.models import CustomTeamRole, TEAM_ROLE_PRESETS
+        if not CustomTeamRole.objects.filter(owner=owner).exists():
+            for preset_key, preset_data in TEAM_ROLE_PRESETS.items():
+                CustomTeamRole.objects.create(
+                    owner=owner,
+                    name=preset_data["name"],
+                    description=preset_data["description"],
+                    preset_key=preset_key,
+                    permissions=preset_data["permissions"],
+                )
+
+    def get(self, request):
+        from users.models import CustomTeamRole, TEAM_ROLE_PRESETS
+        from users.serializers import CustomTeamRoleSerializer
+        owner = request.user.get_workspace_owner()
+        self._ensure_default_roles(owner)
+        roles = CustomTeamRole.objects.filter(owner=owner)
+        return Response({
+            "roles": CustomTeamRoleSerializer(roles, many=True).data,
+            "presets": TEAM_ROLE_PRESETS,
+        })
+
+    def post(self, request):
+        if not request.user.has_team_permission("pages", "team"):
+            return Response({"error": "আপনার রোল তৈরির অনুমতি নেই"}, status=403)
+        from users.models import CustomTeamRole
+        from users.serializers import CustomTeamRoleSerializer
+        owner = request.user.get_workspace_owner()
+        name = (request.data.get("name") or "").strip()
+        if not name:
+            return Response({"error": "রোলের নাম লিখুন"}, status=400)
+        role = CustomTeamRole.objects.create(
+            owner=owner,
+            name=name,
+            description=(request.data.get("description") or "").strip(),
+            preset_key=request.data.get("preset_key") or "custom",
+            permissions=request.data.get("permissions") or {},
+        )
+        return Response(CustomTeamRoleSerializer(role).data, status=201)
+
+    def put(self, request):
+        if not request.user.has_team_permission("pages", "team"):
+            return Response({"error": "আপনার রোল এডিট করার অনুমতি নেই"}, status=403)
+        from users.models import CustomTeamRole
+        from users.serializers import CustomTeamRoleSerializer
+        owner = request.user.get_workspace_owner()
+        role_id = request.data.get("id")
+        role = CustomTeamRole.objects.filter(id=role_id, owner=owner).first()
+        if not role:
+            return Response({"error": "রোল পাওয়া যায়নি"}, status=404)
+        if "name" in request.data and request.data["name"].strip():
+            role.name = request.data["name"].strip()
+        if "description" in request.data:
+            role.description = request.data["description"].strip()
+        if "permissions" in request.data and isinstance(request.data["permissions"], dict):
+            role.permissions = request.data["permissions"]
+        role.save()
+        return Response(CustomTeamRoleSerializer(role).data)
+
+    def delete(self, request):
+        if not request.user.has_team_permission("pages", "team"):
+            return Response({"error": "আপনার রোল ডিলিট করার অনুমতি নেই"}, status=403)
+        from users.models import CustomTeamRole
+        owner = request.user.get_workspace_owner()
+        role_id = request.query_params.get("id") or request.data.get("id")
+        role = CustomTeamRole.objects.filter(id=role_id, owner=owner).first()
+        if not role:
+            return Response({"error": "রোল পাওয়া যায়নি"}, status=404)
+        role.delete()
+        return Response({"success": True})
+
+
+class TeamMemberManageView(APIView):
+    """List, create/invite, update, and remove team members for a workspace."""
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def _ensure_default_roles(self, owner):
+        from users.models import CustomTeamRole, TEAM_ROLE_PRESETS
+        if not CustomTeamRole.objects.filter(owner=owner).exists():
+            for preset_key, preset_data in TEAM_ROLE_PRESETS.items():
+                CustomTeamRole.objects.create(
+                    owner=owner,
+                    name=preset_data["name"],
+                    description=preset_data["description"],
+                    preset_key=preset_key,
+                    permissions=preset_data["permissions"],
+                )
+
+    def get(self, request):
+        from users.models import TeamMember
+        from users.serializers import TeamMemberSerializer
+        owner = request.user.get_workspace_owner()
+        members = TeamMember.objects.filter(owner=owner).select_related('user', 'custom_role').prefetch_related('allowed_agents')
+        return Response({
+            "owner": {
+                "id": owner.id,
+                "name": owner.name or owner.email.split("@")[0],
+                "email": owner.email,
+            },
+            "members": TeamMemberSerializer(members, many=True).data,
+        })
+
+    def post(self, request):
+        if not request.user.has_team_permission("pages", "team"):
+            return Response({"error": "আপনার টিম মেম্বার যুক্ত করার অনুমতি নেই"}, status=403)
+        from users.models import TeamMember, CustomTeamRole, UniqueIDPool
+        from users.serializers import TeamMemberSerializer
+        owner = request.user.get_workspace_owner()
+
+        email = (request.data.get("email") or "").strip().lower()
+        name = (request.data.get("name") or "").strip()
+        password = (request.data.get("password") or "").strip()
+        phone_number = (request.data.get("phone_number") or "").strip()
+        custom_role_id = request.data.get("custom_role_id")
+        department = request.data.get("department") or "all"
+        permissions_override = request.data.get("permissions_override") or {}
+        allowed_agent_ids = request.data.get("allowed_agent_ids") or []
+        max_concurrent_chats = int(request.data.get("max_concurrent_chats") or 15)
+
+        if not email:
+            return Response({"error": "টিম মেম্বারের ইমেইল দিন"}, status=400)
+        if email == owner.email.lower():
+            return Response({"error": "মালিকের নিজের ইমেইল টিম মেম্বার হিসেবে যোগ করা যাবে না"}, status=400)
+
+        custom_role = None
+        if custom_role_id:
+            custom_role = CustomTeamRole.objects.filter(id=custom_role_id, owner=owner).first()
+        if not custom_role:
+            # Auto-seed presets if not seeded, and pick default
+            self._ensure_default_roles(owner)
+            custom_role = CustomTeamRole.objects.filter(owner=owner).first()
+
+        with transaction.atomic():
+            member_user = User.objects.filter(email__iexact=email).first()
+            if not member_user:
+                member_user = User(
+                    email=email,
+                    name=name or email.split("@")[0],
+                    id_type="user",
+                    created_by="self",
+                    is_verified=True,
+                )
+                if phone_number:
+                    member_user.phone_number = phone_number
+                if password and len(password) >= 6:
+                    member_user.set_password(password)
+                else:
+                    member_user.set_unusable_password()
+                member_user.save()
+
+                # Ensure profile exists
+                if not hasattr(member_user, "profile"):
+                    uid_obj = UniqueIDPool.objects.filter(is_used=False).first()
+                    if uid_obj:
+                        uid_val = uid_obj.uid
+                        uid_obj.is_used = True
+                        uid_obj.save(update_fields=["is_used"])
+                    else:
+                        uid_val = f"TM{random.randint(100000, 999999)}"
+                    Profile.objects.create(
+                        user=member_user,
+                        id_type="user",
+                        unique_id=uid_val,
+                    )
+            else:
+                # Check if already member of another store
+                existing_other = TeamMember.objects.filter(user=member_user, is_active=True).exclude(owner=owner).first()
+                if existing_other:
+                    return Response({"error": "এই ইমেইলটি ইতিমধ্যে অন্য একটি ওয়ার্কস্পেসের সাথে যুক্ত আছে"}, status=400)
+                if name and not member_user.name:
+                    member_user.name = name
+                    member_user.save(update_fields=["name"])
+                if password and len(password) >= 6:
+                    member_user.set_password(password)
+                    member_user.save(update_fields=["password"])
+
+            role_title = custom_role.name if custom_role else (request.data.get("role_title") or "Support Agent")
+            tm, created = TeamMember.objects.update_or_create(
+                owner=owner,
+                user=member_user,
+                defaults={
+                    "custom_role": custom_role,
+                    "role_title": role_title,
+                    "department": department,
+                    "permissions_override": permissions_override if isinstance(permissions_override, dict) else {},
+                    "max_concurrent_chats": max_concurrent_chats,
+                    "is_active": True,
+                },
+            )
+            if isinstance(allowed_agent_ids, list):
+                from aiAgent.models import AgentAI
+                valid_agents = AgentAI.objects.filter(user=owner, id__in=allowed_agent_ids)
+                tm.allowed_agents.set(valid_agents)
+
+        return Response(TeamMemberSerializer(tm).data, status=201 if created else 200)
+
+    def put(self, request):
+        if not request.user.has_team_permission("pages", "team"):
+            return Response({"error": "আপনার টিম মেম্বার আপডেট করার অনুমতি নেই"}, status=403)
+        from users.models import TeamMember, CustomTeamRole
+        from users.serializers import TeamMemberSerializer
+        owner = request.user.get_workspace_owner()
+        member_id = request.data.get("id")
+        tm = TeamMember.objects.filter(id=member_id, owner=owner).select_related("user", "custom_role").first()
+        if not tm:
+            return Response({"error": "টিম মেম্বার পাওয়া যায়নি"}, status=404)
+
+        if "name" in request.data and request.data["name"].strip():
+            tm.user.name = request.data["name"].strip()
+            tm.user.save(update_fields=["name"])
+        if "password" in request.data and request.data["password"] and len(request.data["password"]) >= 6:
+            tm.user.set_password(request.data["password"])
+            tm.user.save(update_fields=["password"])
+        if "custom_role_id" in request.data:
+            cid = request.data.get("custom_role_id")
+            tm.custom_role = CustomTeamRole.objects.filter(id=cid, owner=owner).first() if cid else None
+            if tm.custom_role:
+                tm.role_title = tm.custom_role.name
+        if "role_title" in request.data and request.data["role_title"]:
+            tm.role_title = request.data["role_title"]
+        if "department" in request.data:
+            tm.department = request.data["department"]
+        if "availability_status" in request.data:
+            tm.availability_status = request.data["availability_status"]
+        if "is_active" in request.data:
+            tm.is_active = bool(request.data["is_active"])
+        if "max_concurrent_chats" in request.data:
+            tm.max_concurrent_chats = int(request.data["max_concurrent_chats"] or 15)
+        if "permissions_override" in request.data and isinstance(request.data["permissions_override"], dict):
+            tm.permissions_override = request.data["permissions_override"]
+        tm.save()
+
+        if "allowed_agent_ids" in request.data and isinstance(request.data["allowed_agent_ids"], list):
+            from aiAgent.models import AgentAI
+            valid_agents = AgentAI.objects.filter(user=owner, id__in=request.data["allowed_agent_ids"])
+            tm.allowed_agents.set(valid_agents)
+
+        return Response(TeamMemberSerializer(tm).data)
+
+    def delete(self, request):
+        if not request.user.has_team_permission("pages", "team"):
+            return Response({"error": "আপনার টিম মেম্বার রিমুভ করার অনুমতি নেই"}, status=403)
+        from users.models import TeamMember
+        owner = request.user.get_workspace_owner()
+        member_id = request.query_params.get("id") or request.data.get("id")
+        tm = TeamMember.objects.filter(id=member_id, owner=owner).first()
+        if not tm:
+            return Response({"error": "টিম মেম্বার পাওয়া যায়নি"}, status=404)
+        # Unassign active contacts before deleting membership
+        tm.assigned_contacts.update(assigned_to=None)
+        tm.delete()
+        return Response({"success": True})
+
+
+class TeamPresenceToggleView(APIView):
+    """Allow any team member to toggle their own availability status (online / busy / offline)."""
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        tm = request.user.get_active_team_member()
+        new_status = request.data.get("availability_status", "online")
+        if new_status not in ("online", "busy", "offline"):
+            return Response({"error": "Invalid status"}, status=400)
+        if tm:
+            tm.availability_status = new_status
+            tm.save(update_fields=["availability_status", "updated_at"])
+        return Response({"success": True, "availability_status": new_status})
+
+
+class GoogleAuthLoginView(APIView):
+    """
+    Google Sign-In / Sign-Up endpoint (`POST /api/users/google-auth/`).
+    - If the email belongs to an active TeamMember (invited by a shop owner),
+      they only need their Name (auto-filled from Google or entered in 1 step)—no shop/courier/password required!
+    - If it's a regular merchant owner signing up via Google, checks if shop/courier onboarding is completed.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        import requests as http_requests
+        from users.models import TeamMember, UniqueIDPool
+
+        credential = request.data.get("credential")
+        custom_name = (request.data.get("name") or "").strip()
+        if not credential:
+            return Response({"error": "Google credential token আবশ্যক"}, status=400)
+
+        # Verify Google ID Token via Google's official tokeninfo endpoint
+        try:
+            resp = http_requests.get(
+                "https://oauth2.googleapis.com/tokeninfo",
+                params={"id_token": credential},
+                timeout=8,
+            )
+            if resp.status_code != 200:
+                return Response({"error": "গুগল টোকেন যাচাই করা যায়নি"}, status=400)
+            token_data = resp.json()
+        except Exception:
+            return Response({"error": "গুগল সার্ভারের সাথে সংযোগ করা যায়নি"}, status=400)
+
+        email = (token_data.get("email") or "").strip().lower()
+        google_name = custom_name or (token_data.get("name") or "").strip()
+        if not email:
+            return Response({"error": "গুগল অ্যাকাউন্টে ইমেইল পাওয়া যায়নি"}, status=400)
+
+        with transaction.atomic():
+            user = User.objects.filter(email__iexact=email).first()
+            is_new_user = False
+            if not user:
+                is_new_user = True
+                user = User(
+                    email=email,
+                    name=google_name or email.split("@")[0],
+                    id_type="user",
+                    created_by="self",
+                    is_verified=True,
+                )
+                user.set_unusable_password()
+                user.save()
+            else:
+                if not user.is_verified:
+                    user.is_verified = True
+                    user.save(update_fields=["is_verified"])
+                if google_name and not user.name:
+                    user.name = google_name
+                    user.save(update_fields=["name"])
+
+            if not hasattr(user, "profile"):
+                uid_obj = UniqueIDPool.objects.filter(is_used=False).first()
+                if uid_obj:
+                    uid_val = uid_obj.uid
+                    uid_obj.is_used = True
+                    uid_obj.save(update_fields=["is_used"])
+                else:
+                    uid_val = f"GU{random.randint(100000, 999999)}"
+                Profile.objects.create(
+                    user=user,
+                    id_type="user",
+                    unique_id=uid_val,
+                )
+
+        # Check if this user is an invited Team Member
+        tm = TeamMember.objects.filter(user=user, is_active=True).select_related("owner", "custom_role").first()
+        is_team_member = bool(tm)
+
+        # Team members or any existing user who already had an account never need re-onboarding
+        if is_team_member or not is_new_user:
+            profile_completed = True
+        else:
+            profile_completed = bool(user.phone_number and user.district)
+
+        refresh = RefreshToken.for_user(user)
+        access_token = str(refresh.access_token)
+        refresh_token = str(refresh)
+
+        response = Response({
+            "user": UserSerializer(user).data,
+            "is_team_member": is_team_member,
+            "is_new_user": is_new_user,
+            "profile_completed": profile_completed,
+            "message": "গুগল লগইন সফল হয়েছে!",
+        }, status=status.HTTP_200_OK)
+
+        response.set_cookie(key='access_token', value=access_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/')
+        response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/')
+
+        import uuid as _uuid
+        _device_token = str(_uuid.uuid4())
+        TrustedDevice.objects.create(
+            user=user,
+            device_token=_device_token,
+            device_name=request.META.get('HTTP_USER_AGENT', 'Google Sign-In Device')[:250],
+            is_trusted=True,
+            expires_at=timezone.now() + timedelta(days=30),
+        )
+        response.set_cookie(key='trusted_device', value=_device_token, httponly=True, samesite="Lax", secure=settings.DEBUG is False, path='/', max_age=30*24*60*60)
+        return response
+
+
+class CompleteOnboardingView(APIView):
+    """Completes profile onboarding after Google Sign-Up (`POST /api/users/complete-onboarding/`)."""
+    authentication_classes = [CookieJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        name = (request.data.get("name") or "").strip()
+        phone_number = (request.data.get("phone_number") or "").strip()
+        district = (request.data.get("district") or "").strip()
+        upazila = (request.data.get("upazila") or "").strip()
+        password = (request.data.get("password") or "").strip()
+
+        if name:
+            user.name = name
+        if phone_number:
+            user.phone_number = phone_number
+        if district:
+            user.district = district
+        if upazila:
+            user.upazila = upazila
+        if password and len(password) >= 6:
+            user.set_password(password)
+        user.save()
+
+        return Response({
+            "user": UserSerializer(user).data,
+            "message": "প্রোফাইল সেটআপ সম্পন্ন হয়েছে!",
+        }, status=status.HTTP_200_OK)
+
+
+

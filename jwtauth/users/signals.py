@@ -103,6 +103,11 @@ def handle_order_created_invoice_n8n(sender, instance, created, **kwargs):
         logger.info(f"⏹️ Invoice already marked sent for order #{instance.id}, skipping task dispatch")
         return
 
+    # If order is created from shop/storefront or is waiting for call confirmation, do not send invoice on create
+    if instance.source_platform == 'shop' or getattr(instance, 'call_status', None) in ['uncalled', 'unverified_call']:
+        logger.info(f"⏳ Order #{instance.id} is waiting for voice call confirmation (call_status={instance.call_status}). Invoice will be sent upon call confirmation.")
+        return
+
     if instance.invoice_task_dispatched:
         logger.info(f"⏹️ Invoice task already dispatched for order #{instance.id}, skipping duplicate enqueue")
         return
@@ -136,3 +141,21 @@ def log_order_status(sender, instance, created, **kwargs):
         logger.info(f"♻️ Order #{instance.id} updated - Status: {instance.status}")
         
         
+
+from users.models import Subscription
+
+@receiver(post_save, sender=Subscription)
+def auto_embed_on_subscription_activate(sender, instance, created, **kwargs):
+    """
+    When a user purchases an offer/subscription (or it becomes active with image_support/tokens),
+    automatically trigger embedding for all their pending/unembedded images.
+    """
+    if instance.is_active and instance.remaining_tokens > 0:
+        try:
+            from django.db import transaction
+            from datasheet.tasks import auto_embed_user_images_task
+            user_id = instance.profile.user_id
+            transaction.on_commit(lambda uid=user_id: auto_embed_user_images_task.delay(uid))
+            logger.info(f"⚡ [Subscription] Queued auto_embed_user_images_task for user_id={instance.profile.user_id}")
+        except Exception as e:
+            logger.error(f"❌ Error triggering auto embed on subscription: {e}")

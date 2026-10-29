@@ -6,7 +6,9 @@ import {
   Package, Phone, CheckSquare, Square, Store, Mail, Globe,
   ChevronRight, Link as LinkIcon, Check, MapPin,
   Search, Printer, LayoutDashboard, BarChart3, TrendingUp, Truck, Plus,
-  Filter, RotateCcw, Calendar, Clock, AlertCircle, DollarSign, ShoppingBag, Award, PieChart
+  Filter, RotateCcw, Calendar, Clock, AlertCircle, DollarSign, ShoppingBag, Award, PieChart,
+  ShieldCheck, Tag, User, Sparkles, Image as ImageIcon,
+  PhoneCall, PhoneForwarded, PhoneOff, Headphones
 } from "lucide-react";
 
 // Chart JS Imports
@@ -32,6 +34,134 @@ ChartJS.register(
   CategoryScale, LinearScale, PointElement, LineElement,
   BarElement, Title, Tooltip, Legend, ArcElement, Filler
 );
+
+// Platform SVG Icons
+function WhatsAppIcon({ className = "w-3 h-3" }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.598 2.668-.699c.974.53 1.954.82 2.79.821 3.183 0 5.767-2.586 5.768-5.766.001-3.181-2.584-5.767-5.766-5.767zm3.393 8.163c-.144.405-.837.774-1.17.822-.312.043-.683.08-2.029-.475-1.611-.666-2.651-2.316-2.732-2.423-.081-.107-.655-.87-.655-1.662 0-.791.415-1.182.562-1.341.147-.159.324-.199.432-.199.108 0 .216.001.31.006.101.005.236-.039.369.28.136.326.467 1.137.509 1.22.042.083.07.18.014.292-.056.113-.085.183-.169.282-.085.099-.178.221-.254.298-.085.086-.174.179-.075.349.099.17.44 1.053 1.205 1.733.722.64 1.332.839 1.52.924.188.085.297.071.407-.056.11-.127.469-.548.595-.736.126-.188.252-.157.424-.093.172.064 1.091.514 1.278.608.187.094.312.14.358.219.046.079.046.458-.098.863z" />
+    </svg>
+  );
+}
+
+function MessengerIcon({ className = "w-3 h-3" }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2C6.477 2 2 6.145 2 11.258c0 2.914 1.455 5.518 3.735 7.152V22l3.419-1.877c.897.248 1.849.383 2.846.383 5.523 0 10-4.145 10-9.258C22 6.145 17.523 2 12 2zm1.066 12.457l-2.73-2.91-5.326 2.91 5.86-6.22 2.796 2.91 5.258-2.91-5.858 6.22z" />
+    </svg>
+  );
+}
+
+function InstagramIcon({ className = "w-3 h-3" }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
+    </svg>
+  );
+}
+
+function TelegramIcon({ className = "w-3 h-3" }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
+    </svg>
+  );
+}
+
+function FacebookIcon({ className = "w-3 h-3" }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+    </svg>
+  );
+}
+
+// Facebook Friends-Style Platform Badges (-space-x-1.5 overlapping circular icons)
+function CustomerPlatformBadges({ platforms = [], defaultPlatform = "web" }) {
+  const rawList = platforms && platforms.length > 0 ? platforms : [{ platform: defaultPlatform || 'web', label: defaultPlatform || 'Web Store' }];
+  const uniquePlatforms = [];
+  const seen = new Set();
+  for (const p of rawList) {
+    const key = (typeof p === 'string' ? p : p.platform || 'web').toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniquePlatforms.push(typeof p === 'string' ? { platform: key, label: key } : p);
+    }
+  }
+
+  const getPlatformDetails = (key) => {
+    switch (key) {
+      case 'whatsapp':
+        return { name: 'WhatsApp', bg: 'bg-[#25D366] text-white', icon: <WhatsAppIcon className="w-2.5 h-2.5" /> };
+      case 'messenger':
+        return { name: 'Messenger', bg: 'bg-[#0084FF] text-white', icon: <MessengerIcon className="w-2.5 h-2.5" /> };
+      case 'instagram':
+        return { name: 'Instagram', bg: 'bg-gradient-to-tr from-[#fd5949] via-[#d6249f] to-[#285AEB] text-white', icon: <InstagramIcon className="w-2.5 h-2.5" /> };
+      case 'telegram':
+        return { name: 'Telegram', bg: 'bg-[#0088cc] text-white', icon: <TelegramIcon className="w-2.5 h-2.5" /> };
+      case 'facebook':
+        return { name: 'Facebook', bg: 'bg-[#1877F2] text-white', icon: <FacebookIcon className="w-2.5 h-2.5" /> };
+      case 'shop':
+      case 'storefront':
+        return { name: 'Online Store', bg: 'bg-indigo-600 text-white', icon: <Store className="w-2.5 h-2.5" /> };
+      default:
+        return { name: 'Web Form', bg: 'bg-slate-700 text-white', icon: <Globe className="w-2.5 h-2.5" /> };
+    }
+  };
+
+  return (
+    <div className="flex items-center -space-x-1.5 overflow-visible py-0.5" title={uniquePlatforms.map(p => p.label || p.platform).join(', ')}>
+      {uniquePlatforms.map((p, idx) => {
+        const details = getPlatformDetails((p.platform || '').toLowerCase());
+        return (
+          <div
+            key={idx}
+            title={`${details.name}${p.identifier ? `: ${p.identifier}` : ''}`}
+            className={`w-5 h-5 rounded-full ring-2 ring-white flex items-center justify-center shadow-xs cursor-pointer transition-transform hover:scale-125 hover:z-20 ${details.bg}`}
+          >
+            {details.icon}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Customer Profile Avatar Component
+function CustomerAvatar({ name = "Customer", avatarUrl = null, hasAccount = false }) {
+  const [imgError, setImgError] = useState(false);
+  const getInitials = (n) => {
+    if (!n) return "C";
+    const parts = n.trim().split(" ");
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
+
+  return (
+    <div className="relative flex-shrink-0">
+      {avatarUrl && !imgError ? (
+        <img
+          src={avatarUrl}
+          alt={name}
+          className="w-11 h-11 sm:w-12 sm:h-12 rounded-full object-cover ring-2 ring-slate-100 shadow-sm"
+          onError={() => setImgError(true)}
+        />
+      ) : (
+        <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr from-indigo-500 via-purple-500 to-pink-500 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center ring-2 ring-slate-100 shadow-sm select-none">
+          {getInitials(name)}
+        </div>
+      )}
+      {hasAccount && (
+        <div
+          title="Verified Customer Account"
+          className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 text-white rounded-full ring-2 ring-white flex items-center justify-center shadow-sm"
+        >
+          <Check className="w-2.5 h-2.5 stroke-[3]" />
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function OrderDashboard() {
   const { user } = useAuth();
@@ -104,12 +234,12 @@ export default function OrderDashboard() {
   const handleCustomDateApply = () => {
     setSelectedPreset("custom");
   };
-  
+
   // Create Store States
   const [createStoreModalOpen, setCreateStoreModalOpen] = useState(false);
   const [newStoreData, setNewStoreData] = useState({ name: "", contact_name: "", contact_number: "", address: "", city_id: "", zone_id: "", area_id: "" });
   const [isCreatingStore, setIsCreatingStore] = useState(false);
-  
+
   const [pathaoCities, setPathaoCities] = useState([]);
   const [pathaoZones, setPathaoZones] = useState([]);
   const [pathaoAreas, setPathaoAreas] = useState([]);
@@ -143,7 +273,7 @@ export default function OrderDashboard() {
   const [bookingZones, setBookingZones] = useState([]);
   const [bookingAreas, setBookingAreas] = useState([]);
   const [addressSuggestions, setAddressSuggestions] = useState(null);
-  
+
   // Courier Config Modal States
   const [courierConfigModalOpen, setCourierConfigModalOpen] = useState(false);
   const [courierConfigTab, setCourierConfigTab] = useState("pathao"); // pathao or steadfast
@@ -156,7 +286,11 @@ export default function OrderDashboard() {
     username: "",
     password: "",
     store_id: "",
-    is_sandbox: true
+    webhook_secret: "",
+    webhook_url: "",
+    is_sandbox: true,
+    cod_charge_mode: "seller",
+    cod_percentage: 1.0
   });
   const [steadfastConfigs, setSteadFastConfigs] = useState([]);
   const [editingSteadFastConfigId, setEditingSteadFastConfigId] = useState(null);
@@ -164,11 +298,16 @@ export default function OrderDashboard() {
     name: "",
     api_key: "",
     api_secret: "",
-    is_sandbox: true
+    webhook_token: "",
+    webhook_url: "",
+    is_sandbox: true,
+    cod_charge_mode: "seller",
+    cod_percentage: 1.0
   });
   const [isSavingConfig, setIsSavingConfig] = useState(false);
   const [courierFormMode, setCourierFormMode] = useState("list");
   const [isDeletingConfig, setIsDeletingConfig] = useState(false);
+  const [copiedWebhook, setCopiedWebhook] = useState(false);
 
   // Custom Order Manual Entry States
   const [addOrderModalOpen, setAddOrderModalOpen] = useState(false);
@@ -219,12 +358,50 @@ export default function OrderDashboard() {
   const [businessEmail, setBusinessEmail] = useState("");
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
+  // Auto-booking & Default Courier Settings
+  const [autoCourierBooking, setAutoCourierBooking] = useState(false);
+  const [defaultCourierProvider, setDefaultCourierProvider] = useState("steadfast");
+  const [isSavingCourierPrefs, setIsSavingCourierPrefs] = useState(false);
+
   useEffect(() => {
     if (user?.profile) {
       setWebsiteUrl(user.profile.website_url || "");
       setBusinessEmail(user.profile.business_email || user.email || "");
+      setAutoCourierBooking(Boolean(user.profile.auto_courier_booking));
+      setDefaultCourierProvider(user.profile.default_courier_provider || "steadfast");
     }
   }, [user]);
+
+  const fetchLatestCourierPrefs = useCallback(async () => {
+    try {
+      const res = await api.get("/users/me/");
+      if (res.data?.profile) {
+        setAutoCourierBooking(Boolean(res.data.profile.auto_courier_booking));
+        setDefaultCourierProvider(res.data.profile.default_courier_provider || "steadfast");
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
+  const saveCourierPreferences = async (nextAutoBooking, nextDefaultProvider) => {
+    setIsSavingCourierPrefs(true);
+    try {
+      await api.patch("/users/update-me/", {
+        profile: {
+          auto_courier_booking: nextAutoBooking,
+          default_courier_provider: nextDefaultProvider,
+        },
+      });
+      setAutoCourierBooking(nextAutoBooking);
+      setDefaultCourierProvider(nextDefaultProvider);
+      toast.success("Courier auto-dispatch & default settings saved!", { icon: "⚡" });
+    } catch (err) {
+      toast.error("Failed to save courier preferences.");
+    } finally {
+      setIsSavingCourierPrefs(false);
+    }
+  };
 
   const saveProfileSettings = async () => {
     setIsSavingProfile(true);
@@ -250,7 +427,8 @@ export default function OrderDashboard() {
     fetchFormId();
     checkCourierConfig();
     checkSteadFastConfig();
-  }, []);
+    fetchLatestCourierPrefs();
+  }, [fetchLatestCourierPrefs]);
 
   const checkCourierConfig = async () => {
     setCourierActive(false);
@@ -267,8 +445,13 @@ export default function OrderDashboard() {
             username: activeConfig.username,
             password: "",
             store_id: activeConfig.store_id || "",
-            is_sandbox: activeConfig.is_sandbox
+            webhook_secret: activeConfig.webhook_secret || "",
+            webhook_url: activeConfig.webhook_url || "",
+            is_sandbox: activeConfig.is_sandbox,
+            cod_charge_mode: activeConfig.cod_charge_mode || "seller",
+            cod_percentage: activeConfig.cod_percentage !== undefined ? activeConfig.cod_percentage : 1.0
           });
+          setEditingPathaoConfigId(activeConfig.id);
           setCourierActive(true);
           try {
             const storesRes = await api.get(`/courier/stores/?config_id=${activeConfig.id}`);
@@ -295,8 +478,13 @@ export default function OrderDashboard() {
             name: activeConfig.name || "",
             api_key: activeConfig.api_key,
             api_secret: "",
-            is_sandbox: activeConfig.is_sandbox
+            webhook_token: activeConfig.webhook_token || "",
+            webhook_url: activeConfig.webhook_url || "",
+            is_sandbox: activeConfig.is_sandbox,
+            cod_charge_mode: activeConfig.cod_charge_mode || "seller",
+            cod_percentage: activeConfig.cod_percentage !== undefined ? activeConfig.cod_percentage : 1.0
           });
+          setEditingSteadFastConfigId(activeConfig.id);
           setSteadFastActive(true);
           try {
             const citiesRes = await api.get("/courier/steadfast/cities/");
@@ -316,8 +504,10 @@ export default function OrderDashboard() {
     try {
       const payload = { ...pathaoConfig };
       if (!payload.password) delete payload.password;
-      if (editingPathaoConfigId) payload.config_id = editingPathaoConfigId;
-      
+      if (!payload.client_secret) delete payload.client_secret;
+      const targetConfigId = editingPathaoConfigId || (pathaoConfigs.length > 0 ? pathaoConfigs[0].id : null);
+      if (targetConfigId) payload.config_id = targetConfigId;
+
       await api.post("/courier/config/", payload);
       toast.success("Pathao credentials verified & saved successfully!", { icon: "🚚" });
       setCourierFormMode("list");
@@ -359,15 +549,19 @@ export default function OrderDashboard() {
   const handleSaveSteadFastConfig = async () => {
     setIsSavingConfig(true);
     try {
-      const payload = { 
+      const payload = {
         name: steadfastConfig.name,
         api_key: steadfastConfig.api_key,
-        api_secret: steadfastConfig.api_secret,
-        is_sandbox: steadfastConfig.is_sandbox
+        webhook_token: steadfastConfig.webhook_token || "",
+        is_sandbox: steadfastConfig.is_sandbox,
+        cod_charge_mode: steadfastConfig.cod_charge_mode || 'seller',
+        cod_percentage: steadfastConfig.cod_percentage !== undefined ? steadfastConfig.cod_percentage : 1.0
       };
-      if (editingSteadFastConfigId) payload.config_id = editingSteadFastConfigId;
+      if (steadfastConfig.api_secret) payload.api_secret = steadfastConfig.api_secret;
+      const targetConfigId = editingSteadFastConfigId || (steadfastConfigs.length > 0 ? steadfastConfigs[0].id : null);
+      if (targetConfigId) payload.config_id = targetConfigId;
       await api.post("/courier/steadfast/config/", payload);
-      toast.success("SteadFast credentials verified & saved successfully!", { icon: "🚚" });
+      toast.success("SteadFast configuration saved successfully!", { icon: "🚚" });
       setCourierConfigTab("list");
       setCourierFormMode("list");
       setEditingSteadFastConfigId(null);
@@ -431,22 +625,27 @@ export default function OrderDashboard() {
 
   const openBookingModal = (order) => {
     setBookingOrder(order);
-    setSelectedCourier("pathao"); // Default to Pathao
+    const preferred =
+      (order?.courier && order.courier !== "manual" ? order.courier : null) ||
+      defaultCourierProvider ||
+      (courierActive ? "pathao" : "steadfast");
+    setSelectedCourier(preferred);
     setCourierProviderModalOpen(true);
   };
 
-  const startCourierBooking = async () => {
+  const startCourierBooking = async (providerOverride = null) => {
+    const activeProvider = providerOverride || selectedCourier;
     const loadingToast = toast.loading("Fetching courier suggestions...");
     let suggestedCity = "";
     let suggestedZone = "";
     let suggestedArea = "";
-    
+
     try {
       const res = await api.get(`/courier/suggested-address/?order_id=${bookingOrder.id}`);
       const data = res.data || {};
       setAddressSuggestions(data);
-      
-      const suggestions = selectedCourier === "pathao" ? data.pathao : data.steadfast;
+
+      const suggestions = activeProvider === "pathao" ? data.pathao : data.steadfast;
       if (suggestions) {
         suggestedCity = suggestions.city_id ? String(suggestions.city_id) : "";
         suggestedZone = suggestions.zone_id ? String(suggestions.zone_id) : "";
@@ -459,6 +658,8 @@ export default function OrderDashboard() {
       toast.dismiss(loadingToast);
     }
 
+    const orderMatchesProvider = bookingOrder.courier === activeProvider;
+
     setBookingDetails({
       recipient_name: bookingOrder.customer_name || "",
       recipient_phone: bookingOrder.phone_number || "",
@@ -467,10 +668,10 @@ export default function OrderDashboard() {
       item_weight: bookingOrder.item_weight || 0.5,
       amount_to_collect: bookingOrder.price || 0,
       item_description: bookingOrder.product_name || "Order Parcel",
-      store_id: stores[0]?.store_id || "",
-      recipient_city: bookingOrder.city_id ? String(bookingOrder.city_id) : suggestedCity,
-      recipient_zone: bookingOrder.zone_id ? String(bookingOrder.zone_id) : suggestedZone,
-      recipient_area: bookingOrder.area_id ? String(bookingOrder.area_id) : suggestedArea,
+      store_id: pathaoConfig.store_id || stores[0]?.store_id || "",
+      recipient_city: suggestedCity || (orderMatchesProvider && bookingOrder.city_id ? String(bookingOrder.city_id) : ""),
+      recipient_zone: suggestedZone || (orderMatchesProvider && bookingOrder.zone_id ? String(bookingOrder.zone_id) : ""),
+      recipient_area: suggestedArea || (orderMatchesProvider && bookingOrder.area_id ? String(bookingOrder.area_id) : ""),
       special_instruction: bookingOrder.special_instruction || ""
     });
     setCourierProviderModalOpen(false);
@@ -481,15 +682,15 @@ export default function OrderDashboard() {
     if (!bookingDetails.recipient_address) {
       return toast.error("Please provide a valid delivery address.");
     }
-    
+
     setBookingInProgress(true);
     const courierName = selectedCourier === "pathao" ? "Pathao" : "SteadFast";
     const loadingToast = toast.loading(`Booking parcel in ${courierName} Courier...`);
-    
+
     try {
       let endpoint = "";
       let payload = {};
-      
+
       if (selectedCourier === "pathao") {
         endpoint = "/courier/book-order/";
         payload = {
@@ -525,10 +726,10 @@ export default function OrderDashboard() {
           special_instruction: bookingDetails.special_instruction || null
         };
       }
-      
+
       const res = await api.post(endpoint, payload);
       toast.success(res.data.message || "Parcel successfully booked!", { id: loadingToast, icon: "🚚" });
-      
+
       // Update order status and details locally
       const trackingPrefix = selectedCourier === "pathao" ? "Pathao Courier" : "SteadFast Courier";
       setOrders(prev => prev.map(o => {
@@ -537,12 +738,21 @@ export default function OrderDashboard() {
           return {
             ...o,
             status: "shipped",
+            courier: selectedCourier,
+            courier_booking_info: {
+              is_booked: true,
+              provider: selectedCourier,
+              provider_label: trackingPrefix,
+              consignment_id: res.data.consignment_id,
+              booking_status: "pending",
+              error: null,
+            },
             extra_info: o.extra_info ? o.extra_info + tracking : tracking.trim()
           };
         }
         return o;
       }));
-      
+
       setBookingModalOpen(false);
     } catch (e) {
       const errText = e.response?.data?.error || "Failed to book parcel.";
@@ -768,16 +978,25 @@ export default function OrderDashboard() {
     bookingDetails.item_weight
   ]);
 
-  const handleTrackOrder = async (consignmentId) => {
+  const [selectedOrderForTracking, setSelectedOrderForTracking] = useState(null);
+
+  const handleTrackOrder = async (consignmentId, orderObj = null) => {
     setLoadingTracking(true);
     setTrackingModalOpen(true);
     setTrackingDetails(null);
+    setSelectedOrderForTracking(orderObj || null);
     try {
-      const res = await api.get(`/courier/order-info/${consignmentId}/`);
+      const provider = orderObj?.courier_booking_info?.provider || (String(orderObj?.extra_info || '').toLowerCase().includes('steadfast') ? 'steadfast' : 'pathao');
+      const endpoint = provider === 'steadfast'
+        ? `/courier/steadfast/order-info/${consignmentId}/`
+        : `/courier/order-info/${consignmentId}/`;
+      const res = await api.get(endpoint);
       setTrackingDetails(res.data);
+      if (res.data?.delivery_status === 'unknown' || res.data?.delivery_status === 'cancelled') {
+        fetchOrders();
+      }
     } catch (err) {
       toast.error(err.response?.data?.error || "Failed to fetch tracking details.");
-      setTrackingModalOpen(false);
     } finally {
       setLoadingTracking(false);
     }
@@ -793,15 +1012,15 @@ export default function OrderDashboard() {
     try {
       const res = await api.post("/courier/stores/create/", newStoreData);
       toast.success("Store created successfully!", { id: loadingToast, icon: "🏪" });
-      
+
       const storesRes = await api.get("/courier/stores/");
       setStores(storesRes.data || []);
-      
+
       if (res.data.store_id) {
         setBookingDetails(prev => ({ ...prev, store_id: res.data.store_id }));
         setPathaoConfig(prev => ({ ...prev, store_id: res.data.store_id }));
       }
-      
+
       setCreateStoreModalOpen(false);
       setNewStoreData({ name: "", contact_name: "", contact_number: "", address: "" });
     } catch (e) {
@@ -1034,121 +1253,331 @@ export default function OrderDashboard() {
     }
   };
 
-  const renderOrderCard = (order) => (
-    <div key={order.id} className={`bg-white border rounded-2xl p-4 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-5 transition-all hover:shadow-md ${selectedOrders.includes(order.id) ? 'border-indigo-500 ring-1 ring-indigo-500 bg-indigo-50/10' : 'border-gray-200 hover:border-indigo-300'}`}>
+  const renderOrderCard = (order) => {
+    const isSelected = selectedOrders.includes(order.id);
+    const customerInfo = order.customer_info || {};
+    const hasAccount = Boolean(customerInfo.has_account || order.customer_id || order.customer);
+    const customerAvatarUrl = customerInfo.avatar_url || order.customer_profile_photo;
+    const customerName = customerInfo.name || order.customer_name || "Guest Customer";
+    const platforms = customerInfo.platforms && customerInfo.platforms.length > 0
+      ? customerInfo.platforms
+      : [{ platform: order.source_platform || 'web', label: order.source_platform || 'Web Store' }];
 
-      {/* Left Section: Checkbox & Customer Info */}
-      <div className="flex items-start lg:items-center gap-4 w-full lg:w-4/12">
-        <div className="mt-1 lg:mt-0">
-          <button onClick={() => toggleSelect(order.id)} className="text-gray-400 hover:text-indigo-600 transition-colors">
-            {selectedOrders.includes(order.id) ? <CheckSquare className="w-6 h-6 text-indigo-600" /> : <Square className="w-6 h-6" />}
-          </button>
-        </div>
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 mb-1.5">
-            <h3 className="font-bold text-gray-900 text-base sm:text-lg truncate">{order.customer_name}</h3>
-            <span className="text-[10px] sm:text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 flex-shrink-0">
-              #{order.id}
-            </span>
-          </div>
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs text-gray-500 font-medium tracking-wide">
-            <span className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-gray-400" /> {order.phone_number}</span>
-            <span className="flex items-center gap-1.5 truncate"><MapPin className="w-3.5 h-3.5 text-gray-400" /> {order.district}, {order.upazila}</span>
-          </div>
-        </div>
-      </div>
+    const productInfo = order.product_info || {};
+    const orderItems = order.order_items || [];
+    const primaryItem = orderItems[0] || {};
+    const productImage = productInfo.image || primaryItem.image || order.photo_url || null;
+    const productCategory = productInfo.category || primaryItem.category || null;
+    const productSku = productInfo.sku || primaryItem.sku || null;
+    const productName = productInfo.name || primaryItem.name || order.product_name || "Product";
 
-      {/* Middle Section: Product Details & Price */}
-      <div className="flex flex-col w-full lg:w-4/12 px-0 lg:px-6 border-t lg:border-t-0 lg:border-l lg:border-r border-gray-100 pt-4 lg:pt-0 pb-4 lg:pb-0">
-        <div className="font-semibold text-gray-800 flex items-center gap-2 text-sm sm:text-base mb-1.5">
-          <Package className="w-4.5 h-4.5 text-indigo-500 flex-shrink-0" />
-          <span className="truncate">{order.product_name || "N/A"}</span>
-        </div>
-        <div className="flex items-center flex-wrap gap-3 mb-2">
-          {order.price > 0 ? (
-            <span className="text-sm font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100">
-              ৳ {Number(order.price).toLocaleString()}
-            </span>
-          ) : (
-            <span className="text-sm font-medium text-gray-400 italic">No price set</span>
-          )}
-          {order.extra_info && (
-            <span className="text-xs font-medium text-gray-500 bg-gray-50 px-2 py-1 rounded-md border border-gray-200 truncate max-w-[150px]" title={order.extra_info}>
-              Info: {order.extra_info}
-            </span>
-          )}
-          {order.item_weight && (
-            <span className="text-xs font-medium text-slate-500 bg-slate-50 px-2 py-1 rounded-md border border-slate-200">
-              Weight: {order.item_weight} kg
-            </span>
-          )}
-          {order.item_quantity && (
-            <span className="text-xs font-medium text-slate-500 bg-slate-50 px-2 py-1 rounded-md border border-slate-200">
-              Qty: {order.item_quantity}
-            </span>
-          )}
-          {order.special_instruction && (
-            <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-md border border-amber-100 truncate max-w-[180px]" title={order.special_instruction}>
-              Note: {order.special_instruction}
-            </span>
-          )}
-        </div>
-        <div className="text-xs text-gray-500 line-clamp-2 leading-relaxed" title={order.address}>
-          <span className="font-semibold text-gray-400 uppercase tracking-widest text-[9px] mr-1">Address:</span> {order.address}
-        </div>
-      </div>
+    const formattedDate = order.created_at
+      ? new Date(order.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+      : "N/A";
+    const formattedTime = order.created_at
+      ? new Date(order.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+      : "";
 
-      {/* Right Section: Actions & Status */}
-      <div className="flex flex-col sm:flex-row items-center justify-between lg:justify-end gap-4 w-full lg:w-3/12 pt-4 lg:pt-0 border-t lg:border-t-0 border-gray-100">
-        <div className="text-left sm:text-right w-full sm:w-auto flex flex-row sm:flex-col justify-between sm:justify-start">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Date Added</p>
-          <p className="text-xs font-bold text-gray-700">{new Date(order.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-        </div>
-
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <button onClick={() => handlePrint([order])} className="p-2 sm:p-2.5 bg-white text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-gray-200 hover:border-indigo-200 shadow-sm">
-            <Printer className="w-4 h-4" />
+    return (
+      <div
+        key={order.id}
+        className={`bg-white border rounded-2xl p-4 sm:p-5 transition-all duration-200 hover:shadow-lg flex flex-col xl:flex-row xl:items-center justify-between gap-4 ${isSelected
+          ? 'border-indigo-500 ring-2 ring-indigo-500/20 bg-indigo-50/20'
+          : 'border-slate-200 hover:border-indigo-300'
+          }`}
+      >
+        {/* --- SECTION 1: Customer Profile, Account Badge & Platforms --- */}
+        <div className="flex items-start gap-3.5 w-full xl:w-4/12 min-w-0">
+          <button
+            onClick={() => toggleSelect(order.id)}
+            className="mt-2 text-slate-300 hover:text-indigo-600 transition-colors flex-shrink-0"
+            title="Select order"
+          >
+            {isSelected ? (
+              <CheckSquare className="w-5 h-5 text-indigo-600" />
+            ) : (
+              <Square className="w-5 h-5" />
+            )}
           </button>
 
-          {order.status === "pending" && (
-            <button
-              onClick={() => courierActive ? openBookingModal(order) : setCourierConfigModalOpen(true)}
-              title={courierActive ? "Book Pathao Delivery" : "Configure Pathao Courier"}
-              className={`p-2 sm:p-2.5 rounded-xl transition-all shadow-sm flex items-center justify-center active:scale-95 ${courierActive ? 'bg-indigo-600 text-white hover:bg-indigo-700 border-indigo-600 hover:border-indigo-700' : 'bg-slate-100 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200'}`}
-            >
-              <Truck className="w-4 h-4" />
-            </button>
-          )}
+          <CustomerAvatar
+            name={customerName}
+            avatarUrl={customerAvatarUrl}
+            hasAccount={hasAccount}
+          />
 
-          {getConsignmentId(order.extra_info) && (
-            <button
-              onClick={() => handleTrackOrder(getConsignmentId(order.extra_info))}
-              title="Track Pathao Delivery"
-              className="p-2 sm:p-2.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl transition-all border border-indigo-100 shadow-sm flex items-center justify-center active:scale-95"
-            >
-              <Search className="w-4 h-4" />
-            </button>
-          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <h3 className="font-bold text-slate-900 text-sm sm:text-base truncate leading-snug">
+                {customerName}
+              </h3>
+              {hasAccount ? (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <ShieldCheck className="w-3 h-3 text-emerald-600" /> Account
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 text-slate-500">
+                  Guest
+                </span>
+              )}
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-mono ml-auto sm:ml-0 flex-shrink-0">
+                #{order.public_id || order.id}
+              </span>
 
-          <div className="relative flex-1 sm:flex-none">
-            <select
-              value={order.status}
-              onChange={(e) => updateStatus(order.id, e.target.value)}
-              className={`w-full appearance-none pl-4 pr-10 py-2 sm:py-2.5 rounded-xl font-bold text-xs uppercase tracking-wide cursor-pointer transition-colors border shadow-sm ${order.status === 'delivered' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 focus:ring-2 focus:ring-emerald-500 focus:outline-none' :
-                  order.status === 'shipped' ? 'bg-indigo-50 text-indigo-700 border-indigo-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none' : 'bg-amber-50 text-amber-700 border-amber-200 focus:ring-2 focus:ring-amber-500 focus:outline-none'
-                }`}
+              {/* Call Verification Badges */}
+              {(order.call_status === 'confirmed') && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
+                  <PhoneCall className="w-2.5 h-2.5 text-emerald-600" /> Verified by Call
+                </span>
+              )}
+              {(order.call_status === 'unverified_call' || order.call_status === 'uncalled') && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs">
+                  <PhoneForwarded className="w-2.5 h-2.5 text-amber-700 animate-pulse" /> Needs Manual Call
+                </span>
+              )}
+              {order.call_status === 'cancelled' && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300 shadow-2xs">
+                  <PhoneOff className="w-2.5 h-2.5 text-rose-600" /> Cancelled via Call
+                </span>
+              )}
+              {order.call_status === 'human_requested' && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-800 border border-indigo-300 shadow-2xs">
+                  <Headphones className="w-2.5 h-2.5 text-indigo-600" /> Support Requested
+                </span>
+              )}
+            </div>
+
+            {/* Platforms (Facebook Friends Overlapping Style) & Phone */}
+            <div className="flex items-center gap-2.5 flex-wrap text-xs text-slate-500 font-medium mb-1">
+              <CustomerPlatformBadges platforms={platforms} defaultPlatform={order.source_platform} />
+              <a
+                href={`tel:${order.phone_number}`}
+                className="flex items-center gap-1 hover:text-indigo-600 transition-colors font-semibold"
+              >
+                <Phone className="w-3 h-3 text-slate-400" />
+                <span>{order.phone_number || "No phone"}</span>
+              </a>
+            </div>
+
+            {/* Location / District */}
+            <div className="flex items-center gap-1.5 text-xs text-slate-400 truncate">
+              <MapPin className="w-3 h-3 text-slate-400 flex-shrink-0" />
+              <span className="truncate">
+                {[order.upazila, order.district].filter(Boolean).join(", ") || "No address specified"}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* --- SECTION 2: Product Catalog Info & Image --- */}
+        <div className="flex items-start gap-3 w-full xl:w-5/12 border-t xl:border-t-0 xl:border-l xl:border-r border-slate-100 pt-3 xl:pt-0 pb-3 xl:pb-0 px-0 xl:px-5 min-w-0">
+          {/* Catalog Product Image Thumbnail */}
+          <div className="relative group w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden border border-slate-200 bg-slate-50 flex-shrink-0 shadow-xs flex items-center justify-center">
+            {productImage ? (
+              <img
+                src={productImage}
+                alt={productName}
+                className="w-full h-full object-cover transition-transform group-hover:scale-110 duration-200"
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center text-slate-300">
+                <Package className="w-6 h-6" />
+                <span className="text-[8px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">Catalog</span>
+              </div>
+            )}
+            {orderItems.length > 1 && (
+              <span className="absolute bottom-1 right-1 bg-slate-900/80 backdrop-blur-xs text-white font-black text-[9px] px-1 rounded">
+                +{orderItems.length}
+              </span>
+            )}
+          </div>
+
+          {/* Product Specs & Badges */}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <span className="font-bold text-slate-900 text-xs sm:text-sm truncate max-w-[200px] sm:max-w-[260px]" title={productName}>
+                {productName}
+              </span>
+              {productCategory && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100">
+                  <Tag className="w-2.5 h-2.5" /> {productCategory}
+                </span>
+              )}
+              {productSku && (
+                <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                  SKU: {productSku}
+                </span>
+              )}
+            </div>
+
+            {/* Price, Quantity & Add-on tags */}
+            <div className="flex items-center flex-wrap gap-2 mb-1.5">
+              {order.price > 0 ? (
+                <span className="text-xs font-black text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-md border border-indigo-100">
+                  ৳ {Number(order.price).toLocaleString()}
+                </span>
+              ) : (
+                <span className="text-xs font-medium text-slate-400 italic">No price</span>
+              )}
+
+              {order.item_quantity && (
+                <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
+                  Qty: {order.item_quantity}
+                </span>
+              )}
+
+              {order.delivery_charge > 0 && (
+                <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
+                  Delivery: ৳{order.delivery_charge}
+                </span>
+              )}
+
+              {order.item_weight && (
+                <span className="text-[10px] font-medium text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
+                  {order.item_weight} kg
+                </span>
+              )}
+
+              {/* Courier Dispatch Status Badge */}
+              {order.courier_booking_info?.is_booked ? (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span
+                    className={`inline-flex items-center gap-1 text-[10px] font-black px-2.5 py-0.5 rounded-full border shadow-2xs ${order.courier_booking_info.provider === "pathao"
+                      ? "bg-indigo-100 text-indigo-800 border-indigo-300"
+                      : "bg-emerald-100 text-emerald-800 border-emerald-300"
+                      }`}
+                    title={`Consignment ID: ${order.courier_booking_info.consignment_id}`}
+                  >
+                    <Truck className="w-3 h-3" />
+                    Sent to {order.courier_booking_info.provider === "pathao" ? "Pathao" : "SteadFast"} • #{order.courier_booking_info.consignment_id}
+                  </span>
+
+                  {order.courier_booking_info?.latest_status_label && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                      {order.courier_booking_info.latest_status_label}
+                    </span>
+                  )}
+                </div>
+              ) : order.status === "cancelled" ? (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-200">
+                  <Truck className="w-3 h-3 opacity-70" /> Courier Cancelled
+                </span>
+              ) : (
+                <span
+                  className={`inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${order.courier_booking_info?.error
+                    ? "bg-rose-50 text-rose-700 border-rose-200"
+                    : "bg-amber-50 text-amber-800 border-amber-200"
+                    }`}
+                  title={order.courier_booking_info?.error || "Not booked in courier yet"}
+                >
+                  <Truck className="w-3 h-3" />
+                  {order.courier_booking_info?.error
+                    ? "Courier Dispatch Failed"
+                    : `Not Sent to Courier (${(order.courier && order.courier !== "manual" ? order.courier : defaultCourierProvider).toUpperCase()})`}
+                </span>
+              )}
+            </div>
+
+            {order.courier_booking_info?.latest_reason && (
+              <div className="text-[10px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md mb-1 border border-rose-200 flex items-center gap-1.5">
+                <AlertCircle className="w-3 h-3 text-rose-600 shrink-0" />
+                <span>কুরিয়ার নোট/কারণ: {order.courier_booking_info.latest_reason}</span>
+              </div>
+            )}
+
+            {order.courier_booking_info?.error && !order.courier_booking_info?.is_booked && (
+              <div className="text-[10px] font-semibold text-rose-700 bg-rose-50 px-2 py-1 rounded-lg mb-1.5 border border-rose-200 flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                <span className="truncate" title={order.courier_booking_info.error}>
+                  {order.courier_booking_info.error}
+                </span>
+              </div>
+            )}
+
+            {/* Address & Note snippet */}
+            <div className="text-[11px] text-slate-500 line-clamp-1 leading-relaxed" title={order.address}>
+              <span className="font-bold text-slate-400 uppercase text-[9px] mr-1">Address:</span> {order.address || "No address provided"}
+            </div>
+
+            {order.special_instruction && (
+              <div className="text-[10px] font-medium text-amber-700 bg-amber-50/80 px-2 py-0.5 rounded mt-1 border border-amber-200/50 line-clamp-1" title={order.special_instruction}>
+                Note: {order.special_instruction}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* --- SECTION 3: Order Actions, Date & Status --- */}
+        <div className="flex flex-col sm:flex-row xl:flex-col items-end justify-between xl:justify-center gap-3 w-full xl:w-3/12 border-t xl:border-t-0 border-slate-100 pt-3 xl:pt-0">
+          <div className="text-left sm:text-right xl:text-right w-full sm:w-auto xl:w-full flex sm:block xl:block justify-between items-center">
+            <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">Ordered</span>
+            <div className="text-xs font-bold text-slate-700">
+              {formattedDate} {formattedTime && <span className="text-[10px] text-slate-400 font-normal">({formattedTime})</span>}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto xl:w-full justify-end">
+            <button
+              onClick={() => handlePrint([order])}
+              title="Print Order Invoice"
+              className="p-2 bg-white text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all border border-slate-200 hover:border-indigo-200 shadow-sm"
             >
-              <option value="pending">Pending</option>
-              <option value="shipped">Shipped</option>
-              <option value="delivered">Delivered</option>
-            </select>
-            <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none rotate-90 opacity-50" />
+              <Printer className="w-4 h-4" />
+            </button>
+
+            {!order.courier_booking_info?.is_booked && !["shipped", "delivered", "cancelled"].includes(order.status) && (
+              <button
+                onClick={() => (courierActive || steadfastActive) ? openBookingModal(order) : setCourierConfigModalOpen(true)}
+                title={(courierActive || steadfastActive) ? "Send to Courier (Pathao / SteadFast)" : "Configure Courier"}
+                className={`px-2.5 py-2 rounded-xl transition-all shadow-sm flex items-center gap-1.5 text-[11px] font-bold active:scale-95 ${(courierActive || steadfastActive)
+                  ? 'bg-indigo-600 text-white hover:bg-indigo-700 border-indigo-600'
+                  : 'bg-slate-100 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 border border-slate-200'
+                  }`}
+              >
+                <Truck className="w-4 h-4" />
+                <span className="hidden sm:inline">Send Courier</span>
+              </button>
+            )}
+
+            {(order.courier_booking_info?.consignment_id || getConsignmentId(order.extra_info)) && (
+              <button
+                onClick={() => handleTrackOrder(order.courier_booking_info?.consignment_id || getConsignmentId(order.extra_info), order)}
+                title="Track Delivery & View Live Events"
+                className="p-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl transition-all border border-indigo-100 shadow-sm flex items-center justify-center active:scale-95"
+              >
+                <Search className="w-4 h-4" />
+              </button>
+            )}
+
+            <div className="relative flex-1 sm:flex-none">
+              <select
+                value={order.status}
+                onChange={(e) => updateStatus(order.id, e.target.value)}
+                className={`w-full appearance-none pl-3 pr-8 py-1.5 sm:py-2 rounded-xl font-bold text-xs uppercase tracking-wide cursor-pointer transition-colors border shadow-sm ${order.status === 'delivered'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 focus:ring-2 focus:ring-emerald-500'
+                  : order.status === 'shipped'
+                    ? 'bg-indigo-50 text-indigo-700 border-indigo-200 focus:ring-2 focus:ring-indigo-500'
+                    : order.status === 'confirmed'
+                      ? 'bg-teal-50 text-teal-700 border-teal-200 focus:ring-2 focus:ring-teal-500'
+                      : order.status === 'cancelled'
+                        ? 'bg-rose-50 text-rose-700 border-rose-200 focus:ring-2 focus:ring-rose-500'
+                        : 'bg-amber-50 text-amber-700 border-amber-200 focus:ring-2 focus:ring-amber-500'
+                  }`}
+              >
+                <option value="pending">Pending</option>
+                <option value="confirmed">Confirmed</option>
+                <option value="shipped">Shipped</option>
+                <option value="delivered">Delivered</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+              <ChevronRight className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none rotate-90 opacity-60" />
+            </div>
           </div>
         </div>
       </div>
-
-    </div>
-  );
+    );
+  };
 
   if (loading) return (
     <div className="p-8 grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1545,7 +1974,7 @@ export default function OrderDashboard() {
           <h1 className="text-2xl xs:text-3xl md:text-5xl font-black text-gray-900 tracking-tighter leading-tight">
             Order <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-blue-500">Center</span>
           </h1>
-          
+
           {/* Action Buttons row at the top */}
           <div className="mt-4 flex flex-wrap items-center justify-center lg:justify-start gap-3">
             <button onClick={() => { setCourierFormMode("list"); setCourierConfigModalOpen(true); }} className="flex items-center gap-2 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl font-bold text-[10px] md:text-xs transition-all border border-indigo-200 shadow-sm active:scale-95">
@@ -1560,7 +1989,7 @@ export default function OrderDashboard() {
         <div className="w-full lg:w-[480px]">
           <div className="bg-white border border-indigo-100 p-4 sm:p-5 rounded-3xl shadow-xl flex flex-col gap-4 border-b-4 border-b-indigo-500 relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none" />
-            
+
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
                 <Store className="w-4.5 h-4.5" />
@@ -2041,11 +2470,10 @@ export default function OrderDashboard() {
                   <button
                     key={p.id}
                     onClick={() => handlePresetChange(p.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
-                      selectedPreset === p.id
-                        ? "bg-indigo-600 text-white shadow-md"
-                        : "text-slate-600 hover:text-slate-900"
-                    }`}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all ${selectedPreset === p.id
+                      ? "bg-indigo-600 text-white shadow-md"
+                      : "text-slate-600 hover:text-slate-900"
+                      }`}
                   >
                     {p.label}
                   </button>
@@ -2205,7 +2633,7 @@ export default function OrderDashboard() {
       {courierProviderModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setCourierProviderModalOpen(false)} />
-          
+
           <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 sm:p-8 animate-in zoom-in-95 duration-200 border border-slate-100 z-10">
             <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
               <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">
@@ -2220,8 +2648,8 @@ export default function OrderDashboard() {
             <div className="space-y-3">
               {courierActive && (
                 <button
-                  onClick={() => { setSelectedCourier("pathao"); startCourierBooking(); }}
-                  className={`w-full p-4 rounded-2xl border-2 transition-all text-left ${ selectedCourier === "pathao" ? "border-indigo-500 bg-indigo-50" : "border-slate-200 bg-slate-50 hover:border-indigo-300" }`}
+                  onClick={() => { setSelectedCourier("pathao"); startCourierBooking("pathao"); }}
+                  className={`w-full p-4 rounded-2xl border-2 transition-all text-left ${selectedCourier === "pathao" ? "border-indigo-500 bg-indigo-50" : "border-slate-200 bg-slate-50 hover:border-indigo-300"}`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -2237,10 +2665,10 @@ export default function OrderDashboard() {
                   </div>
                 </button>
               )}
-              
+
               {steadfastActive && (
                 <button
-                  onClick={() => { setSelectedCourier("steadfast"); startCourierBooking(); }}
+                  onClick={() => { setSelectedCourier("steadfast"); startCourierBooking("steadfast"); }}
                   className={`w-full p-4 rounded-2xl border-2 transition-all text-left ${selectedCourier === "steadfast" ? "border-green-500 bg-green-50" : "border-slate-200 bg-slate-50 hover:border-green-300"}`}
                 >
                   <div className="flex items-center justify-between">
@@ -2292,7 +2720,7 @@ export default function OrderDashboard() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
           {/* Backdrop */}
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => !bookingInProgress && setBookingModalOpen(false)} />
-          
+
           {/* Dialog Container */}
           <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-8 animate-in zoom-in-95 duration-200 border border-slate-100 z-10 max-h-[90vh] overflow-y-auto custom-scrollbar">
             {/* Header */}
@@ -2310,24 +2738,24 @@ export default function OrderDashboard() {
             <div className="space-y-5">
               {/* Pickup Store (Pathao Only) */}
               {selectedCourier === "pathao" && (
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Pickup Store Address</label>
-                  <button type="button" onClick={() => setCreateStoreModalOpen(true)} className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-lg transition-colors border border-indigo-100"><Plus className="w-3 h-3" /> New Store</button>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Pickup Store Address</label>
+                    <button type="button" onClick={() => setCreateStoreModalOpen(true)} className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-lg transition-colors border border-indigo-100"><Plus className="w-3 h-3" /> New Store</button>
+                  </div>
+                  <select
+                    value={bookingDetails.store_id}
+                    onChange={(e) => setBookingDetails(prev => ({ ...prev, store_id: e.target.value }))}
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-indigo-500/10 cursor-pointer transition-all"
+                  >
+                    <option value="" disabled>Select pickup location</option>
+                    {stores.map(store => (
+                      <option key={store.store_id} value={store.store_id}>
+                        {store.store_name} ({store.store_address})
+                      </option>
+                    ))}
+                  </select>
                 </div>
-                <select
-                  value={bookingDetails.store_id}
-                  onChange={(e) => setBookingDetails(prev => ({ ...prev, store_id: e.target.value }))}
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 text-xs sm:text-sm outline-none focus:ring-2 focus:ring-indigo-500/10 cursor-pointer transition-all"
-                >
-                  <option value="" disabled>Select pickup location</option>
-                  {stores.map(store => (
-                    <option key={store.store_id} value={store.store_id}>
-                      {store.store_name} ({store.store_address})
-                    </option>
-                  ))}
-                </select>
-              </div>
               )}
 
               {/* Recipient Details */}
@@ -2364,71 +2792,71 @@ export default function OrderDashboard() {
 
               {/* City, Zone, Area Selector for Booking */}
               {selectedCourier === "pathao" && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">City</label>
-                  <select
-                    value={bookingDetails.recipient_city}
-                    onChange={(e) => setBookingDetails(prev => ({ ...prev, recipient_city: e.target.value, recipient_zone: "", recipient_area: "" }))}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
-                  >
-                    <option value="">Select City</option>
-                    {bookingCities.map(city => <option key={city.city_id} value={city.city_id}>{city.city_name}</option>)}
-                  </select>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">City</label>
+                    <select
+                      value={bookingDetails.recipient_city}
+                      onChange={(e) => setBookingDetails(prev => ({ ...prev, recipient_city: e.target.value, recipient_zone: "", recipient_area: "" }))}
+                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
+                    >
+                      <option value="">Select City</option>
+                      {bookingCities.map(city => <option key={city.city_id} value={city.city_id}>{city.city_name}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Zone</label>
+                    <select
+                      value={bookingDetails.recipient_zone}
+                      onChange={(e) => setBookingDetails(prev => ({ ...prev, recipient_zone: e.target.value, recipient_area: "" }))}
+                      disabled={!bookingDetails.recipient_city}
+                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 disabled:opacity-50 cursor-pointer"
+                    >
+                      <option value="">Select Zone</option>
+                      {bookingZones.map(zone => <option key={zone.zone_id} value={zone.zone_id}>{zone.zone_name}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Area</label>
+                    <select
+                      value={bookingDetails.recipient_area}
+                      onChange={(e) => setBookingDetails(prev => ({ ...prev, recipient_area: e.target.value }))}
+                      disabled={!bookingDetails.recipient_zone}
+                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 disabled:opacity-50 cursor-pointer"
+                    >
+                      <option value="">Select Area</option>
+                      {bookingAreas.map(area => <option key={area.area_id} value={area.area_id}>{area.area_name}</option>)}
+                    </select>
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Zone</label>
-                  <select
-                    value={bookingDetails.recipient_zone}
-                    onChange={(e) => setBookingDetails(prev => ({ ...prev, recipient_zone: e.target.value, recipient_area: "" }))}
-                    disabled={!bookingDetails.recipient_city}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 disabled:opacity-50 cursor-pointer"
-                  >
-                    <option value="">Select Zone</option>
-                    {bookingZones.map(zone => <option key={zone.zone_id} value={zone.zone_id}>{zone.zone_name}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Area</label>
-                  <select
-                    value={bookingDetails.recipient_area}
-                    onChange={(e) => setBookingDetails(prev => ({ ...prev, recipient_area: e.target.value }))}
-                    disabled={!bookingDetails.recipient_zone}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 disabled:opacity-50 cursor-pointer"
-                  >
-                    <option value="">Select Area</option>
-                    {bookingAreas.map(area => <option key={area.area_id} value={area.area_id}>{area.area_name}</option>)}
-                  </select>
-                </div>
-              </div>
               )}
 
               {selectedCourier === "steadfast" && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">City</label>
-                  <select
-                    value={bookingDetails.recipient_city}
-                    onChange={(e) => setBookingDetails(prev => ({ ...prev, recipient_city: e.target.value, recipient_area: "" }))}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
-                  >
-                    <option value="">Select City</option>
-                    {bookingCities.map(city => <option key={city.city_id} value={city.city_id}>{city.city_name}</option>)}
-                  </select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">City</label>
+                    <select
+                      value={bookingDetails.recipient_city}
+                      onChange={(e) => setBookingDetails(prev => ({ ...prev, recipient_city: e.target.value, recipient_area: "" }))}
+                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
+                    >
+                      <option value="">Select City</option>
+                      {bookingCities.map(city => <option key={city.city_id} value={city.city_id}>{city.city_name}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Area</label>
+                    <select
+                      value={bookingDetails.recipient_area}
+                      onChange={(e) => setBookingDetails(prev => ({ ...prev, recipient_area: e.target.value }))}
+                      disabled={!bookingDetails.recipient_city}
+                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 disabled:opacity-50 cursor-pointer"
+                    >
+                      <option value="">Select Area</option>
+                      {bookingAreas.map(area => <option key={area.area_id} value={area.area_id}>{area.area_name}</option>)}
+                    </select>
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Area</label>
-                  <select
-                    value={bookingDetails.recipient_area}
-                    onChange={(e) => setBookingDetails(prev => ({ ...prev, recipient_area: e.target.value }))}
-                    disabled={!bookingDetails.recipient_city}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 disabled:opacity-50 cursor-pointer"
-                  >
-                    <option value="">Select Area</option>
-                    {bookingAreas.map(area => <option key={area.area_id} value={area.area_id}>{area.area_name}</option>)}
-                  </select>
-                </div>
-              </div>
               )}
 
               {/* Delivery Details */}
@@ -2527,9 +2955,9 @@ export default function OrderDashboard() {
       {courierConfigModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 overflow-y-auto">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => (!isSavingConfig && !isDeletingConfig) && setCourierConfigModalOpen(false)} />
-          
+
           <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-8 animate-in zoom-in-95 duration-200 z-10 max-h-[90vh] overflow-y-auto custom-scrollbar">
-            
+
             {courierFormMode === "list" ? (
               <>
                 <div className="flex items-center justify-between gap-3 mb-6 pb-4 border-b border-slate-100">
@@ -2569,7 +2997,90 @@ export default function OrderDashboard() {
                     Add Courier
                   </button>
                 </div>
-                
+
+                {/* Auto-Dispatch & Default Courier Preferences */}
+                <div className="mb-6 p-4 rounded-2xl bg-gradient-to-br from-indigo-50/80 via-white to-emerald-50/50 border border-indigo-100 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-indigo-600" /> Auto-Dispatch on Call Confirm
+                      </h4>
+                      <p className="text-[11px] font-medium text-slate-500 mt-0.5">
+                        কাস্টমার ওয়েব কলে ১ চেপে অর্ডার কনফার্ম করলেই অটোমেটিক ডিফল্ট কুরিয়ারে বুক হয়ে যাবে
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isSavingCourierPrefs}
+                      onClick={() => saveCourierPreferences(!autoCourierBooking, defaultCourierProvider)}
+                      className={`w-12 h-6 rounded-full p-1 transition-colors shrink-0 ${autoCourierBooking ? "bg-emerald-500" : "bg-slate-300"
+                        }`}
+                    >
+                      <div
+                        className={`w-4 h-4 bg-white rounded-full shadow-xs transition-transform ${autoCourierBooking ? "translate-x-6" : "translate-x-0"
+                          }`}
+                      />
+                    </button>
+                  </div>
+
+                  <div className="pt-3 border-t border-indigo-100/80">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">
+                      Default Courier Service (প্রাথমিক কুরিয়ার)
+                    </label>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <button
+                        type="button"
+                        disabled={isSavingCourierPrefs}
+                        onClick={() => saveCourierPreferences(autoCourierBooking, "pathao")}
+                        className={`p-2.5 rounded-xl border text-left transition-all flex items-center justify-between ${defaultCourierProvider === "pathao"
+                          ? "border-indigo-600 bg-indigo-50/90 text-indigo-900 ring-2 ring-indigo-500/20"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-indigo-200"
+                          }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-lg bg-indigo-600 text-white font-black text-xs flex items-center justify-center">
+                            P
+                          </span>
+                          <div>
+                            <p className="text-xs font-extrabold leading-tight">Pathao</p>
+                            <p className="text-[9px] font-semibold opacity-75">
+                              {defaultCourierProvider === "pathao" ? "★ Default" : "Set Default"}
+                            </p>
+                          </div>
+                        </div>
+                        {defaultCourierProvider === "pathao" && (
+                          <Check className="w-4 h-4 text-indigo-600" />
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isSavingCourierPrefs}
+                        onClick={() => saveCourierPreferences(autoCourierBooking, "steadfast")}
+                        className={`p-2.5 rounded-xl border text-left transition-all flex items-center justify-between ${defaultCourierProvider === "steadfast"
+                          ? "border-emerald-600 bg-emerald-50/90 text-emerald-900 ring-2 ring-emerald-500/20"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-emerald-200"
+                          }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-lg bg-emerald-600 text-white font-black text-xs flex items-center justify-center">
+                            S
+                          </span>
+                          <div>
+                            <p className="text-xs font-extrabold leading-tight">SteadFast</p>
+                            <p className="text-[9px] font-semibold opacity-75">
+                              {defaultCourierProvider === "steadfast" ? "★ Default" : "Set Default"}
+                            </p>
+                          </div>
+                        </div>
+                        {defaultCourierProvider === "steadfast" && (
+                          <Check className="w-4 h-4 text-emerald-600" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
                 {(pathaoConfigs.length > 0 || steadfastConfigs.length > 0) ? (
                   <div className="space-y-4">
                     {pathaoConfigs.length > 0 && pathaoConfigs.map((config) => (
@@ -2579,22 +3090,45 @@ export default function OrderDashboard() {
                             <Truck className="w-5 h-5" />
                           </div>
                           <div>
-                            <p className="font-bold text-slate-800">{config.name || `Pathao ${config.id}`}</p>
-                            <span className={`text-[10px] font-bold ${config.is_active ? 'text-emerald-600 bg-emerald-100' : 'text-amber-600 bg-amber-100'} px-2 py-0.5 rounded-full uppercase`}>
-                              {config.is_active ? 'Active' : 'Inactive'}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <p className="font-bold text-slate-800">{config.name || `Pathao ${config.id}`}</p>
+                              {defaultCourierProvider === "pathao" && (
+                                <span className="text-[9px] font-black bg-indigo-600 text-white px-2 py-0.5 rounded-full uppercase">
+                                  Default
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                              <span className={`text-[10px] font-bold ${config.is_active ? 'text-emerald-600 bg-emerald-100' : 'text-amber-600 bg-amber-100'} px-2 py-0.5 rounded-full uppercase`}>
+                                {config.is_active ? 'Active' : 'Inactive'}
+                              </span>
+                              <span className={`text-[10px] font-bold ${config.is_sandbox ? 'text-amber-700 bg-amber-100' : 'text-blue-700 bg-blue-100'} px-2 py-0.5 rounded-full uppercase`}>
+                                {config.is_sandbox ? 'Sandbox' : 'Live'}
+                              </span>
+                              {config.store_id && (
+                                <span className="text-[10px] font-mono font-bold text-slate-600 bg-slate-200/70 px-2 py-0.5 rounded-full">
+                                  Store #{config.store_id}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          <button onClick={() => { setCourierConfigTab("pathao"); setCourierFormMode("form"); setEditingPathaoConfigId(config.id); setPathaoConfig({
-                            name: config.name || "",
-                            client_id: config.client_id,
-                            client_secret: "",
-                            username: config.username,
-                            password: "",
-                            store_id: config.store_id || "",
-                            is_sandbox: config.is_sandbox
-                          }); }} className="px-3 py-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors">Edit</button>
+                          <button onClick={() => {
+                            setCourierConfigTab("pathao"); setCourierFormMode("form"); setEditingPathaoConfigId(config.id); setPathaoConfig({
+                              name: config.name || "",
+                              client_id: config.client_id,
+                              client_secret: "",
+                              username: config.username,
+                              password: "",
+                              store_id: config.store_id || "",
+                              webhook_secret: config.webhook_secret || "",
+                              webhook_url: config.webhook_url || "",
+                              is_sandbox: config.is_sandbox,
+                              cod_charge_mode: config.cod_charge_mode || "seller",
+                              cod_percentage: config.cod_percentage !== undefined ? config.cod_percentage : 1.0
+                            });
+                          }} className="px-3 py-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors">Edit</button>
                           <button onClick={() => handleDeletePathaoConfig(config.id)} disabled={isDeletingConfig} className="px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">{isDeletingConfig ? "..." : "Delete"}</button>
                         </div>
                       </div>
@@ -2607,19 +3141,37 @@ export default function OrderDashboard() {
                             <Truck className="w-5 h-5" />
                           </div>
                           <div>
-                            <p className="font-bold text-slate-800">{config.name || `SteadFast ${config.id}`}</p>
-                            <span className={`text-[10px] font-bold ${config.is_active ? 'text-emerald-600 bg-emerald-100' : 'text-amber-600 bg-amber-100'} px-2 py-0.5 rounded-full uppercase`}>
-                              {config.is_active ? 'Active' : 'Inactive'}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <p className="font-bold text-slate-800">{config.name || `SteadFast ${config.id}`}</p>
+                              {defaultCourierProvider === "steadfast" && (
+                                <span className="text-[9px] font-black bg-emerald-600 text-white px-2 py-0.5 rounded-full uppercase">
+                                  Default
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                              <span className={`text-[10px] font-bold ${config.is_active ? 'text-emerald-600 bg-emerald-100' : 'text-amber-600 bg-amber-100'} px-2 py-0.5 rounded-full uppercase`}>
+                                {config.is_active ? 'Active' : 'Inactive'}
+                              </span>
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full uppercase">
+                                Packzy API
+                              </span>
+                            </div>
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          <button onClick={() => { setCourierConfigTab("steadfast"); setCourierFormMode("form"); setEditingSteadFastConfigId(config.id); setSteadFastConfig({
-                            name: config.name || "",
-                            api_key: config.api_key,
-                            api_secret: "",
-                            is_sandbox: config.is_sandbox
-                          }); }} className="px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors">Edit</button>
+                          <button onClick={() => {
+                            setCourierConfigTab("steadfast"); setCourierFormMode("form"); setEditingSteadFastConfigId(config.id); setSteadFastConfig({
+                              name: config.name || "",
+                              api_key: config.api_key,
+                              api_secret: "",
+                              webhook_token: config.webhook_token || "",
+                              webhook_url: config.webhook_url || "",
+                              is_sandbox: config.is_sandbox,
+                              cod_charge_mode: config.cod_charge_mode || "seller",
+                              cod_percentage: config.cod_percentage !== undefined ? config.cod_percentage : 1.0
+                            });
+                          }} className="px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors">Edit</button>
                           <button onClick={() => handleDeleteSteadFastConfig(config.id)} disabled={isDeletingConfig} className="px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">{isDeletingConfig ? "..." : "Delete"}</button>
                         </div>
                       </div>
@@ -2632,7 +3184,7 @@ export default function OrderDashboard() {
                     <button onClick={() => { setCourierConfigTab("pathao"); setCourierFormMode("form"); }} className="px-4 py-2 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-md">Add Courier</button>
                   </div>
                 )}
-                
+
                 <div className="mt-8 pt-4 border-t border-slate-100">
                   <button
                     onClick={() => setCourierConfigModalOpen(false)}
@@ -2666,6 +3218,32 @@ export default function OrderDashboard() {
                 {courierConfigTab === "pathao" ? (
                   <>
                     <div className="space-y-4">
+                      {/* Quick Sandbox Fill Banner */}
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-amber-50 border border-amber-200/70">
+                        <div>
+                          <p className="text-xs font-bold text-amber-900">Pathao Sandbox (Test Mode)</p>
+                          <p className="text-[10px] text-amber-700 font-medium">Use official test credentials to test booking</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPathaoConfig(prev => ({
+                              ...prev,
+                              name: prev.name || "Pathao Sandbox Test",
+                              client_id: "7N1aMJQbWm",
+                              client_secret: "wRcaibZkUdSNz2EI9ZyuXLlNrnAv0TdPUPXMnD39",
+                              username: "test@pathao.com",
+                              password: "lovePathao",
+                              is_sandbox: true
+                            }));
+                            toast.success("Pathao Sandbox test credentials filled!");
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-bold transition shadow-sm"
+                        >
+                          Fill Test Credentials
+                        </button>
+                      </div>
+
                       <div className="space-y-1.5">
                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Client ID</label>
                         <input
@@ -2680,6 +3258,7 @@ export default function OrderDashboard() {
                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Client Secret</label>
                         <input
                           type="password"
+                          placeholder={(editingPathaoConfigId || pathaoConfigs.length > 0) ? "Leave empty if unchanged" : "Enter Client Secret"}
                           value={pathaoConfig.client_secret}
                           onChange={(e) => setPathaoConfig(prev => ({ ...prev, client_secret: e.target.value }))}
                           className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
@@ -2711,7 +3290,7 @@ export default function OrderDashboard() {
                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Password</label>
                         <input
                           type="password"
-                          placeholder="Leave empty if unchanged"
+                          placeholder={(editingPathaoConfigId || pathaoConfigs.length > 0) ? "Leave empty if unchanged" : "Enter Pathao Password"}
                           value={pathaoConfig.password}
                           onChange={(e) => setPathaoConfig(prev => ({ ...prev, password: e.target.value }))}
                           className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
@@ -2720,25 +3299,132 @@ export default function OrderDashboard() {
 
                       <div className="space-y-1.5">
                         <div className="flex items-center justify-between">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Store ID</label>
+                          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Store Selection / Store ID</label>
                           <button type="button" onClick={() => setCreateStoreModalOpen(true)} className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-lg transition-colors border border-indigo-100"><Plus className="w-3 h-3" /> New Store</button>
                         </div>
+                        {stores && stores.length > 0 && (
+                          <select
+                            value={pathaoConfig.store_id || ""}
+                            onChange={(e) => setPathaoConfig(prev => ({ ...prev, store_id: e.target.value }))}
+                            className="w-full px-4 py-3 mb-2 bg-indigo-50/50 border border-indigo-200 rounded-xl font-bold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
+                          >
+                            <option value="">-- Select from your Pathao Stores --</option>
+                            {stores.map(st => (
+                              <option key={st.store_id} value={String(st.store_id)}>
+                                {st.store_name} (ID: {st.store_id}){st.is_default_store ? " ★ Default" : ""}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                         <input
                           type="text"
-                          placeholder="e.g. 12345"
+                          placeholder="Or enter Store ID manually (e.g. 12345)"
                           value={pathaoConfig.store_id || ""}
                           onChange={(e) => setPathaoConfig(prev => ({ ...prev, store_id: e.target.value }))}
                           className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
                         />
                       </div>
 
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center justify-between">
+                          <span>Pathao Webhook Secret</span>
+                          <span className="text-[9px] text-indigo-500 lowercase font-medium">from pathao developer panel</span>
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. f3992ecc-59da-4cbe-a049-a13da2018d51"
+                          value={pathaoConfig.webhook_secret || ""}
+                          onChange={(e) => setPathaoConfig(prev => ({ ...prev, webhook_secret: e.target.value }))}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10"
+                        />
+                      </div>
+
+                      {pathaoConfig.webhook_url && (
+                        <div className="p-3.5 bg-indigo-50/70 border border-indigo-100 rounded-xl space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-indigo-900 uppercase tracking-wide">Pathao Webhook Callback URL:</span>
+                            <span className="text-[9px] font-bold text-indigo-600 bg-white px-2 py-0.5 rounded border border-indigo-200">Live Status Sync</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              readOnly
+                              value={pathaoConfig.webhook_url}
+                              className="w-full text-xs font-mono px-3 py-2 bg-white border border-indigo-200 rounded-lg text-slate-700 select-all outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(pathaoConfig.webhook_url);
+                                setCopiedWebhook(true);
+                                setTimeout(() => setCopiedWebhook(false), 2000);
+                                toast.success("Webhook URL copied to clipboard!", { icon: "📋" });
+                              }}
+                              className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shrink-0 transition-all shadow-xs active:scale-95"
+                            >
+                              {copiedWebhook ? "Copied! ✓" : "Copy"}
+                            </button>
+                          </div>
+                          <p className="text-[10px] text-indigo-700 font-medium leading-relaxed">
+                            Paste this URL into your <strong>Pathao Merchant Portal &gt; Settings &gt; Webhook Settings</strong> for automatic order status updates.
+                          </p>
+                        </div>
+                      )}
+
                       <div className="flex items-center gap-3 pt-2">
-                        <div className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${pathaoConfig.is_sandbox ? 'bg-amber-400' : 'bg-slate-300'}`} onClick={() => setPathaoConfig(prev => ({ ...prev, is_sandbox: !prev.is_sandbox }))}>
+                        <div className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${pathaoConfig.is_sandbox ? 'bg-amber-400' : 'bg-emerald-500'}`} onClick={() => setPathaoConfig(prev => ({ ...prev, is_sandbox: !prev.is_sandbox }))}>
                           <div className={`w-4 h-4 bg-white rounded-full transition-transform ${pathaoConfig.is_sandbox ? 'translate-x-6' : 'translate-x-0'}`} />
                         </div>
                         <div>
-                          <p className="text-sm font-bold text-slate-700">Sandbox Mode</p>
-                          <p className="text-[10px] font-bold text-slate-400">Use test API endpoints</p>
+                          <p className="text-sm font-bold text-slate-700">
+                            {pathaoConfig.is_sandbox ? "Sandbox Mode (Test Environment)" : "Live Mode (Production Environment)"}
+                          </p>
+                          <p className="text-[10px] font-bold text-slate-400">
+                            {pathaoConfig.is_sandbox ? "Using https://courier-api-sandbox.pathao.com" : "Using https://api-hermes.pathao.com"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Pathao COD Charge Policy */}
+                      <div className="p-4 bg-indigo-50/60 border border-indigo-100 rounded-2xl space-y-3">
+                        <div>
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-black text-indigo-950 uppercase tracking-wider">Pathao COD চার্জ পলিসি</label>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-200/60 text-indigo-800">১% Cash On Delivery Fee</span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-0.5">এই কুরিয়ারের ক্ষেত্রে ১% COD চার্জ কে বহন করবে নির্ধারণ করুন:</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          <button
+                            type="button"
+                            onClick={() => setPathaoConfig(prev => ({ ...prev, cod_charge_mode: 'seller' }))}
+                            className={`p-3 rounded-xl border text-left transition-all ${pathaoConfig.cod_charge_mode === 'seller'
+                              ? 'bg-white border-indigo-600 ring-2 ring-indigo-500/20 shadow-xs'
+                              : 'bg-white/60 border-slate-200 text-slate-600 hover:border-slate-300'
+                              }`}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-extrabold text-slate-900">সেলার নিজে দেবেন</span>
+                              {pathaoConfig.cod_charge_mode === 'seller' && <span className="w-2 h-2 rounded-full bg-indigo-600" />}
+                            </div>
+                            <p className="text-[10px] text-slate-500 leading-tight">গ্রাহক চার্জমুক্ত থাকবেন; প্রফিট অ্যানালিটিক্সে কুরিয়ার খরচ হিসেবে হিসাব হবে।</p>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setPathaoConfig(prev => ({ ...prev, cod_charge_mode: 'customer' }))}
+                            className={`p-3 rounded-xl border text-left transition-all ${pathaoConfig.cod_charge_mode === 'customer'
+                              ? 'bg-white border-indigo-600 ring-2 ring-indigo-500/20 shadow-xs'
+                              : 'bg-white/60 border-slate-200 text-slate-600 hover:border-slate-300'
+                              }`}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-extrabold text-slate-900">গ্রাহক পরিশোধ করবেন</span>
+                              {pathaoConfig.cod_charge_mode === 'customer' && <span className="w-2 h-2 rounded-full bg-indigo-600" />}
+                            </div>
+                            <p className="text-[10px] text-slate-500 leading-tight">ডেলিভারি চার্জের সাথে ১% COD চার্জ যুক্ত হয়ে মোট ডেলিভারি বিল হবে।</p>
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -2752,17 +3438,22 @@ export default function OrderDashboard() {
                         Back to List
                       </button>
                       <button
-                        disabled={isSavingConfig || !pathaoConfig.client_id || !pathaoConfig.client_secret || !pathaoConfig.username}
+                        disabled={isSavingConfig || !pathaoConfig.client_id || (!editingPathaoConfigId && pathaoConfigs.length === 0 && !pathaoConfig.client_secret) || !pathaoConfig.username}
                         onClick={handleSavePathaoConfig}
                         className="flex-1 px-4 py-3 text-sm font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-50"
                       >
-                        {isSavingConfig ? "Saving..." : "Save & Verify"}
+                        {isSavingConfig ? "Saving..." : (editingPathaoConfigId || pathaoConfigs.length > 0 ? "Save Changes" : "Save & Verify")}
                       </button>
                     </div>
                   </>
                 ) : (
                   <>
                     <div className="space-y-4">
+                      <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200/70">
+                        <p className="text-xs font-bold text-emerald-900">SteadFast (Packzy) API</p>
+                        <p className="text-[10px] text-emerald-700 font-medium">Endpoint: https://portal.packzy.com/api/v1 (Verifies via /get_balance)</p>
+                      </div>
+
                       <div className="space-y-1.5">
                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">SteadFast API Key</label>
                         <input
@@ -2774,10 +3465,10 @@ export default function OrderDashboard() {
                       </div>
 
                       <div className="space-y-1.5">
-                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">SteadFast API Secret</label>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">SteadFast Secret Key</label>
                         <input
                           type="password"
-                          placeholder="Leave empty if unchanged"
+                          placeholder={(editingSteadFastConfigId || steadfastConfigs.length > 0) ? "Leave empty if unchanged" : "Enter Secret Key"}
                           value={steadfastConfig.api_secret}
                           onChange={(e) => setSteadFastConfig(prev => ({ ...prev, api_secret: e.target.value }))}
                           className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-emerald-500/10"
@@ -2795,13 +3486,90 @@ export default function OrderDashboard() {
                         />
                       </div>
 
-                      <div className="flex items-center gap-3 pt-2">
-                        <div className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${steadfastConfig.is_sandbox ? 'bg-amber-400' : 'bg-slate-300'}`} onClick={() => setSteadFastConfig(prev => ({ ...prev, is_sandbox: !prev.is_sandbox }))}>
-                          <div className={`w-4 h-4 bg-white rounded-full transition-transform ${steadfastConfig.is_sandbox ? 'translate-x-6' : 'translate-x-0'}`} />
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center justify-between">
+                          <span>SteadFast Webhook Auth Token (Optional)</span>
+                          <span className="text-[9px] text-emerald-600 lowercase font-medium">from steadfast developer portal</span>
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. 3dd87619bf872c422c98721a11ee5cc7"
+                          value={steadfastConfig.webhook_token || ""}
+                          onChange={(e) => setSteadFastConfig(prev => ({ ...prev, webhook_token: e.target.value }))}
+                          className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-emerald-500/10"
+                        />
+                      </div>
+
+                      {steadfastConfig.webhook_url && (
+                        <div className="p-3.5 bg-emerald-50/70 border border-emerald-100 rounded-xl space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-emerald-900 uppercase tracking-wide">SteadFast Webhook Callback URL:</span>
+                            <span className="text-[9px] font-bold text-emerald-700 bg-white px-2 py-0.5 rounded border border-emerald-200">Live Status Sync</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              readOnly
+                              value={steadfastConfig.webhook_url}
+                              className="w-full px-3 py-1.5 bg-white border border-emerald-200 text-emerald-950 font-mono text-xs rounded-lg select-all"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(steadfastConfig.webhook_url);
+                                toast.success("SteadFast Callback URL copied!");
+                              }}
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors shrink-0"
+                            >
+                              Copy
+                            </button>
+                          </div>
+                          <p className="text-[10px] text-emerald-800/80 leading-normal">
+                            Steadfast Developer Portal-এ Webhook Settings-এ গিয়ে এই Callback URL দিন। Auth Token ব্যবহার করলে উপরোক্ত বক্সে সেভ করুন।
+                          </p>
                         </div>
+                      )}
+
+                      {/* SteadFast COD Charge Policy */}
+                      <div className="p-4 bg-emerald-50/60 border border-emerald-100 rounded-2xl space-y-3">
                         <div>
-                          <p className="text-sm font-bold text-slate-700">Sandbox Mode</p>
-                          <p className="text-[10px] font-bold text-slate-400">Use test API endpoints</p>
+                          <div className="flex items-center justify-between">
+                            <label className="text-xs font-black text-emerald-950 uppercase tracking-wider">SteadFast COD চার্জ পলিসি</label>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-200/60 text-emerald-800">১% Cash On Delivery Fee</span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-0.5">এই কুরিয়ারের ক্ষেত্রে ১% COD চার্জ কে বহন করবে নির্ধারণ করুন:</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          <button
+                            type="button"
+                            onClick={() => setSteadFastConfig(prev => ({ ...prev, cod_charge_mode: 'seller' }))}
+                            className={`p-3 rounded-xl border text-left transition-all ${steadfastConfig.cod_charge_mode === 'seller'
+                              ? 'bg-white border-emerald-600 ring-2 ring-emerald-500/20 shadow-xs'
+                              : 'bg-white/60 border-slate-200 text-slate-600 hover:border-slate-300'
+                              }`}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-extrabold text-slate-900">সেলার নিজে দেবেন</span>
+                              {steadfastConfig.cod_charge_mode === 'seller' && <span className="w-2 h-2 rounded-full bg-emerald-600" />}
+                            </div>
+                            <p className="text-[10px] text-slate-500 leading-tight">গ্রাহক চার্জমুক্ত থাকবেন; প্রফিট অ্যানালিটিক্সে কুরিয়ার খরচ হিসেবে হিসাব হবে।</p>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setSteadFastConfig(prev => ({ ...prev, cod_charge_mode: 'customer' }))}
+                            className={`p-3 rounded-xl border text-left transition-all ${steadfastConfig.cod_charge_mode === 'customer'
+                              ? 'bg-white border-emerald-600 ring-2 ring-emerald-500/20 shadow-xs'
+                              : 'bg-white/60 border-slate-200 text-slate-600 hover:border-slate-300'
+                              }`}
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-extrabold text-slate-900">গ্রাহক পরিশোধ করবেন</span>
+                              {steadfastConfig.cod_charge_mode === 'customer' && <span className="w-2 h-2 rounded-full bg-emerald-600" />}
+                            </div>
+                            <p className="text-[10px] text-slate-500 leading-tight">ডেলিভারি চার্জের সাথে ১% COD চার্জ যুক্ত হয়ে মোট ডেলিভারি বিল হবে।</p>
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -2815,11 +3583,11 @@ export default function OrderDashboard() {
                         Back to List
                       </button>
                       <button
-                        disabled={isSavingConfig || !steadfastConfig.api_key || !steadfastConfig.api_secret}
+                        disabled={isSavingConfig || !steadfastConfig.api_key || (!editingSteadFastConfigId && steadfastConfigs.length === 0 && !steadfastConfig.api_secret)}
                         onClick={handleSaveSteadFastConfig}
                         className="flex-1 px-4 py-3 text-sm font-black text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-50"
                       >
-                        {isSavingConfig ? "Saving..." : "Save & Verify"}
+                        {isSavingConfig ? "Saving..." : (editingSteadFastConfigId || steadfastConfigs.length > 0 ? "Save Changes" : "Save & Verify")}
                       </button>
                     </div>
                   </>
@@ -2834,7 +3602,7 @@ export default function OrderDashboard() {
       {addOrderModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 overflow-y-auto">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => !isSubmittingOrder && setAddOrderModalOpen(false)} />
-          
+
           <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-2xl p-6 sm:p-8 animate-in zoom-in-95 duration-200 z-10 max-h-[90vh] overflow-y-auto custom-scrollbar">
             <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
               <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl">
@@ -3024,7 +3792,7 @@ export default function OrderDashboard() {
       {createStoreModalOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 overflow-y-auto">
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => !isCreatingStore && setCreateStoreModalOpen(false)} />
-          
+
           <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-8 animate-in zoom-in-95 duration-200 z-10">
             <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
               <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl">
@@ -3078,7 +3846,7 @@ export default function OrderDashboard() {
                   className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10 resize-none"
                 />
               </div>
-              
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">City <span className="text-red-500">*</span></label>
@@ -3142,7 +3910,7 @@ export default function OrderDashboard() {
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 overflow-y-auto">
           {/* Backdrop */}
           <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setTrackingModalOpen(false)} />
-          
+
           {/* Dialog Container */}
           <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-8 animate-in zoom-in-95 duration-200 border border-slate-100 z-10 max-h-[90vh] overflow-y-auto custom-scrollbar">
             {/* Header */}
@@ -3151,10 +3919,49 @@ export default function OrderDashboard() {
                 <Search className="w-6 h-6 animate-pulse" />
               </div>
               <div>
-                <h3 className="text-lg font-black text-slate-900 tracking-tight">Pathao Live Tracking</h3>
-                <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">Real-time Delivery Status</p>
+                <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                  {selectedOrderForTracking?.courier_booking_info?.provider === 'steadfast' ? 'SteadFast Live Tracking' : 'Pathao Live Tracking'}
+                </h3>
+                <p className="text-xs text-slate-400 font-semibold uppercase tracking-wider">
+                  Real-time Courier Delivery & Webhook Timeline
+                </p>
               </div>
             </div>
+
+            {/* Step-by-Step Courier Webhook Event Timeline */}
+            {selectedOrderForTracking?.courier_booking_info?.events && selectedOrderForTracking.courier_booking_info.events.length > 0 && (
+              <div className="mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-indigo-600" />
+                    কুরিয়ার ইভেন্ট হিস্ট্রি (Live Webhook Logs)
+                  </span>
+                  <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
+                    {selectedOrderForTracking.courier_booking_info.events.length} Updates
+                  </span>
+                </div>
+                <div className="space-y-2.5 max-h-48 overflow-y-auto pr-1">
+                  {selectedOrderForTracking.courier_booking_info.events.map((ev, i) => (
+                    <div key={i} className="flex items-start gap-2.5 text-xs bg-white p-2.5 rounded-xl border border-slate-100 shadow-2xs">
+                      <span className="w-2 h-2 rounded-full bg-indigo-600 mt-1.5 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-bold text-slate-900">{ev.status_label || ev.event_name}</span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            {ev.created_at ? new Date(ev.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                          </span>
+                        </div>
+                        {ev.reason && (
+                          <p className="text-[11px] text-rose-600 font-medium mt-0.5">
+                            নোট/কারণ: {ev.reason}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {loadingTracking ? (
               <div className="py-12 flex flex-col items-center justify-center gap-3 text-sm text-slate-500 font-bold">
@@ -3167,15 +3974,29 @@ export default function OrderDashboard() {
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Consignment ID</p>
-                    <p className="font-bold text-slate-800 text-sm">{trackingDetails.consignment_id}</p>
+                    <p className="font-bold text-slate-800 text-sm">
+                      {trackingDetails.consignment_id || trackingDetails.consignment?.consignment_id || selectedOrderForTracking?.courier_booking_info?.consignment_id || "N/A"}
+                    </p>
                   </div>
                   <div className="text-right">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Status</p>
-                    <span className="inline-block px-3 py-1 rounded-full text-xs font-black bg-indigo-50 text-indigo-700 uppercase tracking-wider">
-                      {trackingDetails.order_status}
+                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${(trackingDetails.delivery_status === "unknown" || trackingDetails.delivery_status === "cancelled" || trackingDetails.order_status === "Cancelled")
+                      ? "bg-rose-50 text-rose-700 border border-rose-200"
+                      : (trackingDetails.delivery_status === "delivered" || trackingDetails.order_status === "Delivered")
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        : "bg-indigo-50 text-indigo-700"
+                      }`}>
+                      {trackingDetails.delivery_status === "unknown" ? "Deleted / Cancelled" : (trackingDetails.delivery_status || trackingDetails.order_status || "Pending")}
                     </span>
                   </div>
                 </div>
+
+                {trackingDetails.delivery_status === "unknown" && (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs font-semibold flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>এই পার্সেলটি SteadFast প্যানেল থেকে মুছে ফেলা বা বাতিল করা হয়েছে। ড্যাশবোর্ডে অর্ডারটির কুরিয়ার স্ট্যাটাস স্বয়ংক্রিয়ভাবে বাতিল করা হয়েছে।</span>
+                  </div>
+                )}
 
                 {/* Details */}
                 <div className="space-y-3.5 text-xs text-slate-700 font-medium">

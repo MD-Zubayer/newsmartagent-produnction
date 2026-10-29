@@ -1,16 +1,18 @@
 import os
 import requests
 import logging
+import hmac
+import hashlib
 from django.utils import timezone
 from datetime import timedelta
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from users.authentication import CookieJWTAuthentication
 from django.shortcuts import get_object_or_404
 
-from .models import PathaoCourierConfig, PathaoBookingLog, PathaoZonePrice
+from .models import PathaoCourierConfig, PathaoBookingLog, PathaoZonePrice, SteadFastBookingLog, SteadFastCourierConfig
 from users.models import CustomerOrder
 
 logger = logging.getLogger(__name__)
@@ -37,8 +39,30 @@ class PathaoCourierClient:
         if not self.config.pk:
             self.config.save()
 
-        # Otherwise, request a new token
         url = f"{self.base_url}/aladdin/api/v1/issue-token"
+
+        # 1. Try OAuth 2.0 refresh_token grant first if refresh_token exists
+        if self.config.refresh_token:
+            refresh_payload = {
+                "client_id": self.config.client_id,
+                "client_secret": self.config.client_secret,
+                "grant_type": "refresh_token",
+                "refresh_token": self.config.refresh_token
+            }
+            try:
+                ref_res = requests.post(url, json=refresh_payload, timeout=15)
+                ref_data = ref_res.json() if ref_res.content else None
+                if ref_res.status_code == 200 and ref_data and "access_token" in ref_data:
+                    self.config.access_token = ref_data["access_token"]
+                    self.config.refresh_token = ref_data.get("refresh_token", self.config.refresh_token)
+                    expires_in = ref_data.get("expires_in", 432000)
+                    self.config.token_expires_at = timezone.now() + timedelta(seconds=expires_in)
+                    self.config.save(update_fields=["access_token", "refresh_token", "token_expires_at"])
+                    return self.config.access_token
+            except Exception as ref_err:
+                logger.warning(f"Pathao refresh_token grant failed, falling back to password grant: {ref_err}")
+
+        # 2. Request a new token using password grant
         payload = {
             "client_id": self.config.client_id,
             "client_secret": self.config.client_secret,
@@ -57,7 +81,7 @@ class PathaoCourierClient:
             if response.status_code == 200 and response_data and "access_token" in response_data:
                 self.config.access_token = response_data["access_token"]
                 self.config.refresh_token = response_data.get("refresh_token")
-                expires_in = response_data.get("expires_in", 31536000)
+                expires_in = response_data.get("expires_in", 432000)
                 self.config.token_expires_at = timezone.now() + timedelta(seconds=expires_in)
                 self.config.save(update_fields=["access_token", "refresh_token", "token_expires_at"])
                 return self.config.access_token
@@ -163,6 +187,18 @@ class SteadFastCourierClient:
             "Accept": "application/json"
         }
 
+    def get_balance(self):
+        url = f"{self.base_url}/get_balance"
+        response = requests.get(url, headers=self.get_headers(), timeout=15)
+        try:
+            data = response.json()
+        except ValueError:
+            data = None
+        if response.status_code == 200 and data and data.get("status") == 200:
+            return data
+        err_msg = data.get("message") if data else f"SteadFast API returned status {response.status_code}"
+        raise Exception(err_msg or "Failed to verify SteadFast credentials via /get_balance.")
+
     def get_cities(self):
         # Using police_stations endpoint to get coverage areas
         url = f"{self.base_url}/police_stations"
@@ -221,8 +257,29 @@ class SteadFastCourierClient:
                 data = response.json()
             except ValueError:
                 raise Exception("SteadFast returned invalid JSON for order info endpoint.")
-            return data.get("data", {})
+            if isinstance(data, dict):
+                inner = data.get("data") if isinstance(data.get("data"), dict) else dict(data)
+                inner["delivery_status"] = data.get("delivery_status") or inner.get("delivery_status") or "unknown"
+                return inner
+            return {}
         raise Exception(f"Failed to fetch order info: {response.text}")
+
+    def get_fraud_check_score(self, phone):
+        """Return Steadfast's merchant-authorized phone risk aggregate."""
+        digits = ''.join(ch for ch in str(phone or '') if ch.isdigit())
+        if digits.startswith('880'):
+            digits = '0' + digits[3:]
+        if len(digits) < 10:
+            raise ValueError('A valid phone number is required for Steadfast fraud check.')
+        url = f"{self.base_url}/fraud_check/score/{digits}"
+        response = requests.get(url, headers=self.get_headers(), timeout=15)
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise Exception('Steadfast returned invalid JSON for fraud check endpoint.') from exc
+        if response.status_code != 200 or data.get('status') not in (None, 200):
+            raise Exception(data.get('message') or f'Fraud check failed (status {response.status_code}).')
+        return data
 
     def calculate_price(self, payload):
         # Note: SteadFast API documentation doesn't provide specific pricing endpoint
@@ -247,6 +304,24 @@ class SteadFastCourierClient:
 
 # --- API VIEWS ---
 
+def _resolve_courier_webhook_domain(request) -> str:
+    """
+    Dynamically resolves webhook domain:
+    1. First priority: Incoming request host (e.g. dev.newsmartagent.com or newsmartagent.com).
+       Filters out internal Docker service names (like backend:8000, localhost, IP addresses).
+    2. Fallback: MAIN_DOMAIN from environment variables or Django settings.
+    """
+    try:
+        host = request.get_host().split(':')[0].strip().lower()
+        if host and host not in ('localhost', '127.0.0.1', 'backend', 'web', 'nginx') and not host.replace('.', '').isdigit():
+            return host
+    except Exception as e:
+        logger.debug(f"[CourierConfig] Host detection error: {e}")
+
+    from django.conf import settings
+    return os.getenv("MAIN_DOMAIN") or getattr(settings, 'MAIN_DOMAIN', 'newsmartagent.com')
+
+
 class PathaoCourierConfigView(APIView):
     authentication_classes = [CookieJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -258,6 +333,7 @@ class PathaoCourierConfigView(APIView):
 
     def get(self, request):
         configs = PathaoCourierConfig.objects.filter(user=request.user)
+        base_domain = _resolve_courier_webhook_domain(request)
         return Response([
             {
                 "id": config.id,
@@ -265,8 +341,12 @@ class PathaoCourierConfigView(APIView):
                 "client_id": config.client_id,
                 "username": config.username,
                 "store_id": config.store_id,
+                "webhook_secret": config.webhook_secret or "",
+                "webhook_url": f"https://{base_domain}/api/courier/webhooks/pathao/{request.user.id}/",
                 "is_sandbox": config.is_sandbox,
                 "is_active": config.is_active,
+                "cod_charge_mode": getattr(config, "cod_charge_mode", "seller"),
+                "cod_percentage": float(getattr(config, "cod_percentage", 1.0) or 1.0),
             }
             for config in configs
         ])
@@ -278,39 +358,83 @@ class PathaoCourierConfigView(APIView):
         username = request.data.get("username")
         password = request.data.get("password")
         store_id = request.data.get("store_id")
+        webhook_secret = request.data.get("webhook_secret")
         name = request.data.get("name")
         is_sandbox = request.data.get("is_sandbox", True)
         is_active = request.data.get("is_active", True)
+        cod_charge_mode = request.data.get("cod_charge_mode")
+        cod_percentage = request.data.get("cod_percentage")
 
-        if not all([client_id, client_secret, username]):
-            return Response({"error": "client_id, client_secret, and username are required."}, status=status.HTTP_400_BAD_REQUEST)
+        if not all([client_id, username]):
+            return Response({"error": "client_id and username are required."}, status=status.HTTP_400_BAD_REQUEST)
 
         if config_id:
             config = self._get_config(request, config_id)
             if not config:
                 return Response({"error": "Pathao configuration not found."}, status=status.HTTP_404_NOT_FOUND)
         else:
-            config = PathaoCourierConfig(user=request.user)
+            config = PathaoCourierConfig.objects.filter(user=request.user, client_id=str(client_id).strip()).first()
+            if not config:
+                config = PathaoCourierConfig.objects.filter(user=request.user).first()
+            if not config:
+                config = PathaoCourierConfig(user=request.user)
 
         config.name = name or config.name
-        config.client_id = client_id
-        config.client_secret = client_secret
-        config.username = username
+        config.client_id = str(client_id).strip()
+        if client_secret:
+            config.client_secret = str(client_secret).strip()
+        elif not config.pk:
+            return Response({"error": "client_secret is required for new config."}, status=status.HTTP_400_BAD_REQUEST)
+
+        config.username = str(username).strip()
         if password:
             config.password = password
         elif not config.pk:
             return Response({"error": "password is required for new config."}, status=status.HTTP_400_BAD_REQUEST)
-        config.store_id = store_id
-        config.is_sandbox = is_sandbox
-        config.is_active = is_active
-        config.access_token = None
-        config.token_expires_at = None
+
+        if store_id is not None:
+            config.store_id = str(store_id).strip() if store_id else None
+        if webhook_secret is not None:
+            config.webhook_secret = str(webhook_secret).strip() if webhook_secret else None
+        if cod_charge_mode in ('seller', 'customer'):
+            config.cod_charge_mode = cod_charge_mode
+        if cod_percentage is not None:
+            try:
+                config.cod_percentage = float(cod_percentage)
+            except (ValueError, TypeError):
+                pass
+        config.is_sandbox = bool(is_sandbox)
+        config.is_active = bool(is_active)
+
+        # Only invalidate tokens if credentials or environment changed
+        credentials_changed = bool(client_secret or password)
+        if credentials_changed:
+            config.access_token = None
+            config.refresh_token = None
+            config.token_expires_at = None
 
         try:
             client = PathaoCourierClient(config)
             client.get_access_token()
             config.save()
-            return Response({"message": "Pathao credentials verified and saved successfully!", "id": config.id}, status=status.HTTP_200_OK)
+
+            stores = []
+            try:
+                stores = client.get_stores()
+                if not config.store_id and stores and isinstance(stores, list) and len(stores) > 0:
+                    default_st = next((s for s in stores if s.get("is_default_store")), stores[0])
+                    if default_st.get("store_id"):
+                        config.store_id = str(default_st["store_id"])
+                        config.save(update_fields=["store_id"])
+            except Exception as st_err:
+                logger.warning(f"Verified Pathao token but failed to fetch stores: {st_err}")
+
+            return Response({
+                "message": "Pathao credentials verified and saved successfully!",
+                "id": config.id,
+                "store_id": config.store_id,
+                "stores": stores
+            }, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -396,8 +520,8 @@ class PathaoStoreCreateView(APIView):
 
 
 class PathaoCityListView(APIView):
-    authentication_classes = [CookieJWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    authentication_classes = []
+    permission_classes = [AllowAny]
 
     def get(self, request):
         from .models import PathaoCity
@@ -406,8 +530,8 @@ class PathaoCityListView(APIView):
 
 
 class PathaoZoneListView(APIView):
-    authentication_classes = [CookieJWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    authentication_classes = []
+    permission_classes = [AllowAny]
 
     def get(self, request):
         city_id = request.query_params.get("city_id")
@@ -420,8 +544,8 @@ class PathaoZoneListView(APIView):
 
 
 class PathaoAreaListView(APIView):
-    authentication_classes = [CookieJWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    authentication_classes = []
+    permission_classes = [AllowAny]
 
     def get(self, request):
         zone_id = request.query_params.get("zone_id")
@@ -659,13 +783,18 @@ class SteadFastCourierConfigView(APIView):
     def get(self, request):
         from .models import SteadFastCourierConfig
         configs = SteadFastCourierConfig.objects.filter(user=request.user)
+        base_domain = _resolve_courier_webhook_domain(request)
         return Response([
             {
                 "id": config.id,
                 "name": config.name,
                 "api_key": config.api_key,
+                "webhook_token": getattr(config, 'webhook_token', None) or "",
+                "webhook_url": f"https://{base_domain}/api/courier/webhooks/steadfast/{request.user.id}/",
                 "is_sandbox": config.is_sandbox,
                 "is_active": config.is_active,
+                "cod_charge_mode": getattr(config, "cod_charge_mode", "seller"),
+                "cod_percentage": float(getattr(config, "cod_percentage", 1.0) or 1.0),
             }
             for config in configs
         ])
@@ -675,33 +804,71 @@ class SteadFastCourierConfigView(APIView):
         config_id = request.data.get("config_id")
         api_key = request.data.get("api_key")
         api_secret = request.data.get("api_secret")
+        webhook_token = request.data.get("webhook_token")
         name = request.data.get("name")
         is_sandbox = request.data.get("is_sandbox", True)
         is_active = request.data.get("is_active", True)
-
-        if not all([api_key, api_secret]):
-            return Response({"error": "api_key and api_secret are required."}, status=status.HTTP_400_BAD_REQUEST)
+        cod_charge_mode = request.data.get("cod_charge_mode")
+        cod_percentage = request.data.get("cod_percentage")
 
         if config_id:
             config = SteadFastCourierConfig.objects.filter(id=config_id, user=request.user).first()
             if not config:
                 return Response({"error": "SteadFast configuration not found."}, status=status.HTTP_404_NOT_FOUND)
         else:
-            config, created = SteadFastCourierConfig.objects.get_or_create(user=request.user)
+            config = SteadFastCourierConfig.objects.filter(user=request.user).first()
+            if not config:
+                config = SteadFastCourierConfig(user=request.user)
 
-        config.api_key = api_key
-        config.api_secret = api_secret
+        # Detect credential changes
+        credentials_changed = False
+
+        if api_key:
+            clean_api_key = str(api_key).strip()
+            if clean_api_key != config.api_key:
+                config.api_key = clean_api_key
+                credentials_changed = True
+        elif not config.pk or not config.api_key:
+            return Response({"error": "api_key is required for new config."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if api_secret:
+            clean_api_secret = str(api_secret).strip()
+            if clean_api_secret != config.api_secret:
+                config.api_secret = clean_api_secret
+                credentials_changed = True
+        elif not config.pk or not config.api_secret:
+            return Response({"error": "api_secret is required for new config."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if webhook_token is not None:
+            config.webhook_token = str(webhook_token).strip()
+
         config.name = name or config.name
-        config.is_sandbox = is_sandbox
-        config.is_active = is_active
-        
-        try:
-            client = SteadFastCourierClient(config)
-            client.get_cities()
-            config.save()
-            return Response({"message": "SteadFast credentials verified and saved successfully!", "id": config.id}, status=status.HTTP_200_OK)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        if cod_charge_mode in ('seller', 'customer'):
+            config.cod_charge_mode = cod_charge_mode
+        if cod_percentage is not None:
+            try:
+                config.cod_percentage = float(cod_percentage)
+            except (ValueError, TypeError):
+                pass
+        config.is_sandbox = bool(is_sandbox)
+        config.is_active = bool(is_active)
+
+        # Only verify against SteadFast external API if it's a new config or credentials changed!
+        current_balance = None
+        if not config.pk or credentials_changed:
+            try:
+                client = SteadFastCourierClient(config)
+                balance_info = client.get_balance()
+                current_balance = balance_info.get("current_balance") if balance_info else None
+            except Exception as e:
+                return Response({"error": f"Failed to verify SteadFast credentials: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+
+        config.save()
+        return Response({
+            "message": "SteadFast configuration saved successfully!",
+            "id": config.id,
+            "current_balance": current_balance
+        }, status=status.HTTP_200_OK)
 
     def delete(self, request):
         from .models import SteadFastCourierConfig
@@ -886,7 +1053,7 @@ class SteadFastOrderInfoView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, consignment_id):
-        from .models import SteadFastCourierConfig
+        from .models import SteadFastCourierConfig, SteadFastBookingLog, CourierTimelineEvent
         config_id = request.query_params.get("config_id")
         if config_id:
             config = SteadFastCourierConfig.objects.filter(id=config_id, user=request.user).first()
@@ -898,6 +1065,29 @@ class SteadFastOrderInfoView(APIView):
         try:
             client = SteadFastCourierClient(config)
             info = client.get_order_info(consignment_id)
+            delivery_status = str(info.get("delivery_status") or "").strip().lower()
+
+            # Self-healing sync: If parcel was deleted in SteadFast (delivery_status is unknown)
+            if delivery_status == 'unknown':
+                booking_log = SteadFastBookingLog.objects.filter(consignment_id=consignment_id).first()
+                if booking_log and booking_log.status != 'cancelled':
+                    booking_log.status = 'cancelled'
+                    booking_log.save(update_fields=['status', 'updated_at'])
+                    order = booking_log.order
+                    if order and order.status == 'shipped':
+                        order.status = 'confirmed'
+                        order.save(update_fields=['status', 'updated_at'])
+                        CourierTimelineEvent.objects.get_or_create(
+                            order=order,
+                            provider='steadfast',
+                            consignment_id=str(consignment_id),
+                            event_name='delivery_status:unknown',
+                            defaults={
+                                'status_label': 'পার্সেল কুরিয়ার থেকে ডিলিট/বাতিল হয়েছে',
+                                'reason': 'SteadFast portal থেকে পার্সেল মুছে ফেলা হয়েছে',
+                                'raw_payload': info
+                            }
+                        )
             return Response(info, status=status.HTTP_200_OK)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -1033,3 +1223,514 @@ class CourierSuggestedAddressView(APIView):
             district, upazila = extract_location_from_address(order.address)
         suggestions = match_address_redis(district, upazila, full_address=order.address)
         return Response(suggestions, status=status.HTTP_200_OK)
+
+
+# ─── COURIER STATUS WEBHOOK HANDLERS ───────────────────────────────────────
+
+class PathaoWebhookView(APIView):
+    """
+    POST /api/courier/webhooks/pathao/
+    Receives real-time parcel lifecycle webhooks from Pathao Courier:
+    - order.created, order.pickup-requested, order.assigned-for-pickup
+    - order.picked, order.in-transit
+    - order.delivered
+    - order.returned, order.return-in-transit
+    - order.pickup-cancelled, order.cancelled
+    """
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request, merchant_identifier=None):
+        payload = request.data or {}
+        logger.info(f"🔔 [PathaoWebhook] Received event (merchant={merchant_identifier}): {payload} | headers: {dict(request.headers)}")
+
+        # 1. Resolve merchant config dynamically (if merchant_identifier provided in URL or store_id in payload)
+        merchant_config = None
+        if merchant_identifier:
+            clean_m = str(merchant_identifier).strip()
+            if clean_m.isdigit():
+                merchant_config = PathaoCourierConfig.objects.filter(user_id=int(clean_m), is_active=True).first()
+            if not merchant_config:
+                merchant_config = PathaoCourierConfig.objects.filter(user__email=clean_m, is_active=True).first()
+
+        store_id = str(payload.get('store_id') or '').strip()
+        if not merchant_config and store_id:
+            merchant_config = PathaoCourierConfig.objects.filter(store_id=store_id, is_active=True).first()
+
+        # Dynamic Webhook secret priority:
+        # 1. Merchant's saved webhook_secret in DB
+        # 2. Incoming header from Pathao
+        # 3. Environment variable fallback
+        webhook_secret = None
+        if merchant_config and merchant_config.webhook_secret:
+            webhook_secret = merchant_config.webhook_secret
+        if not webhook_secret:
+            webhook_secret = (
+                request.headers.get('X-Pathao-Merchant-Webhook-Integration-Secret') or
+                os.getenv('PATHAO_WEBHOOK_SECRET') or
+                ''
+            )
+
+        event_name = str(payload.get('event_name') or payload.get('event') or '').strip().lower()
+        order_status = str(payload.get('order_status') or payload.get('status') or '').strip().lower()
+        consignment_id = str(payload.get('consignment_id') or payload.get('tracking_id') or '').strip()
+        merchant_order_id = str(payload.get('merchant_order_id') or '').strip()
+
+        # Check if this is a Pathao Webhook verification/handshake challenge (e.g. empty or test ping)
+        if not consignment_id and not merchant_order_id:
+            logger.info(f"[PathaoWebhook] Verification handshake challenge for merchant {merchant_identifier}. Responding with 202 and Secret Header.")
+            resp = Response(
+                {"status": "accepted", "message": "Pathao webhook endpoint verified successfully"},
+                status=status.HTTP_202_ACCEPTED
+            )
+            if webhook_secret:
+                resp['X-Pathao-Merchant-Webhook-Integration-Secret'] = webhook_secret
+            return resp
+
+        # 1. Locate PathaoBookingLog and CustomerOrder
+        booking_log = None
+        if consignment_id:
+            booking_log = PathaoBookingLog.objects.select_related('order').filter(consignment_id=consignment_id).first()
+        if not booking_log and merchant_order_id:
+            clean_oid = merchant_order_id.replace('ORD-', '').replace('#', '').strip()
+            if clean_oid.isdigit():
+                booking_log = PathaoBookingLog.objects.select_related('order').filter(order_id=int(clean_oid)).first()
+
+        order = booking_log.order if booking_log else None
+        if not order and merchant_order_id:
+            clean_oid = merchant_order_id.replace('ORD-', '').replace('#', '').strip()
+            if clean_oid.isdigit():
+                order = CustomerOrder.objects.filter(id=int(clean_oid)).first()
+
+        if not order and consignment_id:
+            order = CustomerOrder.objects.filter(extra_info__icontains=consignment_id).first()
+
+        if not order:
+            logger.warning(f"[PathaoWebhook] No matching order found for consignment {consignment_id} / {merchant_order_id}")
+            return Response({"status": "ignored", "message": "Order not found in database"}, status=status.HTTP_200_OK)
+
+        # 2. Determine target status
+        # Pathao cancel variants
+        is_cancel = (
+            'cancel' in event_name or
+            'cancel' in order_status or
+            event_name in ('order.pickup-cancelled', 'order.cancelled') or
+            order_status in ('pickup cancel', 'pickup_cancelled', 'cancelled', 'order_cancelled')
+        )
+        # Pathao return variants
+        is_return = (
+            'return' in event_name or
+            'return' in order_status or
+            event_name in ('order.returned', 'order.return-in-transit') or
+            order_status in ('returned', 'return', 'return_in_transit', 'failed_delivery')
+        )
+        # Pathao delivered
+        is_delivered = (
+            event_name == 'order.delivered' or
+            order_status in ('delivered', 'order_delivered', 'completed')
+        )
+        # In transit / Picked
+        is_shipped = (
+            event_name in ('order.picked', 'order.in-transit', 'order.assigned-for-pickup') or
+            order_status in ('picked', 'in transit', 'in_transit', 'assigned_for_pickup')
+        )
+
+        now = timezone.now()
+        updated_fields = ['updated_at']
+
+        # Human-readable status mapping
+        status_label_map = {
+            'order.created': 'অর্ডার কুরিয়ারে বুকিং হয়েছে',
+            'order.pickup-requested': 'পিকআপ রিকোয়েস্ট পাঠানো হয়েছে',
+            'order.assigned-for-pickup': 'রাইডারকে পিকআপের জন্য নির্ধারণ করা হয়েছে',
+            'order.picked': 'রাইডার পার্সেল সংগ্রহ করেছে',
+            'order.at-the-sorting-hub': 'সর্টিং হাবে প্রক্রিয়াজাত হচ্ছে',
+            'order.in-transit': 'পার্সেল ট্রানজিটে রয়েছে',
+            'order.received-at-last-mile-hub': 'ডেলিভারি হাবে পৌঁছেছে',
+            'order.assigned-for-delivery': 'আজ ডেলিভারির জন্য বের হয়েছে',
+            'order.delivered': 'ডেলিভারি সম্পন্ন হয়েছে',
+            'order.partial-delivered': 'আংশিক ডেলিভারি সম্পন্ন হয়েছে',
+            'order.returned': 'পার্সেলটি রিটার্ন করা হয়েছে',
+            'order.return-in-transit': 'পার্সেলটি সেলারের কাছে ফেরত পাঠানো হচ্ছে',
+            'order.delivery-failed': 'ডেলিভারি ব্যর্থ হয়েছে',
+            'order.on-hold': 'ডেলিভারি সাময়িক স্থগিত আছে',
+            'order.pickup-cancelled': 'পিকআপ বাতিল করা হয়েছে',
+            'order.cancelled': 'অর্ডার বাতিল করা হয়েছে',
+        }
+        human_status = status_label_map.get(event_name) or order_status or event_name
+        failure_reason = str(payload.get('reason') or payload.get('note') or payload.get('order_status') or '')
+
+        if is_cancel:
+            order.status = 'cancelled'
+            if not order.call_notes or 'cancel' not in str(order.call_notes).lower():
+                order.call_notes = f"Cancelled via Pathao Courier ({payload.get('order_status') or event_name})"
+                updated_fields.append('call_notes')
+            updated_fields.append('status')
+            raw_log_status = 'cancelled'
+            logger.info(f"🚨 [PathaoWebhook] Order #{order.id} marked CANCELLED from Pathao event.")
+        elif is_return:
+            order.status = 'returned'
+            updated_fields.append('status')
+            raw_log_status = 'returned'
+            logger.info(f"📦 [PathaoWebhook] Order #{order.id} marked RETURNED from Pathao event.")
+        elif is_delivered:
+            order.status = 'delivered'
+            updated_fields.append('status')
+            raw_log_status = 'delivered'
+            logger.info(f"✅ [PathaoWebhook] Order #{order.id} marked DELIVERED from Pathao event.")
+        elif is_shipped and order.status != 'delivered':
+            order.status = 'shipped'
+            updated_fields.append('status')
+            raw_log_status = 'in_transit'
+        else:
+            raw_log_status = order_status or event_name
+
+        order.updated_at = now
+        order.save(update_fields=list(set(updated_fields)))
+
+        # 3. Create CourierTimelineEvent
+        try:
+            from .models import CourierTimelineEvent
+            CourierTimelineEvent.objects.create(
+                order=order,
+                provider='pathao',
+                consignment_id=consignment_id or '',
+                event_name=event_name,
+                status_label=human_status,
+                reason=failure_reason if (is_cancel or is_return or 'fail' in event_name or 'hold' in event_name) else '',
+                raw_payload=payload
+            )
+        except Exception as timeline_err:
+            logger.warning(f"[PathaoWebhook] Failed to save CourierTimelineEvent: {timeline_err}")
+
+        # 4. Notify Customer on Messenger/WhatsApp asynchronously
+        try:
+            from .tasks import notify_customer_courier_update_task
+            notify_customer_courier_update_task.delay(order.id, event_name, human_status, failure_reason)
+        except Exception as task_err:
+            logger.warning(f"[PathaoWebhook] Failed to dispatch customer notification task: {task_err}")
+
+        # 5. Broadcast Realtime WebSocket event to Seller Dashboard
+        try:
+            from asgiref.sync import async_to_sync
+            from channels.layers import get_channel_layer
+            channel_layer = get_channel_layer()
+            if channel_layer and order.user_id:
+                async_to_sync(channel_layer.group_send)(
+                    f"user_{order.user_id}",
+                    {
+                        "type": "send_notification",
+                        "content": {
+                            "type": "courier_status_update",
+                            "order_id": order.id,
+                            "order_status": order.status,
+                            "courier_provider": "pathao",
+                            "consignment_id": consignment_id,
+                            "event_name": event_name,
+                            "status_label": human_status,
+                            "reason": failure_reason,
+                            "customer_name": order.customer_name,
+                        }
+                    }
+                )
+        except Exception as ws_err:
+            logger.debug(f"[PathaoWebhook] WebSocket broadcast error: {ws_err}")
+
+        # Update PathaoBookingLog status & response_data
+        if booking_log:
+            booking_log.status = raw_log_status
+            existing_data = booking_log.response_data if isinstance(booking_log.response_data, dict) else {}
+            existing_data['last_webhook_event'] = payload
+            existing_data['last_webhook_at'] = now.isoformat()
+            booking_log.response_data = existing_data
+            booking_log.save(update_fields=['status', 'response_data', 'updated_at'])
+
+        resp = Response({
+            "status": "success",
+            "order_id": order.id,
+            "order_status": order.status,
+            "courier_status": raw_log_status
+        }, status=status.HTTP_200_OK)
+        resp['X-Pathao-Merchant-Webhook-Integration-Secret'] = webhook_secret
+        return resp
+
+
+class SteadFastWebhookView(APIView):
+    """
+    POST /api/courier/webhooks/steadfast/
+    POST /api/courier/webhooks/steadfast/<str:merchant_identifier>/
+    POST /api/webhooks/steadfast/<str:merchant_identifier>/
+
+    Receives real-time parcel lifecycle and account webhooks from Steadfast Courier:
+    - Events: delivery_status, tracking_update, consignment_update, cancel_request, return_request, etc.
+    - Security: HMAC-SHA256 of raw request body verified against X-Signature using merchant webhook_token,
+      plus Authorization: Bearer <token>.
+    - Idempotency: Deduplicates retries using Idempotency-Key header via Redis.
+    """
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request, merchant_identifier=None):
+        raw_body = request.body or b''
+        payload = request.data if isinstance(request.data, dict) else {}
+        logger.info(f"🔔 [SteadFastWebhook] Received event. URL param: {merchant_identifier} | Payload: {payload}")
+
+        # 1. Immediate 200 OK for ping / health-check / empty test payloads
+        if not payload or payload.get('test') or payload.get('notification_type') == 'test':
+            return Response({"status": "accepted", "message": "SteadFast webhook endpoint verified successfully"}, status=status.HTTP_200_OK)
+
+        # 2. Idempotency-Key handling (ignore retried duplicate requests)
+        idempotency_key = (
+            request.headers.get('Idempotency-Key')
+            or request.META.get('HTTP_IDEMPOTENCY_KEY')
+            or ''
+        ).strip()
+        if idempotency_key:
+            try:
+                from django_redis import get_redis_connection
+                r = get_redis_connection("default")
+                idemp_cache_key = f"steadfast_webhook_idemp:{idempotency_key}"
+                if r.get(idemp_cache_key):
+                    logger.info(f"🔁 [SteadFastWebhook] Duplicate event skipped via Idempotency-Key: {idempotency_key}")
+                    return Response({"status": "success", "message": "Event already processed"}, status=status.HTTP_200_OK)
+                r.setex(idemp_cache_key, 86400, "1")
+            except Exception as idemp_err:
+                logger.debug(f"[SteadFastWebhook] Redis idempotency check failed: {idemp_err}")
+
+        # 3. Locate Merchant Config
+        merchant_config = None
+        if merchant_identifier:
+            clean_ident = str(merchant_identifier).strip()
+            if clean_ident.isdigit():
+                merchant_config = SteadFastCourierConfig.objects.filter(user_id=int(clean_ident), is_active=True).first()
+            if not merchant_config:
+                merchant_config = SteadFastCourierConfig.objects.filter(webhook_token=clean_ident, is_active=True).first()
+            if not merchant_config:
+                merchant_config = SteadFastCourierConfig.objects.filter(api_secret=clean_ident, is_active=True).first()
+
+        # If not resolved from URL, check Authorization: Bearer <token>
+        auth_header = (
+            request.headers.get('Authorization')
+            or request.META.get('HTTP_AUTHORIZATION')
+            or ''
+        ).strip()
+        bearer_token = None
+        if auth_header.lower().startswith('bearer '):
+            bearer_token = auth_header[7:].strip()
+            if not merchant_config and bearer_token:
+                merchant_config = SteadFastCourierConfig.objects.filter(webhook_token=bearer_token, is_active=True).first()
+                if not merchant_config:
+                    merchant_config = SteadFastCourierConfig.objects.filter(api_secret=bearer_token, is_active=True).first()
+
+        # 4. HMAC-SHA256 Signature Verification
+        given_sig = (
+            request.headers.get('X-Signature')
+            or request.META.get('HTTP_X_SIGNATURE')
+            or ''
+        ).strip()
+
+        secret_candidates = []
+        if merchant_config:
+            if getattr(merchant_config, 'webhook_token', None):
+                secret_candidates.append(merchant_config.webhook_token)
+            if getattr(merchant_config, 'api_secret', None):
+                secret_candidates.append(merchant_config.api_secret)
+        if bearer_token:
+            secret_candidates.append(bearer_token)
+
+        if given_sig and secret_candidates:
+            matched = False
+            for sec in secret_candidates:
+                expected_sig = hmac.new(sec.encode('utf-8'), raw_body, hashlib.sha256).hexdigest()
+                if hmac.compare_digest(expected_sig, given_sig):
+                    matched = True
+                    break
+            if not matched:
+                logger.warning(
+                    f"❌ [SteadFastWebhook] Invalid HMAC signature for merchant #{merchant_config.user_id if merchant_config else 'unknown'}. "
+                    f"Given: {given_sig[:10]}..."
+                )
+                return Response({"error": "Invalid signature"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # 5. Extract Event Fields
+        notification_type = str(payload.get('notification_type') or 'delivery_status').strip().lower()
+        consignment_id = str(payload.get('consignment_id') or payload.get('tracking_code') or '').strip()
+        invoice = str(payload.get('invoice') or payload.get('merchant_order_id') or '').strip()
+        sf_status = str(payload.get('status') or '').strip().lower()
+        tracking_message = str(payload.get('tracking_message') or payload.get('message') or payload.get('note') or payload.get('reason') or '').strip()
+
+        # If non-consignment notification (e.g. user_update, payment_request)
+        if not consignment_id and not invoice:
+            logger.info(f"ℹ️ [SteadFastWebhook] Handled non-consignment event: {notification_type}")
+            return Response({"status": "success", "notification_type": notification_type}, status=status.HTTP_200_OK)
+
+        # 6. Locate Order and Booking Log
+        booking_log = None
+        if consignment_id:
+            booking_log = SteadFastBookingLog.objects.select_related('order').filter(consignment_id=consignment_id).first()
+        if not booking_log and invoice:
+            clean_oid = invoice.replace('ORD-', '').replace('INV-', '').replace('#', '').strip()
+            if clean_oid.isdigit():
+                booking_log = SteadFastBookingLog.objects.select_related('order').filter(order_id=int(clean_oid)).first()
+
+        order = booking_log.order if booking_log else None
+        if not order and invoice:
+            clean_oid = invoice.replace('ORD-', '').replace('INV-', '').replace('#', '').strip()
+            if clean_oid.isdigit():
+                order = CustomerOrder.objects.filter(id=int(clean_oid)).first()
+            if not order:
+                import uuid
+                try:
+                    uuid.UUID(str(invoice).strip())
+                    order = CustomerOrder.objects.filter(public_id=invoice).first()
+                except (ValueError, TypeError, AttributeError):
+                    pass
+
+        if not order and consignment_id:
+            order = CustomerOrder.objects.filter(extra_info__icontains=consignment_id).first()
+
+        if not order:
+            logger.warning(f"⚠️ [SteadFastWebhook] No matching order found for consignment {consignment_id} / invoice {invoice}")
+            return Response({"status": "ignored", "message": "Order not found"}, status=status.HTTP_200_OK)
+
+        # If merchant config was not resolved from URL/header, resolve from order now
+        if not merchant_config and order.user_id:
+            merchant_config = SteadFastCourierConfig.objects.filter(user_id=order.user_id, is_active=True).first()
+            if merchant_config and merchant_config.webhook_token:
+                expected_sig = hmac.new(
+                    merchant_config.webhook_token.encode('utf-8'),
+                    raw_body,
+                    hashlib.sha256
+                ).hexdigest()
+                if not given_sig or not hmac.compare_digest(expected_sig, given_sig):
+                    logger.warning(f"❌ [SteadFastWebhook] Signature check failed for order #{order.id}")
+                    return Response({"error": "Invalid signature"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        # 7. Map Status to Bengali and Order Status
+        now = timezone.now()
+        updated_fields = ['updated_at']
+
+        sf_label_map = {
+            'pending': 'কুরিয়ার বুকিং পেন্ডিং',
+            'in_review': 'অর্ডার রিভিউতে আছে',
+            'delivered': 'ডেলিভারি সম্পন্ন হয়েছে',
+            'delivered_approval_pending': 'ডেলিভারি অনুমোদন পেন্ডিং',
+            'partial_delivered': 'আংশিক ডেলিভারি সম্পন্ন হয়েছে',
+            'partial_delivered_approval_pending': 'আংশিক ডেলিভারি অনুমোদন পেন্ডিং',
+            'cancelled': 'পার্সেল বাতিল করা হয়েছে',
+            'cancelled_approval_pending': 'বাতিল অনুমোদন পেন্ডিং',
+            'unknown': 'পার্সেল কুরিয়ার থেকে ডিলিট/বাতিল হয়েছে',
+            'hold': 'পার্সেল সাময়িক হোল্ডে আছে',
+            'in_transit': 'পার্সেল ট্রানজিটে রয়েছে',
+            'transit': 'পার্সেল ট্রানজিটে রয়েছে',
+            'shipped': 'পার্সেল কুরিয়ারের পথে',
+            'return': 'পার্সেল রিটার্ন করা হয়েছে',
+            'delivery_status': 'ডেলিভারি স্ট্যাটাস আপডেট',
+            'tracking_update': 'নতুন ট্র্যাকিং আপডেট',
+            'cancel_request': 'বাতিলের অনুরোধ',
+            'return_request': 'রিটার্নের অনুরোধ',
+            'pickup_request': 'পিকআপের অনুরোধ',
+        }
+
+        human_status = sf_label_map.get(sf_status) or sf_label_map.get(notification_type) or tracking_message or sf_status or 'আপডেট'
+        failure_reason = tracking_message or str(payload.get('reason') or payload.get('note') or '')
+
+        if sf_status in ('cancelled', 'cancelled_approval_pending', 'unknown') or notification_type in ('cancel_request', 'parcel_deleted'):
+            raw_log_status = 'cancelled'
+            if sf_status == 'unknown':
+                human_status = 'পার্সেল কুরিয়ার থেকে ডিলিট/বাতিল হয়েছে'
+                failure_reason = failure_reason or 'SteadFast portal থেকে পার্সেল মুছে ফেলা হয়েছে'
+                if order.status == 'shipped':
+                    order.status = 'confirmed'
+                    updated_fields.append('status')
+            else:
+                order.status = 'cancelled'
+                updated_fields.append('status')
+
+            if not order.call_notes or 'steadfast' not in str(order.call_notes).lower():
+                order.call_notes = f"SteadFast parcel removed/cancelled ({sf_status or notification_type})"
+                updated_fields.append('call_notes')
+            logger.info(f"🚨 [SteadFastWebhook] Order #{order.id} marked CANCELLED/REMOVED from SteadFast ({sf_status}). Order status set to {order.status}.")
+        elif sf_status in ('delivered', 'delivered_approval_pending'):
+            order.status = 'delivered'
+            updated_fields.append('status')
+            raw_log_status = 'delivered'
+            logger.info(f"✅ [SteadFastWebhook] Order #{order.id} marked DELIVERED from SteadFast.")
+        elif sf_status in ('partial_delivered', 'partial_delivered_approval_pending', 'return') or notification_type in ('return_request', 'return_list_accepted'):
+            order.status = 'returned'
+            updated_fields.append('status')
+            raw_log_status = 'returned'
+        elif (sf_status in ('in_review', 'transit', 'shipped', 'in_transit') or notification_type == 'tracking_update') and order.status != 'delivered':
+            order.status = 'shipped'
+            updated_fields.append('status')
+            raw_log_status = 'in_transit'
+        else:
+            raw_log_status = sf_status or notification_type or 'pending'
+
+        order.updated_at = now
+        order.save(update_fields=list(set(updated_fields)))
+
+        # 8. Create CourierTimelineEvent
+        try:
+            from .models import CourierTimelineEvent
+            CourierTimelineEvent.objects.create(
+                order=order,
+                provider='steadfast',
+                consignment_id=consignment_id or '',
+                event_name=f"{notification_type}:{sf_status}" if sf_status else notification_type,
+                status_label=human_status,
+                reason=failure_reason if (sf_status in ('cancelled', 'return', 'hold') or 'fail' in sf_status or 'hold' in sf_status) else '',
+                raw_payload=payload
+            )
+        except Exception as timeline_err:
+            logger.warning(f"[SteadFastWebhook] Failed to save CourierTimelineEvent: {timeline_err}")
+
+        # 9. Notify Customer across all platforms (Messenger, WhatsApp, Telegram, Instagram)
+        try:
+            from .tasks import notify_customer_courier_update_task
+            notify_customer_courier_update_task.delay(order.id, sf_status or notification_type, human_status, failure_reason)
+        except Exception as task_err:
+            logger.warning(f"[SteadFastWebhook] Failed to dispatch customer notification task: {task_err}")
+
+        # 10. Broadcast Realtime WebSocket event to Seller Dashboard
+        try:
+            from asgiref.sync import async_to_sync
+            from channels.layers import get_channel_layer
+            channel_layer = get_channel_layer()
+            if channel_layer and order.user_id:
+                async_to_sync(channel_layer.group_send)(
+                    f"user_{order.user_id}",
+                    {
+                        "type": "send_notification",
+                        "content": {
+                            "type": "courier_status_update",
+                            "order_id": order.id,
+                            "order_status": order.status,
+                            "courier_provider": "steadfast",
+                            "consignment_id": consignment_id,
+                            "event_name": sf_status or notification_type,
+                            "status_label": human_status,
+                            "reason": failure_reason,
+                            "customer_name": order.customer_name,
+                        }
+                    }
+                )
+        except Exception as ws_err:
+            logger.debug(f"[SteadFastWebhook] WebSocket broadcast error: {ws_err}")
+
+        # 11. Update SteadFastBookingLog
+        if booking_log:
+            booking_log.status = raw_log_status
+            existing_data = booking_log.response_data if isinstance(booking_log.response_data, dict) else {}
+            existing_data['last_webhook_event'] = payload
+            existing_data['last_webhook_at'] = now.isoformat()
+            booking_log.response_data = existing_data
+            booking_log.save(update_fields=['status', 'response_data', 'updated_at'])
+
+        return Response({
+            "status": "success",
+            "order_id": order.id,
+            "order_status": order.status,
+            "courier_status": raw_log_status
+        }, status=status.HTTP_200_OK)
+

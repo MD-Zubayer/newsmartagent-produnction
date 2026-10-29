@@ -142,7 +142,10 @@ def backup_db_to_drive():
             os.environ.get('GOOGLE_DRIVE_LOG_FOLDER_ID') or getattr(settings, 'GOOGLE_DRIVE_LOG_FOLDER_ID', None)
         )
         if not root_folder_id:
-            raise ValueError("Invalid or missing GOOGLE_DRIVE_LOG_FOLDER_ID for database backup")
+            logger.warning("Database backup skipped: Invalid or missing GOOGLE_DRIVE_LOG_FOLDER_ID")
+            if os.path.exists(local_backup_path):
+                os.remove(local_backup_path)
+            return {'status': 'skipped', 'reason': 'missing GOOGLE_DRIVE_LOG_FOLDER_ID'}
         
         # Sub-folder: "database-backups"
         folder_id = get_or_create_folder(

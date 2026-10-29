@@ -6,8 +6,9 @@ import {
   FaMobileAlt, FaWhatsapp, FaHistory, FaCreditCard, 
   FaCopy, FaCheckCircle, FaArrowRight,
   FaExchangeAlt, FaUserShield, FaArrowUp, FaArrowDown,
-  FaLock, FaEnvelopeOpenText, FaShieldAlt, // added for verification
-  FaFacebookMessenger, FaUniversity, FaUser 
+  FaLock, FaEnvelopeOpenText, FaShieldAlt, 
+  FaFacebookMessenger, FaUniversity, FaUser,
+  FaImage, FaCloudUploadAlt
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 
@@ -18,10 +19,15 @@ export default function ManualPaymentPage() {
   const [amount, setAmount] = useState(""); 
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
-const [submitting, setSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   // --- নতুন ট্রান্সফার স্টেট ---
   const [receiverId, setReceiverId] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
+
+  // --- নতুন অটোমেটিক পেমেন্ট স্টেট ---
+  const [screenshot, setScreenshot] = useState(null);
+  const [screenshotPreview, setScreenshotPreview] = useState(null);
+  const [verifyingScreenshot, setVerifyingScreenshot] = useState(false);
 
   // পেমেন্ট এবং ট্রান্সফার হিস্ট্রি একসাথে ফেচ করা
   const fetchHistory = async () => {
@@ -83,6 +89,47 @@ const [submitting, setSubmitting] = useState(false);
       setSubmitting(false);
     }
   };
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (!file.type.startsWith("image/")) {
+        toast.error("Please upload an image file.");
+        return;
+      }
+      setScreenshot(file);
+      setScreenshotPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleAutomaticVerifyPayment = async () => {
+    if (!screenshot) return toast.error("Please upload a payment screenshot first.");
+    
+    setVerifyingScreenshot(true);
+    const loadingToast = toast.loading("AI verifying screenshot & updating balance...");
+    
+    try {
+      const formData = new FormData();
+      formData.append("screenshot", screenshot);
+      
+      const res = await api.post("/automatic-verify/", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data"
+        }
+      });
+      
+      toast.success(res.data.message || "Payment verified successfully!", { id: loadingToast });
+      setScreenshot(null);
+      setScreenshotPreview(null);
+      fetchHistory();
+      router.push(`/dashboard/payment-success?payment_id=${res.data.payment_id}`);
+    } catch (err) {
+      const errMsg = err.response?.data?.error || "AI Verification failed. Please make sure it is a valid receipt.";
+      toast.error(errMsg, { id: loadingToast });
+    } finally {
+      setVerifyingScreenshot(false);
+    }
+  };
+
 
   const startTransferFlow = () => {
     if (!receiverId || !transferAmount) return toast.error("Please provide all information correctly.");
@@ -167,39 +214,118 @@ const [submitting, setSubmitting] = useState(false);
                 </div>
               </div>
 
-              <div className="bg-white px-2 py-6 md:p-8 rounded-[2.5rem] border border-slate-100 shadow-xl space-y-5">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Amount</label>
-                  <div className="relative">
-                    <input 
-                      type="number" 
-                      placeholder="e.g. 1000" 
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      className="w-full p-5 bg-slate-50 rounded-[1.5rem] border-none focus:ring-2 focus:ring-indigo-500 font-black text-slate-800"
-                    />
-                    <span className="absolute right-6 top-5 text-slate-400 font-bold">৳</span>
+              <div className="bg-white px-5 py-8 md:p-8 rounded-[2.5rem] border border-slate-100 shadow-xl space-y-8">
+                
+                {/* --- Option 1: AI Auto Verification --- */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider">Option 1</span>
+                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">AI Instant Verification (Recommended)</h3>
                   </div>
+                  
+                  <div className="border-2 border-dashed border-slate-200 rounded-3xl p-6 text-center hover:border-indigo-500 transition-colors bg-slate-50 relative overflow-hidden group">
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                    />
+                    {screenshotPreview ? (
+                      <div className="relative z-20 space-y-4">
+                        <img 
+                          src={screenshotPreview} 
+                          alt="Screenshot Preview" 
+                          className="max-h-40 mx-auto rounded-xl shadow-md border border-slate-200"
+                        />
+                        <p className="text-xs font-bold text-slate-600 truncate">{screenshot?.name}</p>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            setScreenshot(null);
+                            setScreenshotPreview(null);
+                          }}
+                          className="text-[10px] font-black text-rose-500 uppercase hover:text-rose-700 transition-colors"
+                        >
+                          Remove Image
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 py-4">
+                        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-slate-400 mx-auto shadow-sm group-hover:scale-110 transition-transform">
+                          <FaCloudUploadAlt size={24} className="text-indigo-500" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-black text-slate-700">Click to upload payment screenshot</p>
+                          <p className="text-[10px] text-slate-400 font-medium mt-1">Supports PNG, JPG, JPEG (Max 5MB)</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {screenshot && (
+                    <button 
+                      onClick={handleAutomaticVerifyPayment}
+                      disabled={verifyingScreenshot}
+                      className="w-full p-5 bg-indigo-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                    >
+                      {verifyingScreenshot ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                          Verifying with AI...
+                        </>
+                      ) : <>AI Verify & Add Balance <FaArrowRight /></>}
+                    </button>
+                  )}
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Transaction ID</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. 8N7K10L9P" 
-                    value={tranId}
-                    onChange={(e) => setTranId(e.target.value)}
-                    className="w-full p-5 bg-slate-50 rounded-[1.5rem] border-none focus:ring-2 focus:ring-indigo-500 font-black text-slate-800 uppercase"
-                  />
+                <div className="relative flex py-2 items-center">
+                  <div className="flex-grow border-t border-slate-100"></div>
+                  <span className="flex-shrink mx-4 text-slate-300 text-[10px] font-black uppercase tracking-widest">Or Pay Manually</span>
+                  <div className="flex-grow border-t border-slate-100"></div>
                 </div>
 
-                <button 
-                  onClick={handleConfirmPayment}
-                  disabled={loading}
-                  className="w-full p-5 bg-slate-900 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest shadow-xl hover:bg-black active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
-                >
-                  {loading ? "Processing..." : <>Submit <FaArrowRight /></>}
-                </button>
+                {/* --- Option 2: Manual Verification --- */}
+                <div className="space-y-5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider">Option 2</span>
+                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">Manual Verification</h3>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Amount</label>
+                    <div className="relative">
+                      <input 
+                        type="number" 
+                        placeholder="e.g. 1000" 
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        className="w-full p-5 bg-slate-50 rounded-[1.5rem] border-none focus:ring-2 focus:ring-indigo-500 font-black text-slate-800"
+                      />
+                      <span className="absolute right-6 top-5 text-slate-400 font-bold">৳</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Transaction ID</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. 8N7K10L9P" 
+                      value={tranId}
+                      onChange={(e) => setTranId(e.target.value)}
+                      className="w-full p-5 bg-slate-50 rounded-[1.5rem] border-none focus:ring-2 focus:ring-indigo-500 font-black text-slate-800 uppercase"
+                    />
+                  </div>
+
+                  <button 
+                    onClick={handleConfirmPayment}
+                    disabled={submitting}
+                    className="w-full p-5 bg-slate-900 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest shadow-xl hover:bg-black active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                  >
+                    {submitting ? "Processing..." : <>Submit Manually <FaArrowRight /></>}
+                  </button>
+                </div>
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4">

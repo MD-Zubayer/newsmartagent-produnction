@@ -12,8 +12,16 @@ class PathaoCourierConfig(models.Model):
     username = models.CharField(max_length=255, help_text="Pathao Merchant Registered Email/Username")
     password = models.CharField(max_length=255, help_text="Pathao Merchant Password")
     store_id = models.CharField(max_length=100, blank=True, null=True, help_text="Default Store ID to book orders")
+    webhook_secret = models.CharField(max_length=255, blank=True, null=True, help_text="Pathao Merchant Webhook Integration Secret")
     is_sandbox = models.BooleanField(default=True, help_text="Check to use Pathao Sandbox environment")
     is_active = models.BooleanField(default=True)
+    cod_charge_mode = models.CharField(
+        max_length=20,
+        default='seller',
+        choices=(('seller', 'Seller Bears COD Fee'), ('customer', 'Customer Pays COD Fee')),
+        help_text="seller | customer"
+    )
+    cod_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=1.00, help_text="COD percentage fee, usually 1%")
     
     # Credentials Cache
     access_token = models.TextField(blank=True, null=True)
@@ -95,8 +103,21 @@ class SteadFastCourierConfig(models.Model):
     name = models.CharField(max_length=100, blank=True, null=True, help_text="Optional config label")
     api_key = models.CharField(max_length=255)
     api_secret = models.CharField(max_length=255)
+    webhook_token = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text="Steadfast Webhook Auth Token for verifying HMAC-SHA256 signature and Bearer auth"
+    )
     is_sandbox = models.BooleanField(default=True, help_text="Check to use Steadfast Sandbox environment")
     is_active = models.BooleanField(default=True)
+    cod_charge_mode = models.CharField(
+        max_length=20,
+        default='seller',
+        choices=(('seller', 'Seller Bears COD Fee'), ('customer', 'Customer Pays COD Fee')),
+        help_text="seller | customer"
+    )
+    cod_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=1.00, help_text="COD percentage fee, usually 1%")
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -156,3 +177,28 @@ class SteadFastAreaPrice(models.Model):
 
     def __str__(self):
         return f"Area {self.area_id} - City {self.city_id} ({self.weight}kg): {self.total_amount} BDT"
+
+
+class CourierTimelineEvent(models.Model):
+    """
+    Step-by-step courier lifecycle history & status events received via Webhooks.
+    Stores raw events, human-friendly labels, hub info, and failure/delay reasons.
+    """
+    order = models.ForeignKey(CustomerOrder, on_delete=models.CASCADE, related_name='courier_timeline_events')
+    provider = models.CharField(max_length=30, choices=(('pathao', 'Pathao'), ('steadfast', 'SteadFast'), ('manual', 'Manual')))
+    consignment_id = models.CharField(max_length=100, db_index=True)
+    event_name = models.CharField(max_length=100, help_text="e.g. order.picked, in_transit, assigned_for_delivery, delivery_failed")
+    status_label = models.CharField(max_length=150, help_text="Human-friendly label e.g. 'রাইডার পার্সেল সংগ্রহ করেছে'")
+    reason = models.TextField(blank=True, default='', help_text="Failure reason or note from courier")
+    raw_payload = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['order', '-created_at']),
+            models.Index(fields=['consignment_id', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"Order #{self.order_id} - {self.provider} - {self.status_label}"
