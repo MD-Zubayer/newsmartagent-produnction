@@ -409,3 +409,58 @@ def notify_customer_courier_update_task(self, order_id: int, event_name: str, st
         logger.warning(f"⚠️ [CourierNotify] Failed sending customer update for Order #{order_id}: {exc}")
     return False
 
+
+
+@shared_task(name="courier.tasks.sync_pending_steadfast_parcels_task")
+def sync_pending_steadfast_parcels_task():
+    """
+    Periodic self-healing task to sync pending/in-review Steadfast parcels.
+    If a parcel was removed or canceled directly on the Steadfast merchant portal,
+    it detects status 'unknown' and safely resets the booking on the order.
+    """
+    from users.models import CustomerOrder
+    from courier.models import SteadfastCourierConfig
+    from courier.provider_registry import CourierProviderRegistry
+    from courier.reset_views import reset_order_courier_booking
+
+    logger.info("🔄 [CourierSync] Starting sync_pending_steadfast_parcels_task...")
+    pending_orders = CustomerOrder.objects.filter(
+        courier_name="steadfast",
+        courier_consignment_id__isnull=False
+    ).exclude(
+        courier_delivery_status__in=["delivered", "cancelled", "returned", "partial_delivered"]
+    )[:50]
+
+    synced_count = 0
+    reset_count = 0
+
+    for order in pending_orders:
+        try:
+            profile = getattr(order.user, 'profile', None)
+            if not profile:
+                continue
+            config = SteadfastCourierConfig.objects.filter(profile=profile, is_active=True).first()
+            if not config or not config.api_key or not config.secret_key:
+                continue
+
+            provider = CourierProviderRegistry.get_provider("steadfast")
+            if not provider:
+                continue
+
+            status_res = provider.get_delivery_status(config=config, consignment_id=order.courier_consignment_id)
+            delivery_status = status_res.get("delivery_status", "").lower()
+
+            if delivery_status == "unknown" or status_res.get("status") == 404:
+                # Parcel was deleted/unlinked on Steadfast portal -> auto reset booking
+                reset_order_courier_booking(order, reason="Auto-reset: Deleted from Steadfast portal")
+                reset_count += 1
+                logger.info(f"🔄 [CourierSync] Auto-reset Order #{order.id} (Consignment {order.courier_consignment_id} deleted on Steadfast)")
+            elif delivery_status and delivery_status != order.courier_delivery_status:
+                order.courier_delivery_status = delivery_status
+                order.save(update_fields=["courier_delivery_status", "updated_at"])
+                synced_count += 1
+        except Exception as exc:
+            logger.warning(f"⚠️ [CourierSync] Failed checking Steadfast order #{order.id}: {exc}")
+
+    logger.info(f"✅ [CourierSync] Done. Synced: {synced_count}, Auto-reset: {reset_count}")
+    return {"synced": synced_count, "reset": reset_count}

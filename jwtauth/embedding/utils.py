@@ -21,30 +21,43 @@ logger = logging.getLogger('aiAgent')
 
 
 def get_gemini_embedding(text):
-
-    print(f"\n--- [DEBUG] Starting Text Embedding Process ---")
-    print(f"[DEBUG] Input Text: {text[:100]}...")
-
     if not text or not isinstance(text, str):
-        print(f"[DEBUG] Error: Invalid input text.")
         return None
+
+    cleaned_text = text.strip()
+    if not cleaned_text:
+        return None
+
+    # Check shared Redis cache first to prevent duplicate embedding calls
+    import hashlib
+    import json
+    from django.core.cache import cache
+
+    cache_key = f"shared_txt_emb:{hashlib.sha256(cleaned_text.encode('utf-8')).hexdigest()}"
+    try:
+        cached_vec = cache.get(cache_key)
+        if cached_vec:
+            return cached_vec
+    except Exception:
+        pass
 
     try:
         response = client.models.embed_content(
             model='models/gemini-embedding-2',
-            contents=[text],
+            contents=[cleaned_text],
             config={
                 'output_dimensionality': 768
             }
         )
 
-        embedding_values = response.embeddings[0].values
-        print(f"[DEBUG] Success! Text Vector Length: {len(embedding_values)}")
-        print(f"[DEBUG] First 5 values: {embedding_values[:5]}")
-        print(f"--- [DEBUG] Text Embedding Process Finished ---\n")
-        return list(embedding_values)
+        embedding_values = list(response.embeddings[0].values)
+        try:
+            cache.set(cache_key, embedding_values, timeout=86400)
+        except Exception:
+            pass
+        return embedding_values
     except Exception as e:
-        print(f"Text Embedding API Error: {e}")
+        logger.error(f"Text Embedding API Error: {e}")
         return None
 
 

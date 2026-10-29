@@ -149,8 +149,13 @@ def auto_embed_on_subscription_activate(sender, instance, created, **kwargs):
     """
     When a user purchases an offer/subscription (or it becomes active with image_support/tokens),
     automatically trigger embedding for all their pending/unembedded images.
+    Only runs on creation or when newly activated, not on token deduction updates.
     """
-    if instance.is_active and instance.remaining_tokens > 0:
+    update_fields = kwargs.get('update_fields')
+    if update_fields and 'remaining_tokens' in update_fields and len(update_fields) == 1:
+        return
+
+    if created and instance.is_active and instance.remaining_tokens > 0:
         try:
             from django.db import transaction
             from datasheet.tasks import auto_embed_user_images_task

@@ -269,7 +269,7 @@ def normalize_with_map(text):
     mapped_text = translation_pattern.sub(replace_logic, text)
     if mapped_text != text:
         unique_terms = list(dict.fromkeys(matched_terms))
-        logger.info(
+        logger.debug(
             "🔁 Translation applied | matched=%s | before='%s' | after='%s'",
             unique_terms[:5],
             text[:120],

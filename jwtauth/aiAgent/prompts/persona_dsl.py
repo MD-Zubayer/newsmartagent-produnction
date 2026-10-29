@@ -32,7 +32,7 @@ def build_persona_dsl(agent_name: str, custom_role: str, contact_instructions: s
     elif style == "NATIVE_BANGLA_SCRIPT":
         lang_rule = "Reply entirely in natural Bangla script, matching the customer's polite and warm conversational tone."
     elif style == "BANGLISH_OR_ENGLISH":
-        lang_rule = "Reply in the customer's language and writing style (natural Banglish in Latin script or English). Do not force Bangla script if customer writes in Latin letters."
+        lang_rule = "Customers may write in Banglish (Latin script) or English; you may naturally reply in standard, polite Bengali script or matched English."
     else:
         lang_rule = "Match customer's language and tone naturally."
 

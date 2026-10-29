@@ -288,11 +288,16 @@ def transcribe_audio_with_gemini(audio_bytes: bytes, mime_type: str, agent_confi
         logger.info(f"🎙️ Transcribing audio with Gemini model {model_name}. Mime type: {mime_type}")
         
         prompt = (
-            "You are a highly accurate audio transcriber. Listen to the audio and transcribe "
-            "exactly what is said. Respond ONLY with the transcribed text in the language "
-            "spoken (which is likely Bengali or English). Do not translate, do not add any "
-            "explanations, notes, metadata or formatting. If there is no speech or it is quiet, "
-            "return an empty string."
+            "Transcribe this Bangladeshi Bengali customer voice message accurately into Bengali script. "
+            "Context: E-commerce order conversation containing product names, quantities, person names, "
+            "11-digit BD mobile numbers, and Bangladesh addresses (District/জেলা like ফরিদপুর, "
+            "Thana/Upazila like ভাঙ্গা, Village/গ্রাম like শাহমল্লিকদি বটতলা). "
+            "CRITICAL RULES: "
+            "1. Never mis-transcribe conversational openings like 'কই কি' or 'ভাই' as 'হইছে' or 'হয়কি'. "
+            "2. If a specific village name, thana, or word is noisy or phonetically unclear, write your closest "
+            "phonetic transcription followed by '[অস্পষ্ট]' so the system can clarify that specific part. "
+            "Respond ONLY with the transcribed Bengali text. Do not add any explanations, notes, or metadata. "
+            "If there is no speech or it is quiet, return an empty string."
         )
         
         audio_part = types.Part.from_bytes(

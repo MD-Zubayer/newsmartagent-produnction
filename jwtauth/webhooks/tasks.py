@@ -641,6 +641,11 @@ def _get_order_fields(user_memory):
     return user_memory.data.get('_internal', {}).get('order_fields', {})
 
 
+def _get_collected_order_fields(user_memory):
+    """Return collected order fields that have a value with confidence >= 0.75."""
+    return _get_plain_order_values(user_memory)
+
+
 def _get_plain_order_values(user_memory):
     fields = _get_order_fields(user_memory)
     values = {
@@ -811,13 +816,20 @@ def _get_confirmation_prompt(user_memory):
     for key in ORDER_FIELDS:
         if key in ['district', 'upazila']:
             continue
+        # extra_info is purely optional; do not show as an error/cross if absent
+        if key == 'extra_info' and not order_fields.get(key, {}).get('value'):
+            continue
         # If multi-item order, we format products and price customly below
         if has_multiple_items and key in ['product_name', 'quantity', 'price']:
             continue
             
         label = key.replace('_', ' ').title()
         field_data = order_fields.get(key, {})
-        value = field_data.get('value') or 'মৌলিক তথ্য প্রয়োজন'
+        val = field_data.get('value')
+        # Clean [অস্পষ্ট] marker if present so draft UI never shows raw internal tag
+        if isinstance(val, str):
+            val = val.replace('[অস্পষ্ট]', '').strip()
+        value = val or 'মৌলিক তথ্য প্রয়োজন'
         status = '✅' if field_data.get('value') and field_data.get('confidence', 1.0) >= 0.75 else '❌'
         lines.append(f"{status} {label}: {value}")
 
@@ -877,6 +889,12 @@ def _save_order_fields_to_memory(user_memory, order_data, source='ai_extraction'
             continue
         if value is None:
             continue
+            
+        # Clean [অস্পষ্ট] marker if present so database never stores raw audio noise tag
+        if isinstance(value, str):
+            value = value.replace('[অস্পষ্ট]', '').strip()
+            if not value and key in ['address', 'customer_name']:
+                continue
             
         existing = order_fields.get(key, {})
         metadata = field_metadata.get(key, {})
@@ -2808,8 +2826,22 @@ def process_ai_reply_task(self, data):
         cached_res = None
         cache_hit_scope = None  # কোন layer থেকে hit এলো সেটা track করার জন্য
 
+        # Pre-LLM Cache Guardrail: Pure State & Context Driven
+        user_order_state = _get_order_state(user_memory)
+        collected_order_slots = _get_collected_order_fields(user_memory)
+        has_active_order_state = user_order_state in ('collecting_details', 'awaiting_confirmation', 'editing') or bool(collected_order_slots)
+
         if is_media_message:
             logger.info(f"🖼️ Media message detected for sender {sender_id}; bypassing fuzzy/global cache checks.")
+        elif is_audio:
+            logger.info(f"🎙️ Audio/voice transcribed message detected for sender {sender_id}; bypassing cache checks for dynamic conversational handling.")
+        elif has_active_order_state:
+            logger.info(
+                "🛒 Active order state detected (state=%s, collected=%s); bypassing generic cache checks for sender=%s.",
+                user_order_state,
+                list(collected_order_slots.keys()) if collected_order_slots else [],
+                sender_id,
+            )
         elif product_cache_bypass:
             logger.info(
                 "🛡️ Product cache guardrail: bypassing generic reply cache "
@@ -3494,7 +3526,20 @@ def process_ai_reply_task(self, data):
                             msg_trace_id, order_intent, current_state, json.dumps(order_data, ensure_ascii=False, default=str)
                         )
                     if order_intent == 'confirm':
-                        if current_state == 'awaiting_confirmation':
+                        # BUG-3 Fix: Verify if the user modified/corrected any fields (e.g. address, name, qty)
+                        # If a field was modified or if message is a descriptive sentence, treat as an edit (do not auto-finalize!)
+                        is_modification = False
+                        prev_fields = _get_order_fields(user_memory) if user_memory else {}
+                        if isinstance(order_data, dict):
+                            for f in ('customer_name', 'phone_number', 'address', 'upazila', 'district', 'quantity'):
+                                new_v = order_data.get(f)
+                                old_v = prev_fields.get(f, {}).get('value')
+                                if new_v and str(new_v).strip() != str(old_v or "").strip():
+                                    is_modification = True
+                                    logger.info(f"🔄 Order modification detected on '{f}' ({old_v} -> {new_v}). Showing updated draft instead of auto-confirm.")
+                                    break
+
+                        if current_state == 'awaiting_confirmation' and not is_modification:
                             logger.info("Order confirm intent detected! Creating order...")
                             order_obj = create_customer_order_from_memory(agent_config, sender_id, request_type, msg_id=msg_id)
                             if order_obj:
@@ -3509,7 +3554,10 @@ def process_ai_reply_task(self, data):
                                 parsed_reply = "দুঃখিত, আপনার অর্ডার নিশ্চিত করা যায়নি। দয়া করে আবার চেষ্টা করুন।"
                                 cache_type = 'no_cache'
                         else:
-                            logger.warning("AI sent confirm intent but order state is not awaiting_confirmation. Redirecting to create.")
+                            if is_modification:
+                                logger.info("Field modified during confirmation stage. Re-routing intent to 'create' to update draft.")
+                            else:
+                                logger.warning("AI sent confirm intent but order state is not awaiting_confirmation. Redirecting to create.")
                             order_intent = 'create'
 
                     if order_intent == 'cancel':
@@ -3735,10 +3783,27 @@ def process_ai_reply_task(self, data):
                         except Exception as charge_err:
                             logger.error(f"Failed to charge image delivery surcharge: {charge_err}")
 
-                # ---- 3-Tier Grouped Cache Save ----
+                # ---- 3-Tier Grouped Cache Save & Vector Embedding (Pure State & AI-Intent Driven) ----
+                post_order_data = parsed.get('order_data') or {}
+                has_customer_slots = isinstance(post_order_data, dict) and any(
+                    post_order_data.get(k) for k in ("customer_name", "phone_number", "address", "district", "upazila", "items")
+                )
+                skip_similarity_and_vector = (
+                    cache_type in ("no_cache", "sender_specific")
+                    or parsed.get('order_intent') is not None
+                    or has_customer_slots
+                    or is_handoff is True
+                    or bool(parsed.get('image_intent'))
+                )
+
                 redis_cache_enabled = is_system_redis_cache_enabled() and (agent_config.get_settings.redis_cache_enabled if agent_config else False)
                 if not redis_cache_enabled:
                     logger.info(f"🚫 Cache SKIPPED (redis_cache_enabled=False) for: '{text[:30]}'")
+                elif skip_similarity_and_vector:
+                    logger.info(
+                        "🚫 Cache & Vector SKIPPED due to active order intent / PII / no_cache | cache_type=%s, order_intent=%s, has_slots=%s, handoff=%s",
+                        cache_type, parsed.get('order_intent'), has_customer_slots, is_handoff
+                    )
                 elif cache_type == 'global':
                     set_global_cached_reply(
                         text, reply, model=effective_model,
@@ -3753,21 +3818,8 @@ def process_ai_reply_task(self, data):
                         best_row_id=best_hit_row_id
                     )
                     send_cache_update_ws(agent_config.user.id, page_id, sender_id=sender_id, contact_id=contact_obj.id if contact_obj else None)
-                elif cache_type == 'sender_specific':
-                    set_sender_cached_reply(
-                        page_id, sender_id, text, reply, model=effective_model,
-                        input_tokens=ai_data.get('input_tokens', 0),
-                        output_tokens=ai_data.get('output_tokens', 0),
-                        cache_type=cache_type,
-                        human_handoff=is_handoff,
-                        image_intent=parsed.get('image_intent'),
-                        image_style=parsed.get('image_style'),
-                        order_intent=parsed.get('order_intent'),
-                        order_data=parsed.get('order_data'),
-                        best_row_id=best_hit_row_id
-                    )
                 elif cache_type == 'agent_specific':
-                    # বিদ্যমান agent-level cache (DB 2)
+                    # বিদ্যমান agent-level cache (DB 2) - pure FAQ queries with no order state/PII
                     set_cached_reply(
                         page_id, text, reply, model=effective_model,
                         input_tokens=ai_data.get('input_tokens', 0),
@@ -3783,24 +3835,25 @@ def process_ai_reply_task(self, data):
                     )
                     send_cache_update_ws(agent_config.user.id, page_id, sender_id=sender_id, contact_id=contact_obj.id if contact_obj else None)
                 else:
-                    # no_cache বা অজানা type → save করা হবে না
-                    logger.info(f"🚫 Cache SKIPPED (no_cache) for: '{text[:30]}'")
+                    # অজানা type → save করা হবে না
+                    logger.info(f"🚫 Cache SKIPPED (unsupported type: {cache_type}) for: '{text[:30]}'")
 
-                # ---- Clustering (unchanged) ----
-                try:
-                    from aiAgent.cache.cluster import assign_to_cluster
-                    from aiAgent.cache.hybrid_similarity import find_best_cached_hash
-                    best_cluster_hash = find_best_cached_hash(page_id, text, threshold=70)
-                    target_hash = best_cluster_hash if best_cluster_hash else hashlib.md5(normalize_for_cache(text).encode()).hexdigest()
-                    assign_to_cluster(page_id, text, target_hash)
-                except Exception as e:
-                    logger.error(f"Failed to assign cluster: {e}")
+                # ---- Clustering & Vector Embedding Save ----
+                # Never index vectors or clusters for transactional/order/PII/handoff messages
+                if not skip_similarity_and_vector:
+                    try:
+                        from aiAgent.cache.cluster import assign_to_cluster
+                        from aiAgent.cache.hybrid_similarity import find_best_cached_hash
+                        best_cluster_hash = find_best_cached_hash(page_id, text, threshold=70)
+                        target_hash = best_cluster_hash if best_cluster_hash else hashlib.md5(normalize_for_cache(text).encode()).hexdigest()
+                        assign_to_cluster(page_id, text, target_hash)
+                    except Exception as e:
+                        logger.error(f"Failed to assign cluster: {e}")
 
-                # ---- Vector Embedding Save (unchanged) ----
-                if query_vector:
-                    msg_hash_for_vector = hashlib.md5(normalize_for_cache(text).encode()).hexdigest()
-                    save_vector_embedding(page_id, text, msg_hash_for_vector, query_vector)
-                    logger.info(f"✅ Saved vector embedding for '{text[:30]}'")
+                    if query_vector:
+                        msg_hash_for_vector = hashlib.md5(normalize_for_cache(text).encode()).hexdigest()
+                        save_vector_embedding(page_id, text, msg_hash_for_vector, query_vector)
+                        logger.info(f"✅ Saved vector embedding for '{text[:30]}'")
 
                 save_message(agent_config, sender_id, reply, 'assistant', tokens=total_tokens, platform=agent_config.platform)
 

@@ -86,7 +86,7 @@ def build_catalog_dsl(
     directives_list.extend([
         '    - FOLLOW_UP: Use active_product for ongoing product questions (price, offer/discount, battery, camera, stock, order).',
         '    - OFFERS_AND_DISCOUNTS: When a product has "has_offer": true (meaning offer_price < regular_price), ALWAYS highlight the offer/discount when the customer asks about offers, discounts, or price (e.g., regular price is regular_price, currently on offer at offer_price with discount_amount / discount_percentage% off). Also mention any applicable <active_promotions>. Never say there is no offer if has_offer is true!',
-        '    - BROWSE: When customer asks what else is available or browses the store, warmly present options from active_inventory.',
+        '    - BROWSE: When customer asks what else is available or browses the store (e.g. "ki ki ponno ase apnar kase?"), warmly present options from active_inventory including each product\'s clear price or special offer price.',
         '    - SWITCH: Transition to searched_product when customer inquires about a new item.',
         '    - TONE: Natural conversational sales tone; keep replies concise, friendly, and human.',
         '    - FACT_INTEGRITY: Rely only on verified catalog facts. Never invent prices, stock, or specs.',

@@ -836,7 +836,7 @@ def deduct_user_tokens(user_profile, total_tokens, ai_model_name, is_image_query
                         logger.error(f"Low Tokens Notification Error: {e}")
                         
                     remaining_to_deduct = 0
-                    sub.save()
+                    sub.save(update_fields=['remaining_tokens'])
                     logger.info(f"Deducted tokens from Sub {sub.id}. Remaining: {sub.remaining_tokens}")
                 else:
                     # Current sub is exhausted or exactly matches
@@ -1097,12 +1097,11 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
                 if strike:
                     strike_lines.append(f"{field_name}: strike {strike}")
 
-            is_order_intent_msg = any(k in (text or '').lower() for k in [
-                'order', 'অর্ডার', 'কিনতে', 'নিতে', 'পাঠান', 'কুরিয়ার', 'ঠিকানা'
-            ])
-            if order_state in ['ordering', 'editing', 'awaiting_confirmation'] or is_order_intent_msg:
+            # State & Intent Driven Context Injection (Zero rigid keyword matching)
+            has_active_order = order_state in ['ordering', 'editing', 'awaiting_confirmation', 'collecting_details'] or bool(collected)
+            if has_active_order:
                 from aiAgent.prompts.state_dsl import build_order_state_dsl
-                is_interruption = bool(interruption_buffer.get('active') and not is_order_intent_msg)
+                is_interruption = bool(interruption_buffer.get('active'))
 
                 last_confirmed = internal.get('last_confirmed_order')
                 order_context = "\n" + build_order_state_dsl(
