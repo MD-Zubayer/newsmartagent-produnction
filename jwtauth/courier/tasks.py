@@ -416,51 +416,48 @@ def sync_pending_steadfast_parcels_task():
     """
     Periodic self-healing task to sync pending/in-review Steadfast parcels.
     If a parcel was removed or canceled directly on the Steadfast merchant portal,
-    it detects status 'unknown' and safely resets the booking on the order.
+    it detects status 'unknown' and safely updates the booking log and order.
     """
-    from users.models import CustomerOrder
-    from courier.models import SteadfastCourierConfig
-    from courier.provider_registry import CourierProviderRegistry
-    from courier.reset_views import reset_order_courier_booking
+    from courier.models import SteadFastCourierConfig, SteadFastBookingLog
+    from courier.views import SteadFastCourierClient
 
     logger.info("🔄 [CourierSync] Starting sync_pending_steadfast_parcels_task...")
-    pending_orders = CustomerOrder.objects.filter(
-        courier_name="steadfast",
-        courier_consignment_id__isnull=False
+    pending_bookings = SteadFastBookingLog.objects.filter(
+        consignment_id__isnull=False
     ).exclude(
-        courier_delivery_status__in=["delivered", "cancelled", "returned", "partial_delivered"]
-    )[:50]
+        status__in=["delivered", "cancelled", "returned", "partial_delivered"]
+    ).select_related('order', 'order__user')[:50]
 
     synced_count = 0
     reset_count = 0
 
-    for order in pending_orders:
+    for booking in pending_bookings:
         try:
-            profile = getattr(order.user, 'profile', None)
-            if not profile:
-                continue
-            config = SteadfastCourierConfig.objects.filter(profile=profile, is_active=True).first()
-            if not config or not config.api_key or not config.secret_key:
+            order = booking.order
+            user = order.user if order else None
+            if not user:
                 continue
 
-            provider = CourierProviderRegistry.get_provider("steadfast")
-            if not provider:
+            config = SteadFastCourierConfig.objects.filter(user=user, is_active=True).first()
+            if not config or not config.api_key or not config.api_secret:
                 continue
 
-            status_res = provider.get_delivery_status(config=config, consignment_id=order.courier_consignment_id)
-            delivery_status = status_res.get("delivery_status", "").lower()
+            client = SteadFastCourierClient(config)
+            status_res = client.get_order_info(booking.consignment_id)
+            delivery_status = (status_res.get("delivery_status") or "").lower()
 
             if delivery_status == "unknown" or status_res.get("status") == 404:
-                # Parcel was deleted/unlinked on Steadfast portal -> auto reset booking
-                reset_order_courier_booking(order, reason="Auto-reset: Deleted from Steadfast portal")
+                # Parcel was deleted/unlinked on Steadfast portal -> mark cancelled
+                booking.status = "cancelled"
+                booking.save(update_fields=["status", "updated_at"])
                 reset_count += 1
-                logger.info(f"🔄 [CourierSync] Auto-reset Order #{order.id} (Consignment {order.courier_consignment_id} deleted on Steadfast)")
-            elif delivery_status and delivery_status != order.courier_delivery_status:
-                order.courier_delivery_status = delivery_status
-                order.save(update_fields=["courier_delivery_status", "updated_at"])
+                logger.info(f"🔄 [CourierSync] Marked cancelled Booking #{booking.id} (Consignment {booking.consignment_id} deleted on Steadfast)")
+            elif delivery_status and delivery_status != booking.status:
+                booking.status = delivery_status
+                booking.save(update_fields=["status", "updated_at"])
                 synced_count += 1
         except Exception as exc:
-            logger.warning(f"⚠️ [CourierSync] Failed checking Steadfast order #{order.id}: {exc}")
+            logger.warning(f"⚠️ [CourierSync] Failed checking Steadfast booking #{booking.id}: {exc}")
 
-    logger.info(f"✅ [CourierSync] Done. Synced: {synced_count}, Auto-reset: {reset_count}")
+    logger.info(f"✅ [CourierSync] Done. Synced: {synced_count}, Updated: {reset_count}")
     return {"synced": synced_count, "reset": reset_count}

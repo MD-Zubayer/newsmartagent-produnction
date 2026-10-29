@@ -43,3 +43,22 @@ app.autodiscover_tasks()
 @app.task(bind=True)
 def debug_task(self):
     print(f'Request: {self.request!r}')
+
+from celery.signals import after_setup_logger, after_setup_task_logger
+import logging
+
+@after_setup_logger.connect
+@after_setup_task_logger.connect
+def setup_celery_logging(logger, **kwargs):
+    from django.conf import settings
+    import os
+    from logging.handlers import RotatingFileHandler
+    
+    log_dir = getattr(settings, 'LOG_DIR', os.path.join(settings.BASE_DIR, 'logs'))
+    log_file = os.path.join(log_dir, 'celery_worker.log')
+    formatter = logging.Formatter('{asctime} | {levelname} | {name} | {message}', style='{')
+    
+    file_handler = RotatingFileHandler(log_file, maxBytes=10*1024*1024, backupCount=5)
+    file_handler.setFormatter(formatter)
+    file_handler.setLevel(logging.INFO)
+    logger.addHandler(file_handler)
