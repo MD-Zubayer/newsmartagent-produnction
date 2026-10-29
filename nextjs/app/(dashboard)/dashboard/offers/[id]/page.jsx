@@ -83,6 +83,9 @@ export default function OfferDetailsPage() {
                 <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider italic">
                     {offer.schedule_messages?.toLocaleString?.() ?? offer.schedule_messages} Scheduled Messages
                 </span>
+                <span className="bg-purple-50 text-purple-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider italic">
+                    {offer.max_agents_per_platform ?? 1} Agent(s) Per Platform
+                </span>
                 {offer.image_support ? (
                   <span className="bg-teal-50 text-teal-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider italic flex items-center gap-1">
                       <FaImage /> Image Support Enabled
@@ -130,6 +133,68 @@ export default function OfferDetailsPage() {
             ) : (
               <div className="w-full p-8 bg-slate-50 rounded-3xl border border-dashed border-slate-200 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest italic">
                  No models configured for this plan
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 🔹 Supported Platforms Section */}
+        <div className="mb-12">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2">
+                <FaCube className="text-emerald-500" /> Supported Platforms
+            </h3>
+            <span className="text-[9px] font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded">
+                {offer.allowed_platforms?.length || 0} Platforms Included
+            </span>
+          </div>
+          
+          <div className="flex flex-wrap gap-2 md:gap-3">
+            {offer.allowed_platforms && offer.allowed_platforms.length > 0 ? (
+              offer.allowed_platforms.map((plat) => {
+                const platformMap = {
+                  1: 'Messenger',
+                  2: 'FB Comment',
+                  3: 'WhatsApp',
+                  4: 'Instagram',
+                  5: 'Telegram',
+                  6: 'GBP',
+                  7: 'YouTube'
+                };
+                const platId = typeof plat === 'object' ? plat.id : plat;
+                const rawName = typeof plat === 'object' ? (plat.name || '') : (platformMap[platId] || '');
+                const name = String(rawName).toLowerCase();
+                
+                let colorClass = "bg-slate-50 border-slate-100 hover:border-slate-200 text-slate-700";
+                if (name.includes('whatsapp')) colorClass = "bg-emerald-50/50 border-emerald-100 hover:border-emerald-200 text-emerald-700";
+                if (name.includes('messanger') || name.includes('messenger')) colorClass = "bg-blue-50/50 border-blue-100 hover:border-blue-200 text-blue-700";
+                if (name.includes('comment')) colorClass = "bg-indigo-50/50 border-indigo-100 hover:border-indigo-200 text-indigo-700";
+
+                let displayName = rawName;
+                if (name === 'whatsapp') displayName = 'WhatsApp';
+                else if (name === 'messanger' || name === 'messenger') displayName = 'Messenger';
+                else if (name === 'facebook comment' || name === 'fb comment') displayName = 'FB Comment';
+                else if (name === 'instagram') displayName = 'Instagram';
+                else if (name === 'telegram') displayName = 'Telegram';
+                else if (name === 'gbp') displayName = 'GBP';
+                else if (name === 'youtube') displayName = 'YouTube';
+
+                if (!displayName) displayName = `Platform ${platId}`;
+
+                return (
+                  <div 
+                    key={platId} 
+                    className={`group flex items-center gap-2 px-4 py-2 border transition-all duration-200 rounded-xl ${colorClass}`}
+                  >
+                    <span className="text-[11px] md:text-xs font-black uppercase italic">
+                      {displayName}
+                    </span>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="w-full p-8 bg-slate-50 rounded-3xl border border-dashed border-slate-200 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest italic">
+                 No platforms configured for this plan
               </div>
             )}
           </div>

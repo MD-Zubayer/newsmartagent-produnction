@@ -444,19 +444,30 @@ def get_gemini_image_caption(image_url, fallback_text=None):
         image_data = resize_image_bytes(image_data, max_width=1000, quality=85)
         mime_type = 'image/jpeg'
 
-        # ৪. প্রম্পট তৈরি করা (SMART structured prompt for DB-ready caption)
-        prompt = (
-            "Analyze this product image and extract key details for a search database. "
-            "Format the response in a short descriptive sentence including: "
-            "1. Product Category (e.g., Electronics, Clothing, Grocery), "
-            "2. Name or Title, "
-            "3. Brand/Model (if visible, otherwise skip), "
-            "4. Primary Color, "
-            "5. One unique visual identifier (e.g., texture, shape, pattern, or logo) "
-            "that makes it distinct from similar items."
-        )
+        # ৪. Approved GPT Vision provider; the original Gemini call below is fallback.
+        try:
+            from ai_extensions.provider_hooks import run_provider_override
+            provider_result, provider_version = run_provider_override(
+                key="image-analysis-provider",
+                payload={"image_bytes": image_data, "mime_type": mime_type, "prompt": "Analyze this product image and return a concise searchable caption."},
+                context={"image_url": image_url, "mime_type": mime_type}, base_fallback=None,
+            )
+            if provider_version:
+                return provider_result.get("reply", "") if isinstance(provider_result, dict) else provider_result
+        except Exception:
+            pass
+
+        # ৪. প্রম্পট তৈরি করা (Universal Vision Analysis Protocol DSL)
+        from aiAgent.prompts.vision_dsl import build_vision_analysis_dsl
+        prompt = build_vision_analysis_dsl()
 
         # ৫. মডেল কল করা (ইমেজ বাইটস সহ - proper SDK types)
+        try:
+            from ai_extensions.resolver import apply_text_override
+            prompt, _ = apply_text_override("image-product-analysis", prompt, context={"mime_type": mime_type})
+        except Exception:
+            pass
+
         print(f"[DEBUG] Calling Gemini Vision API with image data...")
         response = client.models.generate_content(
             model='gemini-3.1-flash-lite',
@@ -580,19 +591,17 @@ def get_openai_image_caption(image_url, fallback_text=None):
             data_url = f"data:{mime_type};base64,{image_base64}"
             print(f"[DEBUG] Created data URL for OpenAI")
 
-        # ६. प्रॉम्प्ट बनाना (SMART structured prompt for DB-ready caption)
-        prompt = (
-            "Analyze this product image and extract key details for a search database. "
-            "Format the response in a short descriptive sentence including: "
-            "1. Product Category (e.g., Electronics, Clothing, Grocery), "
-            "2. Name or Title, "
-            "3. Brand/Model (if visible, otherwise skip), "
-            "4. Primary Color, "
-            "5. One unique visual identifier (e.g., texture, shape, pattern, or logo) "
-            "that makes it distinct from similar items."
-        )
+        # ६. प्रॉम्प्ट बनाना (Universal Vision Analysis Protocol DSL)
+        from aiAgent.prompts.vision_dsl import build_vision_analysis_dsl
+        prompt = build_vision_analysis_dsl()
 
         # ७. OpenAI API कॉल करा (डेटा URL सह)
+        try:
+            from ai_extensions.resolver import apply_text_override
+            prompt, _ = apply_text_override("image-product-analysis", prompt, context={"mime_type": mime_type})
+        except Exception:
+            pass
+
         client = OpenAI(api_key=settings.OPENAI_API_KEY)
         print(f"[DEBUG] Calling OpenAI Vision API with image data...")
 
@@ -841,6 +850,16 @@ def process_document_text(user, text, document):
 # ============================================================================
 
 def rerank_images_with_llm(query: str, images: list) -> list:
+    from ai_extensions.provider_hooks import run_provider_override
+    result, version = run_provider_override(
+        key="image-rerank-provider", payload={"prompt": query, "images": images},
+        context={"query": query, "candidate_count": len(images)}, base_fallback=None,
+    )
+    if version:
+        ranked = result.get("data", []) if isinstance(result, dict) else []
+        if ranked and all(isinstance(i, int) and 0 <= i < len(images) for i in ranked):
+            return [images[i] for i in dict.fromkeys(ranked)]
+        return sorted(images, key=lambda x: x.get("hybrid_score", 1.0))
     """
     Re-rank a list of image candidates using Gemini as a lightweight cross-encoder.
 
@@ -879,6 +898,11 @@ def rerank_images_with_llm(query: str, images: list) -> list:
     )
 
     try:
+        try:
+            from ai_extensions.resolver import apply_text_override
+            prompt, _ = apply_text_override("image-search-rerank", prompt, context={"query": query, "candidate_count": len(images)})
+        except Exception:
+            pass
         response = client.models.generate_content(
             model='gemini-3.1-flash-lite',
             contents=[prompt],

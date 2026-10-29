@@ -32,6 +32,6 @@ class AiagentConfig(AppConfig):
                     return None
             PickledField.from_db_value = safe_pickled_from_db_value
 
-            logger.info("✅ Successfully monkey-patched django_cryptography to handle BadSignature safely.")
+            logger.debug("✅ Successfully monkey-patched django_cryptography to handle BadSignature safely.")
         except Exception as patch_err:
             print(f"Error patching django_cryptography: {patch_err}")

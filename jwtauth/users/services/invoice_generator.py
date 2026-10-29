@@ -5,6 +5,7 @@ Invoice HTML to Image Converter using Playwright
 
 import os
 import io
+import base64
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -16,6 +17,7 @@ class InvoiceImageGenerator:
     """Playwright দিয়ে HTML invoice কে image (PNG/JPG) এ convert করে"""
     
     def __init__(self):
+        self.playwright = None
         self.browser = None
         self.context = None
     
@@ -24,8 +26,8 @@ class InvoiceImageGenerator:
         try:
             from playwright.async_api import async_playwright
             
-            playwright = await async_playwright().start()
-            self.browser = await playwright.chromium.launch(headless=True)
+            self.playwright = await async_playwright().start()
+            self.browser = await self.playwright.chromium.launch(headless=True)
             self.context = await self.browser.new_context(
                 viewport={'width': 800, 'height': 1100}  # A4 size
             )
@@ -40,6 +42,8 @@ class InvoiceImageGenerator:
                 await self.context.close()
             if self.browser:
                 await self.browser.close()
+            if self.playwright:
+                await self.playwright.stop()
         except Exception as e:
             logger.error(f"Browser close error: {e}")
     
@@ -84,7 +88,35 @@ class InvoiceImageGenerator:
             raise
     
     @staticmethod
-    def generate_invoice_html(order_data: dict, shop_name: str = "Smart Shop BD", profile_photo_url: str = None) -> str:
+    def generate_qr_code_base64(data: str) -> str:
+        """QR code তৈরি করে Base64 string রিটার্ন করে"""
+        if not data:
+            return ""
+        try:
+            import qrcode
+            qr = qrcode.QRCode(
+                version=None,
+                error_correction=qrcode.constants.ERROR_CORRECT_M,
+                box_size=4,
+                border=1,
+            )
+            qr.add_data(data)
+            qr.make(fit=True)
+            img = qr.make_image(fill_color="#1e293b", back_color="#ffffff")
+            buffer = io.BytesIO()
+            img.save(buffer, format="PNG")
+            return base64.b64encode(buffer.getvalue()).decode("utf-8")
+        except Exception as e:
+            logger.warning(f"Could not generate QR code: {e}")
+            return ""
+
+    @staticmethod
+    def generate_invoice_html(
+        order_data: dict,
+        shop_name: str = "Smart Shop BD",
+        profile_photo_url: str = None,
+        tracking_url: str = None
+    ) -> str:
         """
         Order data থেকে professional invoice HTML তৈরি করে
         
@@ -92,6 +124,7 @@ class InvoiceImageGenerator:
             order_data: CustomerOrder dictionary
             shop_name: Shop/Business name
             profile_photo_url: URL to business profile image
+            tracking_url: Direct link to live order tracking & shop profile
         
         Returns:
             HTML string
@@ -108,6 +141,10 @@ class InvoiceImageGenerator:
         price = order_data.get('price', 0)
         status = order_data.get('status', 'pending').upper()
         created_at = order_data.get('created_at', datetime.now().isoformat())
+        
+        # QR Code Generation
+        target_tracking_url = tracking_url or order_data.get('tracking_url') or ""
+        qr_code_base64 = InvoiceImageGenerator.generate_qr_code_base64(target_tracking_url) if target_tracking_url else ""
         
         # Date formatting
         try:
@@ -128,6 +165,7 @@ class InvoiceImageGenerator:
         items = order_data.get('items')
         table_rows = ""
         total_price = 0
+        single_prod_img = order_data.get('product_image_url') or ''
         
         if items and isinstance(items, list) and len(items) > 0:
             for idx, item in enumerate(items, 1):
@@ -136,13 +174,21 @@ class InvoiceImageGenerator:
                 item_price = float(item.get('price', 0))
                 line_total = item_price * qty
                 total_price += line_total
+                item_img = item.get('image_url') or single_prod_img
+                
+                img_html = f'<img src="{item_img}" alt="{name}" class="item-img" />' if item_img else '<div class="item-img-placeholder">📦</div>'
                 
                 table_rows += f"""
                         <tr>
-                            <td>{idx}</td>
+                            <td style="width: 30px;">{idx}</td>
                             <td>
-                                <div class="item-name">{name} (x{qty})</div>
-                                <div class="item-description">Product order from {shop_name}</div>
+                                <div class="item-cell">
+                                    {img_html}
+                                    <div class="item-details">
+                                        <div class="item-name">{name} <span class="item-qty-tag">x{qty}</span></div>
+                                        <div class="item-description">Product order from {shop_name}</div>
+                                    </div>
+                                </div>
                             </td>
                             <td style="text-align: right; font-weight: 600;">৳ {item_price:,.2f}</td>
                             <td style="text-align: center;">
@@ -154,13 +200,19 @@ class InvoiceImageGenerator:
             # Fallback
             total_price = float(order_data.get('price', 0))
             qty = int(order_data.get('item_quantity', 1))
+            img_html = f'<img src="{single_prod_img}" alt="{product_name}" class="item-img" />' if single_prod_img else '<div class="item-img-placeholder">📦</div>'
             
             table_rows = f"""
                         <tr>
-                            <td>1</td>
+                            <td style="width: 30px;">1</td>
                             <td>
-                                <div class="item-name">{product_name} (x{qty})</div>
-                                <div class="item-description">Product order from {shop_name}</div>
+                                <div class="item-cell">
+                                    {img_html}
+                                    <div class="item-details">
+                                        <div class="item-name">{product_name} <span class="item-qty-tag">x{qty}</span></div>
+                                        <div class="item-description">Product order from {shop_name}</div>
+                                    </div>
+                                </div>
                             </td>
                             <td style="text-align: right; font-weight: 600;">৳ {(total_price/qty if qty > 0 else total_price):,.2f}</td>
                             <td style="text-align: center;">
@@ -359,10 +411,56 @@ class InvoiceImageGenerator:
                     color: #374151;
                 }}
                 
+                .item-cell {{
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                }}
+                
+                .item-img {{
+                    width: 48px;
+                    height: 48px;
+                    border-radius: 6px;
+                    object-fit: cover;
+                    border: 1px solid #e5e7eb;
+                    flex-shrink: 0;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+                }}
+                
+                .item-img-placeholder {{
+                    width: 48px;
+                    height: 48px;
+                    border-radius: 6px;
+                    background: #f3f4f6;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 20px;
+                    flex-shrink: 0;
+                    border: 1px dashed #d1d5db;
+                }}
+                
+                .item-details {{
+                    display: flex;
+                    flex-direction: column;
+                }}
+                
                 .item-name {{
                     font-weight: 600;
                     color: #111827;
-                    margin-bottom: 4px;
+                    margin-bottom: 2px;
+                    font-size: 14px;
+                }}
+                
+                .item-qty-tag {{
+                    display: inline-block;
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: #3b82f6;
+                    background: #eff6ff;
+                    padding: 1px 6px;
+                    border-radius: 4px;
+                    margin-left: 4px;
                 }}
                 
                 .item-description {{
@@ -383,14 +481,73 @@ class InvoiceImageGenerator:
                 
                 .totals-section {{
                     display: flex;
-                    justify-content: flex-end;
+                    justify-content: space-between;
+                    align-items: flex-end;
+                    gap: 30px;
                     margin-bottom: 40px;
                 }}
                 
+                .qr-tracking-box {{
+                    display: flex;
+                    align-items: center;
+                    gap: 16px;
+                    background: #f8fafc;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 12px;
+                    padding: 14px 18px;
+                    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.03);
+                    max-width: 380px;
+                }}
+
+                .qr-image-wrapper {{
+                    flex-shrink: 0;
+                    background: white;
+                    padding: 6px;
+                    border-radius: 8px;
+                    border: 1px solid #e2e8f0;
+                    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+                }}
+
+                .qr-image {{
+                    width: 76px;
+                    height: 76px;
+                    display: block;
+                }}
+
+                .qr-info h5 {{
+                    font-size: 13px;
+                    font-weight: 700;
+                    color: #0f172a;
+                    margin-bottom: 4px;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                }}
+
+                .qr-info p {{
+                    font-size: 11px;
+                    color: #64748b;
+                    line-height: 1.5;
+                    margin-bottom: 6px;
+                }}
+
+                .qr-link-badge {{
+                    display: inline-block;
+                    font-size: 10px;
+                    font-weight: 700;
+                    color: #2563eb;
+                    background: #eff6ff;
+                    border: 1px solid #bfdbfe;
+                    padding: 2px 8px;
+                    border-radius: 6px;
+                    letter-spacing: 0.3px;
+                }}
+                
                 .totals {{
-                    width: 320px;
+                    width: 300px;
                     border-top: 2px solid #e5e7eb;
-                    padding-top: 20px;
+                    padding-top: 16px;
+                    flex-shrink: 0;
                 }}
                 
                 .total-line {{
@@ -524,6 +681,16 @@ class InvoiceImageGenerator:
                 </table>
                 
                 <div class="totals-section">
+                    {f'''<div class="qr-tracking-box">
+                        <div class="qr-image-wrapper">
+                            <img src="data:image/png;base64,{qr_code_base64}" alt="Order QR Code" class="qr-image" />
+                        </div>
+                        <div class="qr-info">
+                            <h5>📱 লাইভ ট্র্যাকিং ও শপ</h5>
+                            <p>ক্যামেরা দিয়ে স্ক্যান করে লাইভ কুরিয়ার স্ট্যাটাস ও শপের নতুন পণ্য দেখুন</p>
+                            <span class="qr-link-badge">SCAN TO TRACK ORDER</span>
+                        </div>
+                    </div>''' if qr_code_base64 else '<div style="flex: 1;"></div>'}
                     <div class="totals">
                         <div class="total-line">
                             <span>Subtotal:</span>

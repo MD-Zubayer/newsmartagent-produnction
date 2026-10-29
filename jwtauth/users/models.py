@@ -83,6 +83,36 @@ class User(AbstractUser):
         """
         return reverse("users:detail", kwargs={"id": self.id})
 
+    def get_active_team_member(self):
+        """Return active TeamMember instance if this user is a staff/team member of a merchant."""
+        if hasattr(self, '_cached_team_member'):
+            return self._cached_team_member
+        try:
+            tm = self.team_memberships.select_related('owner', 'custom_role').filter(is_active=True).first()
+        except Exception:
+            tm = None
+        self._cached_team_member = tm
+        return tm
+
+    def get_workspace_owner(self):
+        """Return the merchant User whose workspace this user operates in (self for owners, owner for team members)."""
+        tm = self.get_active_team_member()
+        if tm and tm.owner_id:
+            return tm.owner
+        return self
+
+    def get_effective_permissions(self):
+        """Return merged page and task permissions dictionary."""
+        tm = self.get_active_team_member()
+        if not tm:
+            return get_full_owner_permissions()
+        return tm.get_effective_permissions()
+
+    def has_team_permission(self, section: str, key: str) -> bool:
+        """Check if user has a specific page or task permission ('pages' or 'tasks')."""
+        perms = self.get_effective_permissions()
+        return bool(perms.get(section, {}).get(key, False))
+
     def save(self, *args, **kwargs):
         if self.phone_number:
             try:
@@ -109,8 +139,18 @@ class User(AbstractUser):
 
         try:
             from embedding.models import SpreadsheetKnowledge, DocumentKnowledge
+            from datasheet.models import Product
         except Exception:
             return None
+
+        structured_product = Product.objects.filter(user=self, name__iexact=normalized_name, status="active").prefetch_related("variants").first()
+        if not structured_product:
+            structured_product = Product.objects.filter(user=self, name__icontains=normalized_name, status="active").prefetch_related("variants").first()
+        if structured_product:
+            from datasheet.text_cleaner import clean_product_description_for_ai
+            available_price = structured_product.sale_price if structured_product.sale_price is not None else structured_product.base_price
+            available_stock = sum(float(v.stock) for v in structured_product.variants.all()) if structured_product.variants.exists() else float(structured_product.initial_stock)
+            return {"name": structured_product.name, "price": available_price, "stock": available_stock, "content": clean_product_description_for_ai(structured_product.description)}
 
         def parse_product_info(content):
             if not content:
@@ -233,6 +273,13 @@ class Profile(models.Model):
     recovery_whatsapp = models.CharField(max_length=20, blank=True, null=True, help_text="Enter number with country code")
     website_url = models.CharField(max_length=255, blank=True, null=True)
     business_email = models.EmailField(blank=True, null=True)
+
+    # Courier Auto Booking Configuration
+    auto_courier_booking = models.BooleanField(default=False, help_text="Automatically create parcel in courier upon order confirmation")
+    default_courier_provider = models.CharField(max_length=50, default='steadfast', blank=True, help_text="steadfast | pathao")
+    ai_voice_enabled = models.BooleanField(default=False, help_text="Generate AI voice for order confirmation (deducts word_balance)")
+    voice_preference = models.CharField(max_length=30, default='auto', help_text="auto | seller_upload | ai_generated | default_audio")
+    default_voice_audio = models.FileField(upload_to='merchant_voices/', null=True, blank=True, help_text="Shop-wide default audio confirmation clip")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -298,6 +345,7 @@ class Offer(models.Model):
     duration_days = models.IntegerField(default=30)
     is_active = models.BooleanField(default=True)
     image_support = models.BooleanField(default=False, help_text="ইমেজ সাপোর্ট সচল করতে এটি সিলেক্ট করুন")
+    max_agents_per_platform = models.PositiveIntegerField(default=1, help_text="এই অফারের অধীনে প্রতিটি প্ল্যাটফর্মে সর্বোচ্চ কয়টি এজেন্ট তৈরি করা যাবে।")
     target_audience = models.CharField(max_length=20, choices=TAGET_AUDIENCE, default='all')
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -436,8 +484,11 @@ class OrderForm(models.Model):
 class CustomerOrder(models.Model):
     STATUS_CHOICES = (
         ('pending', 'Pending'),
+        ('confirmed', 'Confirmed'),
         ('shipped', 'Shipped'),
-        ('delivered', 'Delivered')
+        ('delivered', 'Delivered'),
+        ('cancelled', 'Cancelled'),
+        ('returned', 'Returned'),
     )
     PLATFORM_CHOICES = (
         ('whatsapp', 'WhatsApp'),
@@ -445,11 +496,17 @@ class CustomerOrder(models.Model):
         ('instagram', 'Instagram'),
         ('telegram', 'Telegram'),
         ('web', 'Web Form'),
+        ('shop', 'Customer Shop App'),
         ('facebook_comment', 'Facebook Comment'),
         ('other', 'Other')
     )
     
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, db_index=True)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='order')
+    customer = models.ForeignKey('storefront.Customer', on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
+    contact = models.ForeignKey('aiAgent.Contact', on_delete=models.SET_NULL, null=True, blank=True, related_name='customer_orders')
+    checkout_session = models.ForeignKey('storefront.CheckoutSession', on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
+
     customer_name = models.CharField(max_length=255)
     phone_number = models.CharField(max_length=20)
     district = models.CharField(max_length=30, null=True, blank=True)
@@ -458,6 +515,10 @@ class CustomerOrder(models.Model):
     product_name = models.CharField(max_length=255, null=True, blank=True)
     items = models.JSONField(default=list, blank=True, null=True, help_text="List of items: [{'name': '...', 'quantity': 1, 'price': 100}]")
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    delivery_charge = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    cod_charge = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, help_text="Calculated COD fee")
+    cod_bearer = models.CharField(max_length=20, default='seller', help_text="seller | customer")
+    courier = models.CharField(max_length=50, blank=True, null=True, help_text="pathao | steadfast | manual")
     extra_info = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     
@@ -467,6 +528,18 @@ class CustomerOrder(models.Model):
     invoice_task_dispatched = models.BooleanField(default=False, db_index=True)
     invoice_sent = models.BooleanField(default=False, db_index=True)
     invoice_sent_at = models.DateTimeField(null=True, blank=True)
+
+    # AI Web Call Confirmation Fields
+    CALL_CONFIRMATION_CHOICES = (
+        ('uncalled', 'Uncalled'),
+        ('calling', 'Calling'),
+        ('confirmed', 'Confirmed by Call'),
+        ('cancelled', 'Cancelled by Call'),
+        ('human_requested', 'Human Support Requested'),
+    )
+    call_status = models.CharField(max_length=30, choices=CALL_CONFIRMATION_CHOICES, default='uncalled', db_index=True)
+    call_confirmed_at = models.DateTimeField(null=True, blank=True)
+    call_notes = models.TextField(blank=True, null=True)
     
     # Pathao Booking Fields
     city_id = models.CharField(max_length=20, null=True, blank=True)
@@ -481,6 +554,7 @@ class CustomerOrder(models.Model):
 
     def __str__(self):
         return f"{self.customer_name} -> {self.user.email}"
+
 
 
 class EmailVerificationToken(models.Model):
@@ -734,3 +808,309 @@ class LoginSession(models.Model):
 
     def __str__(self):
         return f"{self.user.email} Session - {self.status}"
+
+
+def get_full_owner_permissions():
+    """Full permission structure granted to the workspace owner."""
+    return {
+        "pages": {
+            "overview": True,
+            "inbox": True,
+            "crm": True,
+            "orders": True,
+            "customers": True,
+            "products": True,
+            "spreadsheet": True,
+            "image_gallery": True,
+            "finance": True,
+            "saving": True,
+            "ai_agent": True,
+            "connect": True,
+            "payments": True,
+            "team": True,
+            "settings": True,
+        },
+        "tasks": {
+            "inbox_view_all_chats": True,
+            "inbox_reply": True,
+            "inbox_forward_assign": True,
+            "inbox_toggle_ai": True,
+            "inbox_internal_notes": True,
+            "inbox_edit_contact_prompt": True,
+            "orders_view": True,
+            "orders_create_edit": True,
+            "orders_change_status": True,
+            "orders_book_courier": True,
+            "orders_delete": True,
+            "products_view": True,
+            "products_create_edit": True,
+            "products_update_stock": True,
+            "products_view_cost_profit": True,
+            "products_manage_offers": True,
+            "products_delete": True,
+        },
+    }
+
+
+TEAM_ROLE_PRESETS = {
+    "support_agent": {
+        "name": "কাস্টমার কেয়ার এজেন্ট (Support Agent)",
+        "description": "মেসেজ ও কমেন্টের উত্তর দেওয়া, চ্যাট ফরওয়ার্ড করা এবং কাস্টমারের অর্ডার দেখা ও তৈরি করা",
+        "permissions": {
+            "pages": {
+                "overview": False,
+                "inbox": True,
+                "crm": True,
+                "orders": True,
+                "customers": True,
+                "products": True,
+                "spreadsheet": False,
+                "image_gallery": False,
+                "finance": False,
+                "saving": False,
+                "ai_agent": False,
+                "connect": False,
+                "payments": False,
+                "team": False,
+                "settings": False,
+            },
+            "tasks": {
+                "inbox_view_all_chats": False,
+                "inbox_reply": True,
+                "inbox_forward_assign": True,
+                "inbox_toggle_ai": True,
+                "inbox_internal_notes": True,
+                "inbox_edit_contact_prompt": False,
+                "orders_view": True,
+                "orders_create_edit": True,
+                "orders_change_status": True,
+                "orders_book_courier": False,
+                "orders_delete": False,
+                "products_view": True,
+                "products_create_edit": False,
+                "products_update_stock": False,
+                "products_view_cost_profit": False,
+                "products_manage_offers": False,
+                "products_delete": False,
+            },
+        },
+    },
+    "order_manager": {
+        "name": "অর্ডার ও ডেলিভারি ম্যানেজার (Order Manager)",
+        "description": "অর্ডার কনফার্ম করা, কুরিয়ারে পার্সেল বুকিং, স্টক আপডেট এবং কাস্টমার ম্যানেজমেন্ট",
+        "permissions": {
+            "pages": {
+                "overview": False,
+                "inbox": True,
+                "crm": False,
+                "orders": True,
+                "customers": True,
+                "products": True,
+                "spreadsheet": False,
+                "image_gallery": False,
+                "finance": False,
+                "saving": False,
+                "ai_agent": False,
+                "connect": False,
+                "payments": False,
+                "team": False,
+                "settings": False,
+            },
+            "tasks": {
+                "inbox_view_all_chats": True,
+                "inbox_reply": True,
+                "inbox_forward_assign": True,
+                "inbox_toggle_ai": True,
+                "inbox_internal_notes": True,
+                "inbox_edit_contact_prompt": False,
+                "orders_view": True,
+                "orders_create_edit": True,
+                "orders_change_status": True,
+                "orders_book_courier": True,
+                "orders_delete": False,
+                "products_view": True,
+                "products_create_edit": False,
+                "products_update_stock": True,
+                "products_view_cost_profit": False,
+                "products_manage_offers": False,
+                "products_delete": False,
+            },
+        },
+    },
+    "catalog_editor": {
+        "name": "প্রোডাক্ট ও ক্যাটালগ এডিটর (Catalog Editor)",
+        "description": "প্রোডাক্ট যোগ করা, ছবি আপলোড, অফার ও স্টক ম্যানেজমেন্ট (কেনা দাম ও লাভ গোপন থাকবে)",
+        "permissions": {
+            "pages": {
+                "overview": False,
+                "inbox": False,
+                "crm": False,
+                "orders": False,
+                "customers": False,
+                "products": True,
+                "spreadsheet": True,
+                "image_gallery": True,
+                "finance": False,
+                "saving": False,
+                "ai_agent": False,
+                "connect": False,
+                "payments": False,
+                "team": False,
+                "settings": False,
+            },
+            "tasks": {
+                "inbox_view_all_chats": False,
+                "inbox_reply": False,
+                "inbox_forward_assign": False,
+                "inbox_toggle_ai": False,
+                "inbox_internal_notes": False,
+                "inbox_edit_contact_prompt": False,
+                "orders_view": False,
+                "orders_create_edit": False,
+                "orders_change_status": False,
+                "orders_book_courier": False,
+                "orders_delete": False,
+                "products_view": True,
+                "products_create_edit": True,
+                "products_update_stock": True,
+                "products_view_cost_profit": False,
+                "products_manage_offers": True,
+                "products_delete": False,
+            },
+        },
+    },
+    "supervisor": {
+        "name": "টিম সুপারভাইজার / ম্যানেজার (Supervisor)",
+        "description": "সব এজেন্টের মেসেজ মনিটর করা, মেসেজ ফরওয়ার্ড, অর্ডার, প্রোডাক্ট ও অফার সম্পূর্ণ পরিচালনা করা",
+        "permissions": {
+            "pages": {
+                "overview": True,
+                "inbox": True,
+                "crm": True,
+                "orders": True,
+                "customers": True,
+                "products": True,
+                "spreadsheet": True,
+                "image_gallery": True,
+                "finance": False,
+                "saving": False,
+                "ai_agent": True,
+                "connect": False,
+                "payments": False,
+                "team": True,
+                "settings": False,
+            },
+            "tasks": {
+                "inbox_view_all_chats": True,
+                "inbox_reply": True,
+                "inbox_forward_assign": True,
+                "inbox_toggle_ai": True,
+                "inbox_internal_notes": True,
+                "inbox_edit_contact_prompt": True,
+                "orders_view": True,
+                "orders_create_edit": True,
+                "orders_change_status": True,
+                "orders_book_courier": True,
+                "orders_delete": True,
+                "products_view": True,
+                "products_create_edit": True,
+                "products_update_stock": True,
+                "products_view_cost_profit": False,
+                "products_manage_offers": True,
+                "products_delete": False,
+            },
+        },
+    },
+}
+
+
+class CustomTeamRole(models.Model):
+    """Merchant-defined custom role with granular page & task permissions."""
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='custom_team_roles',
+    )
+    name = models.CharField(max_length=120)
+    description = models.CharField(max_length=255, blank=True, default='')
+    preset_key = models.CharField(max_length=50, blank=True, default='custom')
+    permissions = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['id']
+
+    def __str__(self):
+        return f"{self.name} ({self.owner.email})"
+
+
+class TeamMember(models.Model):
+    """Links a staff User account to a merchant Owner's workspace with role & permissions."""
+    DEPARTMENT_CHOICES = (
+        ('all', 'সকল বিভাগ (All Departments - সেলস, সাপোর্ট, ডেলিভারি, হিসাব)'),
+        ('support', 'কাস্টমার কেয়ার ও সাপোর্ট (Support & Complaint)'),
+        ('sales', 'সেলস ও অর্ডার (Sales & Orders)'),
+        ('delivery', 'অর্ডার ও ডেলিভারি (Delivery & Courier)'),
+        ('billing', 'পেমেন্ট ও বিলিং (Billing & Accounts)'),
+        ('general', 'সাধারণ বিভাগ (General)'),
+    )
+    AVAILABILITY_CHOICES = (
+        ('online', 'অনলাইন (Online)'),
+        ('busy', 'ব্যস্ত (Busy)'),
+        ('offline', 'অফলাইন (Offline)'),
+    )
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='team_members',
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='team_memberships',
+    )
+    custom_role = models.ForeignKey(
+        CustomTeamRole,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='members',
+    )
+    role_title = models.CharField(max_length=120, default='Support Agent')
+    department = models.CharField(max_length=120, choices=DEPARTMENT_CHOICES, default='all')
+    availability_status = models.CharField(max_length=20, choices=AVAILABILITY_CHOICES, default='online')
+    permissions_override = models.JSONField(default=dict, blank=True)
+    allowed_agents = models.ManyToManyField('aiAgent.AgentAI', blank=True, related_name='assigned_team_members')
+    max_concurrent_chats = models.PositiveIntegerField(default=15)
+    is_active = models.BooleanField(default=True)
+    last_assigned_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('owner', 'user')
+        ordering = ['-is_active', 'id']
+
+    def get_effective_permissions(self):
+        base = TEAM_ROLE_PRESETS["support_agent"]["permissions"]
+        merged_pages = dict(base["pages"])
+        merged_tasks = dict(base["tasks"])
+
+        if self.custom_role and isinstance(self.custom_role.permissions, dict):
+            merged_pages.update(self.custom_role.permissions.get("pages", {}))
+            merged_tasks.update(self.custom_role.permissions.get("tasks", {}))
+
+        if isinstance(self.permissions_override, dict):
+            merged_pages.update(self.permissions_override.get("pages", {}))
+            merged_tasks.update(self.permissions_override.get("tasks", {}))
+
+        return {
+            "pages": merged_pages,
+            "tasks": merged_tasks,
+        }
+
+    def __str__(self):
+        return f"{self.user.name or self.user.email} -> {self.owner.email} ({self.role_title})"
+

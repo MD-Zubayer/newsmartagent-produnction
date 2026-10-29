@@ -14,7 +14,7 @@ def set_telegram_webhook(token, bot_username):
     Configure Telegram webhook for a given bot token.
     Prefers TELEGRAM_WEBHOOK_URL (e.g., n8n ingress). Always appends bot_username.
     """
-    base_url = os.getenv("TELEGRAM_WEBHOOK_URL") or "https://newsmartagent.com/api/webhooks/telegram/"
+    base_url = os.getenv("TELEGRAM_WEBHOOK_URL") or getattr(settings, 'TELEGRAM_WEBHOOK_URL', None) or f"https://{getattr(settings, 'MAIN_DOMAIN', 'dev.newsmartagent.com')}/api/webhooks/telegram/"
     if "bot_username=" not in base_url:
         separator = "&" if "?" in base_url else "?"
         webhook_url = f"{base_url}{separator}bot_username={bot_username}"
@@ -49,7 +49,9 @@ class PublicSettingsView(APIView):
 
     def get(self, request):
         return Response({
-            'support_email': settings.DEFAULT_FROM_EMAIL
+            'support_email': settings.DEFAULT_FROM_EMAIL,
+            'google_client_id': os.environ.get('GOOGLE_SHOP_CLIENT_ID') or os.environ.get('CLIENT_ID') or getattr(settings, 'GOOGLE_CLIENT_ID', ''),
+            'main_domain': os.environ.get('MAIN_DOMAIN', '')
         })
 
 class TelegramBotSetupView(APIView):

@@ -1,9 +1,11 @@
 import logging
+from time import monotonic
 from openai import OpenAI
 from django.conf import settings
 from aiAgent.utils import count_openai_tokens
 
 logger = logging.getLogger('aiAgent')
+from jwtauth.provider_metrics import provider_call, record_provider_usage
 
 # open ai client
 client = OpenAI(api_key=settings.OPENAI_API_KEY)
@@ -43,6 +45,11 @@ def generate_openai_reply(system_promt, messages, current_message, agent_config,
             or 'ensure json syntax is perfect' in system_lower
             or 'do not include any conversational text' in system_lower
             or 'return only a valid json object starting with' in system_lower
+            or 'strict_json_only' in system_lower
+            or 'response_classification_dsl' in system_lower
+            or '<response_classification_dsl' in system_lower
+            or '<output_schema>' in system_lower
+            or 'classification_response' in system_lower
         )
 
         if force_json_output:
@@ -126,7 +133,16 @@ def generate_openai_reply(system_promt, messages, current_message, agent_config,
             payload["temperature"] = ai_settings.temperature if ai_settings.temperature is not None else 0.7
 
         # ২. টোকেন লিমিট সেট করা
-        max_t = ai_settings.max_tokens if ai_settings.max_tokens else 1024
+        # Structured responses contain the reply plus classification/order fields.
+        # A legacy value of 200 can truncate JSON before its closing brace.
+        configured_max_t = ai_settings.max_tokens if ai_settings.max_tokens else 1024
+        max_t = max(configured_max_t, 1024) if force_json_output else configured_max_t
+        if force_json_output and configured_max_t < max_t:
+            logger.debug(
+                "OpenAI JSON output token floor applied: configured=%s effective=%s",
+                configured_max_t,
+                max_t,
+            )
         if is_new_model:
             payload["max_completion_tokens"] = max_t
         else:
@@ -134,7 +150,9 @@ def generate_openai_reply(system_promt, messages, current_message, agent_config,
 
         # API কল
         logger.info(f"OpenAI History: {formatted_messages}")
-        response = client.chat.completions.create(timeout=30.0, **payload)
+        provider_started = monotonic()
+        with provider_call("openai", "chat_completion"):
+            response = client.chat.completions.create(timeout=30.0, **payload)
         
         # --- রিপ্লাই এক্সট্রাক্ট করা ---
         message = response.choices[0].message
@@ -156,6 +174,7 @@ def generate_openai_reply(system_promt, messages, current_message, agent_config,
         # টোকেন হিসাব
         output_tokens = response.usage.completion_tokens if response.usage.completion_tokens else count_openai_tokens(reply, agent_config.ai_model)
         total_tokens = input_tokens + output_tokens
+        record_provider_usage("openai", "chat_completion", model_name, input_tokens, output_tokens, result_status, (monotonic() - provider_started) * 1000)
 
         print(f'OpenAI Input: {input_tokens} | Output: {output_tokens} | Total: {total_tokens}')
         

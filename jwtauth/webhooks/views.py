@@ -5,6 +5,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from webhooks.tasks import process_ai_reply_task
 import hashlib
+import time
+import uuid
 import logging
 import requests
 from aiAgent.cache.client import get_redis_client
@@ -146,19 +148,40 @@ def handle_button_action(action, sender_id, page_id, platform):
                 logger.error(f"Order button action {action} failed: {order_action_err}")
                 return True
 
+        from django.utils import timezone
         if action == "HUMAN_HELP":
             contact.is_human_needed = True
             contact.is_auto_reply_enabled = False
+            contact.support_status = "waiting_human"
+            if not contact.waiting_since:
+                contact.waiting_since = timezone.now()
             voice_file = "on-human-mode.wav"
         elif action == "STOP_AI_REPLY":
             contact.is_auto_reply_enabled = False
+            contact.is_human_needed = True
+            contact.support_status = "in_progress"
             voice_file = "off-ai-reply.wav"
         elif action == "ON_AI_REPLY":
             contact.is_auto_reply_enabled = True
+            contact.is_human_needed = False
+            contact.support_status = "resolved"
+            contact.waiting_since = None
+            contact.assigned_to = None
+            contact.assigned_by = None
+            contact.assigned_department = ""
+            contact.assignment_note = ""
+            contact.resolved_at = timezone.now()
             voice_file = "on-ai-reply.wav"
         elif action == "RESOLVE_HUMAN":
             contact.is_human_needed = False
             contact.is_auto_reply_enabled = True
+            contact.support_status = "resolved"
+            contact.waiting_since = None
+            contact.assigned_to = None
+            contact.assigned_by = None
+            contact.assigned_department = ""
+            contact.assignment_note = ""
+            contact.resolved_at = timezone.now()
             voice_file = "off-human-mode.wav"
             
         contact.save()
@@ -222,9 +245,9 @@ def ai_webhook(request):
     # Convert standard DRF request.data to a plain dict
     # Using .dict() if it's a QueryDict (form-data) to avoid list-values issue
     data = request.data.dict() if hasattr(request.data, 'dict') else dict(request.data)
-    print("!!! DATA DICT !!!", data)
-    # first validation
-    logger.info(f"📥 [ai_webhook] Received raw data: {data}")
+    trace_id = data.get('_trace_id') or hashlib.sha256(f"{data.get('sender_id') or data.get('from') or ''}:{time.time()}:{uuid.uuid4().hex[:6]}".encode()).hexdigest()[:12]
+    data['_trace_id'] = trace_id
+    logger.info(f"🌐 [WEBHOOK_INCOMING] trace_id={trace_id} platform={data.get('type') or data.get('platform') or 'auto'} raw_data_len={len(str(data))}")
     
     sender_id = data.get('sender_id')
     page_id = data.get('page_id')
@@ -303,6 +326,24 @@ def ai_webhook(request):
         # messenger or whatsapp
         text = data.get('message') or data.get('caption') or ''
 
+    # Check for Meta Postback / Payload (e.g. DETAILS button click)
+    postback_data = data.get('postback')
+    payload = data.get('payload')
+    if isinstance(postback_data, dict):
+        payload = payload or postback_data.get('payload')
+    elif isinstance(postback_data, str) and not payload:
+        payload = postback_data
+
+    if payload and str(payload).startswith("DETAILS:"):
+        parts = str(payload).split(":", 2)
+        prod_id = parts[1] if len(parts) > 1 else ""
+        prod_name = parts[2] if len(parts) > 2 else ""
+        text = f"{prod_name} সম্পর্কে বিস্তারিত বিবরণ ও মূল্য জানতে চাই" if prod_name else "এই পণ্যটির বিস্তারিত জানতে চাই"
+        data['message'] = text
+        data['payload'] = payload
+        if prod_id and prod_id != '0':
+            data['product_id'] = prod_id
+
     is_echo = data.get('is_echo', False)
     if isinstance(is_echo, str):
         is_echo = is_echo.lower() == 'true'
@@ -370,59 +411,23 @@ def ai_webhook(request):
             
     # WhatsApp Button Response (from Baileys/Evolution API)
     elif request_type == 'whatsapp':
-        # Depending on n8n mapping, the buttonId might be in a specific field
         button_id = data.get('buttonId') or data.get('listResponseId')
         text_cmd = text.strip() if text else ""
 
-        # Numeric button payload may arrive directly as buttonId or plain text.
-        if button_id and str(button_id).strip().isdigit():
-            from aiAgent.models import Contact, AgentAI
-            agent = AgentAI.objects.filter(page_id=page_id, platform='whatsapp', is_active=True).first()
-            contact = Contact.objects.filter(identifier=sender_id, agent=agent).first() if agent else None
-            mapped_action = _map_whatsapp_numeric_button_to_action(agent, contact, button_id)
-            if mapped_action:
-                button_id = mapped_action
-
-        if not button_id and text_cmd.isdigit():
-            from aiAgent.models import Contact, AgentAI
-            agent = AgentAI.objects.filter(page_id=page_id, platform='whatsapp', is_active=True).first()
-            contact = Contact.objects.filter(identifier=sender_id, agent=agent).first() if agent else None
-            numeric_is_order_text = _should_treat_numeric_as_order_text(agent, contact, text_cmd)
-            if agent and not numeric_is_order_text:
-                mapped_action = _map_whatsapp_numeric_button_to_action(agent, contact, text_cmd)
-                if mapped_action:
-                    button_id = mapped_action
-            # fallback old mapping for back-compat and simple menu cases
-            if not button_id and not numeric_is_order_text and text_cmd in ["1", "2", "3"]:
-                if text_cmd == "1":
-                    button_id = "HUMAN_HELP"
-                elif text_cmd == "2":
-                    button_id = "STOP_AI_REPLY"
-                elif text_cmd == "3":
-                    button_id = "RESOLVE_HUMAN"
-
-        # Word-based fallback (strict keywords with length guard to avoid false triggers)
-        if not button_id and text_cmd:
+        # Word-based fallback for explicit mode control commands only (never numeric digits)
+        if not button_id and text_cmd and not text_cmd.isdigit():
             t = text_cmd.lower()
             keyword_map = {
-                "HUMAN_HELP": ["human", "help", "human help", "human assistant"],
-                "RESOLVE_HUMAN": ["resolve", "done", "close human"],
-                "STOP_AI_REPLY": ["stop", "pause", "stop ai", "pause ai", "ai off"],
-                "ON_AI_REPLY": ["on ai", "resume ai", "ai on", "resume"],
-                "CONFIRM_ORDER": ["confirm", "confirm order", "yes", "sure", "ঠিক আছে", "ঠিক"],
-                "EDIT_ORDER": ["edit", "change", "update", "modify", "edit order", "পরিবর্তন"],
-                "CANCEL_ORDER": ["cancel", "cancel order", "stop order", "abort order", "বাতিল", "কিনবো না"],
+                "HUMAN_HELP": ["human mode", "human help", "human assistant"],
+                "RESOLVE_HUMAN": ["resolve human", "close human"],
+                "STOP_AI_REPLY": ["off ai", "stop ai", "pause ai", "ai off"],
+                "ON_AI_REPLY": ["on ai", "resume ai", "ai on"],
             }
             for action, kws in keyword_map.items():
-                for kw in kws:
-                    max_extra = 4  # allow up to +4 chars
-                    if t == kw or (t.startswith(kw) and len(t) <= len(kw) + max_extra):
-                        button_id = action
-                        break
-                if button_id:
+                if t in kws:
+                    button_id = action
                     break
 
-        # Sometimes the button text itself is the action if poorly mapped
         if not button_id and text in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN", "CONFIRM_ORDER", "EDIT_ORDER", "CANCEL_ORDER"]:
             button_id = text
             
@@ -439,19 +444,17 @@ def ai_webhook(request):
 
     # 🔥 View-Level Deduplication: একই message 30s এর মধ্যে দ্বিতীয়বার এলে block করো
     if _is_duplicate_webhook(sender_id, text, page_id):
-        logger.info(f"🔁 Duplicate webhook blocked for sender={sender_id}, text='{str(text)[:30]}'")
+        logger.info(f"🔁 [WEBHOOK_BLOCKED] trace_id={trace_id} Duplicate webhook blocked for sender={sender_id}, text='{str(text)[:30]}'")
         return Response({'status': 'ignored', 'reason': 'duplicate'}, status=200)
 
     # send to celery
-
-    
     try:
         # Ensure sender_id and page_id are in the payload sent to Celery
         data['sender_id'] = sender_id
         data['page_id'] = page_id
         data['type'] = request_type
         
-        logger.info(f"📦 [ai_webhook] Sending to Celery: sender={sender_id}, page={page_id}, type={request_type}")
+        logger.info(f"📦 [ENQUEUE_CELERY] trace_id={trace_id} Sending to Celery: sender={sender_id}, page={page_id}, type={request_type}")
         process_ai_reply_task.delay(data)
         return Response({
              'status': 'accepted',
@@ -467,11 +470,31 @@ def ai_webhook(request):
 def instagram_webhook(request):
     """Dedicated webhook for Instagram messages from n8n"""
     data = request.data.dict() if hasattr(request.data, 'dict') else dict(request.data)
-    logger.info(f"📥 [instagram_webhook] Received IG data: {data}")
+    trace_id = data.get('_trace_id') or hashlib.sha256(f"{data.get('sender_id') or data.get('senderId') or ''}:{time.time()}:{uuid.uuid4().hex[:6]}".encode()).hexdigest()[:12]
+    data['_trace_id'] = trace_id
+    logger.info(f"🌐 [WEBHOOK_INCOMING] trace_id={trace_id} platform=instagram raw_data_len={len(str(data))}")
     
     sender_id = str(data.get('sender_id') or data.get('senderId') or '')
     page_id = str(data.get('page_id') or data.get('recipient') or data.get('receiver') or data.get('recipient_id') or '')
     text = data.get('message') or data.get('text') or data.get('message_text')
+
+    # Check for Instagram Postback / Payload (e.g. DETAILS button click)
+    postback_data = data.get('postback')
+    payload = data.get('payload') or (data.get('quick_reply') if isinstance(data.get('quick_reply'), dict) else {}).get('payload')
+    if isinstance(postback_data, dict):
+        payload = payload or postback_data.get('payload')
+    elif isinstance(postback_data, str) and not payload:
+        payload = postback_data
+
+    if payload and str(payload).startswith("DETAILS:"):
+        parts = str(payload).split(":", 2)
+        prod_id = parts[1] if len(parts) > 1 else ""
+        prod_name = parts[2] if len(parts) > 2 else ""
+        text = f"{prod_name} সম্পর্কে বিস্তারিত বিবরণ ও মূল্য জানতে চাই" if prod_name else "এই পণ্যটির বিস্তারিত জানতে চাই"
+        data['message'] = text
+        data['payload'] = payload
+        if prod_id and prod_id != '0':
+            data['product_id'] = prod_id
     
     is_echo = data.get('is_echo', False)
     if isinstance(is_echo, str):
@@ -526,8 +549,9 @@ def instagram_webhook(request):
         data['message'] = text
         data['type'] = 'instagram'
         data['platform'] = 'instagram'
+        data['_trace_id'] = trace_id
         
-        logger.info(f"📦 [instagram_webhook] Sending to Celery: sender={sender_id}, page={page_id}")
+        logger.info(f"📦 [ENQUEUE_CELERY] trace_id={trace_id} platform=instagram sender={sender_id}, page={page_id}")
         process_ai_reply_task.delay(data)
         return Response({'status': 'accepted'}, status=202)
     except Exception as e:
@@ -539,20 +563,9 @@ def instagram_webhook(request):
 def telegram_webhook(request):
     """Dedicated webhook for Telegram bot messages"""
     data = request.data.dict() if hasattr(request.data, 'dict') else dict(request.data)
-    
-    # 📢 Terminal Logging (User requested)
-    print("\n" + "="*50)
-    print("📥 [TELEGRAM WEBHOOK] Incoming Request")
-    print("="*50)
-    import json
-    # Use indent=2 for readable terminal output
-    try:
-        print(json.dumps(data, indent=2))
-    except:
-        print(data)
-    print("="*50 + "\n")
-
-    logger.info(f"📥 [telegram_webhook] Received Telegram data: {data}")
+    trace_id = data.get('_trace_id') or hashlib.sha256(f"{data.get('sender_id') or ''}:{time.time()}:{uuid.uuid4().hex[:6]}".encode()).hexdigest()[:12]
+    data['_trace_id'] = trace_id
+    logger.info(f"🌐 [WEBHOOK_INCOMING] trace_id={trace_id} platform=telegram raw_data_len={len(str(data))}")
     
     # Telegram webhook can have 'message' or 'callback_query'
     callback_query = data.get('callback_query')
@@ -684,7 +697,22 @@ def telegram_webhook(request):
         # Override sender and text with callback data
         sender_id = str(callback_query.get('from', {}).get('id', sender_id))
         callback_data = callback_query.get('data')
-        if callback_data in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN", "CONFIRM_ORDER", "EDIT_ORDER", "CANCEL_ORDER"]:
+        if callback_data and str(callback_data).startswith("DETAILS:"):
+            try:
+                bot_token = agent.access_token if agent else None
+                callback_id = callback_query.get('id')
+                if bot_token and callback_id:
+                    requests.post(f"https://api.telegram.org/bot{bot_token}/answerCallbackQuery", json={"callback_query_id": callback_id}, timeout=5)
+            except Exception:
+                pass
+            parts = str(callback_data).split(":", 2)
+            prod_id = parts[1] if len(parts) > 1 else ""
+            prod_name = parts[2] if len(parts) > 2 else ""
+            text = f"{prod_name} সম্পর্কে বিস্তারিত বিবরণ ও মূল্য জানতে চাই" if prod_name else "এই পণ্যটির বিস্তারিত জানতে চাই"
+            data['payload'] = callback_data
+            if prod_id and prod_id != '0':
+                data['product_id'] = prod_id
+        elif callback_data in ["HUMAN_HELP", "STOP_AI_REPLY", "ON_AI_REPLY", "RESOLVE_HUMAN", "CONFIRM_ORDER", "EDIT_ORDER", "CANCEL_ORDER"]:
             button_action = callback_data
             # We don't need text for button actions, but want to record deduplication
             text = callback_data
@@ -719,11 +747,12 @@ def telegram_webhook(request):
         data['type'] = 'telegram'
         data['platform'] = 'telegram'
         data['chat_id'] = chat_id
+        data['_trace_id'] = trace_id
         if is_voice:
             data['voice_file_id'] = voice_info.get('file_id')
             data['mimetype'] = voice_info.get('mime_type') or 'audio/ogg'
 
-        print(f"📦 Message accepted. Routing to AI. sender={sender_id}, page={page_id}")
+        logger.info(f"📦 [ENQUEUE_CELERY] trace_id={trace_id} platform=telegram sender={sender_id}, page={page_id}")
         process_ai_reply_task.delay(data)
         return Response({'status': 'accepted'}, status=202)
     except Exception as e:

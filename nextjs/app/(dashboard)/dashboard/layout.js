@@ -18,7 +18,7 @@ function DashboardContent({ children }) {
   const router = useRouter();
   const pathname = usePathname();
   const [viewMode, setViewMode] = useState(null);
-  const { isDesktopMode, isMounted: isDisplayMounted } = useDisplay();
+  const { isDesktopMode, isMounted: isDisplayMounted, sidebarWidth, isResizing } = useDisplay();
   
   // 🔥 লেআউটের সব লজিক এখন এই এক লাইনে!
   const { notifications, unreadCount, markAsRead } = useNotifications(user);
@@ -92,10 +92,20 @@ function DashboardContent({ children }) {
   return (
     <div 
       className={`flex h-screen bg-gray-100 ${isDesktopMode ? 'overflow-x-auto' : ''}`}
-      style={isDesktopMode ? { minWidth: "1024px" } : {}}
+      style={{
+        ...(isDesktopMode ? { minWidth: "1024px" } : {}),
+        '--sidebar-w': `${sidebarWidth}px`,
+      }}
     >
       <Sidebar viewMode={viewMode} isDesktopMode={isDesktopMode} />
-      <div className="flex-1 flex flex-col min-h-screen overflow-hidden">
+      <div 
+        style={{
+          marginLeft: isDesktopMode ? `${sidebarWidth}px` : undefined,
+        }}
+        className={`flex-1 flex flex-col min-h-screen overflow-hidden ${
+          isResizing ? '' : 'transition-[margin] duration-200 ease-out'
+        } ${isDesktopMode ? '' : 'ml-0 md:ml-[var(--sidebar-w)]'}`}
+      >
         <TopNav 
           viewMode={viewMode} 
           onSwitch={handleViewSwitch} 
@@ -103,7 +113,7 @@ function DashboardContent({ children }) {
           unreadCount={unreadCount}
           markAsRead={markAsRead}
         />
-        <main className={`p-4 flex-1 overflow-y-auto ${isDesktopMode ? 'ml-40' : 'ml-0 md:ml-40'}`}>
+        <main className="p-4 flex-1 overflow-y-auto">
           {isValidElement(children) ? cloneElement(children, { viewMode }) : children}
           <DashboardAI />
         </main>

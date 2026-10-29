@@ -127,10 +127,16 @@ const openModal = (agent = null) => {
     // ডাটা কপি করা
     const payload = { ...formData };
     
-    // টাইপ কাস্টিং
-    payload.temperature = parseFloat(payload.temperature);
-    payload.max_tokens = parseInt(payload.max_tokens);
-    payload.history_limit = parseInt(payload.history_limit);
+    // Normalize optional numeric settings before PATCH/POST. Older agents can
+    // return null for these fields; sending null makes DRF reject the entire
+    // update, including max_tokens.
+    const numberOrDefault = (value, fallback, parser) => {
+      const parsed = parser(value);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    };
+    payload.temperature = numberOrDefault(payload.temperature, 0.7, parseFloat);
+    payload.max_tokens = numberOrDefault(payload.max_tokens, 1024, parseInt);
+    payload.history_limit = numberOrDefault(payload.history_limit, 3, parseInt);
 
     // অপ্রয়োজনীয় ফিল্ড রিমুভ (যা ডাটাবেজে সরাসরি যায় না)
     delete payload.id;
@@ -340,6 +346,10 @@ const openModal = (agent = null) => {
                   <option value="whatsapp">WhatsApp Business</option>
                   <option value="instagram">Instagram Direct</option>
                   <option value="instagram_comment">Instagram Comment</option>
+                  <option value="tiktok">TikTok</option>
+                  <option value="web_widget">Web Chat Widget</option>
+                  <option value="telegram">Telegram</option>
+                  <option value="youtube">YouTube</option>
                 </select>
               </div>
 

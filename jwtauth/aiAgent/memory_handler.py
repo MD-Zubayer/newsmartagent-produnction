@@ -107,6 +107,20 @@ def detect_interruption_intent(text, order_state=None):
     continues_order = any(word in lower for word in order_words)
     keyword_interrupted = (has_question or has_policy) and not continues_order
 
+    # 2. Approved classification provider; Gemini remains the fallback.
+    try:
+        from ai_extensions.provider_hooks import run_provider_override
+        provider_result, provider_version = run_provider_override(
+            key="classification-provider",
+            payload={"system_prompt": "Return only JSON: {\"interrupted\": boolean, \"confidence\": number}.", "message": text},
+            context={"order_state": order_state}, base_fallback=None,
+        )
+        if provider_version:
+            result = provider_result.get("data", {}) if isinstance(provider_result, dict) else {}
+            return {"interrupted": bool(result.get("interrupted")), "confidence": float(result.get("confidence", 0.0))}
+    except Exception:
+        pass
+
     # 2. AI-driven Gemini check
     from aiAgent.gemini import GENAI_CLIENT
     from google.genai import types
@@ -118,6 +132,14 @@ def detect_interruption_intent(text, order_state=None):
                 "instead of proceeding directly with ordering steps (e.g. providing customer name, phone, address, or confirming quantity/purchase).\n\n"
                 "Return ONLY a JSON object: {\"interrupted\": true, \"confidence\": 0.9} or {\"interrupted\": false, \"confidence\": 0.0}."
             )
+            try:
+                from ai_extensions.resolver import apply_text_override
+                prompt, _ = apply_text_override(
+                    "intent-classification", prompt,
+                    context={"text": text, "order_state": order_state},
+                )
+            except Exception:
+                pass
             response = GENAI_CLIENT.models.generate_content(
                 model='models/gemini-3.1-flash-lite',
                 contents=[f"User message: {text}"],

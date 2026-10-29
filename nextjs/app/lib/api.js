@@ -30,7 +30,10 @@ const refreshAuthLogic = async (failedRequest) => {
     }
 
     if (typeof window !== 'undefined') {
-      window.location.replace('/signup'); // .replace ব্যবহার করাই ভালো যাতে ব্যাক করা না যায়
+      const p = window.location.pathname;
+      if (!p.startsWith('/login') && !p.startsWith('/signup')) {
+        window.location.replace('/login');
+      }
     }
     
     return Promise.reject(err);

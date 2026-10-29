@@ -742,9 +742,8 @@ class TelegramBotAdmin(ModelAdmin):
         Admin action: reset webhook for selected bots to TELEGRAM_WEBHOOK_URL (n8n ingress).
         """
         import requests
-        import os
-
-        base_url = os.getenv("TELEGRAM_WEBHOOK_URL") or "https://newsmartagent.com/api/webhooks/telegram/"
+        from django.conf import settings
+        base_url = os.getenv("TELEGRAM_WEBHOOK_URL") or getattr(settings, 'TELEGRAM_WEBHOOK_URL', None) or f"https://{getattr(settings, 'MAIN_DOMAIN', 'dev.newsmartagent.com')}/api/webhooks/telegram/"
         success, fail = 0, 0
         for bot in queryset:
             token = bot.bot_token
