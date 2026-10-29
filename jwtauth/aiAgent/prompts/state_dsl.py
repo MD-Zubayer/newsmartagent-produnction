@@ -5,7 +5,7 @@ Constructs the real-time order state machine and memory transition prompt.
 Prevents instruction drift across all frontier models.
 """
 
-from typing import List, Optional
+from typing import List, Optional, Any, Dict
 
 
 def build_order_state_dsl(
@@ -18,6 +18,7 @@ def build_order_state_dsl(
     is_simple_greeting: bool = False,
     is_interruption: bool = False,
     recent_confirmed_order: Optional[dict] = None,
+    pending_area_suggestions: Optional[List[Any]] = None,
 ) -> str:
     """
     Build the universal Order Memory State DSL.
@@ -74,6 +75,23 @@ def build_order_state_dsl(
     if is_interruption:
         directives.append(
             'INTERRUPTION: Customer asked a side question. Answer the question politely; suppress order forms in this reply.'
+        )
+
+    if pending_area_suggestions:
+        formatted_suggestions = []
+        for item in pending_area_suggestions:
+            if isinstance(item, dict):
+                idx = item.get('index') or '•'
+                name = item.get('name') or ''
+                formatted_suggestions.append(f"{idx}: {name}")
+            else:
+                formatted_suggestions.append(str(item))
+        sugg_str = ", ".join(formatted_suggestions)
+        directives.append(
+            f'PENDING_COURIER_AREA_SUGGESTIONS: Assistant recently presented numbered courier areas: [{sugg_str}]. '
+            'If the customer replies with a solitary digit (e.g. 1, 2, ১, ২) or an area name from this list, '
+            'treat it strictly as choosing their delivery hub/sub-area (NOT product quantity). '
+            'Preserve their full raw address and lock the selected courier area.'
         )
 
     if recent_confirmed_order and isinstance(recent_confirmed_order, dict):

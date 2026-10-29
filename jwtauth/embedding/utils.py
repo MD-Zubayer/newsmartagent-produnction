@@ -31,9 +31,13 @@ def get_gemini_embedding(text):
     # Check shared Redis cache first to prevent duplicate embedding calls
     import hashlib
     import json
+    import re
     from django.core.cache import cache
 
-    cache_key = f"shared_txt_emb:{hashlib.sha256(cleaned_text.encode('utf-8')).hexdigest()}"
+    # Normalize punctuation and case for embedding cache key
+    norm_text = re.sub(r'[^\w\s\u0980-\u09FF]', '', cleaned_text.lower()).strip()
+    cache_basis = norm_text if norm_text else cleaned_text
+    cache_key = f"shared_txt_emb:{hashlib.sha256(cache_basis.encode('utf-8')).hexdigest()}"
     try:
         cached_vec = cache.get(cache_key)
         if cached_vec:

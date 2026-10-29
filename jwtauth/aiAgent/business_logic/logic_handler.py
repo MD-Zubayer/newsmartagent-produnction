@@ -1072,7 +1072,7 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
             mem_phone = mem_data_clean.get('phone_number') or mem_data_clean.get('phone')
             mem_addr = mem_data_clean.get('address') or mem_data_clean.get('location')
 
-            for field_name in ['customer_name', 'phone_number', 'address', 'product_name', 'quantity']:
+            for field_name in ['customer_name', 'phone_number', 'address', 'product_name', 'quantity', 'extra_info']:
                 field_data = order_fields.get(field_name, {})
                 if field_data.get('value') and field_data.get('confidence', 1.0) >= 0.75:
                     collected.append(f"{field_name}={field_data.get('value')}")
@@ -1085,17 +1085,24 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
                 elif field_name == 'address' and mem_addr:
                     collected.append(f"address={mem_addr} (from saved profile)")
                     prefilled_fields.append(f"Address: {mem_addr}")
+                elif field_name == 'extra_info':
+                    pass  # optional slot, do not mark as missing
                 else:
                     if order_state in ['ordering', 'editing', 'awaiting_confirmation'] and field_name == 'product_name' and recent_interest.get('product_name'):
                         collected.append(f"product_name={recent_interest.get('product_name')}")
                     else:
                         missing.append(field_name)
 
+            if order_fields.get('product_id', {}).get('value'):
+                collected.append(f"product_id={order_fields.get('product_id', {}).get('value')}")
+
             strike_lines = []
             for field_name, stats in failed_attempts.items():
                 strike = stats.get('strike_context') or stats.get('count')
                 if strike:
                     strike_lines.append(f"{field_name}: strike {strike}")
+
+            pending_areas = internal.get('pending_courier_area_suggestions') or []
 
             # State & Intent Driven Context Injection (Zero rigid keyword matching)
             has_active_order = order_state in ['ordering', 'editing', 'awaiting_confirmation', 'collecting_details'] or bool(collected)
@@ -1114,6 +1121,7 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
                     is_simple_greeting=is_simple_greeting,
                     is_interruption=is_interruption,
                     recent_confirmed_order=last_confirmed,
+                    pending_area_suggestions=pending_areas,
                 )
     except Exception as e:
         logger.error(f"Error building order memory context: {e}")
@@ -1577,12 +1585,15 @@ def _get_checkout_url_for_contact(contact):
         if not items_payload:
             items_payload = [{'name': 'অর্ডার পণ্য', 'price': 0.0, 'quantity': 1}]
 
+        courier_loc_ids = internal.get('courier_location_ids', {})
         metadata_payload = {
             'customer_name': (order_fields.get('customer_name', {}).get('value') or ''),
             'phone': (order_fields.get('phone_number', {}).get('value') or ''),
             'address': (order_fields.get('address', {}).get('value') or ''),
             'district': (order_fields.get('district', {}).get('value') or ''),
             'upazila': (order_fields.get('upazila', {}).get('value') or ''),
+            'extra_info': (order_fields.get('extra_info', {}).get('value') or ''),
+            'courier_location_ids': courier_loc_ids,
         }
 
         # Reuse recent pending session for this contact if created within the last 8 hours

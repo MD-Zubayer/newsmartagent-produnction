@@ -731,13 +731,26 @@ def build_product_context(user, message, agent=None, sender_id=None):
         confidence = payload.get("confidence", 0.0)
 
         alternatives = []
-        if results and confidence >= 0.60:
+        if results and confidence >= 0.50:
             top = results[0]
             searched_product_json = top
             alternatives = [
                 item for item in results
-                if item["id"] != top["id"] and float(item.get("match_score") or 0) >= 0.60
+                if item["id"] != top["id"] and float(item.get("match_score") or 0) >= 0.50
             ][:3]
+
+            # NEW-BUG-2: Automatically update ongoing active product to top matched product when score >= 0.50
+            try:
+                from webhooks.tasks import _save_recent_order_interest
+                if memory:
+                    _save_recent_order_interest(
+                        memory,
+                        product_name=top.get("name"),
+                        price=top.get("price"),
+                        source_text=msg_clean
+                    )
+            except Exception:
+                pass
 
     # 4. Fetch active storefront promotions/campaigns if any
     active_promotions_list = []

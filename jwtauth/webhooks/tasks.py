@@ -620,7 +620,7 @@ def _trigger_order_fallback_escalation(agent_config, sender_id, failed_field, la
     return contact_obj
 
 
-ORDER_FIELDS = ['customer_name', 'phone_number', 'address', 'product_name', 'quantity', 'price', 'extra_info', 'district', 'upazila']
+ORDER_FIELDS = ['customer_name', 'phone_number', 'address', 'product_name', 'quantity', 'price', 'extra_info', 'product_id', 'district', 'upazila']
 
 
 def _set_order_state(user_memory, state):
@@ -917,6 +917,22 @@ def _save_order_fields_to_memory(user_memory, order_data, source='ai_extraction'
             order_fields[key] = {
                 'value': value,  # Keep as list/dict
                 'confidence': 1.0,
+                'source': metadata.get('source', source),
+                'updated_at': timezone.now().isoformat()
+            }
+        elif key == 'address':
+            # Step 1: Preserve full_address 100% intact. Never truncate or replace raw details with just area name.
+            old_addr = str(existing.get('value') or '').strip()
+            new_addr = str(value).strip()
+            if old_addr and new_addr and len(new_addr) < len(old_addr) and (new_addr in old_addr):
+                # User sent shorter area name; preserve original detailed address
+                chosen_addr = old_addr
+            else:
+                chosen_addr = new_addr or old_addr
+
+            order_fields[key] = {
+                'value': chosen_addr,
+                'confidence': metadata.get('confidence', existing.get('confidence', 0.95 if source == 'regex_validated' else 0.85)),
                 'source': metadata.get('source', source),
                 'updated_at': timezone.now().isoformat()
             }
@@ -3495,6 +3511,65 @@ def process_ai_reply_task(self, data):
                     order_intent = parsed.get('order_intent') or None
                     order_data = parsed.get('order_data') or {}
 
+                    # NEW: Resolve numbered or textual selection from pending_courier_area_suggestions
+                    user_memory = _get_or_create_user_memory(agent_config, sender_id)
+                    internal = user_memory.data.get('_internal', {})
+                    pending_areas = internal.get('pending_courier_area_suggestions') or []
+                    user_text_clean = str(text or "").strip()
+                    
+                    matched_sugg = None
+                    if pending_areas and user_text_clean:
+                        # Convert Bengali digits to English
+                        bn_to_en = {'১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9'}
+                        norm_input = "".join(bn_to_en.get(c, c) for c in user_text_clean).strip()
+                        if norm_input.isdigit():
+                            sel_idx = int(norm_input)
+                            for s in pending_areas:
+                                if s.get('index') == sel_idx:
+                                    matched_sugg = s
+                                    break
+                        if not matched_sugg:
+                            # Match by name
+                            for s in pending_areas:
+                                s_name = str(s.get('name') or '').strip().lower()
+                                if s_name and (s_name in user_text_clean.lower() or user_text_clean.lower() in s_name):
+                                    matched_sugg = s
+                                    break
+
+                    if matched_sugg:
+                        logger.info("🎯 Customer resolved courier area from suggestions: %s", matched_sugg)
+                        sel_name = matched_sugg.get('name')
+                        sel_city = matched_sugg.get('city_id')
+                        sel_zone = matched_sugg.get('zone_id')
+                        sel_area = matched_sugg.get('area_id')
+                        active_prov = 'pathao' if sel_zone else 'steadfast'
+
+                        # Lock IDs directly
+                        mem_d = user_memory.data or {}
+                        mem_d.setdefault('_internal', {})['courier_location_ids'] = {
+                            active_prov: {"city_id": sel_city, "zone_id": sel_zone, "area_id": sel_area}
+                        }
+                        # Clear pending suggestions
+                        mem_d['_internal'].pop('pending_courier_area_suggestions', None)
+
+                        # Step 1: Preserve full_address 100% intact, append [Courier Hub: <name>] if not present
+                        curr_fields = mem_d['_internal'].get('order_fields', {})
+                        addr_field = curr_fields.get('address', {})
+                        raw_addr = str(addr_field.get('value') or '').strip()
+                        if raw_addr and sel_name and sel_name.lower() not in raw_addr.lower():
+                            raw_addr = f"{raw_addr} [Courier Hub: {sel_name}]"
+                        if raw_addr:
+                            addr_field['value'] = raw_addr
+                            curr_fields['address'] = addr_field
+                            mem_d['_internal']['order_fields'] = curr_fields
+
+                        user_memory.data = mem_d
+                        user_memory.save(update_fields=['data'])
+
+                        # Ensure order intent is create so it proceeds to complete verification
+                        if not order_intent:
+                            order_intent = 'create'
+
                     if order_intent in ['create', 'confirm']:
                         user_memory = _get_or_create_user_memory(agent_config, sender_id)
                         internal = user_memory.data.get('_internal', {})
@@ -3640,12 +3715,14 @@ def process_ai_reply_task(self, data):
                                     call_dist = ai_courier_call.get('district')
                                     call_upz = ai_courier_call.get('upazila')
                                     call_addr = ai_courier_call.get('address') or order_data.get('address')
+                                    fail_cnt = (user_memory.data or {}).get('_internal', {}).get('failed_attempts', {}).get('address', {}).get('count', 0)
                                     logger.info("🤖 AI directly triggered courier_check tool: district=%s, upazila=%s, address=%s", call_dist, call_upz, call_addr)
                                     direct_res = validate_and_suggest_courier_area(
                                         merchant=agent_config.user,
                                         district=call_dist,
                                         upazila=call_upz,
-                                        full_address=call_addr
+                                        full_address=call_addr,
+                                        address_fail_count=fail_cnt
                                     )
                                     loc_ids = direct_res.get('location_ids') or {}
                                     if any(loc_ids.values()):
@@ -3654,13 +3731,23 @@ def process_ai_reply_task(self, data):
                                         user_memory.data = mem_d
                                         user_memory.save(update_fields=['data'])
                                     if direct_res.get('status') == 'needs_clarification' and direct_res.get('suggested_areas'):
-                                        suggestions = direct_res.get('suggested_areas')[:5]
-                                        sugg_text = "\n".join([f"• {a}" for a in suggestions])
+                                        suggestions = direct_res.get('suggested_areas')[:8]
+                                        mem_d = user_memory.data or {}
+                                        mem_d.setdefault('_internal', {})['pending_courier_area_suggestions'] = suggestions
+                                        user_memory.data = mem_d
+                                        user_memory.save(update_fields=['data'])
+                                        sugg_lines = []
+                                        for s in suggestions:
+                                            idx = s.get('index', '•')
+                                            s_name = s.get('name', '')
+                                            sugg_lines.append(f"{idx}. {s_name}")
+                                        sugg_text = "\n".join(sugg_lines)
                                         area_clarification = (
                                             f"\n\nআপনার এলাকাটি কুরিয়ারে নিখুঁতভাবে ডেলিভারির জন্য নিচের এরিয়াগুলোর মধ্যে কোনটি আপনার সবচেয়ে কাছে?\n{sugg_text}\n"
-                                            "অনুগ্রহ করে শুধু আপনার এরিয়ার নামটি জানান।"
+                                            "অনুগ্রহ করে শুধু নম্বর (যেমন ১, ২) অথবা এরিয়ার নামটি জানান।"
                                         )
                                         parsed_reply = (parsed_reply or "").strip() + area_clarification
+                                        _set_order_state(user_memory, 'collecting_details')
                                 except Exception as direct_tool_err:
                                     logger.warning("Error running AI-triggered courier check: %s", direct_tool_err)
 
@@ -3670,11 +3757,13 @@ def process_ai_reply_task(self, data):
                                 try:
                                     from aiAgent.tools.courier_validation_tool import validate_and_suggest_courier_area
                                     plain_slots = _get_plain_order_values(user_memory)
+                                    fail_cnt = (user_memory.data or {}).get('_internal', {}).get('failed_attempts', {}).get('address', {}).get('count', 0)
                                     val_res = validate_and_suggest_courier_area(
                                         merchant=agent_config.user,
                                         district=plain_slots.get('district'),
                                         upazila=plain_slots.get('upazila'),
-                                        full_address=plain_slots.get('address')
+                                        full_address=plain_slots.get('address'),
+                                        address_fail_count=fail_cnt
                                     )
 
                                     if val_res.get('status') == 'needs_clarification' and val_res.get('suggested_areas'):
@@ -3686,11 +3775,25 @@ def process_ai_reply_task(self, data):
                                             user_memory.data = mem_d
                                             user_memory.save(update_fields=['data'])
 
-                                        suggestions = val_res.get('suggested_areas')[:5]
-                                        sugg_text = "\n".join([f"• {a}" for a in suggestions])
+                                        suggestions = val_res.get('suggested_areas')[:8]
+                                        mem_d = user_memory.data or {}
+                                        mem_d.setdefault('_internal', {})['pending_courier_area_suggestions'] = suggestions
+                                        user_memory.data = mem_d
+                                        user_memory.save(update_fields=['data'])
+
+                                        # Step 3: Downgrade any confirm intent to create; never confirm before courier hub is locked
+                                        if order_intent == 'confirm':
+                                            order_intent = 'create'
+
+                                        sugg_lines = []
+                                        for s in suggestions:
+                                            idx = s.get('index', '•')
+                                            s_name = s.get('name', '')
+                                            sugg_lines.append(f"{idx}. {s_name}")
+                                        sugg_text = "\n".join(sugg_lines)
                                         area_clarification = (
                                             f"\n\nআপনার এলাকাটি কুরিয়ারে নিখুঁতভাবে ডেলিভারির জন্য নিচের এরিয়াগুলোর মধ্যে কোনটি আপনার সবচেয়ে কাছে?\n{sugg_text}\n"
-                                            "অনুগ্রহ করে শুধু আপনার এরিয়ার নামটি জানান।"
+                                            "অনুগ্রহ করে শুধু নম্বর (যেমন ১, ২) অথবা এরিয়ার নামটি জানান।"
                                         )
                                         parsed_reply = (parsed_reply or "").strip() + area_clarification
                                         _set_order_state(user_memory, 'collecting_details')
@@ -3700,6 +3803,8 @@ def process_ai_reply_task(self, data):
                                         if any(loc_ids.values()):
                                             mem_d = user_memory.data or {}
                                             mem_d.setdefault('_internal', {})['courier_location_ids'] = {val_res.get('provider'): loc_ids}
+                                            # Clean pending suggestions once locked
+                                            mem_d['_internal'].pop('pending_courier_area_suggestions', None)
                                             user_memory.data = mem_d
                                             user_memory.save(update_fields=['data'])
 
@@ -3830,10 +3935,7 @@ def process_ai_reply_task(self, data):
                 parsed = {'reply': parsed_reply}
 
             user_msg_clean = (text or '').lower()
-            asked_for_image = any(kw in user_msg_clean for kw in [
-                'ছবি', 'পিক', 'pic', 'photo', 'image', 'picture', 'দেখান', 'দেখাও', 'দেখতে চাই', 'look'
-            ])
-            if has_markdown_img or asked_for_image:
+            if has_markdown_img:
                 parsed['image_intent'] = True
             elif not parsed.get('image_intent'):
                 parsed['image_intent'] = False
