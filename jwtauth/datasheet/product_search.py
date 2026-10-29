@@ -759,6 +759,11 @@ def build_product_context(user, message, agent=None, sender_id=None):
     except Exception:
         pass
 
+    # Extract delivered image product IDs from session memory
+    images_sent_product_ids = []
+    if memory and isinstance(memory.data, dict):
+        images_sent_product_ids = memory.data.get("_internal", {}).get("images_sent_product_ids", [])
+
     from aiAgent.prompts.catalog_dsl import build_catalog_dsl
     catalog_dsl_str = build_catalog_dsl(
         active_inventory=inventory_anchor,
@@ -767,6 +772,7 @@ def build_product_context(user, message, agent=None, sender_id=None):
         confidence=confidence,
         is_list_selection=is_list_selection,
         active_promotions=active_promotions_list,
+        images_sent_product_ids=images_sent_product_ids,
     )
 
     logger.info(

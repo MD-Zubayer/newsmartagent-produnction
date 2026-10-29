@@ -60,7 +60,8 @@ def build_classification_dsl(
             )
         image_rules = (
             "\n  <visual_delivery_rules>\n"
-            "    - Set image_intent=true and fill image_ids if customer asks for photos or to view the product (e.g. 'ছবি পাঠান', 'ছবি দেন', 'দেখান তো', 'দেখতে পারি', 'ছবি আছে?', 'ছবি দাও'), OR when recommending products from catalog.\n"
+            "    - When images_already_sent='false' (in catalog context): Set image_intent=true and fill image_ids when introducing/recommending the product for the first time OR when customer asks for photos (e.g. 'ছবি পাঠান', 'ছবি দেন', 'দেখান তো', 'দেখতে পারি', 'ছবি আছে?', 'ছবি দাও').\n"
+            "    - When images_already_sent='true': The customer already received the photos in this conversation. Set image_intent=false for all follow-up questions (quality, warranty, battery, pricing, or referencing previously sent photos like 'ছবিতে যেমন দেখছি তেমন পাবো তো?'). Set image_intent=true again ONLY if customer explicitly asks to see the photos again or if you recommend a different product whose images_already_sent is 'false'.\n"
             "    - NEVER output markdown image links like ![...](...) or url placeholders in 'reply'. The system delivers photos automatically when image_intent is true.\n"
             "    - NEVER claim you cannot show, send, attach, or upload images. System handles delivery automatically.\n"
             "    - Phrasing: Write a welcoming delivery phrase in 'reply' (e.g. 'অবশ্যই, নিচে ছবি দেওয়া হলো:'). NEVER say future tense 'আমি ছবি পাঠাচ্ছি' or 'ছবি পাঠাবো'."
@@ -79,11 +80,11 @@ def build_classification_dsl(
         f'{cache_section}'
         '\n  <intent_rules>\n'
         '    ORDER_INTENT:\n'
-        '      - "create": Customer expresses interest in ordering, wants to buy/take product (e.g. "অর্ডার করতে চাই", "কিনতে চাই", "১টা দেন"), or provides order details.\n'
-        '      - "confirm": Customer explicitly accepts or confirms draft order details in chat history.\n'
+        '      - "create": Customer expresses unambiguous interest in placing an order or provides order slot details (e.g. "অর্ডার করতে চাই", "১টা দেন", giving phone/address).\n'
+        '      - "confirm": Customer explicitly and purely confirms/accepts the draft shown in chat history (e.g. "হ্যাঁ", "হ", "ঠিক আছে", "কনফার্ম", "ok", "yes") WITHOUT repeating or providing full address/contact details. If customer sends a voice note or message repeating their address/location (even if the address matches the draft!), do NOT set "confirm" — set order_intent="create" and ask them to confirm with a simple "হ্যাঁ" or click 🛒 অর্ডার.\n'
         '      - "cancel": Customer explicitly cancels an active ongoing order or draft (e.g. "অর্ডার বাতিল করুন", "অর্ডার লাগবে না", "ক্যান্সেল করুন").\n'
-        '      - "interrupted": Customer asks a side question (delivery fee, office hours, policy) instead of confirming.\n'
-        '      - null: Customer complaints, criticism, objections (e.g. "বাজে প্রোডাক্ট", "ঠকান আপনারা", "ভালো না"), non-order conversation, or general inquiry. Always respond empathetically in "reply".\n'
+        '      - "interrupted": Customer asks a side question (delivery fee, office hours, policy) during active slot collection.\n'
+        '      - null: Set order_intent=null when customer asks hesitant, conditional, quality, warranty, return policy, or authenticity questions (e.g. "নিতে তো চাই, কিন্তু কেমন হবে? নষ্ট হয়ে গেলে?", "ছবির মতো না হলে ফেরত দেওয়া যাবে?", "ভালো হবে তো?"), complaints, criticism, or general inquiry. Even if message contains "নিতে চাই" or "কিনবো", if it is conditional on quality/warranty, keep order_intent=null, address their question empathetically, and warmly ask if they would like to proceed with the order.\n'
         '\n'
         '    ORDER_DATA:\n'
         '      - Always populate "order_data": {"product_name": "string or null"} tracking active product from conversation, even if order_intent is null.\n'

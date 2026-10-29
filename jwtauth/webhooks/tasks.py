@@ -380,6 +380,20 @@ def _deliver_images_for_ai_response(request_type, data, parsed_ai, best_row_id, 
                         'product_gallery_images_delivered product_id=%s variant_id=%s image_count=%s',
                         product.id, variant_id, len(image_items)
                     )
+                    # Record delivered product_id in UserMemory so AI knows images were already delivered in chat
+                    try:
+                        user_mem = _get_or_create_user_memory(agent_config, sender_id)
+                        m_data = user_mem.data or {}
+                        m_internal = m_data.get('_internal', {})
+                        sent_pids = m_internal.get('images_sent_product_ids', [])
+                        if product.id not in sent_pids:
+                            sent_pids.append(product.id)
+                            m_internal['images_sent_product_ids'] = sent_pids[-20:]
+                            m_data['_internal'] = m_internal
+                            user_mem.data = m_data
+                            user_mem.save(update_fields=['data'])
+                    except Exception as track_err:
+                        logger.warning('Failed tracking sent image product id: %s', track_err)
                     return True, route_result
     except Exception as product_image_err:
         logger.warning('product_gallery_delivery_failed error=%s', type(product_image_err).__name__)
@@ -3526,10 +3540,12 @@ def process_ai_reply_task(self, data):
                             msg_trace_id, order_intent, current_state, json.dumps(order_data, ensure_ascii=False, default=str)
                         )
                     if order_intent == 'confirm':
-                        # BUG-3 Fix: Verify if the user modified/corrected any fields (e.g. address, name, qty)
-                        # If a field was modified or if message is a descriptive sentence, treat as an edit (do not auto-finalize!)
+                        # LIVE-BUG-2 & BUG-3 Fix: Pure State & AI-Driven Order Finalization Guard
+                        # Check whether user modified slots OR repeated address/location in awaiting_confirmation
                         is_modification = False
+                        is_repeated_address_turn = False
                         prev_fields = _get_order_fields(user_memory) if user_memory else {}
+                        
                         if isinstance(order_data, dict):
                             for f in ('customer_name', 'phone_number', 'address', 'upazila', 'district', 'quantity'):
                                 new_v = order_data.get(f)
@@ -3538,8 +3554,15 @@ def process_ai_reply_task(self, data):
                                     is_modification = True
                                     logger.info(f"🔄 Order modification detected on '{f}' ({old_v} -> {new_v}). Showing updated draft instead of auto-confirm.")
                                     break
+                            
+                            # If new address is supplied and equals existing collected address, user is repeating location/voice note
+                            new_addr = order_data.get('address')
+                            old_addr = prev_fields.get('address', {}).get('value')
+                            if new_addr and old_addr and str(new_addr).strip() == str(old_addr).strip():
+                                is_repeated_address_turn = True
+                                logger.info("⚠️ User repeated identical address/voice in awaiting_confirmation. Guarding against auto-confirm.")
 
-                        if current_state == 'awaiting_confirmation' and not is_modification:
+                        if current_state == 'awaiting_confirmation' and not is_modification and not is_repeated_address_turn:
                             logger.info("Order confirm intent detected! Creating order...")
                             order_obj = create_customer_order_from_memory(agent_config, sender_id, request_type, msg_id=msg_id)
                             if order_obj:
@@ -3554,11 +3577,25 @@ def process_ai_reply_task(self, data):
                                 parsed_reply = "দুঃখিত, আপনার অর্ডার নিশ্চিত করা যায়নি। দয়া করে আবার চেষ্টা করুন।"
                                 cache_type = 'no_cache'
                         else:
-                            if is_modification:
+                            if is_repeated_address_turn:
+                                # Count repeated failure / hesitation turn on confirmation
+                                stats = _increment_field_failure(user_memory, 'order_confirmation')
+                                if stats.get('count', 0) >= 2:
+                                    logger.info("Repeated confirmation failure (>= 2). Triggering human handoff.")
+                                    contact_obj = send_human_fallback_email(agent_config, sender_id, text, request_type)
+                                    parsed_reply = "আপনার অর্ডার সংক্রান্ত তথ্যের জন্য আমাদের একজন প্রতিনিধি শীঘ্রই আপনার সাথে যোগাযোগ করবেন।"
+                                else:
+                                    parsed_reply = (
+                                        "আপনার ঠিকানা ড্রাফটে সংরক্ষিত আছে। অর্ডারটি নিশ্চিত করতে অনুগ্রহ করে শুধু 'হ্যাঁ' লিখুন "
+                                        "অথবা নিচের 🛒 অর্ডার বাটনে ক্লিক করুন।"
+                                    )
+                                order_intent = 'create'
+                            elif is_modification:
                                 logger.info("Field modified during confirmation stage. Re-routing intent to 'create' to update draft.")
+                                order_intent = 'create'
                             else:
                                 logger.warning("AI sent confirm intent but order state is not awaiting_confirmation. Redirecting to create.")
-                            order_intent = 'create'
+                                order_intent = 'create'
 
                     if order_intent == 'cancel':
                         logger.info("Order cancel intent detected! Clearing order...")

@@ -24,6 +24,7 @@ def build_catalog_dsl(
     confidence: float = 0.0,
     is_list_selection: bool = False,
     active_promotions: Optional[list] = None,
+    images_sent_product_ids: Optional[list] = None,
 ) -> str:
     """
     Build the universal Catalog & Multi-Track Product DSL.
@@ -35,11 +36,14 @@ def build_catalog_dsl(
         confidence: Match confidence score of searched_product.
         is_list_selection: True if customer chose an item number from a previously listed list.
         active_promotions: Optional list of active storewide promotions/campaigns.
+        images_sent_product_ids: Product IDs whose images have already been delivered in this conversation session.
         
     Returns:
         Structured XML-Declarative DSL string.
     """
     dsl_parts = ['<catalog_context version="2.1">']
+
+    images_sent = set(images_sent_product_ids or [])
 
     # 1. Store Active Inventory Anchor (~30-40 tokens)
     if active_inventory:
@@ -58,8 +62,9 @@ def build_catalog_dsl(
         prod_id = ongoing_product.get("id") or ""
         prod_name = ongoing_product.get("name") or ""
         img_flag = ' has_images="true"' if ongoing_product.get("has_images") else ''
+        sent_flag = f' images_already_sent="{"true" if prod_id in images_sent else "false"}"'
         dsl_parts.append(
-            f'  <active_product id="{prod_id}" name="{prod_name}"{img_flag}>\n'
+            f'  <active_product id="{prod_id}" name="{prod_name}"{img_flag}{sent_flag}>\n'
             f'    {json.dumps(ongoing_product, ensure_ascii=False, default=str)}\n'
             f'  </active_product>'
         )
@@ -69,8 +74,9 @@ def build_catalog_dsl(
         prod_id = searched_product.get("id") or ""
         prod_name = searched_product.get("name") or ""
         img_flag = ' has_images="true"' if searched_product.get("has_images") else ''
+        sent_flag = f' images_already_sent="{"true" if prod_id in images_sent else "false"}"'
         dsl_parts.append(
-            f'  <searched_product id="{prod_id}" name="{prod_name}" confidence="{confidence:.2f}"{img_flag}>\n'
+            f'  <searched_product id="{prod_id}" name="{prod_name}" confidence="{confidence:.2f}"{img_flag}{sent_flag}>\n'
             f'    {json.dumps(searched_product, ensure_ascii=False, default=str)}\n'
             f'  </searched_product>'
         )
