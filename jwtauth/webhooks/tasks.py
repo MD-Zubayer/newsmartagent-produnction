@@ -3715,13 +3715,15 @@ def process_ai_reply_task(self, data):
                                     call_dist = ai_courier_call.get('district')
                                     call_upz = ai_courier_call.get('upazila')
                                     call_addr = ai_courier_call.get('address') or order_data.get('address')
+                                    call_hint = ai_courier_call.get('sub_area_hint')
                                     fail_cnt = (user_memory.data or {}).get('_internal', {}).get('failed_attempts', {}).get('address', {}).get('count', 0)
-                                    logger.info("🤖 AI directly triggered courier_check tool: district=%s, upazila=%s, address=%s", call_dist, call_upz, call_addr)
+                                    logger.info("🤖 AI directly triggered courier_check tool: district=%s, upazila=%s, address=%s, hint=%s", call_dist, call_upz, call_addr, call_hint)
                                     direct_res = validate_and_suggest_courier_area(
                                         merchant=agent_config.user,
                                         district=call_dist,
                                         upazila=call_upz,
                                         full_address=call_addr,
+                                        sub_area_hint=call_hint,
                                         address_fail_count=fail_cnt
                                     )
                                     loc_ids = direct_res.get('location_ids') or {}

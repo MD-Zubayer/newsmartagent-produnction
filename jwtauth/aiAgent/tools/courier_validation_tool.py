@@ -42,6 +42,10 @@ def get_courier_validation_tool_definition() -> Dict[str, Any]:
                 "address": {
                     "type": "string",
                     "description": "Full Bengali or English address including village, road, or landmarks"
+                },
+                "sub_area_hint": {
+                    "type": "string",
+                    "description": "Specific union, bazar, or landmark extracted by AI if identified in context"
                 }
             },
             "required": ["district"]
@@ -76,30 +80,22 @@ def get_active_courier_for_merchant(merchant) -> str:
     return 'steadfast'
 
 
-def _extract_address_keywords(full_address: str) -> List[str]:
-    """Extract search terms from full address for matching hubs/areas."""
-    if not full_address:
-        return []
-    cleaned = full_address.replace(',', ' ').replace(';', ' ').replace('.', ' ')
-    stop_words = {'গ্রাম', 'গ্রাম:', 'ডাকঘর', 'ডাকঘর:', 'থানা', 'থana', 'জেলা', 'road', 'house', 'ward', 'মোবাইল', 'ফোন'}
-    words = []
-    for part in cleaned.split():
-        p = part.strip()
-        if len(p) >= 3 and p.lower() not in stop_words:
-            words.append(p)
-    return words
-
-
 def validate_and_suggest_courier_area(
     merchant,
     district: Optional[str] = None,
     upazila: Optional[str] = None,
     full_address: Optional[str] = None,
+    sub_area_hint: Optional[str] = None,
     provider: Optional[str] = None,
     address_fail_count: int = 0,
 ) -> Dict[str, Any]:
     """
     Validates the customer address against the merchant's courier provider.
+    
+    Zero Naive Backend Splitting:
+    - Anchors strictly to district and upazila/zone.
+    - If exact area is not in courier coverage, returns verified hubs within the zone
+      so the customer or AI selects the nearest genuine hub.
     
     Returns:
         {
@@ -123,6 +119,7 @@ def validate_and_suggest_courier_area(
     district_clean = str(district or "").strip()
     upazila_clean = str(upazila or "").strip()
     full_addr_clean = str(full_address or "").strip()
+    hint_clean = str(sub_area_hint or "").strip()
 
     result = {
         "status": "needs_clarification",
@@ -137,7 +134,7 @@ def validate_and_suggest_courier_area(
         result["message"] = "ঠিকানা প্রদান করা হয়নি।"
         return result
 
-    # 1. First run Redis high-speed cache matcher
+    # 1. High-speed cache matcher
     try:
         redis_match = match_address_redis(district_clean, upazila_clean, full_addr_clean)
         prov_match = redis_match.get(active_provider) or {}
@@ -146,15 +143,16 @@ def validate_and_suggest_courier_area(
         prov_match = {}
 
     if active_provider == 'pathao':
-        return _validate_pathao(district_clean, upazila_clean, full_addr_clean, prov_match, result, address_fail_count)
+        return _validate_pathao(district_clean, upazila_clean, full_addr_clean, hint_clean, prov_match, result, address_fail_count)
     else:
-        return _validate_steadfast(district_clean, upazila_clean, full_addr_clean, prov_match, result, address_fail_count)
+        return _validate_steadfast(district_clean, upazila_clean, full_addr_clean, hint_clean, prov_match, result, address_fail_count)
 
 
 def _validate_pathao(
     district: str,
     upazila: str,
     full_address: str,
+    sub_area_hint: str,
     prov_match: dict,
     result: dict,
     address_fail_count: int = 0
@@ -196,7 +194,7 @@ def _validate_pathao(
         result["message"] = f"জেলা '{district}' পাঠাও কুরিয়ার সার্ভিসের আওতায় পাওয়া যায়নি।"
         return result
 
-    # If zone not found under this city, search if upazila is under another city or suggest zones
+    # If zone not found under this city, suggest available zones for customer/AI clarification
     if not zone_id:
         avail_zones = list(PathaoZone.objects.filter(city_id=city_id).values_list('zone_name', flat=True)[:8])
         structured = []
@@ -214,31 +212,27 @@ def _validate_pathao(
         result["message"] = f"আপনার জেলা '{result['matched_names']['city']}' নিশ্চিত হয়েছে। অনুগ্রহ করে থানা বা জোন নির্বাচন করুন।"
         return result
 
-    # Step 2: Validate Area under Zone, and search Border/Adjacent Upazilas within District if needed
-    addr_keywords = _extract_address_keywords(full_address)
-    
-    if not area_id and full_address:
-        # 1. Exact or partial match inside stated zone
+    # Validate Area strictly anchored under this Zone
+    if not area_id and (sub_area_hint or full_address):
         area_objs = list(PathaoArea.objects.filter(zone_id=zone_id))
-        for a in area_objs:
-            a_lower = a.area_name.lower()
-            if a_lower in full_address.lower() or any(k.lower() == a_lower for k in addr_keywords):
-                area_id = a.area_id
-                result["matched_names"]["area"] = a.area_name
-                break
+        
+        # 1. Match sub_area_hint provided by AI
+        if sub_area_hint:
+            hint_l = sub_area_hint.lower()
+            for a in area_objs:
+                if a.area_name.lower() in hint_l or hint_l in a.area_name.lower():
+                    area_id = a.area_id
+                    result["matched_names"]["area"] = a.area_name
+                    break
 
-    # 2. Border/Adjacent Upazila search across the entire district if still unmatched
-    if not area_id and addr_keywords and city_id:
-        for kw in addr_keywords:
-            b_area = PathaoArea.objects.filter(zone__city_id=city_id, area_name__icontains=kw).select_related('zone').first()
-            if b_area:
-                area_id = b_area.area_id
-                zone_id = b_area.zone_id
-                result["location_ids"]["zone_id"] = zone_id
-                result["matched_names"]["zone"] = b_area.zone.zone_name if b_area.zone else result["matched_names"]["zone"]
-                result["matched_names"]["area"] = b_area.area_name
-                logger.info(f"🌐 Border/Cross-upazila Pathao match: '{kw}' matched {b_area.area_name} in {result['matched_names']['zone']}")
-                break
+        # 2. Check if full_address text contains full official area name under this zone
+        if not area_id and full_address:
+            full_addr_lower = full_address.lower()
+            for a in area_objs:
+                if a.area_name.lower() in full_addr_lower:
+                    area_id = a.area_id
+                    result["matched_names"]["area"] = a.area_name
+                    break
 
     if area_id:
         result["location_ids"]["area_id"] = area_id
@@ -250,7 +244,7 @@ def _validate_pathao(
         result["message"] = "পাঠাও কুরিয়ার এরিয়া সম্পূর্ণ ভ্যালিড।"
         return result
 
-    # Infinite loop guard: If customer has already clarified >= 2 times, fallback to first hub or accept zone
+    # Infinite loop guard: If customer has already clarified >= 2 times, fallback to first zone hub
     if address_fail_count >= 2:
         first_area = PathaoArea.objects.filter(zone_id=zone_id).first()
         if first_area:
@@ -260,39 +254,15 @@ def _validate_pathao(
             result["message"] = f"ঠিকানা গ্রহণ করা হয়েছে। থানা হাব: {first_area.area_name}"
             return result
 
-    # Smart Area Suggestions: Prioritize fuzzy/partial matches from address keywords first
-    candidate_areas = []
-    seen_area_ids = set()
-
-    # Search by address keywords within zone
-    for kw in addr_keywords:
-        for a in PathaoArea.objects.filter(zone_id=zone_id, area_name__icontains=kw)[:5]:
-            if a.area_id not in seen_area_ids:
-                seen_area_ids.add(a.area_id)
-                candidate_areas.append(a)
-
-    # Search border/adjacent zones in same district if still < 8
-    if len(candidate_areas) < 8:
-        for kw in addr_keywords:
-            for a in PathaoArea.objects.filter(zone__city_id=city_id, area_name__icontains=kw).select_related('zone')[:5]:
-                if a.area_id not in seen_area_ids:
-                    seen_area_ids.add(a.area_id)
-                    candidate_areas.append(a)
-
-    # Fill remaining from current zone
-    if len(candidate_areas) < 8:
-        for a in PathaoArea.objects.filter(zone_id=zone_id)[:10]:
-            if a.area_id not in seen_area_ids:
-                seen_area_ids.add(a.area_id)
-                candidate_areas.append(a)
-
+    # Fetch genuine hubs/sub-areas belonging strictly to this zone
+    zone_areas = list(PathaoArea.objects.filter(zone_id=zone_id)[:8])
     structured_suggestions = []
-    for idx, a in enumerate(candidate_areas[:8], 1):
+    for idx, a in enumerate(zone_areas, 1):
         structured_suggestions.append({
             "index": idx,
             "name": a.area_name,
             "city_id": city_id,
-            "zone_id": a.zone_id if hasattr(a, 'zone_id') else zone_id,
+            "zone_id": zone_id,
             "area_id": a.area_id
         })
 
@@ -306,6 +276,7 @@ def _validate_steadfast(
     district: str,
     upazila: str,
     full_address: str,
+    sub_area_hint: str,
     prov_match: dict,
     result: dict,
     address_fail_count: int = 0
@@ -332,33 +303,19 @@ def _validate_steadfast(
         result["message"] = f"জেলা '{district}' স্টিডফাস্ট কুরিয়ারের তালিকায় পাওয়া যায়নি।"
         return result
 
-    addr_keywords = _extract_address_keywords(full_address)
-    search_terms = []
-    if upazila:
-        search_terms.append(upazila)
-    search_terms.extend(addr_keywords)
-
-    # Check Area (Thana or Sub-area) under this City
+    # Check Area (Thana or Sub-area) strictly under this City
     if not area_id:
-        for term in search_terms:
-            a_obj = SteadFastArea.objects.filter(city_id=city_id, area_name__icontains=term).first()
+        if upazila:
+            a_obj = SteadFastArea.objects.filter(city_id=city_id, area_name__icontains=upazila).first()
             if a_obj:
                 area_id = a_obj.area_id
                 result["matched_names"]["area"] = a_obj.area_name
-                break
 
-    # Border/Cross-upazila check if upazila or keywords belong to an adjacent area in Steadfast
-    if not area_id and search_terms:
-        for term in search_terms:
-            b_obj = SteadFastArea.objects.filter(area_name__icontains=term).select_related('city').first()
-            if b_obj:
-                area_id = b_obj.area_id
-                city_id = b_obj.city_id
-                result["location_ids"]["city_id"] = city_id
-                result["matched_names"]["city"] = b_obj.city.city_name if b_obj.city else result["matched_names"]["city"]
-                result["matched_names"]["area"] = b_obj.area_name
-                logger.info(f"🌐 Border Steadfast match: '{term}' matched {b_obj.area_name} under city {result['matched_names']['city']}")
-                break
+        if not area_id and sub_area_hint:
+            a_obj = SteadFastArea.objects.filter(city_id=city_id, area_name__icontains=sub_area_hint).first()
+            if a_obj:
+                area_id = a_obj.area_id
+                result["matched_names"]["area"] = a_obj.area_name
 
     if area_id:
         result["location_ids"]["area_id"] = area_id
@@ -377,24 +334,10 @@ def _validate_steadfast(
         result["message"] = f"জেলা '{result['matched_names']['city']}' নিশ্চিত হয়েছে। পূর্ণ ঠিকানা স্টিডফাস্ট কুরিয়ারে বুকিং করা যাবে।"
         return result
 
-    # Area not yet matched: fetch areas/thanas under this district
-    candidate_areas = []
-    seen_area_ids = set()
-
-    for term in search_terms:
-        for a in SteadFastArea.objects.filter(city_id=city_id, area_name__icontains=term)[:5]:
-            if a.area_id not in seen_area_ids:
-                seen_area_ids.add(a.area_id)
-                candidate_areas.append(a)
-
-    if len(candidate_areas) < 8:
-        for a in SteadFastArea.objects.filter(city_id=city_id)[:10]:
-            if a.area_id not in seen_area_ids:
-                seen_area_ids.add(a.area_id)
-                candidate_areas.append(a)
-
+    # Area not yet matched: fetch areas/thanas strictly under this district
+    district_areas = list(SteadFastArea.objects.filter(city_id=city_id)[:8])
     structured_suggestions = []
-    for idx, a in enumerate(candidate_areas[:8], 1):
+    for idx, a in enumerate(district_areas, 1):
         structured_suggestions.append({
             "index": idx,
             "name": a.area_name,

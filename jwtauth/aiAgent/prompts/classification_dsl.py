@@ -93,7 +93,7 @@ def build_classification_dsl(
         '      - Map raw visual descriptions back to authoritative catalog product name; never invent names or prices.\n'
         '\n'
         '    COURIER_CHECK_INTENT:\n'
-        '      - Whenever customer provides or updates address with district and/or upazila/thana (even in Bengali e.g. "ফরিদপুর ভাঙ্গা বটতলা"), populate "courier_check": {"district": "Faridpur", "upazila": "Bhanga", "address": "ফরিদপুর ভাঙ্গা বটতলা"}. The system invokes live courier coverage validation for these parameters.\n'
+        '      - Whenever customer provides or updates address with district and/or upazila/thana (even in Bengali e.g. "ফরিদপুর ভাঙ্গা বটতলা"), populate "courier_check": {"district": "Faridpur", "upazila": "Bhanga", "address": "ফরিদপুর ভাঙ্গা বটতলা", "sub_area_hint": "বটতলা"}. The system invokes live courier coverage validation for these parameters.\n'
         '  </intent_rules>'
         f'{image_rules}\n'
         '</response_classification_dsl>'
