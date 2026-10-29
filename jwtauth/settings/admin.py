@@ -10,8 +10,8 @@ admin.site.register(AgentSettings)
 
 @admin.register(GlobalSettings)
 class GlobalSettingsAdmin(admin.ModelAdmin):
-    fields = ('image_caption_provider', 'dashboard_ai_model', 'youtube_check_interval', 'payment_verify_threshold')
-    list_display = ('image_caption_provider', 'dashboard_ai_model', 'youtube_check_interval', 'payment_verify_threshold')
+    fields = ('image_caption_provider', 'dashboard_ai_model', 'youtube_check_interval', 'payment_verify_threshold', 'global_redis_cache_enabled')
+    list_display = ('image_caption_provider', 'dashboard_ai_model', 'youtube_check_interval', 'payment_verify_threshold', 'global_redis_cache_enabled')
 
     # Only allow one instance to be edited
     def has_add_permission(self, request):

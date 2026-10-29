@@ -18,6 +18,7 @@ from webhooks.constants import TARGET_KEYWORDS
 from aiAgent.data_processor import processor_spreadsheet_data
 import json
 from django.http import JsonResponse
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 import time
 from embedding.models import SpreadsheetKnowledge, DocumentKnowledge
@@ -64,6 +65,14 @@ def get_order_instructions(user):
         else:
             order_instruction = _default_direct_order_instructions()
 
+        try:
+            from ai_extensions.resolver import apply_text_override
+            order_instruction, _ = apply_text_override(
+                "order-instruction", order_instruction, user=user,
+                context={"user_id": getattr(user, "pk", None)},
+            )
+        except Exception:
+            pass
         return order_instruction
     except Exception as e:
         logger.error(f"Settings Error while fetching order instructions: {e}")
@@ -71,29 +80,8 @@ def get_order_instructions(user):
 
 
 def _default_direct_order_instructions():
-    return (
-        "You are a conversational sales assistant for the merchant. "
-        "Do not tell customers to use any order form or external link. "
-        "If the customer wants to buy, take their order directly in chat. "
-        "Collect required customer details in a friendly way: customer_name, phone_number, address, product_name, quantity, and any special instructions. "
-        "Do not ask the customer for product price and do not invent price; price must come from the merchant catalog or knowledge base. "
-        "Never ask for the same field twice. Always remember details already collected from earlier messages in this conversation. "
-        "If the user gives multiple details in one message, use them immediately. "
-        "If any required detail is missing, ask only for that missing detail. "
-        "ALWAYS return a valid JSON object containing ALL of the following keys in every response: "
-        "\"reply\", \"cache_type\", \"human_handoff\", \"order_intent\", \"order_data\", \"image_intent\", and \"image_ids\". "
-        "If there is no order intent, set \"order_intent\": null and \"order_data\": {}. "
-        "If there is no image request or recommendation, set \"image_intent\": false and \"image_ids\": []. "
-        "\"order_intent\" should be \"create\" when the user confirms interest, wants to order, or provides order details. "
-        "\"order_data\" should be an object containing customer_name, phone_number, address, district, upazila, and extra_info when available. "
-        "Identify and extract the 'district' (district/জেলা name in English) and 'upazila' (upazila/thana name in English) from the customer address or chat text using your knowledge of Bangladesh geography, returning them as separate keys inside 'order_data'. "
-        "CRITICAL: For products, \"order_data\" MUST include an \"items\" array. Each element in \"items\" must be an object with \"name\" and \"quantity\". "
-        "Example: \"items\": [{\"name\": \"product 1\", \"quantity\": 1}, {\"name\": \"product 2\", \"quantity\": 2}]. "
-        "Do not include price unless the user explicitly provided it; backend will merge catalog price. "
-        "If the user is confirming details or answering follow-up questions, do not repeat earlier questions. "
-        "Keep the reply natural, polite, and simple. "
-        "If the user is not placing an order, answer normally."
-    )
+    from aiAgent.business_logic.order_dsl import build_order_protocol_dsl
+    return build_order_protocol_dsl()
 
 
 def perform_rag_search(agent_config, text, post_context_text, order_instruction, existing_vector=None, vector_type='text', image_caption=None, sender_id=None):
@@ -106,16 +94,32 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
     rag_query = f"{post_context_text} {text}" if post_context_text else text
     try:
         from aiAgent.models import UserMemory
+        from datasheet.models import Product
+        from datasheet.product_search import normalize_product_text
         memory = UserMemory.objects.filter(ai_agent=agent_config, sender_id=str(sender_id).lower()).first()
         if memory and isinstance(memory.data, dict):
             internal = memory.data.get('_internal', {})
             recent_interest = internal.get('recent_order_interest') or {}
             prod_name = recent_interest.get('product_name')
+            if not prod_name:
+                last_ids = internal.get('last_viewed_product_ids', [])
+                if last_ids:
+                    prod_name = Product.objects.filter(user=agent_config.user, id__in=last_ids[:1], is_archived=False).values_list('name', flat=True).first()
             if prod_name:
-                rag_query = f"{rag_query} {prod_name}"
-                logger.info(f"✨ Appended recent interest product '{prod_name}' to RAG query. New query: '{rag_query}'")
+                active_products = list(
+                    Product.objects.filter(user=agent_config.user, status="active", is_archived=False).values_list("name", flat=True)
+                )
+                prev_tokens = set(normalize_product_text(prod_name).split())
+                other_catalog_tokens = set()
+                for name in active_products:
+                    name_norm = normalize_product_text(name)
+                    tokens = {t for t in name_norm.split() if len(t) >= 3 and not t.isdigit()}
+                    other_catalog_tokens.update(tokens - prev_tokens)
+
+                # Note: Dual-Track RAG handles product follow-up context via build_product_context
+                pass
     except Exception as e:
-        logger.error(f"Error appending recent interest to RAG query: {e}")
+        logger.error("Error reading active product for RAG query: %s", e)
     
     def _confidence_label(distance):
         if distance is None:
@@ -205,6 +209,24 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
 
         
         if query_vector:
+            try:
+                from ai_extensions.hooks import run_retrieval_override
+                extension_result, applied_extension = run_retrieval_override(
+                    query=rag_query,
+                    agent=agent_config,
+                    user=getattr(agent_config, "user", None),
+                    context={"query_vector": query_vector, "vector_type": vector_type, "sender_id": sender_id},
+                )
+                if isinstance(extension_result, dict) and extension_result.get("sheet_context") is not None:
+                    logger.info("🧩 Applied retrieval extension: %s", applied_extension)
+                    return (
+                        extension_result.get("sheet_context", ""),
+                        extension_result.get("extra_instruction", ""),
+                        extension_result.get("query_vector", query_vector),
+                        extension_result.get("best_hit_row_id"),
+                    )
+            except Exception:
+                logger.exception("Retrieval extension layer failed; continuing with base RAG")
             # 🔍 Scope Filtering logic:
             # - Global (সব এজেন্ট পাবে)
             # - Agent Specific (শুধু এই নির্দিষ্ট এজেন্ট পাবে)
@@ -357,6 +379,18 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                     return candidate_hits
                 
                 try:
+                    from ai_extensions.provider_hooks import run_provider_override
+                    provider_result, provider_version = run_provider_override(
+                        key="rag-rerank-provider",
+                        payload={"prompt": query_text, "images": [{"row_id": h.get("row_id"), "content": h.get("content")} for h in candidate_hits]},
+                        agent=config, user=getattr(config, "user", None),
+                        context={"query": query_text, "candidate_count": len(candidate_hits)}, base_fallback=None,
+                    )
+                    if provider_version:
+                        ordered_ids = provider_result.get("data", []) if isinstance(provider_result, dict) else []
+                        by_id = {h.get("row_id"): h for h in candidate_hits}
+                        return [by_id[row_id] for row_id in ordered_ids if row_id in by_id]
+
                     from django.conf import settings
                     from google import genai
                     from google.genai import types
@@ -386,6 +420,15 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                     )
                     
                     # Call Gemini
+                    try:
+                        from ai_extensions.resolver import apply_text_override
+                        prompt, _ = apply_text_override(
+                            "rag-product-rerank", prompt, agent=config,
+                            user=getattr(config, "user", None),
+                            context={"query": query_text, "candidate_count": len(candidate_hits)},
+                        )
+                    except Exception:
+                        pass
                     response = client.models.generate_content(
                         model='gemini-3.1-flash-lite',
                         contents=[types.Content(role='user', parts=[types.Part.from_text(text=query_text)])],
@@ -667,16 +710,15 @@ def perform_rag_search(agent_config, text, post_context_text, order_instruction,
                     except Exception as sim_err:
                         logger.debug(f"RowSimilarity context retrieval failed: {sim_err}")
 
-                # Inject AI instruction about Direct Image ID selection (optimized for tokens)
+                # Inject AI instruction about Visual / Image Delivery Policy (semantic understanding)
                 image_rate_rule = (
-                    "\n[Direct Image ID Selection Policy]:"
-                    "\n- If photos requested/similar product matched, check 'Available Image Attachments' for Image IDs and descriptions."
-                    "\n- If match found, set 'image_intent': true and include Image IDs in 'image_ids' (e.g., [901])."
-                    "\n- If the user asks to see photos/images of the product (including asking for different colors, styles, designs, or all options), you MUST check all 'Available Image Attachments' for that product, set 'image_intent': true, and include the Image IDs of ALL available variants (colors/styles/images) in 'image_ids'. Tell the user what options are available based on the visual descriptions. If a specific variant, color, or style is requested and it is not in the attachments, set 'image_intent': false, 'image_ids': [], state that it is unavailable, and list what other variants/colors/styles are available in the attachments."
-                    "\n- CRITICAL: All images listed under 'Available Image Attachments for sheet_X_row_Y' belong to that product row. Even if the image caption describes it as something else (e.g. 'Men's Dress Shirt' or 'Men's Kurta'), they are correct images representing the various colors, styles, or designs of that product. You MUST treat them as variants/images of that product and send them when requested."
+                    "\n[Product Visual / Image Delivery Policy]:"
+                    "\n- Understand the customer's semantic intent from the conversation: whenever the customer intends or requests to see, view, or check the product, its appearance, pictures, designs, or options, set 'image_intent': true and set 'order_data': {'product_name': '<product_name>'}. If specific spreadsheet Image IDs are listed in 'Available Image Attachments', include them in 'image_ids' (e.g. [901]); if the product is from the store database, the platform automatically delivers the interactive product card."
+                    "\n- NEVER claim that you cannot upload, attach, or send images. The system automatically handles visual card delivery when image_intent is true."
+                    "\n- CRITICAL: All images listed under 'Available Image Attachments for sheet_X_row_Y' belong to that product row. Even if the image caption describes it as something else, treat them as valid images/variants of that product."
                     "\n- CRITICAL: Do NOT print raw ID/caption texts verbatim. Describe features naturally in Bengali."
-                    "\n- CRITICAL: Spreadsheet Product name is the main authority. Describe images as that product variant (e.g. 'এখানে [Product Name] এর সাদা রঙের ছবি দেওয়া হলো।')."
-                    "\n- CRITICAL (Visual Check - ALWAYS PERFORM THIS): If the user uploaded an image/screenshot (either in the current message as [Image: ...] or as a recently sent image in the conversation history that we are discussing), you MUST compare that image description/caption with the 'Available Image Attachments' captions. If details differ (collar patterns, cuffs, prints, borders) despite being the same color, you MUST state the mismatch first (e.g. 'আপনার ছবির সাথে ডিজাইনে কিছুটা অমিল আছে। আমাদের স্টকে থাকা পাঞ্জাবির ডিজাইন হলো: [আমাদের প্রোডাক্টের বিবরণ]।') AND immediately set 'image_intent': true and include the Image IDs of our correct version and/or the [SIMILAR/ALTERNATIVE PRODUCTS FOR RECOMMENDATION] in 'image_ids' so the user receives the correct/alternative product images in the chat instantly. Never ignore the design mismatch of the discussed image under any circumstances."
+                    "\n- CRITICAL: Spreadsheet Product name is the main authority. Describe images as that product variant (e.g. 'এখানে [Product Name] এর ছবি দেওয়া হলো।')."
+                    "\n- CRITICAL (Visual Check - ALWAYS PERFORM THIS): If the user uploaded an image/screenshot (either in the current message as [Image: ...] or as a recently sent image in the conversation history that we are discussing), compare that image description/caption with the 'Available Image Attachments' captions. If details differ despite being the same color, state the mismatch first and immediately set 'image_intent': true so the user receives the correct/alternative product images in the chat instantly."
                     "\n- CRITICAL: If the user uploaded an image/screenshot recently, they have already seen it. Do NOT ask if they want to 'see' it. Ask if they want to order it ('অর্ডার করতে চান?')."
                 )
                 sheet_context = f"\n[KNOWLEDGE BASE DATA]:\n{clean_data}{similar_products_context}{image_rate_rule}{recommendation_policy}"
@@ -904,6 +946,22 @@ def restore_schedule_quota(user_profile, subscription, count=1):
         subscription.save(update_fields=['remaining_schedule_messages', 'is_active'])
     user_profile.sync_balances()
 
+def _language_mirroring_instruction(text):
+    """Return a prompt directive that mirrors the customer language/script."""
+    value = str(text or "")
+    bangla_chars = sum(1 for char in value if "\u0980" <= char <= "\u09ff")
+    latin_chars = sum(1 for char in value if "a" <= char.lower() <= "z")
+    if bangla_chars and latin_chars:
+        return ("Language rule: The customer used mixed Bangla and English. Reply in the same natural mixed style,"
+                " preserving Bangla script and English terms where appropriate. Do not translate everything into a different language.")
+    if bangla_chars:
+        return "Language rule: Reply entirely in natural Bangla script, matching the customer's politeness and tone."
+    if latin_chars:
+        return ("Language rule: Reply in the customer's language and writing style. If the customer writes Banglish/"
+                "phonetic Bangla in Latin letters, reply in natural Banglish rather than Bangla script or a translation.")
+    return "Language rule: Match the customer's language and tone; do not switch language without a clear reason."
+
+
 def build_ai_context(agent_config, sender_id, text, extra_instruction=None, sheet_context=None, platform='messenger', message_type=None):
     from aiAgent.utils import get_memory_context
     from chat.services import get_last_message
@@ -983,14 +1041,52 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
             if last_img:
                 order_context += f"\n[ACTIVE DISCUSSION IMAGE CAPTION]:\n[Image: {last_img}]\n"
 
+            last_product_image = internal.get('last_product_image_context') or {}
+            if last_product_image:
+                try:
+                    matched_at = timezone.datetime.fromisoformat(
+                        str(last_product_image.get('matched_at', '')).replace('Z', '+00:00')
+                    )
+                    age_seconds = (timezone.now() - matched_at).total_seconds()
+                except Exception:
+                    age_seconds = 10**9
+                if age_seconds <= 2 * 60 * 60 and float(last_product_image.get('confidence') or 0) >= 0.70:
+                    order_context += (
+                        "\n[LAST PRODUCT IMAGE CONTEXT]:\n"
+                        f"Product: {last_product_image.get('product_name')}\n"
+                        f"Product ID: {last_product_image.get('product_id')}\n"
+                        f"Image ID: {last_product_image.get('image_id')}\n"
+                        f"Variant ID: {last_product_image.get('variant_id') or 'general'}\n"
+                        f"Variant attributes: {json.dumps(last_product_image.get('variant_attributes') or {}, ensure_ascii=False)}\n"
+                        f"Image confidence: {last_product_image.get('confidence')}\n"
+                        "If the customer refers to 'this image', 'this one', or similar wording, "
+                        "use this Product/Variant context and verify live database facts.\n"
+                    )
+
             collected = []
             missing = []
+            prefilled_fields = []
+
+            mem_data_clean = {str(k).lower(): v for k, v in (memory.data or {}).items() if not str(k).startswith('_') and v}
+            mem_name = mem_data_clean.get('customer_name') or mem_data_clean.get('name')
+            mem_phone = mem_data_clean.get('phone_number') or mem_data_clean.get('phone')
+            mem_addr = mem_data_clean.get('address') or mem_data_clean.get('location')
+
             for field_name in ['customer_name', 'phone_number', 'address', 'product_name', 'quantity']:
                 field_data = order_fields.get(field_name, {})
                 if field_data.get('value') and field_data.get('confidence', 1.0) >= 0.75:
                     collected.append(f"{field_name}={field_data.get('value')}")
+                elif field_name == 'customer_name' and mem_name:
+                    collected.append(f"customer_name={mem_name} (from saved profile)")
+                    prefilled_fields.append(f"Name: {mem_name}")
+                elif field_name == 'phone_number' and mem_phone:
+                    collected.append(f"phone_number={mem_phone} (from saved profile)")
+                    prefilled_fields.append(f"Phone: {mem_phone}")
+                elif field_name == 'address' and mem_addr:
+                    collected.append(f"address={mem_addr} (from saved profile)")
+                    prefilled_fields.append(f"Address: {mem_addr}")
                 else:
-                    if field_name == 'product_name' and recent_interest.get('product_name'):
+                    if order_state in ['ordering', 'editing', 'awaiting_confirmation'] and field_name == 'product_name' and recent_interest.get('product_name'):
                         collected.append(f"product_name={recent_interest.get('product_name')}")
                     else:
                         missing.append(field_name)
@@ -1001,40 +1097,25 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
                 if strike:
                     strike_lines.append(f"{field_name}: strike {strike}")
 
-            if order_state in ['ordering', 'editing', 'awaiting_confirmation'] or recent_interest.get('product_name'):
-                order_context = (
-                    "\n[ORDER MEMORY STATE]:\n"
-                    f"state={order_state}\n"
-                    f"collected={'; '.join(collected) if collected else 'none'}\n"
-                    f"missing={', '.join(missing) if missing else 'none'}\n"
-                    f"failed_attempts={'; '.join(strike_lines) if strike_lines else 'none'}\n"
+            is_order_intent_msg = any(k in (text or '').lower() for k in [
+                'order', 'অর্ডার', 'কিনতে', 'নিতে', 'পাঠান', 'কুরিয়ার', 'ঠিকানা'
+            ])
+            if order_state in ['ordering', 'editing', 'awaiting_confirmation'] or is_order_intent_msg:
+                from aiAgent.prompts.state_dsl import build_order_state_dsl
+                is_interruption = bool(interruption_buffer.get('active') and not is_order_intent_msg)
+
+                last_confirmed = internal.get('last_confirmed_order')
+                order_context = "\n" + build_order_state_dsl(
+                    order_state=order_state,
+                    collected=collected,
+                    missing=missing,
+                    prefilled_fields=prefilled_fields,
+                    strike_lines=strike_lines,
+                    recent_product=recent_interest.get('product_name'),
+                    is_simple_greeting=is_simple_greeting,
+                    is_interruption=is_interruption,
+                    recent_confirmed_order=last_confirmed,
                 )
-
-                if order_state == 'idle' and recent_interest.get('product_name'):
-                    order_context += (
-                        "\nDirective: The customer recently discussed or showed interest in this product but hasn't placed the order yet. "
-                        "If they now confirm, say yes, or express intent to order/buy (e.g. saying 'Hum', 'Ha', 'yes', 'ok', 'korte cai'), "
-                        "you MUST set order_intent to 'create' and proceed to collect the missing details: "
-                        f"{', '.join(missing)}. Ask for them politely. Do not repeat mismatch warnings or design details."
-                    )
-                else:
-                    order_context += (
-                        "\nDirective: Use collected order fields as truth. Do not fill missing order fields from knowledge-base text. "
-                        "Do not ask the customer for price; backend/catalog validation supplies product price. "
-                        "Ask only for the next missing field, unless the user asks a separate policy/product question."
-                    )
-
-                if is_simple_greeting:
-                    order_context += "\nDirective: The user only greeted. Reply with a warm greeting only; do not push order progress or ask missing order fields in this reply."
-
-                if order_state == 'awaiting_confirmation':
-                    order_context += "\nDirective: Wait for confirmation, edit, or cancellation. Do not create an order without confirmation."
-
-                if interruption_buffer.get('active'):
-                    order_context += (
-                        "\nDirective: This is an order side-track. Answer the side question only. "
-                        "Suppress order ticks, summaries, and field prompts in this reply."
-                    )
     except Exception as e:
         logger.error(f"Error building order memory context: {e}")
 
@@ -1090,11 +1171,23 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
     except Exception as e:
         logger.error(f"Error fetching contact settings: {e}")
 
-    system_prompt_parts = [
-        f"Identity: Always identify you are assistant of the {agent_config.name} if asked.",
-        f"Role: {custom_role}",
-        f"Instructions: {contact_instructions}"
-    ]
+    from aiAgent.prompts.persona_dsl import build_persona_dsl
+    persona_dsl = build_persona_dsl(
+        agent_name=agent_config.name,
+        custom_role=custom_role,
+        contact_instructions=contact_instructions,
+        user_text=text
+    )
+    system_prompt_parts = [persona_dsl]
+
+    try:
+        from datasheet.product_search import build_product_context
+        product_context = build_product_context(agent_config.user, text, agent=agent_config, sender_id=sender_id)
+        if product_context:
+            system_prompt_parts.append(product_context)
+            logger.info("Product authoritative context attached")
+    except Exception:
+        logger.exception("Product context failed; continuing with existing AI context")
 
     if sheet_context: system_prompt_parts.append(sheet_context)
     if memory_context: system_prompt_parts.append(memory_context)
@@ -1103,6 +1196,21 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
     if visitor_context: system_prompt_parts.append(visitor_context)
 
     system_instruction = "\n\n".join(system_prompt_parts)
+
+    # Existing prompt remains the base/default. An enabled extension may
+    # override this point; extension errors always fall back to the base.
+    try:
+        from ai_extensions.resolver import apply_prompt_override
+        system_instruction, applied_extension = apply_prompt_override(
+            base_prompt=system_instruction,
+            agent=agent_config,
+            user=getattr(agent_config, "user", None),
+            context={"sender_id": sender_id, "platform": platform, "current_message": text},
+        )
+        if applied_extension:
+            logger.info("🧩 Applied prompt extension: %s", applied_extension)
+    except Exception:
+        logger.exception("Prompt extension layer failed; continuing with base prompt")
 
     current_message = text
     if message_type in ['image', 'video', 'audio', 'document'] and isinstance(text, str) and text.strip().startswith('['):
@@ -1145,6 +1253,19 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
     return system_instruction, history, current_message
 
 def get_ai_response(agent_config, system_instruction, history, current_message):
+    """Run an approved provider override, preserving the existing dispatcher as fallback."""
+    from ai_extensions.provider_hooks import run_provider_override
+    result, version = run_provider_override(
+        key="main-answer-provider",
+        payload={"system_prompt": system_instruction, "history": history, "message": current_message},
+        agent=agent_config, user=getattr(agent_config, "user", None),
+        context={"current_message": current_message},
+        base_fallback=lambda: _get_ai_response_base(agent_config, system_instruction, history, current_message),
+    )
+    return result
+
+
+def _get_ai_response_base(agent_config, system_instruction, history, current_message):
     """
     Unified AI handler that dispatches to specific providers.
     """
@@ -1184,17 +1305,47 @@ def get_ai_response(agent_config, system_instruction, history, current_message):
             ai_response = generate_openrouter_reply(system_instruction, history, current_message, agent_config=agent_config)
         elif provider == 'gemini':
             logger.info("♊ CALLING GEMINI PROVIDER...")
-            ai_response = generate_gemini_reply(system_instruction, history, current_message, agent_config=agent_config)
+            ai_response = generate_gemini_reply(system_instruction, history, current_message, agent_config=agent_config, _skip_provider=True)
         else:
             logger.error(f"🚨 UNKNOWN PROVIDER '{provider}'. Defaulting to Gemini/OpenAI logic.")
             if 'gpt' in model_name.lower():
                 ai_response = generate_openai_reply(system_instruction, history, current_message, agent_config=agent_config)
             else:
-                ai_response = generate_gemini_reply(system_instruction, history, current_message, agent_config=agent_config)
+                ai_response = generate_gemini_reply(system_instruction, history, current_message, agent_config=agent_config, _skip_provider=True)
             
         logger.info(f"🔍 [Provider: {provider}] AI Raw Data: {ai_response}")
+        try:
+            if isinstance(ai_response, dict) and ai_response.get("reply"):
+                from ai_extensions.hooks import run_answer_validator
+                validation = run_answer_validator(
+                    query=current_message,
+                    answer=ai_response.get("reply", ""),
+                    context={"system_instruction": system_instruction, "history": history},
+                    agent=agent_config,
+                    user=getattr(agent_config, "user", None),
+                )
+                if not validation.get("accepted", True):
+                    ai_response["reply"] = validation.get("answer") or "I’m not confident enough to answer that accurately."
+                    ai_response["status"] = "validation_failed"
+                elif validation.get("answer"):
+                    ai_response["reply"] = validation["answer"]
+        except Exception:
+            logger.exception("Answer validator extension failed; continuing with base response")
 
         # 3. Handle Dictionary Format
+        try:
+            from ai_extensions.function_hooks import run_function_override
+            ai_response, applied_function = run_function_override(
+                key="ai-response-postprocess",
+                value=ai_response,
+                agent=agent_config,
+                user=getattr(agent_config, "user", None),
+                context={"current_message": current_message, "system_instruction": system_instruction},
+            )
+            if applied_function:
+                logger.info("🧩 Applied function extension: %s", applied_function)
+        except Exception:
+            logger.exception("Function extension layer failed; continuing with base response")
         if isinstance(ai_response, dict):
             raw_reply = ai_response.get('reply', "")
             reply = raw_reply if raw_reply else ai_response.get('error_message', "System busy.")
@@ -1339,38 +1490,135 @@ def get_button_payload(contact):
     """Generate button text and payload based on current contact state"""
     buttons = []
     
-    # If this contact has a pending order confirmation, show order actions first
+    is_active_order = False
     try:
         from aiAgent.models import UserMemory
         memory = UserMemory.objects.filter(ai_agent=contact.agent, sender_id=contact.identifier).first()
         if memory and isinstance(memory.data, dict):
             internal = memory.data.get('_internal', {})
             order_state = internal.get('order_state')
-            if order_state in ['awaiting_confirmation', 'editing']:
-                buttons.append({"text": "✅ Confirm Order", "action": "CONFIRM_ORDER"})
-                buttons.append({"text": "✏️ Edit Order", "action": "EDIT_ORDER"})
-                buttons.append({"text": "❌ Cancel Order", "action": "CANCEL_ORDER"})
-                if not contact.is_human_needed:
-                    buttons.append({"text": "🙋 Human Help", "action": "HUMAN_HELP"})
-                return buttons
+            if order_state in ['awaiting_confirmation', 'editing', 'collecting_details', 'ordering']:
+                is_active_order = True
+                buttons.append({"text": "🛒 অর্ডার", "action": "CONFIRM_ORDER"})
+                if order_state in ['awaiting_confirmation', 'editing']:
+                    buttons.append({"text": "✏️ Edit Order", "action": "EDIT_ORDER"})
+                    buttons.append({"text": "❌ Cancel Order", "action": "CANCEL_ORDER"})
     except Exception:
         pass
 
-    # Button 1: Human Help / Resolve Human Mode
+    # General Quick Actions: Always present
     if contact.is_human_needed:
-        buttons.append({"text": "✅ Resolve Human Mode", "action": "RESOLVE_HUMAN"})
+        buttons.append({"text": "Resolve Human", "action": "RESOLVE_HUMAN"})
     else:
-        buttons.append({"text": "🙋 Human Help", "action": "HUMAN_HELP"})
+        buttons.append({"text": "Human", "action": "HUMAN_HELP"})
         
-    # Button 2: Stop AI / On AI
     if contact.is_auto_reply_enabled:
-        buttons.append({"text": "🔇 Stop AI Reply", "action": "STOP_AI_REPLY"})
+        buttons.append({"text": "Stop AI", "action": "STOP_AI_REPLY"})
     else:
-        buttons.append({"text": "🔊 On AI Reply", "action": "ON_AI_REPLY"})
+        buttons.append({"text": "On AI", "action": "ON_AI_REPLY"})
         
     return buttons
 
-def send_telegram_buttons(chat_id, token, contact, reply_text="\u200e"):
+def _get_checkout_url_for_contact(contact):
+    """Helper to create or retrieve checkout session URL for contact order flow"""
+    try:
+        from storefront.services.checkout_link import create_checkout_session, get_checkout_url
+        from storefront.models import CheckoutSession
+        from aiAgent.models import UserMemory
+        from django.utils import timezone
+        from datetime import timedelta
+
+        memory = UserMemory.objects.filter(ai_agent=contact.agent, sender_id=contact.identifier).first()
+        items_payload = []
+        order_fields = {}
+        if memory and isinstance(memory.data, dict):
+            internal = memory.data.get('_internal', {})
+            order_fields = internal.get('order_fields', {})
+            
+            # 1. First check if multi-item 'items' exists in memory
+            items_field_val = order_fields.get('items', {}).get('value')
+            if isinstance(items_field_val, list) and len(items_field_val) > 0:
+                for itm in items_field_val:
+                    if not isinstance(itm, dict):
+                        continue
+                    i_name = itm.get('name') or itm.get('product_name')
+                    if not i_name:
+                        continue
+                    try:
+                        i_qty = int(itm.get('quantity') or itm.get('qty') or 1)
+                    except Exception:
+                        i_qty = 1
+                    try:
+                        i_price = float(itm.get('price') or 0.0)
+                    except Exception:
+                        i_price = 0.0
+                    items_payload.append({'name': i_name, 'price': i_price, 'quantity': i_qty})
+
+            # 2. If no items list, fall back to scalar product_name, price, quantity
+            if not items_payload:
+                p_name = order_fields.get('product_name', {}).get('value')
+                p_price = order_fields.get('price', {}).get('value')
+                p_qty = order_fields.get('quantity', {}).get('value') or order_fields.get('item_quantity', {}).get('value') or 1
+                if not p_name:
+                    recent_interest = internal.get('recent_order_interest', {})
+                    if isinstance(recent_interest, dict):
+                        p_name = recent_interest.get('product_name')
+                        p_price = p_price or recent_interest.get('price')
+                if p_name:
+                    try:
+                        price_val = float(p_price) if p_price else 0.0
+                    except Exception:
+                        price_val = 0.0
+                    try:
+                        qty_val = int(p_qty)
+                    except Exception:
+                        qty_val = 1
+                    items_payload.append({'name': p_name, 'price': price_val, 'quantity': qty_val})
+
+        if not items_payload:
+            items_payload = [{'name': 'অর্ডার পণ্য', 'price': 0.0, 'quantity': 1}]
+
+        metadata_payload = {
+            'customer_name': (order_fields.get('customer_name', {}).get('value') or ''),
+            'phone': (order_fields.get('phone_number', {}).get('value') or ''),
+            'address': (order_fields.get('address', {}).get('value') or ''),
+            'district': (order_fields.get('district', {}).get('value') or ''),
+            'upazila': (order_fields.get('upazila', {}).get('value') or ''),
+        }
+
+        # Reuse recent pending session for this contact if created within the last 8 hours
+        recent_cutoff = timezone.now() - timedelta(hours=8)
+        existing_session = CheckoutSession.objects.filter(
+            merchant=contact.agent.user,
+            contact=contact,
+            status='pending',
+            created_at__gte=recent_cutoff
+        ).order_by('-created_at').first()
+
+        if existing_session and not existing_session.is_expired():
+            existing_session.items = items_payload
+            merged_meta = dict(existing_session.metadata or {})
+            for k, v in metadata_payload.items():
+                if v:
+                    merged_meta[k] = v
+            existing_session.metadata = merged_meta
+            existing_session.save(update_fields=['items', 'metadata', 'updated_at'])
+            return get_checkout_url(existing_session)
+
+        session = create_checkout_session(
+            merchant=contact.agent.user,
+            agent=contact.agent,
+            contact=contact,
+            items=items_payload,
+            source_platform=getattr(contact, 'platform', None) or 'whatsapp',
+            metadata=metadata_payload,
+        )
+        return get_checkout_url(session)
+    except Exception as e:
+        logger.warning(f"Error creating checkout session URL for contact: {e}")
+        return None
+
+def send_telegram_buttons(chat_id, token, contact, reply_text="‎"):
     """Send inline keyboard buttons after Telegram reply via TelegramService"""
     from integrations.services.telegram import TelegramService
 
@@ -1378,6 +1626,30 @@ def send_telegram_buttons(chat_id, token, contact, reply_text="\u200e"):
         return False
 
     buttons = get_button_payload(contact)
+    has_order_buttons = any(b['action'] in ["CONFIRM_ORDER", "EDIT_ORDER", "CANCEL_ORDER"] for b in buttons)
+
+    # For Telegram, interactive inline buttons are clean and native.
+    is_active_order = has_order_buttons
+
+    if is_active_order:
+        checkout_url = _get_checkout_url_for_contact(contact)
+        if checkout_url:
+            inline_keyboard = [
+                [{"text": "🛒 অর্ডার", "url": checkout_url}]
+            ]
+            if any(b['action'] == "CANCEL_ORDER" for b in buttons):
+                inline_keyboard.append([{"text": "❌ Cancel Order", "callback_data": "CANCEL_ORDER"}])
+            reply_markup = {"inline_keyboard": inline_keyboard}
+            msg_body = reply_text.strip() if reply_text and reply_text.strip() and reply_text.strip() != "‎" else "নিচের বাটনে ক্লিক করে ১-ক্লিকে অর্ডার কনফার্ম করতে পারেন:"
+            logger.info(f'[Logic] Sending Telegram checkout button to {chat_id}')
+            return TelegramService.send_message(
+                token=token,
+                chat_id=str(chat_id),
+                message_text=msg_body,
+                reply_markup=reply_markup,
+                msg_type='text',
+            )
+
     inline_keyboard = [[{"text": b["text"], "callback_data": b["action"]} for b in buttons]]
     reply_markup = {"inline_keyboard": inline_keyboard}
 
@@ -1390,45 +1662,128 @@ def send_telegram_buttons(chat_id, token, contact, reply_text="\u200e"):
         msg_type='text',
     )
 
-def send_messenger_buttons(sender_id, page_id, access_token, contact, reply_text="\u200e"):
-    """Send quick_reply buttons after Messenger reply via MetaService"""
+def send_messenger_buttons(sender_id, page_id, access_token, contact, reply_text="‎"):
+    """Send button template with 1-click checkout URL if order is active, alongside bottom quick_replies via MetaService"""
     from integrations.services.meta import MetaService
 
     if not access_token or not sender_id:
         return False
 
     buttons = get_button_payload(contact)
+    if not buttons:
+        return False
+
+    has_order_button = any(b['action'] == "CONFIRM_ORDER" for b in buttons)
+    checkout_url = _get_checkout_url_for_contact(contact) if has_order_button else None
+
     short_titles = {
-        "HUMAN_HELP": "🙋 Human Mode",
-        "RESOLVE_HUMAN": "✅ Resolve Human Mode",
-        "STOP_AI_REPLY": "🔇 Stop AI",
-        "ON_AI_REPLY": "🔊 On AI"
+        "CONFIRM_ORDER": "🛒 অর্ডার",
+        "EDIT_ORDER": "✏️ Edit Order",
+        "CANCEL_ORDER": "❌ Cancel Order",
+        "HUMAN_HELP": "Human",
+        "RESOLVE_HUMAN": "Resolve Human",
+        "STOP_AI_REPLY": "Stop AI",
+        "ON_AI_REPLY": "On AI"
     }
+
+    # If there is an active order intent and checkout URL is available, send official Web URL button template!
+    if has_order_button and checkout_url:
+        template_buttons = [
+            {
+                "type": "web_url",
+                "url": checkout_url,
+                "title": "🛒 অর্ডার",
+                "webview_height_ratio": "full",
+                "messenger_extensions": False
+            }
+        ]
+        msg_body = (reply_text or "").strip()
+        if not msg_body or msg_body == "‎":
+            msg_body = "নিচের 🛒 অর্ডার বাটনে ক্লিক করে খুব সহজেই ১-ক্লিকে অর্ডার কনফার্ম করতে পারেন।"
+
+        logger.info(f'[Logic] Sending Messenger checkout template button to {sender_id}: {checkout_url}')
+        delivered = MetaService.send_message(
+            access_token=access_token,
+            recipient_id=str(sender_id),
+            message_text=msg_body[:640],
+            buttons=template_buttons,
+            msg_type='text'
+        )
+        # Also attach quick replies for human help / stop AI
+        general_quick_replies = [
+            {
+                "content_type": "text",
+                "title": short_titles.get(b["action"], b["text"])[:20],
+                "payload": b["action"]
+            } for b in buttons if b['action'] not in ["CONFIRM_ORDER"]
+        ]
+        if general_quick_replies:
+            try:
+                MetaService.send_message(
+                    access_token=access_token,
+                    recipient_id=str(sender_id),
+                    message_text="\u200e",
+                    quick_replies=general_quick_replies,
+                    msg_type='text'
+                )
+            except Exception:
+                pass
+        return delivered
+
+    # Regular conversational mode (No active order): send quick_replies for Human Help / Stop AI
     quick_replies = [
         {
             "content_type": "text",
             "title": short_titles.get(b["action"], b["text"])[:20],
             "payload": b["action"]
-        } for b in buttons
+        } for b in buttons if b['action'] != "CONFIRM_ORDER"
     ]
 
-    logger.info(f'[Logic] Sending Messenger buttons to {sender_id}')
+    clean_text = (reply_text or "").strip()
+    if not clean_text or clean_text == "‎":
+        clean_text = "\u200e"
+
+    logger.info(f'[Logic] Sending Messenger sleek bottom quick_replies to {sender_id}: {[b["action"] for b in buttons]}')
     return MetaService.send_message(
         access_token=access_token,
         recipient_id=str(sender_id),
-        message_text=reply_text,
+        message_text=clean_text[:640],
         quick_replies=quick_replies,
         msg_type='text',
     )
 
-def send_instagram_buttons(sender_id, page_id, access_token, contact, reply_text="\u200e"):
-    """Send quick_reply buttons after Instagram reply via MetaService"""
+def send_instagram_buttons(sender_id, page_id, access_token, contact, reply_text="‎"):
+    """Send template order button or quick_reply buttons after Instagram reply via MetaService"""
     from integrations.services.meta import MetaService
 
     if not access_token or not sender_id:
         return False
 
     buttons = get_button_payload(contact)
+    has_order_buttons = any(b['action'] in ["CONFIRM_ORDER", "EDIT_ORDER", "CANCEL_ORDER"] for b in buttons)
+
+    if has_order_buttons:
+        checkout_url = _get_checkout_url_for_contact(contact)
+        if checkout_url:
+            template_buttons = [
+                {
+                    "type": "web_url",
+                    "url": checkout_url,
+                    "title": "🛒 অর্ডার",
+                    "webview_height_ratio": "full",
+                    "messenger_extensions": False
+                }
+            ]
+            msg_body = reply_text.strip() if reply_text and reply_text.strip() and reply_text.strip() != "‎" else "নিচের বাটনে ক্লিক করে ১-ক্লিকে অর্ডার কনফার্ম করতে পারেন:"
+            logger.info(f'[Logic] Sending Instagram checkout template button to {sender_id}')
+            return MetaService.send_message(
+                access_token=access_token,
+                recipient_id=str(sender_id),
+                message_text=msg_body[:600],
+                buttons=template_buttons,
+                msg_type='text'
+            )
+
     quick_replies = [
         {
             "content_type": "text",
@@ -1446,8 +1801,8 @@ def send_instagram_buttons(sender_id, page_id, access_token, contact, reply_text
         msg_type='text',
     )
 
-def send_whatsapp_buttons(data, contact, reply_text="\u200e"):
-    """Send button message via Baileys directly for WhatsApp"""
+def send_whatsapp_buttons(data, contact, reply_text="‎"):
+    """Send button message / rich preview card via Baileys directly for WhatsApp"""
     from integrations.services.whatsapp import WhatsAppService
 
     final_target = data.get('delivery_jid') or data.get('sender_id', '')
@@ -1464,21 +1819,18 @@ def send_whatsapp_buttons(data, contact, reply_text="\u200e"):
 
     menu_text = f"{reply_text}\n\n"
     if has_order_buttons:
-        labels = []
-        for i, b in enumerate(buttons_data, 1):
-            label = ''.join(ch for ch in b['text'] if ch.isalnum() or ch.isspace()).strip()
-            labels.append(f"{i}: {label}")
+        labels = [b['text'].strip() for b in buttons_data if b.get('text')]
         menu_text += "  |  ".join(labels)
     else:
-        opt1 = "1: Human Mode"
+        opt1 = "Human Mode"
         if contact.is_human_needed:
-            opt1 = "1: Resolve Human"
-        opt2 = "2: Off AI"
+            opt1 = "Resolve Human"
+        opt2 = "Off AI"
         if not contact.is_auto_reply_enabled:
-            opt2 = "2: On AI"
-        menu_text += f"{opt1}          {opt2}"
+            opt2 = "On AI"
+        menu_text += f"{opt1}  |  {opt2}"
 
-    logger.info(f'[Logic] Sending WhatsApp buttons to {final_target}')
+    logger.info(f'[Logic] Sending WhatsApp buttons/card to {final_target}')
     return WhatsAppService.send_message(
         session_id=session_id,
         to=str(final_target),
@@ -1706,11 +2058,14 @@ def is_duplicate_or_outdated(msg_id, incoming_ts, agent_config, sender_id, redis
     if incoming_ts:
         try:
             incoming_ts = float(incoming_ts)
-            if incoming_ts > 1e12: incoming_ts /= 1000
-            latest = get_last_message(agent_config, sender_id, limit=1)
-            if latest and latest[0].get('timestamp', 0) > incoming_ts:
-                logger.info(f"Zombie Outdated task detected for {sender_id}. Skipping.")
+            if incoming_ts > 1e12:
+                incoming_ts /= 1000
+            ts_key = f"last_incoming_ts:{getattr(agent_config, 'id', '0')}:{sender_id}"
+            last_ts_raw = redis_client.get(ts_key)
+            if last_ts_raw and float(last_ts_raw) > incoming_ts:
+                logger.info(f"Zombie Outdated task detected for {sender_id} (last_ts={last_ts_raw} > incoming_ts={incoming_ts}). Skipping.")
                 return True
+            redis_client.set(ts_key, str(incoming_ts), ex=3600)
         except (ValueError, TypeError) as e:
             logger.error(f"Zombie Check Error: {e}")
     return False

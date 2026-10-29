@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "https://api.newsmartagent.com/api";
+const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || "/api";
 const VISITOR_KEY = "visitor_uuid";
 
 function getStoredUUID() {

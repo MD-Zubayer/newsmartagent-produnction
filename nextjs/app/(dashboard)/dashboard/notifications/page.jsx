@@ -127,22 +127,25 @@ const handleDelete = async (id) => {
     });
   };
 
-  // --- আইকন হেল্পার (Normalized) ---
+  // --- আইকন হেল্পার (Enterprise Clean) ---
   const getIcon = (type) => {
     const normalizedType = type?.toLowerCase() || 'info';
     const styles = {
-      success: { icon: <FaCheckCircle />, color: "text-emerald-600", bg: "bg-emerald-100" },
-      paid:    { icon: <FaCheckCircle />, color: "text-emerald-600", bg: "bg-emerald-100" },
-      payment: { icon: <FaCreditCard />,  color: "text-violet-600",  bg: "bg-violet-100" },
-      warning: { icon: <FaExclamationTriangle />, color: "text-amber-600", bg: "bg-amber-100" },
-      tokens_exhausted: { icon: <FaBell />, color: "text-rose-600", bg: "bg-rose-100" },
-      low_tokens: { icon: <FaBell />, color: "text-amber-600", bg: "bg-amber-100" },
-      alert:   { icon: <FaBell />, color: "text-rose-600", bg: "bg-rose-100" },
-      info:    { icon: <FaInfoCircle />,  color: "text-blue-600",    bg: "bg-blue-100" },
+      order_created:   { icon: <FaCheckCircle />, color: "text-emerald-700", bg: "bg-emerald-50 border border-emerald-200" },
+      order_cancelled: { icon: <FaExclamationTriangle />, color: "text-rose-700", bg: "bg-rose-50 border border-rose-200" },
+      order_return:    { icon: <FaInfoCircle />, color: "text-amber-700", bg: "bg-amber-50 border border-amber-200" },
+      success: { icon: <FaCheckCircle />, color: "text-emerald-700", bg: "bg-emerald-50" },
+      paid:    { icon: <FaCheckCircle />, color: "text-emerald-700", bg: "bg-emerald-50" },
+      payment: { icon: <FaCreditCard />,  color: "text-indigo-700",  bg: "bg-indigo-50" },
+      warning: { icon: <FaExclamationTriangle />, color: "text-amber-700", bg: "bg-amber-50" },
+      tokens_exhausted: { icon: <FaBell />, color: "text-rose-700", bg: "bg-rose-50" },
+      low_tokens: { icon: <FaBell />, color: "text-amber-700", bg: "bg-amber-50" },
+      alert:   { icon: <FaBell />, color: "text-rose-700", bg: "bg-rose-50" },
+      info:    { icon: <FaInfoCircle />,  color: "text-slate-700",    bg: "bg-slate-100" },
     };
     const config = styles[normalizedType] || styles.info;
     return (
-      <div className={`w-12 h-12 flex items-center justify-center rounded-2xl text-xl shadow-sm ${config.bg} ${config.color}`}>
+      <div className={`w-10 h-10 flex items-center justify-center rounded-xl text-base shrink-0 ${config.bg} ${config.color}`}>
         {config.icon}
       </div>
     );

@@ -51,6 +51,15 @@ class Message(models.Model):
 
     tokens_used = models.IntegerField(default=0)
     is_read = models.BooleanField(default=False)
+    is_internal_note = models.BooleanField(default=False, db_index=True)
+    sender_name = models.CharField(max_length=120, blank=True, default='')
+    sent_by_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='sent_chat_messages'
+    )
 
     sent_at = models.DateTimeField(auto_now_add=True)
 

@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional
 
 import requests
 from django.conf import settings
+from jwtauth.provider_metrics import provider_call
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ def send_whatsapp_message(
             'to': recipient,
             'type': 'image',
             'message': caption or '',
+            'message': '',  # Never send image captions on WhatsApp; AI message text is sent separately
             'media_url': image_url,
         }
         endpoint = f"{baileys_url}/send-message"
@@ -69,7 +71,8 @@ def send_whatsapp_message(
         logger.info(
             f"[WhatsApp] Sending {message_type} to {recipient} via Baileys session={session_id}"
         )
-        response = requests.post(endpoint, json=payload, headers=headers, timeout=30)
+        with provider_call("whatsapp_baileys", "send_message"):
+            response = requests.post(endpoint, json=payload, headers=headers, timeout=40)
         if response.status_code not in (200, 202, 204):
             error_text = response.text or 'Unknown error'
             logger.error(

@@ -122,7 +122,12 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <head>
         <meta name="facebook-domain-verification" content="mtx9mkprfp4g4qth08yyt53r69k561" />
-
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap"
+          rel="stylesheet"
+        />
       </head>
       <body className="antialiased">
         <script
@@ -140,8 +145,9 @@ export default function RootLayout({ children }) {
             __html: `
               if (typeof window !== "undefined" && "serviceWorker" in navigator) {
                 window.addEventListener("load", function () {
-                  navigator.serviceWorker.register("/sw.js").then(
+                  navigator.serviceWorker.register("/sw.js?v=20261023-3", { updateViaCache: "none" }).then(
                     function (registration) {
+                      registration.update();
                       console.log("Service Worker registration successful with scope: ", registration.scope);
                     },
                     function (err) {

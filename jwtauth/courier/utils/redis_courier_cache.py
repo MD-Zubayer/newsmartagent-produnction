@@ -111,6 +111,11 @@ def match_address_redis(district, upazila, full_address=None):
         return suggestions
 
     r = get_redis_conn()
+    try:
+        if r.hlen("pathao:cities") == 0 or r.hlen("steadfast:cities") == 0:
+            populate_courier_redis_cache()
+    except Exception:
+        pass
 
     # Helper: exact or contains search over Hash values if ZSET autocomplete yields no results
     def find_city_in_hash(hash_key, search_text):

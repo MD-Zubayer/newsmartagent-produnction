@@ -52,6 +52,68 @@ const MESSAGE_SEND_RETRY_BASE_MS = parseInt(process.env.BAILEYS_SEND_RETRY_BASE_
 const MESSAGE_SEND_DELAY_MS = parseInt(process.env.BAILEYS_SEND_DELAY_MS || '0', 10);
 const RECENT_MESSAGE_CACHE_LIMIT = parseInt(process.env.BAILEYS_RECENT_MESSAGE_CACHE_LIMIT || '2000', 10);
 
+// ─── HUMAN BEHAVIOR CONFIGURATION ─────────────────────────────────────────────
+const ENABLE_HUMAN_BEHAVIOR = process.env.ENABLE_HUMAN_BEHAVIOR !== 'false';
+const SEEN_DELAY_MIN_MS = parseInt(process.env.SEEN_DELAY_MIN_MS || '1000', 10);
+const SEEN_DELAY_MAX_MS = parseInt(process.env.SEEN_DELAY_MAX_MS || '7000', 10);
+const TYPING_DELAY_MIN_MS = parseInt(process.env.TYPING_DELAY_MIN_MS || '2000', 10);
+const TYPING_DELAY_MAX_MS = parseInt(process.env.TYPING_DELAY_MAX_MS || '6000', 10);
+
+const OFFLINE_DELAY_MIN_MS = parseInt(process.env.OFFLINE_DELAY_MIN_MS || '60000', 10); // 1 min min
+const OFFLINE_DELAY_MAX_MS = parseInt(process.env.OFFLINE_DELAY_MAX_MS || '210000', 10); // 3.5 min max
+
+const sessionOfflineTimers = new Map();
+
+function cancelSessionOffline(sessionId) {
+    if (sessionOfflineTimers.has(sessionId)) {
+        clearTimeout(sessionOfflineTimers.get(sessionId));
+        sessionOfflineTimers.delete(sessionId);
+    }
+}
+
+function scheduleSessionOffline(sessionId, session) {
+    if (!ENABLE_HUMAN_BEHAVIOR || !session?.sock) return;
+
+    cancelSessionOffline(sessionId);
+
+    const lateNight = isLateNightHours();
+    // Late night: 45s - 90s, Daytime: 1 to 3.5 mins random delay
+    const offlineDelayMs = lateNight
+        ? (Math.floor(Math.random() * 45000) + 45000)
+        : (Math.floor(Math.random() * (OFFLINE_DELAY_MAX_MS - OFFLINE_DELAY_MIN_MS + 1)) + OFFLINE_DELAY_MIN_MS);
+
+    logger.info(`📱 [Human Behavior] Session ${sessionId} staying ONLINE for ${(offlineDelayMs / 1000).toFixed(0)}s before idle offline...`);
+
+    const timer = setTimeout(async () => {
+        try {
+            sessionOfflineTimers.delete(sessionId);
+            const queue = messageQueues.get(sessionId);
+            if (queue && (queue.processing || queue.messages.length > 0)) {
+                logger.debug(`📱 [Human Behavior] Session ${sessionId} has active messages, skipping offline.`);
+                return;
+            }
+            if (session?.sock && session.state === 'open') {
+                await session.sock.sendPresenceUpdate('unavailable');
+                logger.info(`🌙 [Human Behavior] Presence set to UNAVAILABLE (offline) after ${(offlineDelayMs / 1000).toFixed(0)}s idle for session ${sessionId}`);
+            }
+        } catch (e) {
+            logger.debug(`[Human Behavior] Error setting unavailable: ${e.message}`);
+        }
+    }, offlineDelayMs);
+
+    sessionOfflineTimers.set(sessionId, timer);
+}
+
+function getDhakaHour() {
+    const now = new Date();
+    return (now.getUTCHours() + 6) % 24;
+}
+
+function isLateNightHours() {
+    const hour = getDhakaHour();
+    return (hour >= 1 && hour < 7); // 1:00 AM - 6:59 AM (BD Time)
+}
+
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
 const delay = ms => new Promise(res => setTimeout(res, ms));
 
@@ -85,6 +147,7 @@ async function processQueue(sessionId) {
     const queueData = messageQueues.get(sessionId);
     if (!queueData || queueData.processing) return;
 
+    cancelSessionOffline(sessionId);
     queueData.processing = true;
     try {
         while (queueData.messages.length > 0) {
@@ -112,7 +175,63 @@ async function processQueue(sessionId) {
                     await delay(MESSAGE_SEND_DELAY_MS);
                 }
 
+                // ─── HUMAN BEHAVIOR: TYPING / RECORDING SIMULATION (2-6 SECONDS) ───
+                if (ENABLE_HUMAN_BEHAVIOR && session?.sock) {
+                    try {
+                        const lateNight = isLateNightHours();
+                        const typingDurationMs = lateNight
+                            ? (Math.floor(Math.random() * 4000) + 3000) // 3-7s at late night
+                            : (Math.floor(Math.random() * (TYPING_DELAY_MAX_MS - TYPING_DELAY_MIN_MS + 1)) + TYPING_DELAY_MIN_MS); // 2-6s normal
+
+                        const presenceType = (type === 'audio') ? 'recording' : 'composing';
+                        logger.info(`✍️ [Human Behavior] Simulating ${presenceType} for ${resolvedJid} (${typingDurationMs}ms) [LateNight: ${lateNight}]...`);
+
+                        // 1. Appear online
+                        await session.sock.sendPresenceUpdate('available');
+                        // 2. Start typing or recording
+                        await session.sock.sendPresenceUpdate(presenceType, resolvedJid);
+
+                        // 3. Keep typing for 5-7s so the customer sees it in their chat
+                        await delay(typingDurationMs);
+
+                        // 4. Pause typing indicator before sending
+                        await session.sock.sendPresenceUpdate('paused', resolvedJid);
+                    } catch (presenceErr) {
+                        logger.debug(`[Human Behavior] Presence update error: ${presenceErr.message}`);
+                    }
+                }
+
                 let msgObj = { text: message };
+
+                const fetchMediaBufferWithInternalFallback = async (rawUrl, timeoutMs = 20000) => {
+                    const internalMinio = (process.env.MINIO_ENDPOINT || 'http://minio:9000').replace(/\/+$/, '');
+                    const externalMinio = (process.env.MINIO_EXTERNAL_ENDPOINT || '').replace(/\/+$/, '');
+                    const candidates = [];
+
+                    if (externalMinio && rawUrl.startsWith(externalMinio)) {
+                        candidates.push(rawUrl.replace(externalMinio, internalMinio));
+                    } else if (/^https?:\/\/(?:dev-)?s3\.newsmartagent\.com\//i.test(rawUrl)) {
+                        candidates.push(rawUrl.replace(/^https?:\/\/(?:dev-)?s3\.newsmartagent\.com/i, internalMinio));
+                    }
+                    candidates.push(rawUrl);
+
+                    let lastErr = null;
+                    for (const candidateUrl of candidates) {
+                        for (let attempt = 1; attempt <= 2; attempt++) {
+                            try {
+                                const resp = await axios.get(candidateUrl, { responseType: 'arraybuffer', timeout: timeoutMs });
+                                return Buffer.from(resp.data);
+                            } catch (err) {
+                                lastErr = err;
+                                logger.warn(`⚠️ [Baileys] Media download attempt ${attempt} failed for ${candidateUrl.substring(0, 100)}: ${err.message}`);
+                                if (attempt < 2) {
+                                    await new Promise(r => setTimeout(r, 400));
+                                }
+                            }
+                        }
+                    }
+                    throw lastErr || new Error('Media download failed');
+                };
 
                 if (type === 'image_base64' && image_base64) {
                     // Handle base64 image (for invoice delivery)
@@ -126,15 +245,15 @@ async function processQueue(sessionId) {
                         logger.info(`🖼️ [Baileys] Base64 image converted to buffer (${imageBuffer.length} bytes) for sending`);
                     } catch (convertErr) {
                         logger.error(`❌ [Baileys] Failed to convert base64 image: ${convertErr.message}`);
-                        msgObj = { text: `[Image failed to process: ${convertErr.message}]` };
+                        reject(convertErr);
+                        continue;
                     }
                 } else if (type === 'image' && media_url) {
                     logger.info(`🖼️ [Baileys] Preparing image message from URL: ${media_url.substring(0, 120)}`);
                     try {
-                        const imageResponse = await axios.get(media_url, { responseType: 'arraybuffer', timeout: 20000 });
-                        const imageBuffer = Buffer.from(imageResponse.data);
+                        const imageBuffer = await fetchMediaBufferWithInternalFallback(media_url, 20000);
                         logger.info(`🖼️ [Baileys] Image downloaded. Buffer size: ${imageBuffer.length} bytes`);
-                        
+
                         let resizedBuffer = imageBuffer;
                         try {
                             const image = await Jimp.read(imageBuffer);
@@ -163,16 +282,20 @@ async function processQueue(sessionId) {
                         logger.info(`🖼️ [Baileys] Image message prepared for sending with caption: ${message ? message.substring(0, 120) : '<empty>'}`);
                     } catch (downloadErr) {
                         logger.error(`❌ [Baileys] Failed to download image from ${media_url}: ${downloadErr.message}`);
-                        msgObj = { text: message || `[Image failed to download: ${downloadErr.message}]` };
+                        if (message && message.trim()) {
+                            msgObj = { text: message };
+                        } else {
+                            reject(downloadErr);
+                            continue;
+                        }
                     }
                 } else if (type === 'audio' && media_url) {
                     // Audio message - download from URL and convert to buffer
                     logger.info(`📻 [Baileys] Preparing audio message. Downloading from: ${media_url.substring(0, 80)}`);
                     try {
-                        const audioResponse = await axios.get(media_url, { responseType: 'arraybuffer', timeout: 15000 });
-                        const audioBuffer = Buffer.from(audioResponse.data);
+                        const audioBuffer = await fetchMediaBufferWithInternalFallback(media_url, 15000);
                         logger.info(`📻 [Baileys] Audio downloaded. Buffer size: ${audioBuffer.length} bytes`);
-                        
+
                         msgObj = {
                             audio: audioBuffer,
                             mimetype: 'audio/ogg; codecs=opus',
@@ -182,7 +305,8 @@ async function processQueue(sessionId) {
                         logger.info(`📻 [Baileys] Audio buffer prepared for sending. mimetype=audio/ogg; codecs=opus, ptt=true, size=${audioBuffer.length}`);
                     } catch (downloadErr) {
                         logger.error(`❌ [Baileys] Failed to download audio from ${media_url}: ${downloadErr.message}`);
-                        msgObj = { text: `[Audio failed to download: ${downloadErr.message}]` };
+                        reject(downloadErr);
+                        continue;
                     }
                 } else if (listMessage) {
                     // Baileys-এ লিস্ট মেসেজ পাঠানোর সঠিক পদ্ধতি (To avoid .match() crash)
@@ -207,6 +331,12 @@ async function processQueue(sessionId) {
                 logger.info(`✅ [Baileys] Sent successfully to ${resolvedJid}. MessageId: ${sent?.key?.id}`);
                 logger.debug(`📝 [Baileys] Full message object sent: ${JSON.stringify(msgObj).substring(0, 300)}`);
                 logger.debug(`📝 [Baileys] Send response: ${JSON.stringify(sent).substring(0, 300)}`);
+
+                if (ENABLE_HUMAN_BEHAVIOR && session?.sock) {
+                    // Do not go offline immediately! Stay online for 1 to 3.5 minutes randomly like a real human
+                    scheduleSessionOffline(sessionId, session);
+                }
+
                 resolve({ success: true, messageId: sent?.key?.id });
             } catch (err) {
                 logger.error(`❌ [Baileys] Send FAILED to ${jid}: ${err.message}`);
@@ -217,6 +347,10 @@ async function processQueue(sessionId) {
         logger.error(`❌ [Baileys] Queue processing failed for sessionId=${sessionId}: ${err.message}`);
     } finally {
         queueData.processing = false;
+        const session = sessions.get(sessionId);
+        if (ENABLE_HUMAN_BEHAVIOR && session?.sock && queueData.messages.length === 0) {
+            scheduleSessionOffline(sessionId, session);
+        }
     }
 }
 
@@ -354,6 +488,17 @@ async function initSession(sessionId, phoneNumber = null) {
                 sessionData.phone = jidNormalizedUser(sock.user?.id)?.split('@')[0];
                 logger.info(`[Session: ${sessionId}] ✅ Connected as ${sessionData.phone}`);
                 await notifyDjangoSync(sessionId, sessionData.phone, sock.user?.name || '');
+
+                // Set default presence to offline/unavailable so account does NOT stay online 24/7
+                if (ENABLE_HUMAN_BEHAVIOR && sock) {
+                    setTimeout(async () => {
+                        try {
+                            await sock.sendPresenceUpdate('unavailable');
+                            logger.info(`🌙 [Human Behavior] Initial presence set to UNAVAILABLE (offline) for ${sessionId}`);
+                        } catch (err) { }
+                    }, 3000);
+                }
+
                 const queueData = getSessionQueue(sessionId);
                 if (queueData.messages.length > 0) {
                     logger.info(`[Session: ${sessionId}] Resuming queued messages: ${queueData.messages.length}`);
@@ -403,19 +548,47 @@ async function initSession(sessionId, phoneNumber = null) {
             if (type !== 'notify') return;
             for (const msg of messages) {
                 logger.info(`📨 [Baileys] Message event received. From: ${msg.key.remoteJid}, fromMe: ${msg.key.fromMe}`);
-                
-                if (msg.key.fromMe || msg.key.remoteJid === 'status@broadcast') {
+
+                const from = msg.key.remoteJid || '';
+                if (msg.key.fromMe || from === 'status@broadcast') {
                     logger.debug(`↩️  [Baileys] Skipping own message or status broadcast`);
                     continue;
                 }
 
-                const from = msg.key.remoteJid;
+                if (from.endsWith('@newsletter') || from.endsWith('@broadcast')) {
+                    logger.info(`⏭️  [Baileys] Skipping WhatsApp channel/broadcast message from ${from}`);
+                    continue;
+                }
                 if (msg?.key?.id) {
                     recentMessages.set(msg.key.id, { sessionId, message: msg });
                     if (recentMessages.size > RECENT_MESSAGE_CACHE_LIMIT) {
                         recentMessages.delete(recentMessages.keys().next().value);
                     }
                 }
+
+                // ─── HUMAN BEHAVIOR: REALISTIC SEEN (1-7 SECONDS DELAY) ───
+                if (ENABLE_HUMAN_BEHAVIOR && sock) {
+                    const lateNight = isLateNightHours();
+                    // Normal: 1 to 7 seconds, Late night: 3 to 8 seconds
+                    const seenDelayMs = lateNight
+                        ? (Math.floor(Math.random() * 5000) + 3000)
+                        : (Math.floor(Math.random() * (SEEN_DELAY_MAX_MS - SEEN_DELAY_MIN_MS + 1)) + SEEN_DELAY_MIN_MS);
+
+                    const messageKey = { ...msg.key };
+                    setTimeout(async () => {
+                        try {
+                            if (sessionData?.sock && sessionData.state === 'open') {
+                                await sessionData.sock.sendPresenceUpdate('available');
+                                await sessionData.sock.readMessages([messageKey]);
+                                logger.info(`👁️ [Human Behavior] Marked message as SEEN after ${seenDelayMs}ms for ${from} (LateNight: ${lateNight})`);
+                                scheduleSessionOffline(sessionId, sessionData);
+                            }
+                        } catch (err) {
+                            logger.debug(`[Human Behavior] Read receipt failed: ${err.message}`);
+                        }
+                    }, seenDelayMs);
+                }
+
                 const messageType = Object.keys(msg.message || {})[0] || 'unknown';
                 let messageContent = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
                 let mediaPayload = {};
@@ -546,7 +719,7 @@ async function initSession(sessionId, phoneNumber = null) {
                     pushName: msg.pushName || '',
                     ...mediaPayload
                 };
-                
+
                 logger.info(`📤 [Baileys] Attempting to forward message from ${resolvedPhone}...`);
                 await forwardToIngress(payload);
             }
@@ -675,7 +848,7 @@ app.post('/send-message', async (req, res) => {
     const finalMessage = message || text || "";
     const finalButtons = buttons || interactiveButtons || [];
     const msgType = type || 'text';
-    logger.info(`📥 [HTTP] /send-message request. sessionId=${sessionId}, to=${to}, type=${msgType}, message="${finalMessage.substring(0,120)}", media_url=${media_url ? media_url.substring(0,80) : 'none'}, buttons=${finalButtons.length}, listMessage=${listMessage ? 'yes' : 'no'}`);
+    logger.info(`📥 [HTTP] /send-message request. sessionId=${sessionId}, to=${to}, type=${msgType}, message="${finalMessage.substring(0, 120)}", media_url=${media_url ? media_url.substring(0, 80) : 'none'}, buttons=${finalButtons.length}, listMessage=${listMessage ? 'yes' : 'no'}`);
     logger.debug(`📦 [HTTP] Full body: ${JSON.stringify(req.body)}`);
 
     const session = sessions.get(sessionId);
@@ -701,19 +874,19 @@ app.post('/send-message', async (req, res) => {
     const jid = to.includes('@') ? to : `${to}@s.whatsapp.net`;
 
     const sendPromise = new Promise((resolve, reject) => {
-        queueData.messages.push({ 
-            jid, 
-            message: finalMessage, 
-            buttons: finalButtons, 
+        queueData.messages.push({
+            jid,
+            message: finalMessage,
+            buttons: finalButtons,
             listMessage,
             type: msgType,
             media_url: media_url,
-            resolve, 
-            reject 
+            resolve,
+            reject
         });
     });
 
-    logger.info(`📬 [Queue] enqueue message for sessionId=${sessionId}, to=${jid}, type=${msgType}, media_url=${media_url ? media_url.substring(0,60) : 'none'}, queueLength=${queueData.messages.length}`);
+    logger.info(`📬 [Queue] enqueue message for sessionId=${sessionId}, to=${jid}, type=${msgType}, media_url=${media_url ? media_url.substring(0, 60) : 'none'}, queueLength=${queueData.messages.length}`);
 
     processQueue(sessionId).catch(err => logger.error(`Queue error: ${err.message}`));
 
@@ -832,3 +1005,19 @@ app.listen(PORT, () => {
     logger.info(`Server running on port ${PORT}`);
     restoreSessions();
 });
+
+// ─── HUMAN PRESENCE WATCHDOG: KEEP OFFLINE WHEN IDLE ─────────────────────────
+if (ENABLE_HUMAN_BEHAVIOR) {
+    setInterval(async () => {
+        for (const [sId, session] of sessions.entries()) {
+            if (session && session.state === 'open' && session.sock) {
+                const queue = messageQueues.get(sId);
+                if (!queue || (!queue.processing && queue.messages.length === 0)) {
+                    try {
+                        await session.sock.sendPresenceUpdate('unavailable');
+                    } catch (e) { }
+                }
+            }
+        }
+    }, 10 * 60 * 1000); // Check every 10 minutes
+}

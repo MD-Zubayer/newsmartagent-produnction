@@ -31,7 +31,7 @@ export const useNotifications = (user, setOrders = null) => {
             ref.current.pause();
             ref.current.currentTime = 0;
             ref.current.volume = 1;
-          }).catch(() => {});
+          }).catch(() => { });
         }
       });
       document.removeEventListener('click', unlock);
@@ -87,10 +87,42 @@ export const useNotifications = (user, setOrders = null) => {
           if (setOrders) {
             setOrders((prev) => [data.order_data, ...prev]);
           }
-          toast.success("নতুন অর্ডার আসছে! 💰", {
-            duration: 5000,
-            icon: "📦",
-            id: `order-${data.order_data.id}`
+          const notifMsg = data.message || `নতুন অর্ডার #${data.order_data?.id}`;
+          setNotifications((prev) => [
+            {
+              id: `live-order-${data.order_data?.id || Date.now()}`,
+              message: notifMsg,
+              type: "order_created",
+              is_read: false,
+              created_at: new Date().toISOString()
+            },
+            ...prev
+          ]);
+          setUnreadCount((prev) => prev + 1);
+          toast.success(notifMsg, {
+            duration: 6000,
+            id: `order-${data.order_data?.id}`
+          });
+
+        } else if (data.action === "ORDER_CANCELLED") {
+          if (setOrders) {
+            setOrders((prev) => prev.map(o => o.id === data.order_data?.id ? { ...o, status: 'cancelled' } : o));
+          }
+          const cancelMsg = data.message || `অর্ডার #${data.order_data?.id} বাতিল হয়েছে`;
+          setNotifications((prev) => [
+            {
+              id: `live-cancel-${data.order_data?.id || Date.now()}`,
+              message: cancelMsg,
+              type: "order_cancelled",
+              is_read: false,
+              created_at: new Date().toISOString()
+            },
+            ...prev
+          ]);
+          setUnreadCount((prev) => prev + 1);
+          toast.error(cancelMsg, {
+            duration: 6000,
+            id: `cancel-${data.order_data?.id}`
           });
 
         } else if (data.action === "HUMAN_HANDOFF") {
@@ -104,6 +136,45 @@ export const useNotifications = (user, setOrders = null) => {
             style: { background: '#dc2626', color: '#fff', fontWeight: 'bold', borderRadius: '16px' },
             icon: '🆘',
             id: `handoff-${data.contact_id}`
+          });
+
+        } else if (data.type === "courier_status_update" || data.action === "COURIER_STATUS_UPDATE") {
+          if (setOrders && data.order_id) {
+            setOrders((prev) =>
+              prev.map((o) => {
+                if (o.id !== data.order_id) return o;
+                const removed =
+                  data.courier_status === "cancelled" ||
+                  data.event_name === "unknown" ||
+                  data.event_name === "cancelled" ||
+                  data.event_name === "manual.booking_reset";
+                const newEvent = {
+                  event_name: data.event_name || "courier_update",
+                  status_label: data.status_label || "কুরিয়ার স্ট্যাটাস আপডেট",
+                  reason: data.reason || "",
+                  created_at: new Date().toISOString(),
+                };
+                return {
+                  ...o,
+                  status: data.order_status || o.status,
+                  courier_booking_info: o.courier_booking_info
+                    ? {
+                        ...o.courier_booking_info,
+                        is_booked: !removed,
+                        booking_status: data.courier_status || (removed ? "cancelled" : o.courier_booking_info.booking_status),
+                        latest_status_label: data.status_label || o.courier_booking_info.latest_status_label,
+                        latest_reason: data.reason !== undefined ? data.reason : o.courier_booking_info.latest_reason,
+                        events: [newEvent, ...(o.courier_booking_info.events || [])],
+                      }
+                    : o.courier_booking_info,
+                };
+              })
+            );
+          }
+          toast.success(`অর্ডার #${data.order_id}: ${data.status_label || "কুরিয়ার স্ট্যাটাস আপডেট"}`, {
+            icon: "🚚",
+            duration: 5000,
+            id: `courier-ws-${data.order_id}-${data.event_name || Date.now()}`,
           });
 
         } else if (data.action === "CACHE_UPDATE") {

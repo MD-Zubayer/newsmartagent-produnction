@@ -1,35 +1,35 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation"; // URL থেকে আইডি পাওয়ার জন্য
+import { useParams, useRouter } from "next/navigation";
 import Spreadsheet from "app/(main)/components/Spreadsheet";
+import CatalogHeaderNav from "../../../../../components/CatalogHeaderNav";
+import { useAuth } from "@/context/AuthContext";
 
 export default function SheetPage() {
   const params = useParams();
+  const router = useRouter();
+  const { user } = useAuth();
   const [activeSheetId, setActiveSheetId] = useState(null);
 
   useEffect(() => {
-    // URL-এ যদি আইডি থাকে তবে সেটি সেট করবে
-    if (params?.id) {
-      setActiveSheetId(params.id);
-    } else {
-      setActiveSheetId(1); // ডিফল্ট আইডি
-    }
-  }, [params]);
+    setActiveSheetId(params?.id || user?.sheet_id || 1);
+  }, [params, user]);
 
   return (
-    <div className="h-[calc(100vh-80px)] bg-[#f8fafc] flex flex-col p-0 sm:p-4 overflow-hidden">
-      {/* মোবাইলে টাইটেল হাইড করে স্পেস বাঁচানো যায় */}
-      <h1 className="hidden sm:block text-xl font-black mb-3 px-2 text-slate-800 tracking-tight">
-        Workspace / <span className="text-indigo-600">Spreadsheet</span>
-      </h1>
+    <div className="flex h-[calc(100vh-80px)] flex-col overflow-hidden bg-slate-50 p-2 sm:p-4">
+      {/* Unified ChatGPT-style Nav Bar */}
+      <CatalogHeaderNav
+        activeTab="spreadsheet"
+        sheetId={activeSheetId || user?.sheet_id || 1}
+      />
 
-      <div className="flex-1 min-h-0 border-none sm:border border-slate-200 rounded-none sm:rounded-2xl overflow-hidden shadow-2xl shadow-slate-200/50">
+      <div className="flex-1 min-h-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
         {activeSheetId ? (
           <Spreadsheet sheetId={activeSheetId} />
         ) : (
-          <div className="h-full flex items-center justify-center bg-white">
-             <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+          <div className="flex h-full items-center justify-center bg-white">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
           </div>
         )}
       </div>

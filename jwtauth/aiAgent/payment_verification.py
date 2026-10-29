@@ -3,6 +3,7 @@ import json
 from django.conf import settings
 from google import genai
 from google.genai import types
+from jwtauth.provider_metrics import provider_call
 
 logger = logging.getLogger('aiAgent')
 
@@ -14,6 +15,14 @@ except Exception as e:
 
 
 def verify_payment_screenshot(image_bytes, mime_type):
+    from ai_extensions.provider_hooks import run_provider_override
+    result, version = run_provider_override(
+        key="payment-verification-provider",
+        payload={"image_bytes": image_bytes, "mime_type": mime_type, "prompt": "Verify this payment screenshot. Return only a JSON object with success, amount, transaction_id, and payment_method."},
+        context={"mime_type": mime_type}, base_fallback=None,
+    )
+    if version:
+        return result.get("data", result.get("reply", result)) if isinstance(result, dict) else result
     """
     Sends payment screenshot bytes to Gemini to verify if it represents a successful
     payment/send-money transaction. Extracts amount, transaction_id, and payment_method.
@@ -41,7 +50,13 @@ def verify_payment_screenshot(image_bytes, mime_type):
     """
 
     try:
-        response = GENAI_CLIENT.models.generate_content(
+        try:
+            from ai_extensions.resolver import apply_text_override
+            prompt, _ = apply_text_override("payment-verification-prompt", prompt, context={"mime_type": mime_type})
+        except Exception:
+            pass
+        with provider_call("gemini", "payment_verification"):
+            response = GENAI_CLIENT.models.generate_content(
             model=model_name,
             contents=[
                 types.Part.from_bytes(

@@ -18,14 +18,10 @@ services:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     command: >
-      postgres 
-      -c shared_buffers=${POSTGRES_SHARED_BUFFERS:-4GB} 
-      -c effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE:-10GB} 
-      -c work_mem=${POSTGRES_WORK_MEM:-64MB} 
-      -c maintenance_work_mem=${POSTGRES_MAINTENANCE_WORK_MEM:-1GB}
+      postgres  -c shared_buffers=${POSTGRES_SHARED_BUFFERS:-4GB}  -c effective_cache_size=${POSTGRES_EFFECTIVE_CACHE_SIZE:-10GB}  -c work_mem=${POSTGRES_WORK_MEM:-64MB}  -c maintenance_work_mem=${POSTGRES_MAINTENANCE_WORK_MEM:-1GB}
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -35,13 +31,13 @@ services:
         order: start-first
     networks:
       - smart-network
-      
+
   redis:
     image: redis/redis-stack-server:latest
     container_name: ${PROJECT_NAME}-redis
     restart: always
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -56,15 +52,7 @@ services:
     volumes:
       - redis_data:/data
     command: >
-      redis-server
-      --loadmodule /opt/redis-stack/lib/redisearch.so
-      --loadmodule /opt/redis-stack/lib/rejson.so
-      --maxmemory ${REDIS_MAX_MEMORY:-6gb}
-      --maxmemory-policy volatile-lru
-      --protected-mode no
-      --appendonly yes
-      --appendfsync everysec
-      --save 60 1000
+      redis-server --loadmodule /opt/redis-stack/lib/redisearch.so --loadmodule /opt/redis-stack/lib/rejson.so --maxmemory ${REDIS_MAX_MEMORY:-6gb} --maxmemory-policy volatile-lru --protected-mode no --appendonly yes --appendfsync everysec --save 60 1000
 
   pgbouncer:
     image: edoburu/pgbouncer:latest
@@ -79,19 +67,19 @@ services:
       - DB_PASSWORD=${PGBOUNCER_PASSWORD}
       - DB_NAME=${POSTGRES_DB}
       - POOL_MODE=transaction # প্রোডাকশন ও জ্যাঙ্গো/সেলেরির জন্য বেস্ট মোড
-      - MAX_CLIENT_CONN=1000  # সর্বোচ্চ কতটি ইনকামিং কানেকশন হ্যান্ডেল করবে
-      - DEFAULT_POOL_SIZE=50  # আসল ডাটাবেজের সাথে সর্বোচ্চ কানেকশন পুল
+      - MAX_CLIENT_CONN=1000 # সর্বোচ্চ কতটি ইনকামিং কানেকশন হ্যান্ডেল করবে
+      - DEFAULT_POOL_SIZE=50 # আসল ডাটাবেজের সাথে সর্বোচ্চ কানেকশন পুল
       - MIN_POOL_SIZE=10
       - SERVER_RESET_QUERY=DISCARD ALL
       - SERVER_CHECK_QUERY=SELECT 1
       - SERVER_IDLE_TIMEOUT=600
-      - AUTH_TYPE=scram-sha-256    # সহজ ও সিকিউর ইন্টারনাল ডকার অথেন্টিকেশন
-      - LISTEN_PORT=${DB_POSTGRESDB_PORT}     # PgBouncer নিজে ৫৪৩২ পোর্টে লিসেন করবে
+      - AUTH_TYPE=scram-sha-256 # সহজ ও সিকিউর ইন্টারনাল ডকার অথেন্টিকেশন
+      - LISTEN_PORT=${DB_POSTGRESDB_PORT} # PgBouncer নিজে ৫৪৩২ পোর্টে লিসেন করবে
     depends_on:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p ${DB_POSTGRESDB_PORT} || exit 1"]
+      test: [ "CMD-SHELL", "pg_isready -h 127.0.0.1 -p ${DB_POSTGRESDB_PORT} || exit 1" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -105,20 +93,25 @@ services:
 
   backend:
     build: ./jwtauth
-    container_name: ${PROJECT_NAME}-django
-    command: gunicorn jwtauth.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --workers 6 --timeout 60
+    image: ${BACKEND_IMAGE:-newsmartagent/backend:local}
+
+    command: >-
+      sh -c 'find /tmp/prometheus -mindepth 1 -maxdepth 1 -delete 2>/dev/null || true; exec gunicorn jwtauth.asgi:application -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --workers ${GUNICORN_WORKERS:-2} --timeout 60'
+    tmpfs:
+      - /tmp/prometheus
     volumes:
       - ./jwtauth:/app
       - static_volume:/app/static
       - media_volume:/app/media
       - ${HOST_CONFIG_PATH}/service_account.json:/app/gdrive_key.json:ro
-    
+
     env_file:
       - .env
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ASSUNNAH_ADMIN_PASSWORD=${ASSUNNAH_ADMIN_PASSWORD}
       - REDIS_URL=${REDIS_URL}
       - VOICE_MEDIA_URL=${VOICE_MEDIA_URL}
       - FB_APP_ID=${FB_APP_ID}
@@ -129,6 +122,13 @@ services:
       - GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE=/app/gdrive_key.json
       - BAILEYS_API_URL=${BAILEYS_API_URL}
       - BAILEYS_API_SECRET=${BAILEYS_API_SECRET}
+      - OBSERVABILITY_ENV=production
+      - OTEL_SERVICE_NAME=${PROJECT_NAME}-django
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-http://signoz-otel-collector:4317}
+      - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
+      - MONITORING_TELEMETRY_URL=${MONITORING_TELEMETRY_URL:-http://nsa-monitoring-backend:8000/api/telemetry/traffic/}
+      - MONITORING_TELEMETRY_TOKEN=${MONITORING_TELEMETRY_TOKEN}
+      - MONITORING_USER_HASH_SECRET=${MONITORING_USER_HASH_SECRET}
     depends_on:
       pgbouncer:
         condition: service_healthy
@@ -137,29 +137,43 @@ services:
     logging: *default-logging
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "python -c 'import socket; s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.connect((\"localhost\", 8000))' || exit 1"]
+      test: [ "CMD-SHELL", "python -c 'import socket; s = socket.socket(socket.AF_INET, socket.SOCK_STREAM); s.connect((\"localhost\", 8000))' || exit 1" ]
       interval: 150s
       timeout: 10s
       retries: 3
     deploy:
+      replicas: ${BACKEND_REPLICAS:-1}
       update_config:
+        parallelism: 1
+        delay: 10s
         order: start-first
+        failure_action: rollback
+        monitor: 30s
+      rollback_config:
+        parallelism: 1
+        order: stop-first
       resources:
         limits:
           memory: ${BACKEND_MEMORY_LIMIT:-4G}
     networks:
       - smart-network
 
-
   frontend:
-    build: ./nextjs
-    container_name: ${PROJECT_NAME}-nextjs
+    build:
+      context: ./nextjs
+      args:
+        - NEXT_PUBLIC_BASE_URL=https://${MAIN_DOMAIN}
+        - NEXT_PUBLIC_API_URL=https://${MAIN_DOMAIN}/api
+        - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_SHOP_CLIENT_ID}
+    image: ${FRONTEND_IMAGE:-newsmartagent/frontend:local}
+
     environment:
       - NEXT_PUBLIC_BASE_URL=https://${MAIN_DOMAIN}
       - NEXT_PUBLIC_API_URL=https://${MAIN_DOMAIN}/api
+      - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_SHOP_CLIENT_ID}
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"const http = require('http'); const req = http.get('http://127.0.0.1:3000/frontend-health', (res) => { if (res.statusCode === 200) process.exit(0); else process.exit(1); }); req.on('error', () => process.exit(1));\""]
+      test: [ "CMD-SHELL", "node -e \"const http = require('http'); const req = http.get('http://127.0.0.1:3000/frontend-health', (res) => { if (res.statusCode === 200) process.exit(0); else process.exit(1); }); req.on('error', () => process.exit(1));\"" ]
       interval: 150s
       timeout: 10s
       retries: 3
@@ -167,18 +181,53 @@ services:
     depends_on:
       - backend
     deploy:
+      replicas: ${FRONTEND_REPLICAS:-1}
+      update_config:
+        parallelism: 1
+        delay: 10s
+        order: start-first
+        failure_action: rollback
+        monitor: 30s
+      rollback_config:
+        parallelism: 1
+        order: stop-first
+      resources:
+        limits:
+          memory: ${FRONTEND_MEMORY_LIMIT:-4G}
+
+    networks:
+      - smart-network
+
+  shop:
+    build:
+      context: ./shop
+      args:
+        - NEXT_PUBLIC_SHOP_URL=https://${SHOP_DOMAIN}
+        - NEXT_PUBLIC_API_URL=https://${SHOP_DOMAIN}/api
+        - NEXT_PUBLIC_GOOGLE_CLIENT_ID=${GOOGLE_SHOP_CLIENT_ID:-}
+    image: ${SHOP_IMAGE:-newsmartagent/shop:local}
+    environment:
+      - NEXT_PUBLIC_SHOP_URL=https://${SHOP_DOMAIN}
+      - NEXT_PUBLIC_API_URL=https://${SHOP_DOMAIN}/api
+    restart: always
+    healthcheck:
+      test: [ "CMD-SHELL", "node -e \"require('http').get('http://127.0.0.1:3000/shop-health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\"" ]
+      interval: 150s
+      timeout: 10s
+      retries: 3
+    logging: *default-logging
+    deploy:
       update_config:
         order: start-first
       resources:
         limits:
-          memory: ${FRONTEND_MEMORY_LIMIT:-4G}
-    
+          memory: ${SHOP_MEMORY_LIMIT:-1G}
     networks:
       - smart-network
 
   nginx:
     build: ./nginx
-    container_name: ${PROJECT_NAME}-nginx
+    image: ${NGINX_IMAGE:-newsmartagent/nginx:local}
 
     volumes:
       - static_volume:/app/static
@@ -188,16 +237,18 @@ services:
       - MINIO_CONSOLE_DOMAIN=${MINIO_CONSOLE_DOMAIN}
       - MINIO_API_DOMAIN=${MINIO_API_DOMAIN}
       - FLOWER_DOMAIN=${FLOWER_DOMAIN}
+      - SHOP_DOMAIN=${SHOP_DOMAIN}
     depends_on:
-       - backend
-       - frontend
-       - flower
+      - backend
+      - frontend
+      - flower
+      - shop
     deploy:
       update_config:
         order: start-first
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "nginx -t && wget --no-verbose --tries=1 --spider http://127.0.0.1:80 || exit 1"]
+      test: [ "CMD-SHELL", "nginx -t && wget --no-verbose --tries=1 --spider http://127.0.0.1:80 || exit 1" ]
       interval: 150s
       timeout: 10s
       retries: 3
@@ -206,17 +257,17 @@ services:
     networks:
       - smart-network
 
-
   celery_worker:
     build: ./jwtauth
-    container_name: ${PROJECT_NAME}-celery-worker
+    image: ${BACKEND_IMAGE:-newsmartagent/backend:local}
+
     command: celery -A jwtauth worker -Q chat_queue,celery -c 6 --prefetch-multiplier 1 --max-tasks-per-child 1000 --loglevel=info
     volumes:
       - ./jwtauth:/app
       - ${HOST_CONFIG_PATH}/service_account.json:/app/gdrive_key.json:ro
     env_file:
       - .env
-    
+
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - REDIS_URL=${REDIS_URL}
@@ -243,7 +294,8 @@ services:
 
   celery_beat:
     build: ./jwtauth
-    container_name: ${PROJECT_NAME}-celery-beat
+    image: ${BACKEND_IMAGE:-newsmartagent/backend:local}
+
     command: celery -A jwtauth beat -l info
     volumes:
       - ./jwtauth:/app
@@ -270,7 +322,6 @@ services:
       update_config:
         order: start-first
 
-
   flower:
     image: mher/flower
     container_name: ${PROJECT_NAME}-flower
@@ -286,17 +337,57 @@ services:
     logging: *default-logging
     restart: always
 
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.17.1
+    container_name: ${PROJECT_NAME}-postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - smart-network
+    restart: always
+    logging: *default-logging
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.66.0
+    container_name: ${PROJECT_NAME}-redis-exporter
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - smart-network
+    restart: always
+    logging: *default-logging
+
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:1.4.1
+    container_name: ${PROJECT_NAME}-nginx-exporter
+    command: [ "--nginx.scrape-uri=http://nginx:8080/stub_status" ]
+    depends_on:
+      - nginx
+    networks:
+      - smart-network
+    restart: always
+    logging: *default-logging
 
   cloudflare-tunnel:
     image: cloudflare/cloudflared:latest
     container_name: ${PROJECT_NAME}-cloudflare-tunnel
     user: root
     restart: always
+    environment:
+      # Force the transport when the network blocks QUIC/UDP. Override per
+      # environment with TUNNEL_TRANSPORT_PROTOCOL=quic if needed.
+      TUNNEL_TRANSPORT_PROTOCOL: ${TUNNEL_TRANSPORT_PROTOCOL:-http2}
     deploy:
       update_config:
         order: start-first
     dns:
-      - 1.1.1.1 
+      - 1.1.1.1
     networks:
       - smart-network
     volumes:
@@ -308,19 +399,20 @@ services:
     depends_on:
       - nginx
 
-
   baileys:
     build: ./baileys
-    container_name: ${PROJECT_NAME}-baileys
-    env_file: 
+    image: ${BAILEYS_IMAGE:-newsmartagent/baileys:local}
+
+    env_file:
       - .env
     environment:
       - PORT=${BAILEYS_PORT}
       - DJANGO_WHATSAPP_WEBHOOK_URL=${DJANGO_WHATSAPP_WEBHOOK_URL}
       - SYNC_AGENT_URL=${SYNC_AGENT_URL}
+      - SYNC_CONTACT_URL=${SYNC_CONTACT_URL}
       - BAILEYS_API_SECRET=${BAILEYS_API_SECRET}
       - BAILEYS_API_URL=${BAILEYS_API_URL}
-      - LOG_LEVEL=${BAILEYS_LOG_LEVEL} 
+      - LOG_LEVEL=${BAILEYS_LOG_LEVEL}
       - NODE_ENV=${NODE_ENV}
     volumes:
       - baileys_auth:/app/auth_info_baileys
@@ -340,7 +432,7 @@ services:
     command: server /data --console-address ":${MINIO_CONSOLE_PORT:-9001}"
     volumes:
       - minio_data:/data
-    env_file: 
+    env_file:
       - .env
     environment:
       - MINIO_ROOT_USER=${MINIO_ROOT_USER}
@@ -369,7 +461,6 @@ volumes:
     name: ${VOLUME_PREFIX:-production}-baileys-auth
   minio_data:
     name: ${VOLUME_PREFIX:-production}-minio-data
-  
 
 networks:
   smart-network:

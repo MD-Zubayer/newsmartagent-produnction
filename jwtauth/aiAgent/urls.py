@@ -5,7 +5,7 @@ from aiAgent.views import AgentAIViewSet, TokenUsageAnalyticsView, dashboard_cha
 from aiAgent.contact_views import (
     ContactListView, ToggleAutoReplyView, ContactMessageHistoryView, ContactDetailView,
     UnifiedReplyView, ResolveHumanHandoffView, HumanHelpView, WhatsAppButtonClickView,
-    ContactSummaryView, ScheduledMessageView
+    ContactSummaryView, ScheduledMessageView, ContactAssignView
 )
 from aiAgent.widget_views import WidgetConfigView, WidgetChatView, WidgetIconUploadView, WidgetStatusView, WidgetControlView
 from chat.views import facebook_data_deletion_callback
@@ -29,13 +29,17 @@ urlpatterns = [
     path('available-models/', UserAvailableModelsView.as_view(), name='user-available-models'),
     path('contacts/<str:agent_id>/', ContactListView.as_view(), name='contact-list'),
     path('contacts/summary/', ContactSummaryView.as_view(), name='contact-summary'),
+    path('contacts/unified/reply/', UnifiedReplyView.as_view(), name='unified-reply'),
+    path('contacts/whatsapp-click/', WhatsAppButtonClickView.as_view(), name='whatsapp-button-click'),
     path('contacts/detail/<int:contact_id>/', ContactDetailView.as_view(), name='contact-detail'),
     path('contacts/toggle-reply/<int:contact_id>/', ToggleAutoReplyView.as_view(), name='toggle-auto-reply'),
     path('contacts/resolve-handoff/<int:contact_id>/', ResolveHumanHandoffView.as_view(), name='resolve-human-handoff'),
+    path('contacts/assign/<int:contact_id>/', ContactAssignView.as_view(), name='contact-assign'),
     path('contacts/human-help/<int:contact_id>/', HumanHelpView.as_view(), name='human-help'),
     path('contacts/whatsapp-click/', WhatsAppButtonClickView.as_view(), name='whatsapp-button-click'),
     path('contacts/<int:contact_id>/messages/', ContactMessageHistoryView.as_view(), name='contact-messages'),
     path('contacts/unified/reply/', UnifiedReplyView.as_view(), name='unified-reply'),
+    path('contacts/<str:agent_id>/', ContactListView.as_view(), name='contact-list'),
     path('schedule/', ScheduledMessageView.as_view(), name='scheduled-message'),
     
     # Web Widget Public API

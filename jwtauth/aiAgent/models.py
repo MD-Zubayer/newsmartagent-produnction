@@ -403,6 +403,43 @@ class Contact(models.Model):
     custom_instructions = models.TextField(blank=True, null=True, help_text="Additional instructions for this contact")
     platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES)
     is_human_needed = models.BooleanField(default=False, help_text="Set to True if the user needs human assistance.")
+    assigned_to = models.ForeignKey(
+        'users.TeamMember',
+        blank=True,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name='assigned_contacts',
+    )
+    assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name='forwarded_contacts',
+    )
+    assigned_at = models.DateTimeField(blank=True, null=True)
+    assigned_department = models.CharField(blank=True, default='', max_length=120)
+    assignment_note = models.TextField(blank=True, null=True)
+    support_status = models.CharField(
+        max_length=25,
+        default='ai_active',
+        db_index=True,
+        help_text="ai_active | waiting_human | in_progress | resolved",
+    )
+    waiting_since = models.DateTimeField(
+        blank=True,
+        null=True,
+        db_index=True,
+        help_text="Timestamp when customer started waiting for human assistance",
+    )
+    resolved_at = models.DateTimeField(blank=True, null=True)
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name='resolved_contacts',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
