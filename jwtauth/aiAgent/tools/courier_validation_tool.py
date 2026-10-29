@@ -48,7 +48,7 @@ def get_courier_validation_tool_definition() -> Dict[str, Any]:
                     "description": "Specific union, bazar, or landmark extracted by AI if identified in context"
                 }
             },
-            "required": ["district"]
+            "required": ["district", "upazila", "address"]
         }
     }
 
@@ -88,6 +88,7 @@ def validate_and_suggest_courier_area(
     sub_area_hint: Optional[str] = None,
     provider: Optional[str] = None,
     address_fail_count: int = 0,
+    user_memory=None,
 ) -> Dict[str, Any]:
     """
     Validates the customer address against the merchant's courier provider.
@@ -120,6 +121,17 @@ def validate_and_suggest_courier_area(
     upazila_clean = str(upazila or "").strip()
     full_addr_clean = str(full_address or "").strip()
     hint_clean = str(sub_area_hint or "").strip()
+
+    # Fallback to user_memory if empty args were passed
+    if not district_clean and not upazila_clean and not full_addr_clean and user_memory:
+        mem_data = getattr(user_memory, 'data', {}) or {}
+        order_slots = mem_data.get('order_data', {}) if isinstance(mem_data.get('order_data'), dict) else {}
+        if not district_clean:
+            district_clean = str(order_slots.get('district') or mem_data.get('district') or "").strip()
+        if not upazila_clean:
+            upazila_clean = str(order_slots.get('upazila') or mem_data.get('upazila') or "").strip()
+        if not full_addr_clean:
+            full_addr_clean = str(order_slots.get('address') or mem_data.get('address') or "").strip()
 
     result = {
         "status": "needs_clarification",
@@ -241,7 +253,7 @@ def _validate_pathao(
             if a_obj:
                 result["matched_names"]["area"] = a_obj.area_name
         result["status"] = "valid"
-        result["message"] = "পাঠাও কুরিয়ার এরিয়া সম্পূর্ণ ভ্যালিড।"
+        result["message"] = "কুরিয়ার এরিয়া সম্পূর্ণ ভ্যালিড। এখন order_intent='create' রেখে কাস্টমারকে অর্ডারের খসড়া (Draft) দেখিয়ে 'হ্যাঁ' লিখে কনফার্ম করতে বলুন (কখনোই এই টার্নে order_intent='confirm' দিবেন না)।"
         return result
 
     # Infinite loop guard: If customer has already clarified >= 2 times, fallback to first zone hub
@@ -324,7 +336,7 @@ def _validate_steadfast(
             if a_obj:
                 result["matched_names"]["area"] = a_obj.area_name
         result["status"] = "valid"
-        result["message"] = "স্টিডফাস্ট কুরিয়ার এরিয়া সম্পূর্ণ ভ্যালিড।"
+        result["message"] = "কুরিয়ার এরিয়া সম্পূর্ণ ভ্যালিড। এখন order_intent='create' রেখে কাস্টমারকে অর্ডারের খসড়া (Draft) দেখিয়ে 'হ্যাঁ' লিখে কনফার্ম করতে বলুন (কখনোই এই টার্নে order_intent='confirm' দিবেন না)।"
         return result
 
     # Steadfast allows parcel booking with district/city and free-text address without mandatory area_id.

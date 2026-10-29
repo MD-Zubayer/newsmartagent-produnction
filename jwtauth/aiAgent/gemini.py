@@ -72,7 +72,7 @@ def generate_gemini_reply(prompt, history, current_message, agent_config, _skip_
                     'address': {'type': 'STRING', 'description': 'Full address'},
                     'sub_area_hint': {'type': 'STRING', 'description': 'Village, bazar, or landmark'}
                 },
-                'required': ['district']
+                'required': ['district', 'upazila', 'address']
             }
         )
         gen_config_kwargs["tools"] = [types.Tool(function_declarations=[fd])]

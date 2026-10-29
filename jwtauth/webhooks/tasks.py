@@ -1352,7 +1352,7 @@ def create_customer_order_from_memory(agent_config, sender_id, request_type, msg
         customer_obj = None
         try:
             from aiAgent.models import Contact
-            from storefront.models import CustomerIdentity
+            from storefront.models import CustomerIdentity, CustomerAddress
             contact_obj = Contact.objects.filter(agent=agent_config, identifier=sender_id).first()
             identity = CustomerIdentity.objects.filter(
                 agent=agent_config,
@@ -1361,6 +1361,18 @@ def create_customer_order_from_memory(agent_config, sender_id, request_type, msg
             ).select_related('customer').first()
             if identity:
                 customer_obj = identity.customer
+                if address:
+                    CustomerAddress.objects.update_or_create(
+                        customer=customer_obj,
+                        phone=phone_number or '',
+                        defaults={
+                            'recipient_name': customer_name or getattr(customer_obj, 'name', '') or '',
+                            'full_address': address,
+                            'district': district_val or '',
+                            'upazila': upazila_val or '',
+                            'is_default': True,
+                        }
+                    )
         except Exception as e:
             logger.warning(f"Error resolving customer identity for AI order: {e}")
 
@@ -3469,18 +3481,19 @@ def process_ai_reply_task(self, data):
             if live_tool_data and isinstance(live_tool_data, dict):
                 logger.info("📦 [AI Live Tool Return Ingested]: %s", live_tool_data.get('status'))
                 loc_ids = live_tool_data.get('location_ids') or {}
+                user_memory = _get_or_create_user_memory(agent_config, sender_id)
+                mem_d = user_memory.data or {}
                 if any(loc_ids.values()):
-                    user_memory = _get_or_create_user_memory(agent_config, sender_id)
-                    mem_d = user_memory.data or {}
                     mem_d.setdefault('_internal', {})['courier_location_ids'] = {live_tool_data.get('provider'): loc_ids}
-                    user_memory.data = mem_d
-                    user_memory.save(update_fields=['data'])
                 if live_tool_data.get('status') == 'needs_clarification' and live_tool_data.get('suggested_areas'):
-                    user_memory = _get_or_create_user_memory(agent_config, sender_id)
-                    mem_d = user_memory.data or {}
                     mem_d.setdefault('_internal', {})['pending_courier_area_suggestions'] = live_tool_data.get('suggested_areas')[:8]
-                    user_memory.data = mem_d
-                    user_memory.save(update_fields=['data'])
+                    _set_order_state(user_memory, 'collecting_details')
+                elif live_tool_data.get('status') == 'valid':
+                    mem_d.setdefault('_internal', {}).pop('pending_courier_area_suggestions', None)
+                    if _has_complete_order_fields(user_memory):
+                        _set_order_state(user_memory, 'awaiting_confirmation')
+                user_memory.data = mem_d
+                user_memory.save(update_fields=['data'])
 
             # ---- Parse JSON from AI reply (Using clean_ai_response to fix broken JSON & type mismatches) ----
             raw_ai_reply = ai_data.get('reply', '')
@@ -3598,17 +3611,29 @@ def process_ai_reply_task(self, data):
                             logger.info("🗑️ Cleared last_image_caption from memory due to active order intent.")
 
                     # Sync recent_order_interest memory from AI's output product_name
-                    if isinstance(order_data, dict) and order_data.get('product_name'):
+                    if isinstance(order_data, dict):
                         ai_product = order_data.get('product_name')
-                        user_memory = _get_or_create_user_memory(agent_config, sender_id)
-                        hydrated = _hydrate_order_from_catalog(agent_config.user, {'product_name': ai_product})
-                        _save_recent_order_interest(
-                            user_memory,
-                            product_name=hydrated.get('product_name') or ai_product,
-                            price=hydrated.get('price'),
-                            source_text=text or image_caption
-                        )
-                        logger.info(f"🧠 [AI-Driven Memory Sync] Saved recent_order_interest to '{ai_product}' from AI order_data.")
+                        if ai_product:
+                            user_memory = _get_or_create_user_memory(agent_config, sender_id)
+                            hydrated = _hydrate_order_from_catalog(agent_config.user, {'product_name': ai_product})
+                            _save_recent_order_interest(
+                                user_memory,
+                                product_name=hydrated.get('product_name') or ai_product,
+                                price=hydrated.get('price'),
+                                source_text=text or image_caption
+                            )
+                            logger.info(f"🧠 [AI-Driven Memory Sync] Saved recent_order_interest to '{ai_product}' from AI order_data.")
+                        
+                        # Persist extra_info (color/variant choice) even when browsing (order_intent: null)
+                        extra_info_val = order_data.get('extra_info')
+                        if extra_info_val:
+                            user_memory = _get_or_create_user_memory(agent_config, sender_id)
+                            _save_order_fields_to_memory(
+                                user_memory,
+                                {'extra_info': str(extra_info_val).strip()},
+                                source='ai_extraction'
+                            )
+                            logger.info("🎨 [AI-Driven Memory Sync] Saved extra_info='%s' from AI order_data.", extra_info_val)
 
                     # Real-time In-Chat AI Memory Sync (Zero extra LLM cost)
                     extracted_mem = parsed.get('extracted_memory')
@@ -3633,62 +3658,56 @@ def process_ai_reply_task(self, data):
                             msg_trace_id, order_intent, current_state, json.dumps(order_data, ensure_ascii=False, default=str)
                         )
                     if order_intent == 'confirm':
-                        # LIVE-BUG-2 & BUG-3 Fix: Pure State & AI-Driven Order Finalization Guard
-                        # Check whether user modified slots OR repeated address/location in awaiting_confirmation
-                        is_modification = False
-                        is_repeated_address_turn = False
-                        prev_fields = _get_order_fields(user_memory) if user_memory else {}
-                        
-                        if isinstance(order_data, dict):
-                            for f in ('customer_name', 'phone_number', 'address', 'upazila', 'district', 'quantity'):
-                                new_v = order_data.get(f)
-                                old_v = prev_fields.get(f, {}).get('value')
-                                if new_v and str(new_v).strip() != str(old_v or "").strip():
-                                    is_modification = True
-                                    logger.info(f"🔄 Order modification detected on '{f}' ({old_v} -> {new_v}). Showing updated draft instead of auto-confirm.")
-                                    break
-                            
-                            # If new address is supplied and equals existing collected address, user is repeating location/voice note
-                            new_addr = order_data.get('address')
-                            old_addr = prev_fields.get('address', {}).get('value')
-                            if new_addr and old_addr and str(new_addr).strip() == str(old_addr).strip():
-                                is_repeated_address_turn = True
-                                logger.info("⚠️ User repeated identical address/voice in awaiting_confirmation. Guarding against auto-confirm.")
-
-                        if current_state == 'awaiting_confirmation' and not is_modification and not is_repeated_address_turn:
-                            logger.info("Order confirm intent detected! Creating order...")
-                            order_obj = create_customer_order_from_memory(agent_config, sender_id, request_type, msg_id=msg_id)
-                            if order_obj:
-                                logger.info(
-                                    "🎉 [ORDER_CREATED] trace_id=%s order_id=%s customer='%s' phone='%s' total_amount=%s",
-                                    msg_trace_id, order_obj.id, getattr(order_obj, 'customer_name', ''), getattr(order_obj, 'phone_number', ''), getattr(order_obj, 'total_price', '')
-                                )
-                                parsed_reply = f"✅ আপনার অর্ডার #{order_obj.id} নিশ্চিত করা হয়েছে। ইনভয়েস শীঘ্রই পাঠানো হবে।"
-                                _clear_order_fields(user_memory)
-                                cache_type = 'no_cache'
-                            else:
-                                parsed_reply = "দুঃখিত, আপনার অর্ডার নিশ্চিত করা যায়নি। দয়া করে আবার চেষ্টা করুন।"
-                                cache_type = 'no_cache'
+                        # Pure State & AI-Intent Driven Order Finalization Guard
+                        # 1. If live courier check ran this turn, downgrade to create
+                        if live_tool_data and isinstance(live_tool_data, dict):
+                            logger.info("📦 Courier validation executed this turn; downgrading order_intent from 'confirm' to 'create'.")
+                            order_intent = 'create'
                         else:
-                            if is_repeated_address_turn:
-                                # Count repeated failure / hesitation turn on confirmation
-                                stats = _increment_field_failure(user_memory, 'order_confirmation')
-                                if stats.get('count', 0) >= 2:
-                                    logger.info("Repeated confirmation failure (>= 2). Triggering human handoff.")
-                                    contact_obj = send_human_fallback_email(agent_config, sender_id, text, request_type)
-                                    parsed_reply = "আপনার অর্ডার সংক্রান্ত তথ্যের জন্য আমাদের একজন প্রতিনিধি শীঘ্রই আপনার সাথে যোগাযোগ করবেন।"
-                                else:
-                                    parsed_reply = (
-                                        "আপনার ঠিকানা ড্রাফটে সংরক্ষিত আছে। অর্ডারটি নিশ্চিত করতে অনুগ্রহ করে শুধু 'হ্যাঁ' লিখুন "
-                                        "অথবা নিচের 🛒 অর্ডার বাটনে ক্লিক করুন।"
-                                    )
-                                order_intent = 'create'
-                            elif is_modification:
-                                logger.info("Field modified during confirmation stage. Re-routing intent to 'create' to update draft.")
-                                order_intent = 'create'
+                            is_modification = False
+                            prev_fields = _get_order_fields(user_memory) if user_memory else {}
+                            
+                            if isinstance(order_data, dict):
+                                for f in ('customer_name', 'phone_number', 'address', 'upazila', 'district', 'quantity'):
+                                    new_v = order_data.get(f)
+                                    old_v = prev_fields.get(f, {}).get('value')
+                                    if new_v and str(new_v).strip() != str(old_v or "").strip():
+                                        is_modification = True
+                                        logger.info(f"🔄 Order modification detected on '{f}' ({old_v} -> {new_v}). Showing updated draft instead of auto-confirm.")
+                                        break
+
+                            pending_suggs = (user_memory.data or {}).get('_internal', {}).get('pending_courier_area_suggestions') or []
+                            has_all_fields = _has_complete_order_fields(user_memory)
+
+                            # If complete fields and no pending courier selection, allow confirmation regardless of transient state label
+                            can_confirm = (current_state == 'awaiting_confirmation' or has_all_fields) and not is_modification and not pending_suggs
+
+                            if can_confirm:
+                                logger.info("Order confirm intent detected! Creating order...")
+                                try:
+                                    order_obj = create_customer_order_from_memory(agent_config, sender_id, request_type, msg_id=msg_id)
+                                    if order_obj:
+                                        logger.info(
+                                            "🎉 [ORDER_CREATED] trace_id=%s order_id=%s customer='%s' phone='%s' total_amount=%s",
+                                            msg_trace_id, order_obj.id, getattr(order_obj, 'customer_name', ''), getattr(order_obj, 'phone_number', ''), getattr(order_obj, 'total_price', '')
+                                        )
+                                        parsed_reply = f"✅ আপনার অর্ডার #{order_obj.id} নিশ্চিত করা হয়েছে। ইনভয়েস শীঘ্রই পাঠানো হবে।"
+                                        _clear_order_fields(user_memory)
+                                        cache_type = 'no_cache'
+                                    else:
+                                        parsed_reply = "দুঃখিত, আপনার অর্ডার নিশ্চিত করা যায়নি। দয়া করে আবার চেষ্টা করুন।"
+                                        cache_type = 'no_cache'
+                                except Exception as order_create_err:
+                                    logger.exception("🚨 Error during order creation: %s", order_create_err)
+                                    parsed_reply = "দুঃখিত, অর্ডার সংরক্ষণে একটি কারিগরি সমস্যা হয়েছে। আমাদের প্রতিনিধি শীঘ্রই যোগাযোগ করবেন।"
+                                    cache_type = 'no_cache'
                             else:
-                                logger.warning("AI sent confirm intent but order state is not awaiting_confirmation. Redirecting to create.")
-                                order_intent = 'create'
+                                if is_modification:
+                                    logger.info("Field modified during confirmation stage. Re-routing intent to 'create' to update draft.")
+                                    order_intent = 'create'
+                                else:
+                                    logger.warning("AI sent confirm intent but pending courier clarification or incomplete slots. Redirecting to create.")
+                                    order_intent = 'create'
 
                     if order_intent == 'cancel':
                         logger.info("Order cancel intent detected! Clearing order...")
@@ -3860,10 +3879,15 @@ def process_ai_reply_task(self, data):
                                     checkout_url = _get_checkout_url_for_contact(contact) if contact else None
                                     eff_platform = (request_type or (agent_config.platform if agent_config else 'whatsapp')).lower()
                                     if eff_platform in ['whatsapp'] and checkout_url and checkout_url not in parsed_reply:
-                                        link_cta = (
-                                            f"\n\n🛒 নিচের লিংকে ক্লিক করে শপ থেকে ১-ক্লিকে অর্ডার কনফার্ম করতে পারেন:\n👉 {checkout_url}\n"
-                                            "(অথবা আপনি চাইলে এখানে চ্যাটেও আপনার নাম, মোবাইল নম্বর এবং পূর্ণ ঠিকানা দিতে পারেন)"
-                                        )
+                                        if _has_complete_order_fields(user_memory):
+                                            link_cta = (
+                                                f"\n\n🛒 নিচের লিংকে ক্লিক করে শপ থেকে ১-ক্লিকে অর্ডার কনফার্ম করতে পারেন:\n👉 {checkout_url}"
+                                            )
+                                        else:
+                                            link_cta = (
+                                                f"\n\n🛒 নিচের লিংকে ক্লিক করে শপ থেকে ১-ক্লিকে অর্ডার কনফার্ম করতে পারেন:\n👉 {checkout_url}\n"
+                                                "(অথবা আপনি চাইলে এখানে চ্যাটেও আপনার নাম, মোবাইল নম্বর এবং পূর্ণ ঠিকানা দিতে পারেন)"
+                                            )
                                         parsed_reply = parsed_reply.rstrip() + link_cta
                                     cache_type = 'no_cache'
                                 except Exception as link_err:

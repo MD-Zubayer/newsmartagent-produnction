@@ -1074,6 +1074,7 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
 
             for field_name in ['customer_name', 'phone_number', 'address', 'product_name', 'quantity', 'extra_info']:
                 field_data = order_fields.get(field_name, {})
+                # Active session order_fields takes strict precedence over saved profile
                 if field_data.get('value') and field_data.get('confidence', 1.0) >= 0.75:
                     collected.append(f"{field_name}={field_data.get('value')}")
                 elif field_name == 'customer_name' and mem_name:
@@ -1082,7 +1083,7 @@ def build_ai_context(agent_config, sender_id, text, extra_instruction=None, shee
                 elif field_name == 'phone_number' and mem_phone:
                     collected.append(f"phone_number={mem_phone} (from saved profile)")
                     prefilled_fields.append(f"Phone: {mem_phone}")
-                elif field_name == 'address' and mem_addr:
+                elif field_name == 'address' and mem_addr and not field_data.get('value'):
                     collected.append(f"address={mem_addr} (from saved profile)")
                     prefilled_fields.append(f"Address: {mem_addr}")
                 elif field_name == 'extra_info':

@@ -89,6 +89,7 @@ def build_classification_dsl(
         '\n'
         '    ORDER_DATA:\n'
         '      - Always populate "order_data": {"product_name": "string or null"} tracking active product from conversation, even if order_intent is null.\n'
+        '      - When customer expresses a color, variant, or size preference while browsing (even when order_intent is null), capture it in "order_data": {"extra_info": "Color: Blue Black" (or selected attribute)}.\n'
         '      - If discount/offer price exists in catalog, inform customer and set discount price in "order_data".\n'
         '      - Map raw visual descriptions back to authoritative catalog product name; never invent names or prices.\n'
         '\n'
