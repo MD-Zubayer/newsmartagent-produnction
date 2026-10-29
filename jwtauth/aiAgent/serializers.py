@@ -40,6 +40,9 @@ class AgentAIListSerializer(serializers.ModelSerializer):
     history_skip_keywords = serializers.CharField(source='get_settings.history_skip_keywords', read_only=True)
     shared_cache_agents = serializers.PrimaryKeyRelatedField(source='get_settings.shared_cache_agents', many=True, read_only=True)
     redis_cache_enabled = serializers.BooleanField(source='get_settings.redis_cache_enabled', read_only=True)
+    global_cache_enabled = serializers.BooleanField(source='get_settings.global_cache_enabled', read_only=True)
+    sender_cache_enabled = serializers.BooleanField(source='get_settings.sender_cache_enabled', read_only=True)
+    agent_cache_enabled = serializers.BooleanField(source='get_settings.agent_cache_enabled', read_only=True)
     widget_settings = WidgetSettingsSerializer(read_only=True)
     
     class Meta:
@@ -68,6 +71,9 @@ class AgentAIListSerializer(serializers.ModelSerializer):
             'special_agent_status',
             'shared_cache_agents',
             'redis_cache_enabled',
+            'global_cache_enabled',
+            'sender_cache_enabled',
+            'agent_cache_enabled',
             'widget_key',
             'widget_settings'
         ]
@@ -85,13 +91,16 @@ class AgentAISerializer(serializers.ModelSerializer):
     """
     create & update AgentAI model
     """
-    history_limit = serializers.IntegerField(required=False)
-    temperature = serializers.FloatField(required=False)
-    max_tokens = serializers.IntegerField(required=False)
+    history_limit = serializers.IntegerField(required=False, allow_null=True)
+    temperature = serializers.FloatField(required=False, allow_null=True)
+    max_tokens = serializers.IntegerField(required=False, allow_null=True)
     skip_history = serializers.BooleanField(required=False)
     history_skip_keywords = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     shared_cache_agents = serializers.PrimaryKeyRelatedField(queryset=AgentAI.objects.all(), many=True, required=False)
     redis_cache_enabled = serializers.BooleanField(required=False)
+    global_cache_enabled = serializers.BooleanField(required=False)
+    sender_cache_enabled = serializers.BooleanField(required=False)
+    agent_cache_enabled = serializers.BooleanField(required=False)
     widget_settings = WidgetSettingsSerializer(required=False, allow_null=True)
 
     class Meta:
@@ -120,6 +129,9 @@ class AgentAISerializer(serializers.ModelSerializer):
             'special_agent_status',
             'shared_cache_agents',
             'redis_cache_enabled',
+            'global_cache_enabled',
+            'sender_cache_enabled',
+            'agent_cache_enabled',
             'widget_key',
             'widget_settings'
         ]
@@ -152,6 +164,9 @@ class AgentAISerializer(serializers.ModelSerializer):
         history_skip_keywords = validated_data.pop('history_skip_keywords', '')
         shared_cache_agents = validated_data.pop('shared_cache_agents', [])
         redis_cache_enabled = validated_data.pop('redis_cache_enabled', False)
+        global_cache_enabled = validated_data.pop('global_cache_enabled', True)
+        sender_cache_enabled = validated_data.pop('sender_cache_enabled', True)
+        agent_cache_enabled = validated_data.pop('agent_cache_enabled', True)
         widget_settings_data = validated_data.pop('widget_settings', {}) or {}
         
         # Generate widget key if platform is web_widget
@@ -160,7 +175,7 @@ class AgentAISerializer(serializers.ModelSerializer):
             # Ensure page_id is unique even if not provided
             if not validated_data.get('page_id'):
                 validated_data['page_id'] = f"widget_{validated_data['widget_key']}"
-
+ 
         agent = AgentAI.objects.create(**validated_data)
         
         from settings.models import AgentAISettings
@@ -172,7 +187,10 @@ class AgentAISerializer(serializers.ModelSerializer):
                 'max_tokens': max_tokens,
                 'skip_history': skip_history,
                 'history_skip_keywords': history_skip_keywords,
-                'redis_cache_enabled': redis_cache_enabled
+                'redis_cache_enabled': redis_cache_enabled,
+                'global_cache_enabled': global_cache_enabled,
+                'sender_cache_enabled': sender_cache_enabled,
+                'agent_cache_enabled': agent_cache_enabled
             }
         )
         
@@ -187,12 +205,16 @@ class AgentAISerializer(serializers.ModelSerializer):
         )
         
         return agent
-
+ 
     def update(self, instance, validated_data):
         settings_data = {}
-        for field in ['history_limit', 'temperature', 'max_tokens', 'skip_history', 'history_skip_keywords', 'shared_cache_agents', 'redis_cache_enabled']:
+        for field in ['history_limit', 'temperature', 'max_tokens', 'skip_history', 'history_skip_keywords', 'shared_cache_agents', 'redis_cache_enabled', 'global_cache_enabled', 'sender_cache_enabled', 'agent_cache_enabled']:
             if field in validated_data:
-                settings_data[field] = validated_data.pop(field)
+                value = validated_data.pop(field)
+                # Null means "leave the existing per-agent setting unchanged"
+                # for PATCH requests from older clients/forms.
+                if value is not None:
+                    settings_data[field] = value
         
         widget_settings_data = validated_data.pop('widget_settings', None)
         
@@ -280,6 +302,11 @@ class TokenUsageAnalyticsSerializer(serializers.ModelSerializer):
         if contact:
             if contact.profile_photo_url:
                 return contact.profile_photo_url
+            if contact.profile_photo:
+                try:
+                    return contact.profile_photo.url
+                except ValueError:
+                    pass
             if contact.profile_picture:
                 try:
                     return contact.profile_picture.url
@@ -295,6 +322,12 @@ class ContactSerializer(serializers.ModelSerializer):
     crm_data = serializers.SerializerMethodField()
     is_comment = serializers.SerializerMethodField()
     profile_picture = serializers.SerializerMethodField()
+    assigned_to_name = serializers.SerializerMethodField()
+    assigned_to_role = serializers.SerializerMethodField()
+    assigned_by_name = serializers.SerializerMethodField()
+    assigned_by = serializers.PrimaryKeyRelatedField(read_only=True)
+    assigned_to_user_id = serializers.SerializerMethodField()
+    waiting_seconds = serializers.SerializerMethodField()
 
     class Meta:
         model = Contact
@@ -302,9 +335,51 @@ class ContactSerializer(serializers.ModelSerializer):
             'id', 'agent', 'agent_name', 'identifier', 'name', 'push_name', 'profile_picture',
             'is_auto_reply_enabled', 'is_human_needed', 'platform', 'created_at', 'updated_at',
             'custom_prompt', 'custom_instructions', 'last_message', 'last_message_time', 'unread_count', 'crm_data',
-            'is_comment'
+            'is_comment', 'assigned_to', 'assigned_to_name', 'assigned_to_role', 'assigned_by', 'assigned_by_name',
+            'assigned_to_user_id', 'assigned_department', 'assignment_note', 'support_status', 'waiting_since', 'waiting_seconds'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def get_assigned_to_name(self, obj):
+        if obj.support_status == 'resolved' and not obj.is_human_needed:
+            return None
+        if obj.assigned_to and obj.assigned_to.user:
+            return obj.assigned_to.user.name or obj.assigned_to.user.email.split('@')[0]
+        if obj.support_status == 'in_progress' and obj.assigned_by:
+            return obj.assigned_by.name or obj.assigned_by.email.split('@')[0]
+        return None
+
+    def get_assigned_to_role(self, obj):
+        if obj.support_status == 'resolved' and not obj.is_human_needed:
+            return None
+        if obj.assigned_to:
+            return obj.assigned_to.role_title
+        if obj.support_status == 'in_progress' and obj.assigned_by:
+            return "অ্যাডমিন"
+        return None
+
+    def get_assigned_by_name(self, obj):
+        if obj.support_status == 'resolved' and not obj.is_human_needed:
+            return None
+        if obj.assigned_by:
+            return obj.assigned_by.name or obj.assigned_by.email.split('@')[0]
+        return None
+
+    def get_assigned_to_user_id(self, obj):
+        if obj.support_status == 'resolved' and not obj.is_human_needed:
+            return None
+        if obj.assigned_to and obj.assigned_to.user_id:
+            return obj.assigned_to.user_id
+        if obj.support_status == 'in_progress' and obj.assigned_by_id and not obj.assigned_to:
+            return obj.assigned_by_id
+        return None
+
+    def get_waiting_seconds(self, obj):
+        if obj.waiting_since:
+            from django.utils import timezone
+            diff = int((timezone.now() - obj.waiting_since).total_seconds())
+            return max(0, diff)
+        return 0
 
     def _get_conversations(self, obj):
         from chat.models import Conversation
@@ -368,6 +443,11 @@ class ContactSerializer(serializers.ModelSerializer):
     def get_profile_picture(self, obj):
         if obj.profile_photo_url:
             return obj.profile_photo_url
+        if obj.profile_photo:
+            try:
+                return obj.profile_photo.url
+            except ValueError:
+                pass
         if obj.profile_picture:
             try:
                 return obj.profile_picture.url

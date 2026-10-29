@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { 
-  FaBell, FaRobot, FaShieldAlt, FaGlobe, 
+import {
+  FaBell, FaRobot, FaShieldAlt, FaGlobe,
   FaSave, FaCog, FaExclamationCircle,
   FaUserEdit, FaSearch, FaChevronRight,
-  FaShoppingCart, FaChevronDown, FaClock, FaCoins, FaTruck
+  FaShoppingCart, FaChevronDown, FaClock, FaCoins, FaTruck, FaPhoneVolume, FaMicrophone
 } from "react-icons/fa";
 import api from "@/lib/api";
 import { toast } from 'react-hot-toast';
@@ -22,6 +22,83 @@ export default function SettingsPage() {
     publicProfile: true,
   });
 
+  // AI Voice & Auto Courier Automation State
+  const [voiceSettings, setVoiceSettings] = useState({
+    auto_courier_booking: false,
+    default_courier_provider: 'steadfast',
+    ai_voice_enabled: false,
+    voice_preference: 'auto',
+    word_balance: 0,
+  });
+  const [loadingVoiceSettings, setLoadingVoiceSettings] = useState(false);
+  const [savingVoiceSettings, setSavingVoiceSettings] = useState(false);
+
+  const fetchVoiceSettings = async () => {
+    try {
+      setLoadingVoiceSettings(true);
+      const res = await api.get('/storefront/v1/merchant/automation-settings/');
+      if (res.data) {
+        setVoiceSettings(prev => ({ ...prev, ...res.data }));
+      }
+    } catch (e) {
+      console.warn('Failed to load automation settings', e);
+    } finally {
+      setLoadingVoiceSettings(false);
+    }
+  };
+
+  const saveVoiceSettings = async (updatedFields) => {
+    try {
+      setSavingVoiceSettings(true);
+      const next = { ...voiceSettings, ...updatedFields };
+      setVoiceSettings(next);
+      await api.post('/storefront/v1/merchant/automation-settings/', updatedFields);
+      toast.success('ভয়েস ও কুরিয়ার সেটিংস সেভ হয়েছে!', { icon: '🎙️' });
+    } catch (e) {
+      toast.error('সেটিংস সেভ করা যায়নি।');
+    } finally {
+      setSavingVoiceSettings(false);
+    }
+  };
+
+  const [uploadingDefaultAudio, setUploadingDefaultAudio] = useState(false);
+
+  const handleDefaultAudioUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setUploadingDefaultAudio(true);
+      const fd = new FormData();
+      fd.append('default_voice_audio', file);
+      const res = await api.post('/storefront/v1/merchant/automation-settings/', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      if (res.data) {
+        setVoiceSettings(prev => ({ ...prev, ...res.data }));
+      }
+      toast.success('শপের ডিফল্ট ভয়েস অডিও আপলোড হয়েছে!', { icon: '🎙️' });
+    } catch (err) {
+      toast.error('অডিও ফাইল আপলোড ব্যর্থ হয়েছে।');
+    } finally {
+      setUploadingDefaultAudio(false);
+    }
+  };
+
+  const handleRemoveDefaultAudio = async () => {
+    try {
+      setUploadingDefaultAudio(true);
+      const res = await api.post('/storefront/v1/merchant/automation-settings/', { remove_default_voice: true });
+      if (res.data) {
+        setVoiceSettings(prev => ({ ...prev, ...res.data, default_voice_audio_url: '' }));
+      }
+      toast.success('ডিফল্ট ভয়েস অডিও সরানো হয়েছে।');
+    } catch (err) {
+      toast.error('ভয়েস অডিও সরানো যায়নি।');
+    } finally {
+      setUploadingDefaultAudio(false);
+    }
+  };
+
   const [agentSettings, setAgentSettings] = useState({
     is_order_enable: true,
     auto_renew_enabled: false,
@@ -30,1243 +107,1421 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [offers, setOffers] = useState([]);
 
-  // Security States
-  const [securityData, setSecurityData] = useState({
-    recovery_email: "",
-    recovery_whatsapp: "",
-    recovery_codes_count: 0,
-    recovery_codes_available: [],
-    trusted_devices: []
-  });
-  const [countryCode, setCountryCode] = useState("880");
-  const [loginHistory, setLoginHistory] = useState([]);
-  const [showCodes, setShowCodes] = useState(false);
+// Security States
+const [securityData, setSecurityData] = useState({
+  recovery_email: "",
+  recovery_whatsapp: "",
+  recovery_codes_count: 0,
+  recovery_codes_available: [],
+  trusted_devices: []
+});
+const [countryCode, setCountryCode] = useState("880");
+const [loginHistory, setLoginHistory] = useState([]);
+const [showCodes, setShowCodes] = useState(false);
 
-  // Pathao Settings States
-  const [pathaoConfig, setPathaoConfig] = useState({
-    client_id: "",
-    client_secret: "",
-    username: "",
-    password: "",
-    store_id: "",
-    is_sandbox: true,
-    is_active: true
-  });
-  const [stores, setStores] = useState([]);
-  const [loadingStores, setLoadingStores] = useState(false);
-  const [fetchingConfig, setFetchingConfig] = useState(false);
+// Pathao Settings States
+const [pathaoConfig, setPathaoConfig] = useState({
+  client_id: "",
+  client_secret: "",
+  username: "",
+  password: "",
+  store_id: "",
+  is_sandbox: true,
+  is_active: true
+});
+const [stores, setStores] = useState([]);
+const [loadingStores, setLoadingStores] = useState(false);
+const [fetchingConfig, setFetchingConfig] = useState(false);
 
-  // Custom Confirm Modal State
-  const [confirmModal, setConfirmModal] = useState({ open: false, title: "", message: "", icon: null, confirmLabel: "Confirm", confirmColor: "rose", onConfirm: null });
-  const showConfirm = ({ title, message, icon, confirmLabel, confirmColor = "rose", onConfirm }) => {
-    setConfirmModal({ open: true, title, message, icon, confirmLabel, confirmColor, onConfirm });
-  };
-  const closeConfirm = () => setConfirmModal(prev => ({ ...prev, open: false, onConfirm: null }));
+// Custom Confirm Modal State
+const [confirmModal, setConfirmModal] = useState({ open: false, title: "", message: "", icon: null, confirmLabel: "Confirm", confirmColor: "rose", onConfirm: null });
+const showConfirm = ({ title, message, icon, confirmLabel, confirmColor = "rose", onConfirm }) => {
+  setConfirmModal({ open: true, title, message, icon, confirmLabel, confirmColor, onConfirm });
+};
+const closeConfirm = () => setConfirmModal(prev => ({ ...prev, open: false, onConfirm: null }));
 
-  // Per-Contact Settings State
-  const [agents, setAgents] = useState([]);
-  const [selectedAgent, setSelectedAgent] = useState("");
-  const [contactSearch, setContactSearch] = useState("");
-  const [contacts, setContacts] = useState([]);
-  const [selectedContact, setSelectedContact] = useState(null);
-  const [contactLoading, setContactLoading] = useState(false);
-  const [contactSettings, setContactSettings] = useState({
-    custom_prompt: "",
-    custom_instructions: ""
-  });
+// Per-Contact Settings State
+const [agents, setAgents] = useState([]);
+const [selectedAgent, setSelectedAgent] = useState("");
+const [contactSearch, setContactSearch] = useState("");
+const [contacts, setContacts] = useState([]);
+const [selectedContact, setSelectedContact] = useState(null);
+const [contactLoading, setContactLoading] = useState(false);
+const [contactSettings, setContactSettings] = useState({
+  custom_prompt: "",
+  custom_instructions: ""
+});
 
-  useEffect(() => {
-    if (activeTab === "contacts" || activeTab === "automation") {
-      fetchAgents();
-      fetchOffers();
-    }
-    if (activeTab === "security") {
-      fetchSecurityData();
-      fetchLoginHistory();
-    }
-    if (activeTab === "courier") {
-      fetchPathaoConfig();
-    }
-  }, [activeTab]);
+useEffect(() => {
+  if (activeTab === "contacts" || activeTab === "automation") {
+    fetchAgents();
+    fetchOffers();
+  }
+  if (activeTab === "security") {
+    fetchSecurityData();
+    fetchLoginHistory();
+  }
+  if (activeTab === "courier") {
+    fetchPathaoConfig();
+  }
+  if (activeTab === "voice") {
+    fetchVoiceSettings();
+  }
+}, [activeTab]);
 
-  useEffect(() => {
-    if (selectedAgent && contactSearch.length >= 2) {
-      const delayDebounceFn = setTimeout(() => {
-        searchContacts();
-      }, 500);
-      return () => clearTimeout(delayDebounceFn);
-    }
-  }, [contactSearch, selectedAgent]);
+useEffect(() => {
+  if (selectedAgent && contactSearch.length >= 2) {
+    const delayDebounceFn = setTimeout(() => {
+      searchContacts();
+    }, 500);
+    return () => clearTimeout(delayDebounceFn);
+  }
+}, [contactSearch, selectedAgent]);
 
-  useEffect(() => {
-    fetchAgentSettings();
-  }, []);
+useEffect(() => {
+  fetchAgentSettings();
+}, []);
 
-  useEffect(() => {
-    if (user?.profile?.two_factor_enabled !== undefined) {
-      setTwoFactorEnabled(user.profile.two_factor_enabled);
-    }
-  }, [user]);
+useEffect(() => {
+  if (user?.profile?.two_factor_enabled !== undefined) {
+    setTwoFactorEnabled(user.profile.two_factor_enabled);
+  }
+}, [user]);
 
-  const fetchPathaoConfig = async () => {
-    setFetchingConfig(true);
-    try {
-      const res = await api.get("/courier/config/");
-      setPathaoConfig(prev => ({
-        ...prev,
-        ...res.data,
-        password: "" // Keep password blank as visual cue
-      }));
-      if (res.data.client_id) {
-        // Fetch stores if config exists
-        try {
-          const sRes = await api.get("/courier/stores/");
-          setStores(sRes.data || []);
-        } catch (e) {
-          console.error("Failed to fetch stores on initial load:", e);
-        }
-      }
-    } catch (err) {
-      console.log("No Pathao config found yet.");
-    } finally {
-      setFetchingConfig(false);
-    }
-  };
-
-  const fetchStores = async () => {
-    setLoadingStores(true);
-    try {
-      const res = await api.get("/courier/stores/");
-      setStores(res.data || []);
-      toast.success("Pickup stores refreshed!");
-    } catch (err) {
-      console.error("Failed to fetch Pathao stores:", err);
-      toast.error("Failed to fetch stores from Pathao API.");
-    } finally {
-      setLoadingStores(false);
-    }
-  };
-
-  const handleSavePathaoConfig = async () => {
-    setIsSaving(true);
-    try {
-      const payload = { ...pathaoConfig };
-      if (!payload.password) {
-        delete payload.password;
-      }
-      await api.post("/courier/config/", payload);
-      toast.success("Pathao credentials verified & saved successfully!", { icon: "🚚" });
-      
-      // Immediately fetch stores upon saving successfully
+const fetchPathaoConfig = async () => {
+  setFetchingConfig(true);
+  try {
+    const res = await api.get("/courier/config/");
+    setPathaoConfig(prev => ({
+      ...prev,
+      ...res.data,
+      password: "" // Keep password blank as visual cue
+    }));
+    if (res.data.client_id) {
+      // Fetch stores if config exists
       try {
         const sRes = await api.get("/courier/stores/");
         setStores(sRes.data || []);
       } catch (e) {
-        console.error("Failed to fetch stores post-save:", e);
+        console.error("Failed to fetch stores on initial load:", e);
       }
-    } catch (err) {
-      toast.error(err.response?.data?.error || "Failed to verify or save Pathao credentials.");
-    } finally {
-      setIsSaving(false);
     }
-  };
+  } catch (err) {
+    console.log("No Pathao config found yet.");
+  } finally {
+    setFetchingConfig(false);
+  }
+};
 
-  const fetchAgentSettings = async () => {
-    try {
-      const response = await api.get('/settings/agent-settings/');
-      setAgentSettings(response.data);
-    } catch (err) {
-      console.error("Failed to fetch agent global settings:", err);
+const fetchStores = async () => {
+  setLoadingStores(true);
+  try {
+    const res = await api.get("/courier/stores/");
+    setStores(res.data || []);
+    toast.success("Pickup stores refreshed!");
+  } catch (err) {
+    console.error("Failed to fetch Pathao stores:", err);
+    toast.error("Failed to fetch stores from Pathao API.");
+  } finally {
+    setLoadingStores(false);
+  }
+};
+
+const handleSavePathaoConfig = async () => {
+  setIsSaving(true);
+  try {
+    const payload = { ...pathaoConfig };
+    if (!payload.password) {
+      delete payload.password;
     }
-  };
+    await api.post("/courier/config/", payload);
+    toast.success("Pathao credentials verified & saved successfully!", { icon: "🚚" });
 
-  const fetchOffers = async () => {
+    // Immediately fetch stores upon saving successfully
     try {
-      const res = await api.get("/offers/");
-      setOffers(res.data || []);
-    } catch (err) {
-      console.error("Failed to load offers:", err);
+      const sRes = await api.get("/courier/stores/");
+      setStores(sRes.data || []);
+    } catch (e) {
+      console.error("Failed to fetch stores post-save:", e);
     }
-  };
+  } catch (err) {
+    toast.error(err.response?.data?.error || "Failed to verify or save Pathao credentials.");
+  } finally {
+    setIsSaving(false);
+  }
+};
 
-  const fetchAgents = async () => {
-    try {
-      const res = await api.get("/AgentAI/agents/");
-      setAgents(res.data || []);
-      if (res.data.length > 0 && !selectedAgent) {
-        setSelectedAgent(res.data[0].page_id);
+const fetchAgentSettings = async () => {
+  try {
+    const response = await api.get('/settings/agent-settings/');
+    setAgentSettings(response.data);
+  } catch (err) {
+    console.error("Failed to fetch agent global settings:", err);
+  }
+};
+
+const fetchOffers = async () => {
+  try {
+    const res = await api.get("/offers/");
+    setOffers(res.data || []);
+  } catch (err) {
+    console.error("Failed to load offers:", err);
+  }
+};
+
+const fetchAgents = async () => {
+  try {
+    const res = await api.get("/AgentAI/agents/");
+    setAgents(res.data || []);
+    if (res.data.length > 0 && !selectedAgent) {
+      setSelectedAgent(res.data[0].page_id);
+    }
+  } catch (err) {
+    console.error("Failed to load agents:", err);
+  }
+};
+
+const searchContacts = async () => {
+  setContactLoading(true);
+  try {
+    const res = await api.get(`/AgentAI/contacts/${selectedAgent}/?q=${contactSearch}`);
+    setContacts(res.data.contacts || []);
+  } catch (err) {
+    console.error("Failed to search contacts:", err);
+  } finally {
+    setContactLoading(false);
+  }
+};
+
+const handleSelectContact = (contact) => {
+  setSelectedContact(contact);
+  setContactSettings({
+    custom_prompt: contact.custom_prompt || "",
+    custom_instructions: contact.custom_instructions || ""
+  });
+  setContacts([]);
+  setContactSearch("");
+};
+
+const handleSaveContactSettings = async () => {
+  if (!selectedContact) return;
+  setIsSaving(true);
+  try {
+    await api.patch(`/AgentAI/contacts/detail/${selectedContact.id}/`, contactSettings);
+    toast.success("Contact settings saved!");
+    setSelectedContact(prev => ({ ...prev, ...contactSettings }));
+  } catch (err) {
+    console.error("Failed to save contact settings:", err);
+    toast.error("Failed to save settings.");
+  } finally {
+    setIsSaving(false);
+  }
+};
+
+const toggleSetting = (key) => {
+  setSettings(prev => ({ ...prev, [key]: !prev[key] }));
+};
+
+const handleAgentToggle = async (agentId, key, currentValue, isDirectValue = false) => {
+  setIsSaving(true);
+  try {
+    const newValue = isDirectValue ? currentValue : !currentValue;
+    await api.patch(`/AgentAI/agents/${agentId}/`, { [key]: newValue });
+    toast.success(isDirectValue ? "Keywords saved!" : "Setting updated!");
+    // Update local agent state if it was a toggle
+    if (!isDirectValue) {
+      setAgents(prev => prev.map(a => a.id === agentId ? { ...a, [key]: newValue } : a));
+    }
+  } catch (err) {
+    console.error("Failed to update agent setting:", err);
+    toast.error("Failed to update setting.");
+  } finally {
+    setIsSaving(false);
+  }
+};
+
+const handleGlobalSettingChange = async (key, value) => {
+  setIsSaving(true);
+  try {
+    await api.patch('/settings/agent-settings/', { [key]: value });
+    setAgentSettings(prev => ({ ...prev, [key]: value }));
+    toast.success("Settings updated!");
+  } catch (err) {
+    console.error("Failed to update global setting:", err);
+    toast.error("Failed to update global setting.");
+  } finally {
+    setIsSaving(false);
+  }
+};
+
+const handleGlobalSettingToggle = async (key, currentValue) => {
+  handleGlobalSettingChange(key, !currentValue);
+};
+
+const handleToggle2FA = async () => {
+  setIsSaving(true);
+  try {
+    const newValue = !twoFactorEnabled;
+    const res = await api.post('/auth/2fa/toggle/', { enabled: newValue });
+    setTwoFactorEnabled(newValue);
+
+    // Update local user state
+    if (setUser) {
+      setUser(prev => ({
+        ...prev,
+        profile: {
+          ...prev.profile,
+          two_factor_enabled: newValue
+        }
+      }));
+    }
+
+    toast.success(res.data.message);
+  } catch (err) {
+    console.error("Failed to toggle 2FA:", err);
+    toast.error(err.response?.data?.error || "Failed to update 2FA setting.");
+  } finally {
+    setIsSaving(false);
+  }
+};
+
+const fetchSecurityData = async () => {
+  try {
+    const res = await api.get("/security/settings/");
+    const data = res.data;
+
+    // Parse country code from recovery_whatsapp
+    if (data.recovery_whatsapp) {
+      let whatsapp = data.recovery_whatsapp.replace(/^\+/, '');
+      if (whatsapp.startsWith("880")) {
+        setCountryCode("880");
+        data.recovery_whatsapp = whatsapp.substring(3);
+      } else if (whatsapp.startsWith("91")) {
+        setCountryCode("91");
+        data.recovery_whatsapp = whatsapp.substring(2);
+      } else if (whatsapp.startsWith("1")) {
+        setCountryCode("1");
+        data.recovery_whatsapp = whatsapp.substring(1);
+      } else if (whatsapp.startsWith("44")) {
+        setCountryCode("44");
+        data.recovery_whatsapp = whatsapp.substring(2);
+      } else if (whatsapp.startsWith("971")) {
+        setCountryCode("971");
+        data.recovery_whatsapp = whatsapp.substring(3);
+      } else if (whatsapp.startsWith("966")) {
+        setCountryCode("966");
+        data.recovery_whatsapp = whatsapp.substring(3);
       }
-    } catch (err) {
-      console.error("Failed to load agents:", err);
     }
-  };
 
-  const searchContacts = async () => {
-    setContactLoading(true);
-    try {
-      const res = await api.get(`/AgentAI/contacts/${selectedAgent}/?q=${contactSearch}`);
-      setContacts(res.data.contacts || []);
-    } catch (err) {
-      console.error("Failed to search contacts:", err);
-    } finally {
-      setContactLoading(false);
-    }
-  };
+    setSecurityData(data);
+  } catch (err) {
+    console.error("Failed to fetch security data");
+  }
+};
 
-  const handleSelectContact = (contact) => {
-    setSelectedContact(contact);
-    setContactSettings({
-      custom_prompt: contact.custom_prompt || "",
-      custom_instructions: contact.custom_instructions || ""
+const fetchLoginHistory = async () => {
+  try {
+    const res = await api.get("/security/login-history/");
+    setLoginHistory(res.data || []);
+  } catch (err) {
+    console.error("Failed to fetch login history");
+  }
+};
+
+const handleUpdateRecovery = async () => {
+  setIsSaving(true);
+  try {
+    // Clean number (remove any leading zeros the user might add)
+    const cleanNumber = securityData.recovery_whatsapp.replace(/^0+/, '');
+    const fullNumber = countryCode + cleanNumber;
+
+    await api.post("/security/settings/", {
+      action: "update_recovery",
+      recovery_email: securityData.recovery_email,
+      recovery_whatsapp: fullNumber
     });
-    setContacts([]);
-    setContactSearch("");
-  };
+    toast.success("Recovery options updated!");
+  } catch (err) {
+    toast.error("Failed to update recovery options.");
+  } finally {
+    setIsSaving(false);
+  }
+};
 
-  const handleSaveContactSettings = async () => {
-    if (!selectedContact) return;
-    setIsSaving(true);
-    try {
-      await api.patch(`/AgentAI/contacts/detail/${selectedContact.id}/`, contactSettings);
-      toast.success("Contact settings saved!");
-      setSelectedContact(prev => ({ ...prev, ...contactSettings }));
-    } catch (err) {
-      console.error("Failed to save contact settings:", err);
-      toast.error("Failed to save settings.");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const toggleSetting = (key) => {
-    setSettings(prev => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  const handleAgentToggle = async (agentId, key, currentValue, isDirectValue = false) => {
-    setIsSaving(true);
-    try {
-      const newValue = isDirectValue ? currentValue : !currentValue;
-      await api.patch(`/AgentAI/agents/${agentId}/`, { [key]: newValue });
-      toast.success(isDirectValue ? "Keywords saved!" : "Setting updated!");
-      // Update local agent state if it was a toggle
-      if (!isDirectValue) {
-        setAgents(prev => prev.map(a => a.id === agentId ? { ...a, [key]: newValue } : a));
-      }
-    } catch (err) {
-      console.error("Failed to update agent setting:", err);
-      toast.error("Failed to update setting.");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleGlobalSettingChange = async (key, value) => {
-    setIsSaving(true);
-    try {
-      await api.patch('/settings/agent-settings/', { [key]: value });
-      setAgentSettings(prev => ({ ...prev, [key]: value }));
-      toast.success("Settings updated!");
-    } catch (err) {
-      console.error("Failed to update global setting:", err);
-      toast.error("Failed to update global setting.");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleGlobalSettingToggle = async (key, currentValue) => {
-    handleGlobalSettingChange(key, !currentValue);
-  };
-
-  const handleToggle2FA = async () => {
-    setIsSaving(true);
-    try {
-      const newValue = !twoFactorEnabled;
-      const res = await api.post('/auth/2fa/toggle/', { enabled: newValue });
-      setTwoFactorEnabled(newValue);
-      
-      // Update local user state
-      if (setUser) {
-        setUser(prev => ({
+const handleGenerateCodes = async () => {
+  showConfirm({
+    title: "Generate New Codes?",
+    message: "This will permanently delete your previous recovery codes and generate 10 new ones. Make sure to save them in a safe place.",
+    icon: "🔑",
+    confirmLabel: "Yes, Generate",
+    confirmColor: "amber",
+    onConfirm: async () => {
+      closeConfirm();
+      setIsSaving(true);
+      try {
+        const res = await api.post("/security/settings/", { action: "generate_codes" });
+        setSecurityData(prev => ({
           ...prev,
-          profile: {
-            ...prev.profile,
-            two_factor_enabled: newValue
-          }
+          recovery_codes_available: res.data.codes,
+          recovery_codes_count: res.data.codes.length
         }));
+        setShowCodes(true);
+        toast.success("New recovery codes generated!");
+      } catch (err) {
+        toast.error("Failed to generate codes.");
+      } finally {
+        setIsSaving(false);
       }
-      
-      toast.success(res.data.message);
-    } catch (err) {
-      console.error("Failed to toggle 2FA:", err);
-      toast.error(err.response?.data?.error || "Failed to update 2FA setting.");
-    } finally {
-      setIsSaving(false);
     }
-  };
+  });
+};
 
-  const fetchSecurityData = async () => {
-    try {
-      const res = await api.get("/security/settings/");
-      const data = res.data;
-      
-      // Parse country code from recovery_whatsapp
-      if (data.recovery_whatsapp) {
-        let whatsapp = data.recovery_whatsapp.replace(/^\+/, '');
-        if (whatsapp.startsWith("880")) {
-          setCountryCode("880");
-          data.recovery_whatsapp = whatsapp.substring(3);
-        } else if (whatsapp.startsWith("91")) {
-          setCountryCode("91");
-          data.recovery_whatsapp = whatsapp.substring(2);
-        } else if (whatsapp.startsWith("1")) {
-          setCountryCode("1");
-          data.recovery_whatsapp = whatsapp.substring(1);
-        } else if (whatsapp.startsWith("44")) {
-          setCountryCode("44");
-          data.recovery_whatsapp = whatsapp.substring(2);
-        } else if (whatsapp.startsWith("971")) {
-          setCountryCode("971");
-          data.recovery_whatsapp = whatsapp.substring(3);
-        } else if (whatsapp.startsWith("966")) {
-          setCountryCode("966");
-          data.recovery_whatsapp = whatsapp.substring(3);
-        }
+const handleRemoveDevice = async (deviceId) => {
+  showConfirm({
+    title: "Disconnect Device?",
+    message: "This will immediately log out this device. They will need to complete 2-Step Verification to log in again.",
+    icon: "🔒",
+    confirmLabel: "Disconnect",
+    confirmColor: "rose",
+    onConfirm: async () => {
+      closeConfirm();
+      setIsSaving(true);
+      try {
+        await api.post("/security/settings/", {
+          action: "remove_device",
+          device_id: deviceId
+        });
+        setSecurityData(prev => ({
+          ...prev,
+          trusted_devices: prev.trusted_devices.filter(d => d.id !== deviceId)
+        }));
+        toast.success("Device disconnected successfully!");
+      } catch (err) {
+        toast.error("Failed to disconnect device.");
+      } finally {
+        setIsSaving(false);
       }
-      
-      setSecurityData(data);
-    } catch (err) {
-      console.error("Failed to fetch security data");
     }
-  };
+  });
+};
 
-  const fetchLoginHistory = async () => {
-    try {
-      const res = await api.get("/security/login-history/");
-      setLoginHistory(res.data || []);
-    } catch (err) {
-      console.error("Failed to fetch login history");
-    }
-  };
+const SettingRow = ({ icon: Icon, title, desc, active, onClick, color }) => (
+  <div className="flex items-center justify-between gap-3 p-3.5 sm:p-4 bg-white rounded-xl border border-slate-200/80 hover:border-indigo-200 transition-all shadow-xs">
+    <div className="flex items-center gap-3 min-w-0">
+      <div className={`w-8 h-8 rounded-lg ${color} bg-slate-50 border border-slate-200 flex items-center justify-center shrink-0`}>
+        <Icon className="text-sm" />
+      </div>
+      <div className="min-w-0">
+        <h4 className="font-bold text-slate-800 text-xs sm:text-sm">{title}</h4>
+        <p className="text-[11px] text-slate-500 leading-tight">{desc}</p>
+      </div>
+    </div>
+    <button
+      onClick={onClick}
+      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none ring-1 ring-inset ${active ? 'bg-indigo-600 ring-indigo-600' : 'bg-slate-200 ring-slate-200'}`}
+    >
+      <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs transition-transform ${active ? 'translate-x-4' : 'translate-x-0.5'}`} />
+    </button>
+  </div>
+);
 
-  const handleUpdateRecovery = async () => {
-    setIsSaving(true);
-    try {
-      // Clean number (remove any leading zeros the user might add)
-      const cleanNumber = securityData.recovery_whatsapp.replace(/^0+/, '');
-      const fullNumber = countryCode + cleanNumber;
-      
-      await api.post("/security/settings/", {
-        action: "update_recovery",
-        recovery_email: securityData.recovery_email,
-        recovery_whatsapp: fullNumber
-      });
-      toast.success("Recovery options updated!");
-    } catch (err) {
-      toast.error("Failed to update recovery options.");
-    } finally {
-      setIsSaving(false);
-    }
-  };
+const tabs = [
+  { id: "general", label: "General", icon: FaCog },
+  { id: "automation", label: "Automation", icon: FaRobot },
+  { id: "contacts", label: "Contact-Specific", icon: FaUserEdit },
+  { id: "security", label: "Security", icon: FaShieldAlt },
+  { id: "courier", label: "Courier Settings", icon: FaTruck },
+  { id: "voice", label: "AI Voice & Auto Courier", icon: FaPhoneVolume },
+];
 
-  const handleGenerateCodes = async () => {
-    showConfirm({
-      title: "Generate New Codes?",
-      message: "This will permanently delete your previous recovery codes and generate 10 new ones. Make sure to save them in a safe place.",
-      icon: "🔑",
-      confirmLabel: "Yes, Generate",
-      confirmColor: "amber",
-      onConfirm: async () => {
-        closeConfirm();
-        setIsSaving(true);
-        try {
-          const res = await api.post("/security/settings/", { action: "generate_codes" });
-          setSecurityData(prev => ({
-            ...prev,
-            recovery_codes_available: res.data.codes,
-            recovery_codes_count: res.data.codes.length
-          }));
-          setShowCodes(true);
-          toast.success("New recovery codes generated!");
-        } catch (err) {
-          toast.error("Failed to generate codes.");
-        } finally {
-          setIsSaving(false);
-        }
-      }
-    });
-  };
+return (
+  <div className="max-w-6xl mx-auto py-6 px-4 sm:px-6 animate-in fade-in slide-in-from-bottom-6 duration-500">
 
-  const handleRemoveDevice = async (deviceId) => {
-    showConfirm({
-      title: "Disconnect Device?",
-      message: "This will immediately log out this device. They will need to complete 2-Step Verification to log in again.",
-      icon: "🔒",
-      confirmLabel: "Disconnect",
-      confirmColor: "rose",
-      onConfirm: async () => {
-        closeConfirm();
-        setIsSaving(true);
-        try {
-          await api.post("/security/settings/", {
-            action: "remove_device",
-            device_id: deviceId
-          });
-          setSecurityData(prev => ({
-            ...prev,
-            trusted_devices: prev.trusted_devices.filter(d => d.id !== deviceId)
-          }));
-          toast.success("Device disconnected successfully!");
-        } catch (err) {
-          toast.error("Failed to disconnect device.");
-        } finally {
-          setIsSaving(false);
-        }
-      }
-    });
-  };
-
-  const SettingRow = ({ icon: Icon, title, desc, active, onClick, color }) => (
-    <div className="flex items-center justify-between gap-4 p-4 sm:p-5 bg-slate-50 rounded-xl border border-slate-200 hover:bg-white transition-all">
-      <div className="flex items-center gap-3 min-w-0">
-        <div className={`p-2.5 rounded-lg ${color} bg-white border border-slate-200 shadow-sm shrink-0`}>
-          <Icon className="text-lg" />
-        </div>
-        <div className="min-w-0">
-          <h4 className="font-bold text-slate-800 text-sm sm:text-base">{title}</h4>
-          <p className="text-xs text-slate-500 font-medium">{desc}</p>
+    {/* ── Custom Confirm Modal ── */}
+    {confirmModal.open && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        {/* Backdrop */}
+        <div
+          className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+          onClick={closeConfirm}
+        />
+        {/* Dialog */}
+        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in zoom-in-95 fade-in duration-200">
+          {/* Icon */}
+          <div className="text-4xl text-center mb-4">{confirmModal.icon}</div>
+          {/* Title */}
+          <h3 className="text-lg font-black text-slate-900 text-center mb-2">
+            {confirmModal.title}
+          </h3>
+          {/* Message */}
+          <p className="text-sm text-slate-500 font-medium text-center mb-6 leading-relaxed">
+            {confirmModal.message}
+          </p>
+          {/* Actions */}
+          <div className="flex gap-3">
+            <button
+              onClick={closeConfirm}
+              className="flex-1 px-4 py-2.5 text-sm font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={confirmModal.onConfirm}
+              className={`flex-1 px-4 py-2.5 text-sm font-black text-white rounded-xl transition-all shadow-lg ${confirmModal.confirmColor === 'rose'
+                ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200'
+                : 'bg-amber-500 hover:bg-amber-600 shadow-amber-200'
+                }`}
+            >
+              {confirmModal.confirmLabel}
+            </button>
+          </div>
         </div>
       </div>
-      <button 
-        onClick={onClick}
-        className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus:outline-none ring-1 ring-inset ${active ? 'bg-indigo-600 ring-indigo-600' : 'bg-slate-300 ring-slate-300'}`}
-      >
-        <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${active ? 'translate-x-6' : 'translate-x-1'}`} />
-      </button>
+    )}
+
+    {/* Modern App-Style Header */}
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+      <div className="flex items-center gap-2.5">
+        <div className="w-9 h-9 bg-slate-900 rounded-xl text-white flex items-center justify-center shadow-xs">
+          <FaCog className="text-sm" />
+        </div>
+        <div>
+          <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight leading-none">Settings</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Preferences, automation rules, and smart controls</p>
+        </div>
+      </div>
+      <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md self-start sm:self-auto">
+        Auto-saves instantly
+      </span>
     </div>
-  );
 
-  const tabs = [
-    { id: "general", label: "General", icon: FaCog },
-    { id: "automation", label: "Automation", icon: FaRobot },
-    { id: "contacts", label: "Contact-Specific", icon: FaUserEdit },
-    { id: "security", label: "Security", icon: FaShieldAlt },
-    { id: "courier", label: "Courier Settings", icon: FaTruck },
-  ];
+    {/* Responsive Horizontal / Segmented Pill Tabs for Mobile & Desktop */}
+    <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl overflow-x-auto scrollbar-none mb-5 border border-slate-200/60 shadow-xs">
+      {tabs.map(tab => {
+        const isActive = activeTab === tab.id;
+        const TabIcon = tab.icon;
+        return (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${isActive
+              ? 'bg-white text-indigo-600 shadow-xs ring-1 ring-slate-200'
+              : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+              }`}
+          >
+            <TabIcon className="text-xs" />
+            <span>{tab.label}</span>
+          </button>
+        );
+      })}
+    </div>
 
-  return (
-    <div className="max-w-6xl mx-auto py-6 px-4 sm:px-6 animate-in fade-in slide-in-from-bottom-6 duration-500">
+    {/* Main Content Area */}
+    <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 p-4 sm:p-6">
+      {activeTab === "general" && (
+        <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+          <section>
+            <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Display & Notifications</h3>
+            <div className="space-y-4">
+              <SettingRow
+                icon={FaBell}
+                title="Email Notifications"
+                desc="Receive weekly reports and alert emails."
+                active={settings.emailNotif}
+                onClick={() => toggleSetting('emailNotif')}
+                color="text-blue-500"
+              />
+              <SettingRow
+                icon={FaGlobe}
+                title="Public Portfolio"
+                desc="Make your automation stats visible to others."
+                active={settings.publicProfile}
+                onClick={() => toggleSetting('publicProfile')}
+                color="text-green-500"
+              />
+            </div>
+          </section>
+        </div>
+      )}
 
-      {/* ── Custom Confirm Modal ── */}
-      {confirmModal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
-            onClick={closeConfirm}
-          />
-          {/* Dialog */}
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in zoom-in-95 fade-in duration-200">
-            {/* Icon */}
-            <div className="text-4xl text-center mb-4">{confirmModal.icon}</div>
-            {/* Title */}
-            <h3 className="text-lg font-black text-slate-900 text-center mb-2">
-              {confirmModal.title}
-            </h3>
-            {/* Message */}
-            <p className="text-sm text-slate-500 font-medium text-center mb-6 leading-relaxed">
-              {confirmModal.message}
-            </p>
-            {/* Actions */}
-            <div className="flex gap-3">
-              <button
-                onClick={closeConfirm}
-                className="flex-1 px-4 py-2.5 text-sm font-bold text-slate-600 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmModal.onConfirm}
-                className={`flex-1 px-4 py-2.5 text-sm font-black text-white rounded-xl transition-all shadow-lg ${
-                  confirmModal.confirmColor === 'rose'
-                    ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200'
-                    : 'bg-amber-500 hover:bg-amber-600 shadow-amber-200'
-                }`}
-              >
-                {confirmModal.confirmLabel}
-              </button>
+      {activeTab === "automation" && (
+        <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+          <section>
+            <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">AI Rules</h3>
+
+            <div className="mb-8 space-y-4">
+              <SettingRow
+                icon={FaShoppingCart}
+                title="Enable Order Link Logic"
+                desc="AI will provide order links and instructions when users ask to buy."
+                active={agentSettings.is_order_enable}
+                onClick={() => handleGlobalSettingToggle('is_order_enable', agentSettings.is_order_enable)}
+                color="text-green-500"
+              />
+
+              <div className="pt-6 border-t border-gray-100 mt-6">
+                <SettingRow
+                  icon={FaShoppingCart}
+                  title="Auto-Renew Offer"
+                  desc="Automatic purchase when token balance reaches 2,000."
+                  active={agentSettings.auto_renew_enabled}
+                  onClick={() => handleGlobalSettingToggle('auto_renew_enabled', agentSettings.auto_renew_enabled)}
+                  color="text-indigo-500"
+                />
+
+                {agentSettings.auto_renew_enabled && (
+                  <div className="mt-4 ml-2 sm:ml-14 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Select Offer to Renew</label>
+
+                    <div className="relative group/dropdown">
+                      <button
+                        onClick={() => {
+                          const dropdown = document.getElementById('offer-dropdown');
+                          dropdown.classList.toggle('hidden');
+                        }}
+                        className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 text-sm shadow-sm flex items-center justify-between group hover:border-indigo-300 transition-all"
+                      >
+                        <div className="flex items-center gap-3">
+                          {agentSettings.auto_renew_offer ? (
+                            <>
+                              <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600">
+                                <FaShoppingCart className="text-xs" />
+                              </div>
+                              <div className="text-left">
+                                <p className="font-black text-gray-900 leading-tight">
+                                  {offers.find(o => String(o.id) === String(agentSettings.auto_renew_offer))?.name || "Selected Offer"}
+                                </p>
+                                <p className="text-[10px] text-gray-400 font-bold">
+                                  {offers.find(o => String(o.id) === String(agentSettings.auto_renew_offer))?.price} BDT • {offers.find(o => String(o.id) === String(agentSettings.auto_renew_offer))?.tokens} Tokens
+                                </p>
+                              </div>
+                            </>
+                          ) : (
+                            <span className="text-gray-400 font-bold">Select an Offer to Auto-Renew</span>
+                          )}
+                        </div>
+                        <FaChevronDown className="text-gray-300 group-hover:text-indigo-400 transition-colors" />
+                      </button>
+
+                      <div
+                        id="offer-dropdown"
+                        className="absolute z-50 mt-3 w-full bg-white border border-slate-200 rounded-xl shadow-xl p-3 hidden animate-in fade-in slide-in-from-top-4 duration-300"
+                      >
+                        <div className="max-h-[300px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                          {offers.length > 0 ? (
+                            offers.map(offer => (
+                              <button
+                                key={offer.id}
+                                onClick={() => {
+                                  handleGlobalSettingChange('auto_renew_offer', offer.id);
+                                  document.getElementById('offer-dropdown').classList.add('hidden');
+                                }}
+                                className={`w-full p-4 rounded-xl transition-all flex items-center justify-between group/item ${String(agentSettings.auto_renew_offer) === String(offer.id)
+                                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100'
+                                  : 'hover:bg-gray-50 text-gray-700'
+                                  }`}
+                              >
+                                <div className="flex items-center gap-4">
+                                  <div className={`p-3 rounded-2xl ${String(agentSettings.auto_renew_offer) === String(offer.id) ? 'bg-white/20' : 'bg-gray-100 group-hover/item:bg-white group-hover/item:shadow-sm'} transition-colors`}>
+                                    <FaCoins className={String(agentSettings.auto_renew_offer) === String(offer.id) ? 'text-white' : 'text-amber-500'} />
+                                  </div>
+                                  <div className="text-left">
+                                    <p className="font-black text-sm">{offer.name}</p>
+                                    <div className={`flex items-center gap-2 mt-0.5 ${String(agentSettings.auto_renew_offer) === String(offer.id) ? 'text-indigo-100' : 'text-gray-400'}`}>
+                                      <div className="flex items-center gap-1 text-[10px] font-bold">
+                                        <FaClock className="text-[10px]" /> {offer.duration_days} Days
+                                      </div>
+                                      <span className="text-[10px]">•</span>
+                                      <p className="text-[10px] font-bold uppercase tracking-widest">{offer.tokens} Tokens</p>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <p className={`font-black text-lg italic ${String(agentSettings.auto_renew_offer) === String(offer.id) ? 'text-white' : 'text-indigo-600'}`}>
+                                    ৳{offer.price}
+                                  </p>
+                                </div>
+                              </button>
+                            ))
+                          ) : (
+                            <div className="p-10 text-center">
+                              <p className="text-gray-400 font-bold italic">No offers available</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="text-[10px] text-slate-500 ml-1 sm:ml-6 italic">Ensure sufficient balance for automatic renewal. Tokens renew with {offers.find(o => String(o.id) === String(agentSettings.auto_renew_offer))?.duration_days || "30"} days validity.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {agents.length > 0 ? (
+              <div className="space-y-6">
+                {agents.map(agent => (
+                  <div key={agent.id} className="p-5 bg-slate-50 rounded-xl border border-slate-200">
+                    <div className="flex items-center gap-3 mb-4 ml-2">
+                      <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-[10px] font-black">
+                        {agent.platform[0].toUpperCase()}
+                      </div>
+                      <h4 className="font-black text-gray-800 text-sm">{agent.name || agent.page_id}</h4>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4">
+                      <SettingRow
+                        icon={FaRobot}
+                        title="Auto-Reply"
+                        desc="Automatically respond using AI on this agent."
+                        active={agent.is_active}
+                        onClick={() => handleAgentToggle(agent.id, 'is_active', agent.is_active)}
+                        color="text-purple-500"
+                      />
+                      <SettingRow
+                        icon={FaCog}
+                        title="Skip History"
+                        desc="Only skip history if a keyword is found (Saves tokens)."
+                        active={agent.skip_history}
+                        onClick={() => handleAgentToggle(agent.id, 'skip_history', agent.skip_history)}
+                        color="text-amber-500"
+                      />
+
+                      {agent.skip_history && (
+                        <div className="mt-2 ml-14 space-y-2 animate-in slide-in-from-top-2 duration-300">
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">History Skip Keywords</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              placeholder="e.g. reset, clear, নতুন করে (comma separated)"
+                              value={agent.history_skip_keywords || ""}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setAgents(prev => prev.map(a => a.id === agent.id ? { ...a, history_skip_keywords: val } : a));
+                              }}
+                              className="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 shadow-sm"
+                            />
+                            <button
+                              onClick={() => handleAgentToggle(agent.id, 'history_skip_keywords', agent.history_skip_keywords, true)}
+                              className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-md hover:bg-indigo-700 transition-all"
+                            >
+                              Save
+                            </button>
+                          </div>
+                          <p className="text-[10px] text-gray-400 ml-2 italic underline decoration-indigo-200/50">Only skips history if one of these keywords is found in the user's message.</p>
+                        </div>
+                      )}
+
+                      <div className="mt-4 pt-4 border-t border-slate-200">
+                        <h5 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3 ml-1">AI Parameters</h5>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">History Limit</label>
+                            <div className="flex gap-2">
+                              <input
+                                type="number"
+                                value={agent.history_limit ?? ''}
+                                onChange={(e) => setAgents(prev => prev.map(a => a.id === agent.id ? { ...a, history_limit: e.target.value } : a))}
+                                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 shadow-sm"
+                              />
+                              <button onClick={() => handleAgentToggle(agent.id, 'history_limit', parseInt(agent.history_limit) || 3, true)} className="px-3 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold shadow-md hover:bg-slate-900 transition-all">Save</button>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Temperature</label>
+                            <div className="flex gap-2">
+                              <input
+                                type="number" step="0.1"
+                                value={agent.temperature ?? ''}
+                                onChange={(e) => setAgents(prev => prev.map(a => a.id === agent.id ? { ...a, temperature: e.target.value } : a))}
+                                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 shadow-sm"
+                              />
+                              <button onClick={() => handleAgentToggle(agent.id, 'temperature', parseFloat(agent.temperature) || 0.7, true)} className="px-3 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold shadow-md hover:bg-slate-900 transition-all">Save</button>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Max Tokens</label>
+                            <div className="flex gap-2">
+                              <input
+                                type="number"
+                                value={agent.max_tokens ?? ''}
+                                onChange={(e) => setAgents(prev => prev.map(a => a.id === agent.id ? { ...a, max_tokens: e.target.value } : a))}
+                                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 shadow-sm"
+                              />
+                              <button onClick={() => handleAgentToggle(agent.id, 'max_tokens', parseInt(agent.max_tokens) || 1024, true)} className="px-3 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold shadow-md hover:bg-slate-900 transition-all">Save</button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <SettingRow
+                icon={FaRobot}
+                title="Auto-reply to comments"
+                desc="Automatically respond to user comments using AI."
+                active={settings.autoReply}
+                onClick={() => toggleSetting('autoReply')}
+                color="text-purple-500"
+              />
+            )}
+          </section>
+
+          <div className="bg-indigo-50 p-5 rounded-xl border border-indigo-100 flex items-start gap-3">
+            <FaExclamationCircle className="text-indigo-600 mt-1" />
+            <div>
+              <p className="text-indigo-900 font-semibold text-sm">AI Efficiency</p>
+              <p className="text-indigo-700/70 text-xs font-medium mt-1">
+                Customizing your AI logic for specific users can increase engagement by up to 60%. Use the 'Contact-Specific' tab for granular control.
+              </p>
             </div>
           </div>
         </div>
       )}
 
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-slate-900 rounded-xl text-white shadow-sm">
-            <FaCog className="text-lg" />
-          </div>
-          <div>
-            <h2 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Settings</h2>
-            <p className="text-slate-500 text-sm font-medium">Manage preferences, automation rules, and account controls.</p>
-          </div>
-        </div>
-        <p className="text-xs text-slate-500 font-semibold">Most changes apply instantly</p>
-      </div>
+      {activeTab === "contacts" && (
+        <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+          <section>
+            <h3 className="text-sm font-black uppercase tracking-widest text-gray-400 mb-6 ml-2">Sender-Specific Logic</h3>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col md:flex-row min-h-[620px]">
-        
-        {/* Sidebar Tabs */}
-        <div className="w-full md:w-72 bg-slate-50 border-r border-slate-200 p-4 sm:p-5 flex flex-col gap-2">
-          <p className="text-[11px] px-2 font-bold uppercase tracking-widest text-slate-500 mb-1">Setting Categories</p>
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl font-semibold transition-all text-left ${
-                activeTab === tab.id 
-                ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-slate-200' 
-                : 'text-slate-500 hover:text-slate-700 hover:bg-white'
-              }`}
-            >
-              <tab.icon className="text-base" />
-              <span className="text-sm">{tab.label}</span>
-            </button>
-          ))}
-        </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Select Agent</label>
+                <select
+                  value={selectedAgent}
+                  onChange={(e) => setSelectedAgent(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500/10"
+                >
+                  {agents.map(agent => (
+                    <option key={agent.id} value={agent.page_id}>{agent.name} ({agent.platform})</option>
+                  ))}
+                </select>
+              </div>
 
-        {/* Tab Content */}
-        <div className="flex-1 p-5 sm:p-7 md:p-8">
-          {activeTab === "general" && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
-              <section>
-                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Display & Notifications</h3>
-                <div className="space-y-4">
-                  <SettingRow 
-                    icon={FaBell} 
-                    title="Email Notifications" 
-                    desc="Receive weekly reports and alert emails."
-                    active={settings.emailNotif}
-                    onClick={() => toggleSetting('emailNotif')}
-                    color="text-blue-500"
-                  />
-                  <SettingRow 
-                    icon={FaGlobe} 
-                    title="Public Portfolio" 
-                    desc="Make your automation stats visible to others."
-                    active={settings.publicProfile}
-                    onClick={() => toggleSetting('publicProfile')}
-                    color="text-green-500"
+              <div className="space-y-2 relative">
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Search Contact</label>
+                <div className="relative">
+                  <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Name or identifier..."
+                    value={contactSearch}
+                    onChange={(e) => setContactSearch(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500/10"
                   />
                 </div>
-              </section>
-            </div>
-          )}
 
-          {activeTab === "automation" && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
-              <section>
-                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">AI Rules</h3>
-                
-                <div className="mb-8 space-y-4">
-                  <SettingRow 
-                    icon={FaShoppingCart} 
-                    title="Enable Order Link Logic" 
-                    desc="AI will provide order links and instructions when users ask to buy."
-                    active={agentSettings.is_order_enable}
-                    onClick={() => handleGlobalSettingToggle('is_order_enable', agentSettings.is_order_enable)}
-                    color="text-green-500"
-                  />
-
-                  <div className="pt-6 border-t border-gray-100 mt-6">
-                    <SettingRow 
-                      icon={FaShoppingCart} 
-                      title="Auto-Renew Offer" 
-                      desc="Automatic purchase when token balance reaches 2,000."
-                      active={agentSettings.auto_renew_enabled}
-                      onClick={() => handleGlobalSettingToggle('auto_renew_enabled', agentSettings.auto_renew_enabled)}
-                      color="text-indigo-500"
-                    />
-
-                    {agentSettings.auto_renew_enabled && (
-                      <div className="mt-4 ml-2 sm:ml-14 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Select Offer to Renew</label>
-                        
-                        <div className="relative group/dropdown">
-                          <button
-                            onClick={() => {
-                              const dropdown = document.getElementById('offer-dropdown');
-                              dropdown.classList.toggle('hidden');
-                            }}
-                            className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:ring-4 focus:ring-indigo-500/10 text-sm shadow-sm flex items-center justify-between group hover:border-indigo-300 transition-all"
-                          >
-                            <div className="flex items-center gap-3">
-                              {agentSettings.auto_renew_offer ? (
-                                <>
-                                  <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600">
-                                    <FaShoppingCart className="text-xs" />
-                                  </div>
-                                  <div className="text-left">
-                                    <p className="font-black text-gray-900 leading-tight">
-                                      {offers.find(o => String(o.id) === String(agentSettings.auto_renew_offer))?.name || "Selected Offer"}
-                                    </p>
-                                    <p className="text-[10px] text-gray-400 font-bold">
-                                      {offers.find(o => String(o.id) === String(agentSettings.auto_renew_offer))?.price} BDT • {offers.find(o => String(o.id) === String(agentSettings.auto_renew_offer))?.tokens} Tokens
-                                    </p>
-                                  </div>
-                                </>
-                              ) : (
-                                <span className="text-gray-400 font-bold">Select an Offer to Auto-Renew</span>
-                              )}
-                            </div>
-                            <FaChevronDown className="text-gray-300 group-hover:text-indigo-400 transition-colors" />
-                          </button>
-
-                          <div
-                            id="offer-dropdown"
-                            className="absolute z-50 mt-3 w-full bg-white border border-slate-200 rounded-xl shadow-xl p-3 hidden animate-in fade-in slide-in-from-top-4 duration-300"
-                          >
-                            <div className="max-h-[300px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
-                              {offers.length > 0 ? (
-                                offers.map(offer => (
-                                  <button
-                                    key={offer.id}
-                                    onClick={() => {
-                                      handleGlobalSettingChange('auto_renew_offer', offer.id);
-                                      document.getElementById('offer-dropdown').classList.add('hidden');
-                                    }}
-                                    className={`w-full p-4 rounded-xl transition-all flex items-center justify-between group/item ${
-                                      String(agentSettings.auto_renew_offer) === String(offer.id) 
-                                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' 
-                                      : 'hover:bg-gray-50 text-gray-700'
-                                    }`}
-                                  >
-                                    <div className="flex items-center gap-4">
-                                      <div className={`p-3 rounded-2xl ${String(agentSettings.auto_renew_offer) === String(offer.id) ? 'bg-white/20' : 'bg-gray-100 group-hover/item:bg-white group-hover/item:shadow-sm'} transition-colors`}>
-                                        <FaCoins className={String(agentSettings.auto_renew_offer) === String(offer.id) ? 'text-white' : 'text-amber-500'} />
-                                      </div>
-                                      <div className="text-left">
-                                        <p className="font-black text-sm">{offer.name}</p>
-                                        <div className={`flex items-center gap-2 mt-0.5 ${String(agentSettings.auto_renew_offer) === String(offer.id) ? 'text-indigo-100' : 'text-gray-400'}`}>
-                                          <div className="flex items-center gap-1 text-[10px] font-bold">
-                                            <FaClock className="text-[10px]" /> {offer.duration_days} Days
-                                          </div>
-                                          <span className="text-[10px]">•</span>
-                                          <p className="text-[10px] font-bold uppercase tracking-widest">{offer.tokens} Tokens</p>
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <div className="text-right">
-                                      <p className={`font-black text-lg italic ${String(agentSettings.auto_renew_offer) === String(offer.id) ? 'text-white' : 'text-indigo-600'}`}>
-                                        ৳{offer.price}
-                                      </p>
-                                    </div>
-                                  </button>
-                                ))
-                              ) : (
-                                <div className="p-10 text-center">
-                                  <p className="text-gray-400 font-bold italic">No offers available</p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
+                {contacts.length > 0 && (
+                  <div className="absolute top-[100%] left-0 right-0 z-50 mt-2 bg-white border border-gray-100 shadow-xl rounded-2xl max-h-60 overflow-y-auto p-2">
+                    {contacts.map(c => (
+                      <button
+                        key={c.id}
+                        onClick={() => handleSelectContact(c)}
+                        className="w-full flex items-center justify-between p-3 hover:bg-indigo-50 rounded-xl transition-colors text-left"
+                      >
+                        <div className="flex flex-col">
+                          <span className="text-sm font-black text-gray-800">{c.name || c.push_name || c.identifier}</span>
+                          <span className="text-[10px] font-bold text-gray-400">{c.identifier}</span>
                         </div>
-
-                        <p className="text-[10px] text-slate-500 ml-1 sm:ml-6 italic">Ensure sufficient balance for automatic renewal. Tokens renew with {offers.find(o => String(o.id) === String(agentSettings.auto_renew_offer))?.duration_days || "30"} days validity.</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {agents.length > 0 ? (
-                  <div className="space-y-6">
-                    {agents.map(agent => (
-                      <div key={agent.id} className="p-5 bg-slate-50 rounded-xl border border-slate-200">
-                        <div className="flex items-center gap-3 mb-4 ml-2">
-                          <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-[10px] font-black">
-                            {agent.platform[0].toUpperCase()}
-                          </div>
-                          <h4 className="font-black text-gray-800 text-sm">{agent.name || agent.page_id}</h4>
-                        </div>
-                        
-                        <div className="grid grid-cols-1 gap-4">
-                          <SettingRow 
-                            icon={FaRobot} 
-                            title="Auto-Reply" 
-                            desc="Automatically respond using AI on this agent."
-                            active={agent.is_active}
-                            onClick={() => handleAgentToggle(agent.id, 'is_active', agent.is_active)}
-                            color="text-purple-500"
-                          />
-                          <SettingRow 
-                            icon={FaCog} 
-                            title="Skip History" 
-                            desc="Only skip history if a keyword is found (Saves tokens)."
-                            active={agent.skip_history}
-                            onClick={() => handleAgentToggle(agent.id, 'skip_history', agent.skip_history)}
-                            color="text-amber-500"
-                          />
-                          
-                          {agent.skip_history && (
-                            <div className="mt-2 ml-14 space-y-2 animate-in slide-in-from-top-2 duration-300">
-                              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">History Skip Keywords</label>
-                              <div className="flex gap-2">
-                                <input 
-                                  type="text"
-                                  placeholder="e.g. reset, clear, নতুন করে (comma separated)"
-                                  value={agent.history_skip_keywords || ""}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    setAgents(prev => prev.map(a => a.id === agent.id ? { ...a, history_skip_keywords: val } : a));
-                                  }}
-                                  className="flex-1 px-4 py-3 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 shadow-sm"
-                                />
-                                <button 
-                                  onClick={() => handleAgentToggle(agent.id, 'history_skip_keywords', agent.history_skip_keywords, true)}
-                                  className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-md hover:bg-indigo-700 transition-all"
-                                >
-                                  Save
-                                </button>
-                              </div>
-                              <p className="text-[10px] text-gray-400 ml-2 italic underline decoration-indigo-200/50">Only skips history if one of these keywords is found in the user's message.</p>
-                            </div>
-                          )}
-
-                          <div className="mt-4 pt-4 border-t border-slate-200">
-                            <h5 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-3 ml-1">AI Parameters</h5>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                              <div className="space-y-2">
-                                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">History Limit</label>
-                                <div className="flex gap-2">
-                                  <input 
-                                    type="number"
-                                    value={agent.history_limit ?? ''}
-                                    onChange={(e) => setAgents(prev => prev.map(a => a.id === agent.id ? { ...a, history_limit: e.target.value } : a))}
-                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 shadow-sm"
-                                  />
-                                  <button onClick={() => handleAgentToggle(agent.id, 'history_limit', parseInt(agent.history_limit) || 3, true)} className="px-3 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold shadow-md hover:bg-slate-900 transition-all">Save</button>
-                                </div>
-                              </div>
-                              <div className="space-y-2">
-                                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Temperature</label>
-                                <div className="flex gap-2">
-                                  <input 
-                                    type="number" step="0.1"
-                                    value={agent.temperature ?? ''}
-                                    onChange={(e) => setAgents(prev => prev.map(a => a.id === agent.id ? { ...a, temperature: e.target.value } : a))}
-                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 shadow-sm"
-                                  />
-                                  <button onClick={() => handleAgentToggle(agent.id, 'temperature', parseFloat(agent.temperature) || 0.7, true)} className="px-3 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold shadow-md hover:bg-slate-900 transition-all">Save</button>
-                                </div>
-                              </div>
-                              <div className="space-y-2">
-                                <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Max Tokens</label>
-                                <div className="flex gap-2">
-                                  <input 
-                                    type="number"
-                                    value={agent.max_tokens ?? ''}
-                                    onChange={(e) => setAgents(prev => prev.map(a => a.id === agent.id ? { ...a, max_tokens: e.target.value } : a))}
-                                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl font-semibold text-slate-700 text-xs outline-none focus:ring-2 focus:ring-indigo-500/10 shadow-sm"
-                                  />
-                                  <button onClick={() => handleAgentToggle(agent.id, 'max_tokens', parseInt(agent.max_tokens) || 200, true)} className="px-3 py-2 bg-slate-800 text-white rounded-xl text-xs font-bold shadow-md hover:bg-slate-900 transition-all">Save</button>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                        <FaChevronRight className="text-xs text-gray-300" />
+                      </button>
                     ))}
                   </div>
-                ) : (
-                  <SettingRow 
-                    icon={FaRobot} 
-                    title="Auto-reply to comments" 
-                    desc="Automatically respond to user comments using AI."
-                    active={settings.autoReply}
-                    onClick={() => toggleSetting('autoReply')}
-                    color="text-purple-500"
-                  />
                 )}
-              </section>
-              
-              <div className="bg-indigo-50 p-5 rounded-xl border border-indigo-100 flex items-start gap-3">
-                <FaExclamationCircle className="text-indigo-600 mt-1" />
-                <div>
-                  <p className="text-indigo-900 font-semibold text-sm">AI Efficiency</p>
-                  <p className="text-indigo-700/70 text-xs font-medium mt-1">
-                    Customizing your AI logic for specific users can increase engagement by up to 60%. Use the 'Contact-Specific' tab for granular control.
-                  </p>
-                </div>
               </div>
             </div>
-          )}
 
-          {activeTab === "contacts" && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
-              <section>
-                <h3 className="text-sm font-black uppercase tracking-widest text-gray-400 mb-6 ml-2">Sender-Specific Logic</h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Select Agent</label>
-                    <select 
-                      value={selectedAgent} 
-                      onChange={(e) => setSelectedAgent(e.target.value)}
-                      className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500/10"
-                    >
-                      {agents.map(agent => (
-                        <option key={agent.id} value={agent.page_id}>{agent.name} ({agent.platform})</option>
-                      ))}
-                    </select>
+            {selectedContact ? (
+              <div className="space-y-6 animate-in zoom-in-95 duration-300">
+                <div className="p-6 bg-indigo-50/50 border border-indigo-100/50 rounded-[2.5rem]">
+                  <div className="flex items-center gap-4 mb-6 pb-6 border-b border-indigo-100/30">
+                    <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-indigo-600 shadow-sm font-black">
+                      {selectedContact.name?.[0] || selectedContact.identifier[0]}
+                    </div>
+                    <div>
+                      <h4 className="font-black text-gray-800">{selectedContact.name || selectedContact.identifier}</h4>
+                      <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Editing custom AI rules</p>
+                    </div>
                   </div>
 
-                  <div className="space-y-2 relative">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Search Contact</label>
-                    <div className="relative">
-                      <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-                      <input 
-                        type="text"
-                        placeholder="Name or identifier..."
-                        value={contactSearch}
-                        onChange={(e) => setContactSearch(e.target.value)}
-                        className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-100 rounded-xl font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500/10"
-                      />
+                  <div className="space-y-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Custom System Prompt (Role)</label>
+                      <textarea
+                        rows="4"
+                        placeholder="e.g. You are a senior accountant dealing with a high-priority client. Be formal and precise."
+                        value={contactSettings.custom_prompt}
+                        onChange={(e) => setContactSettings(prev => ({ ...prev, custom_prompt: e.target.value }))}
+                        className="w-full px-6 py-4 bg-white border border-gray-100 rounded-[2rem] font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500/10 text-sm shadow-sm"
+                      ></textarea>
+                      <p className="text-[10px] text-gray-400 ml-2 italic">This overrides the general agent prompt for this contact.</p>
                     </div>
-                    
-                    {contacts.length > 0 && (
-                      <div className="absolute top-[100%] left-0 right-0 z-50 mt-2 bg-white border border-gray-100 shadow-xl rounded-2xl max-h-60 overflow-y-auto p-2">
-                        {contacts.map(c => (
-                          <button
-                            key={c.id}
-                            onClick={() => handleSelectContact(c)}
-                            className="w-full flex items-center justify-between p-3 hover:bg-indigo-50 rounded-xl transition-colors text-left"
-                          >
-                            <div className="flex flex-col">
-                              <span className="text-sm font-black text-gray-800">{c.name || c.push_name || c.identifier}</span>
-                              <span className="text-[10px] font-bold text-gray-400">{c.identifier}</span>
-                            </div>
-                            <FaChevronRight className="text-xs text-gray-300" />
-                          </button>
-                        ))}
-                      </div>
-                    )}
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Additional Instructions</label>
+                      <textarea
+                        rows="4"
+                        placeholder="e.g. Always mention the next board meeting. Never discuss pricing."
+                        value={contactSettings.custom_instructions}
+                        onChange={(e) => setContactSettings(prev => ({ ...prev, custom_instructions: e.target.value }))}
+                        className="w-full px-6 py-4 bg-white border border-gray-100 rounded-[2rem] font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500/10 text-sm shadow-sm"
+                      ></textarea>
+                      <p className="text-[10px] text-gray-400 ml-2 italic">These instructions are appended to the main prompt.</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-8 flex items-center justify-between gap-4">
+                    <button
+                      onClick={() => setSelectedContact(null)}
+                      className="px-6 py-3 text-gray-400 text-xs font-black uppercase hover:text-rose-500"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSaveContactSettings}
+                      disabled={isSaving}
+                      className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2"
+                    >
+                      {isSaving ? "Saving..." : <><FaSave /> Save Contact Settings</>}
+                    </button>
                   </div>
                 </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-20 bg-gray-50/50 rounded-[3rem] border border-dashed border-gray-200">
+                <FaUserEdit className="h-12 w-12 text-gray-300 mb-4" />
+                <h4 className="font-black text-gray-400">Search & select a contact to start</h4>
+                <p className="text-xs text-gray-400 mt-1">Granular AI controls will appear here.</p>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
 
-                {selectedContact ? (
-                  <div className="space-y-6 animate-in zoom-in-95 duration-300">
-                    <div className="p-6 bg-indigo-50/50 border border-indigo-100/50 rounded-[2.5rem]">
-                      <div className="flex items-center gap-4 mb-6 pb-6 border-b border-indigo-100/30">
-                        <div className="w-12 h-12 rounded-2xl bg-white flex items-center justify-center text-indigo-600 shadow-sm font-black">
-                          {selectedContact.name?.[0] || selectedContact.identifier[0]}
-                        </div>
-                        <div>
-                          <h4 className="font-black text-gray-800">{selectedContact.name || selectedContact.identifier}</h4>
-                          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Editing custom AI rules</p>
-                        </div>
-                      </div>
-
-                      <div className="space-y-6">
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Custom System Prompt (Role)</label>
-                          <textarea 
-                            rows="4"
-                            placeholder="e.g. You are a senior accountant dealing with a high-priority client. Be formal and precise."
-                            value={contactSettings.custom_prompt}
-                            onChange={(e) => setContactSettings(prev => ({ ...prev, custom_prompt: e.target.value }))}
-                            className="w-full px-6 py-4 bg-white border border-gray-100 rounded-[2rem] font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500/10 text-sm shadow-sm"
-                          ></textarea>
-                          <p className="text-[10px] text-gray-400 ml-2 italic">This overrides the general agent prompt for this contact.</p>
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Additional Instructions</label>
-                          <textarea 
-                            rows="4"
-                            placeholder="e.g. Always mention the next board meeting. Never discuss pricing."
-                            value={contactSettings.custom_instructions}
-                            onChange={(e) => setContactSettings(prev => ({ ...prev, custom_instructions: e.target.value }))}
-                            className="w-full px-6 py-4 bg-white border border-gray-100 rounded-[2rem] font-bold text-gray-700 outline-none focus:ring-2 focus:ring-indigo-500/10 text-sm shadow-sm"
-                          ></textarea>
-                          <p className="text-[10px] text-gray-400 ml-2 italic">These instructions are appended to the main prompt.</p>
-                        </div>
-                      </div>
-
-                      <div className="mt-8 flex items-center justify-between gap-4">
-                        <button 
-                          onClick={() => setSelectedContact(null)}
-                          className="px-6 py-3 text-gray-400 text-xs font-black uppercase hover:text-rose-500"
-                        >
-                          Cancel
-                        </button>
-                        <button 
-                          onClick={handleSaveContactSettings}
-                          disabled={isSaving}
-                          className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center gap-2"
-                        >
-                          {isSaving ? "Saving..." : <><FaSave /> Save Contact Settings</>}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-20 bg-gray-50/50 rounded-[3rem] border border-dashed border-gray-200">
-                    <FaUserEdit className="h-12 w-12 text-gray-300 mb-4" />
-                    <h4 className="font-black text-gray-400">Search & select a contact to start</h4>
-                    <p className="text-xs text-gray-400 mt-1">Granular AI controls will appear here.</p>
-                  </div>
-                )}
-              </section>
+      {activeTab === "security" && (
+        <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500 pb-10">
+          {/* 2FA Toggle */}
+          <section>
+            <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Account Protection</h3>
+            <div className="space-y-4">
+              <SettingRow
+                icon={FaShieldAlt}
+                title="Two-Factor Authentication"
+                desc="Require a verification code sent to your email or WhatsApp during login."
+                active={twoFactorEnabled}
+                onClick={handleToggle2FA}
+                color="text-amber-500"
+              />
             </div>
-          )}
+          </section>
 
-          {activeTab === "security" && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500 pb-10">
-              {/* 2FA Toggle */}
-              <section>
-                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Account Protection</h3>
-                <div className="space-y-4">
-                  <SettingRow 
-                    icon={FaShieldAlt} 
-                    title="Two-Factor Authentication" 
-                    desc="Require a verification code sent to your email or WhatsApp during login."
-                    active={twoFactorEnabled}
-                    onClick={handleToggle2FA}
-                    color="text-amber-500"
+          {/* Recovery Options */}
+          <section className="pt-6 border-t border-slate-100">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Recovery Options</h3>
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Recovery Email</label>
+                  <input
+                    type="email"
+                    value={securityData.recovery_email || ""}
+                    onChange={(e) => setSecurityData({ ...securityData, recovery_email: e.target.value })}
+                    placeholder="Backup email address"
+                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500/10"
                   />
                 </div>
-              </section>
-
-              {/* Recovery Options */}
-              <section className="pt-6 border-t border-slate-100">
-                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Recovery Options</h3>
-                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-5">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">Recovery Email</label>
-                      <input 
-                        type="email"
-                        value={securityData.recovery_email || ""}
-                        onChange={(e) => setSecurityData({...securityData, recovery_email: e.target.value})}
-                        placeholder="Backup email address"
-                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-indigo-500/10"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">WhatsApp for Security</label>
-                      <div className="flex bg-white border border-slate-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/10 transition-all shadow-sm">
-                        <select 
-                          value={countryCode}
-                          onChange={(e) => setCountryCode(e.target.value)}
-                          className="bg-slate-50 px-3 py-3 border-r border-slate-200 text-xs font-black text-slate-600 outline-none cursor-pointer hover:bg-slate-100 transition-colors"
-                        >
-                          <option value="880">BD +880</option>
-                          <option value="91">IN +91</option>
-                          <option value="1">US +1</option>
-                          <option value="44">UK +44</option>
-                          <option value="971">UAE +971</option>
-                          <option value="966">KSA +966</option>
-                        </select>
-                        <input 
-                          type="text"
-                          value={securityData.recovery_whatsapp || ""}
-                          onChange={(e) => setSecurityData({...securityData, recovery_whatsapp: e.target.value.replace(/\D/g, '')})}
-                          placeholder="17XXXXXXXX"
-                          className="flex-1 px-4 py-3 text-sm font-bold text-slate-700 outline-none placeholder:text-slate-300"
-                        />
-                      </div>
-                      <p className="text-[9px] text-slate-400 ml-2 italic">Select country code and enter number without 0.</p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={handleUpdateRecovery}
-                    disabled={isSaving}
-                    className="w-full md:w-auto px-8 py-3 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-black transition-all shadow-lg shadow-slate-200"
-                  >
-                    {isSaving ? "Saving..." : "Update Recovery Info"}
-                  </button>
-                </div>
-              </section>
-
-              {/* Connected Devices Section */}
-              <section className="pt-6 border-t border-slate-100">
-                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Connected Devices</h3>
-                <p className="text-[10px] text-slate-400 mb-4">Disconnecting a device will immediately log it out.</p>
-                <div className="space-y-3">
-                  {securityData.trusted_devices && securityData.trusted_devices.length > 0 ? (
-                    securityData.trusted_devices.map((device) => (
-                      <div key={device.id} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:shadow-sm transition-all">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="p-2.5 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600">
-                            <FaGlobe className="text-sm" />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-bold text-slate-800 text-sm truncate">{device.device_name}</h4>
-                              {device.is_trusted && (
-                                <span className="px-1.5 py-0.5 text-[9px] font-black bg-emerald-100 text-emerald-700 rounded-md uppercase tracking-wide">Trusted</span>
-                              )}
-                              {device.is_expired && (
-                                <span className="px-1.5 py-0.5 text-[9px] font-black bg-slate-100 text-slate-500 rounded-md uppercase tracking-wide">Expired</span>
-                              )}
-                            </div>
-                            <p className="text-[10px] text-slate-400 font-medium">
-                              Added {new Date(device.created_at).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
-                        <button 
-                          onClick={() => handleRemoveDevice(device.id)}
-                          className="flex-shrink-0 px-3 py-1.5 text-[10px] font-black text-rose-600 uppercase border border-rose-100 rounded-lg hover:bg-rose-50 transition-colors"
-                        >
-                          Disconnect
-                        </button>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="p-10 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                      <p className="text-slate-400 text-sm font-medium italic">No active sessions found.</p>
-                      <p className="text-[10px] text-slate-400 mt-1">All your logged-in devices will appear here.</p>
-                    </div>
-                  )}
-                </div>
-              </section>
-
-              {/* Recovery Codes */}
-              <section className="pt-6 border-t border-slate-100">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">Backup Recovery Codes</h3>
-                  <button 
-                    onClick={handleGenerateCodes}
-                    className="text-[10px] font-black text-indigo-600 uppercase hover:underline"
-                  >
-                    Generate New Codes
-                  </button>
-                </div>
-                
-                <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100">
-                  <div className="flex items-start gap-4 mb-4">
-                    <div className="p-2 bg-white rounded-lg border border-indigo-100 text-indigo-600">
-                      <FaShieldAlt />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-slate-800">You have {securityData.recovery_codes_count} unused codes</p>
-                      <p className="text-xs text-slate-500 font-medium">Use these if you lose access to your email and phone.</p>
-                    </div>
-                  </div>
-
-                  {securityData.recovery_codes_available.length > 0 && (
-                    <div className="mt-4">
-                       <button 
-                        onClick={() => setShowCodes(!showCodes)}
-                        className="text-xs font-bold text-slate-600 bg-white border border-slate-200 px-4 py-2 rounded-lg hover:bg-slate-50 mb-4"
-                      >
-                        {showCodes ? "Hide Codes" : "Show Available Codes"}
-                      </button>
-
-                      {showCodes && (
-                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 animate-in fade-in zoom-in-95">
-                          {securityData.recovery_codes_available.map((code, i) => (
-                            <div key={i} className="bg-white border border-indigo-100 p-3 rounded-xl text-center font-mono font-bold text-indigo-600 text-sm shadow-sm select-all">
-                              {code}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </section>
-
-              {/* Login History */}
-              <section className="pt-6 border-t border-slate-100">
-                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Recent Login Activity</h3>
-                <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-sm">
-                  <table className="w-full text-left bg-white text-sm">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200">
-                        <th className="px-6 py-4 font-bold text-slate-500 uppercase tracking-widest text-[10px]">Device / Browser</th>
-                        <th className="px-6 py-4 font-bold text-slate-500 uppercase tracking-widest text-[10px]">IP Address</th>
-                        <th className="px-6 py-4 font-bold text-slate-500 uppercase tracking-widest text-[10px]">Time</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {loginHistory.length > 0 ? loginHistory.map((login, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-6 py-4 font-bold text-slate-800">
-                            <div className="flex items-center gap-3">
-                              <FaGlobe className="text-slate-300" />
-                              {login.device_name || "Unknown Browser"}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 font-mono text-xs text-slate-500">{login.ip_address}</td>
-                          <td className="px-6 py-4 text-slate-400 font-medium">
-                            {new Date(login.created_at).toLocaleString()}
-                          </td>
-                        </tr>
-                      )) : (
-                        <tr>
-                          <td colSpan="3" className="px-6 py-10 text-center text-slate-400 italic font-medium">No recent activity logged.</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            </div>
-          )}
-
-          {activeTab === "courier" && (
-            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
-              <section>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                  <div>
-                    <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Pathao Courier Credentials</h3>
-                    <p className="text-xs text-slate-400 font-medium">Connect your Pathao Merchant account to book deliveries instantly.</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${pathaoConfig.is_active ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-100 text-slate-400 border border-slate-200'}`}>
-                      {pathaoConfig.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Client ID</label>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400 ml-1">WhatsApp for Security</label>
+                  <div className="flex bg-white border border-slate-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500/10 transition-all shadow-sm">
+                    <select
+                      value={countryCode}
+                      onChange={(e) => setCountryCode(e.target.value)}
+                      className="bg-slate-50 px-3 py-3 border-r border-slate-200 text-xs font-black text-slate-600 outline-none cursor-pointer hover:bg-slate-100 transition-colors"
+                    >
+                      <option value="880">BD +880</option>
+                      <option value="91">IN +91</option>
+                      <option value="1">US +1</option>
+                      <option value="44">UK +44</option>
+                      <option value="971">UAE +971</option>
+                      <option value="966">KSA +966</option>
+                    </select>
                     <input
                       type="text"
-                      placeholder="Enter Client ID"
-                      value={pathaoConfig.client_id}
-                      onChange={(e) => setPathaoConfig(prev => ({ ...prev, client_id: e.target.value }))}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10 focus:bg-white transition-all shadow-sm"
+                      value={securityData.recovery_whatsapp || ""}
+                      onChange={(e) => setSecurityData({ ...securityData, recovery_whatsapp: e.target.value.replace(/\D/g, '') })}
+                      placeholder="17XXXXXXXX"
+                      className="flex-1 px-4 py-3 text-sm font-bold text-slate-700 outline-none placeholder:text-slate-300"
                     />
                   </div>
-                  
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Client Secret</label>
-                    <input
-                      type="password"
-                      placeholder="Enter Client Secret"
-                      value={pathaoConfig.client_secret}
-                      onChange={(e) => setPathaoConfig(prev => ({ ...prev, client_secret: e.target.value }))}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10 focus:bg-white transition-all shadow-sm"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Merchant Username (Email)</label>
-                    <input
-                      type="email"
-                      placeholder="merchant@example.com"
-                      value={pathaoConfig.username}
-                      onChange={(e) => setPathaoConfig(prev => ({ ...prev, username: e.target.value }))}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10 focus:bg-white transition-all shadow-sm"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Merchant Password</label>
-                    <input
-                      type="password"
-                      placeholder={pathaoConfig.client_id ? "•••••••• (Leave blank to keep current)" : "Enter password"}
-                      value={pathaoConfig.password}
-                      onChange={(e) => setPathaoConfig(prev => ({ ...prev, password: e.target.value }))}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10 focus:bg-white transition-all shadow-sm"
-                    />
-                  </div>
+                  <p className="text-[9px] text-slate-400 ml-2 italic">Select country code and enter number without 0.</p>
                 </div>
+              </div>
+              <button
+                onClick={handleUpdateRecovery}
+                disabled={isSaving}
+                className="w-full md:w-auto px-8 py-3 bg-slate-900 text-white rounded-xl text-sm font-bold hover:bg-black transition-all shadow-lg shadow-slate-200"
+              >
+                {isSaving ? "Saving..." : "Update Recovery Info"}
+              </button>
+            </div>
+          </section>
 
-                <div className="flex flex-col lg:flex-row gap-6 mb-6 pt-4 border-t border-slate-100">
-                  <div className="flex-1 flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-white transition-all">
-                    <div>
-                      <h4 className="font-bold text-slate-800 text-sm">Sandbox Environment</h4>
-                      <p className="text-xs text-slate-500 font-medium">Use the Pathao test sandbox for fake booking/testing.</p>
+          {/* Connected Devices Section */}
+          <section className="pt-6 border-t border-slate-100">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Connected Devices</h3>
+            <p className="text-[10px] text-slate-400 mb-4">Disconnecting a device will immediately log it out.</p>
+            <div className="space-y-3">
+              {securityData.trusted_devices && securityData.trusted_devices.length > 0 ? (
+                securityData.trusted_devices.map((device) => (
+                  <div key={device.id} className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-xl hover:shadow-sm transition-all">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="p-2.5 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-600">
+                        <FaGlobe className="text-sm" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-bold text-slate-800 text-sm truncate">{device.device_name}</h4>
+                          {device.is_trusted && (
+                            <span className="px-1.5 py-0.5 text-[9px] font-black bg-emerald-100 text-emerald-700 rounded-md uppercase tracking-wide">Trusted</span>
+                          )}
+                          {device.is_expired && (
+                            <span className="px-1.5 py-0.5 text-[9px] font-black bg-slate-100 text-slate-500 rounded-md uppercase tracking-wide">Expired</span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-400 font-medium">
+                          Added {new Date(device.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
                     </div>
                     <button
-                      onClick={() => setPathaoConfig(prev => ({ ...prev, is_sandbox: !prev.is_sandbox }))}
-                      className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus:outline-none ring-1 ring-inset ${pathaoConfig.is_sandbox ? 'bg-amber-500 ring-amber-500' : 'bg-slate-300 ring-slate-300'}`}
+                      onClick={() => handleRemoveDevice(device.id)}
+                      className="flex-shrink-0 px-3 py-1.5 text-[10px] font-black text-rose-600 uppercase border border-rose-100 rounded-lg hover:bg-rose-50 transition-colors"
                     >
-                      <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${pathaoConfig.is_sandbox ? 'translate-x-6' : 'translate-x-1'}`} />
+                      Disconnect
                     </button>
                   </div>
-
-                  <div className="flex-1 flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-white transition-all">
-                    <div>
-                      <h4 className="font-bold text-slate-800 text-sm">Enable Service</h4>
-                      <p className="text-xs text-slate-500 font-medium">Make courier booking options visible on your orders dashboard.</p>
-                    </div>
-                    <button
-                      onClick={() => setPathaoConfig(prev => ({ ...prev, is_active: !prev.is_active }))}
-                      className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus:outline-none ring-1 ring-inset ${pathaoConfig.is_active ? 'bg-indigo-600 ring-indigo-600' : 'bg-slate-300 ring-slate-300'}`}
-                    >
-                      <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${pathaoConfig.is_active ? 'translate-x-6' : 'translate-x-1'}`} />
-                    </button>
-                  </div>
+                ))
+              ) : (
+                <div className="p-10 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                  <p className="text-slate-400 text-sm font-medium italic">No active sessions found.</p>
+                  <p className="text-[10px] text-slate-400 mt-1">All your logged-in devices will appear here.</p>
                 </div>
-
-                <div className="flex justify-end gap-3 mt-6">
-                  <button
-                    disabled={isSaving || fetchingConfig}
-                    onClick={handleSavePathaoConfig}
-                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm px-6 py-3 rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-50"
-                  >
-                    <FaSave className="text-sm" />
-                    <span>{isSaving ? "Verifying & Saving..." : "Verify & Save Credentials"}</span>
-                  </button>
-                </div>
-              </section>
-
-              {pathaoConfig.client_id && (
-                <section className="pt-8 border-t border-slate-100 animate-in fade-in duration-500">
-                  <div className="flex items-center justify-between gap-4 mb-4">
-                    <div>
-                      <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Select Default Store</h3>
-                      <p className="text-xs text-slate-400 font-medium">Select which store will be the default pickup address for your parcels.</p>
-                    </div>
-                    <button
-                      onClick={fetchStores}
-                      disabled={loadingStores}
-                      className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
-                    >
-                      {loadingStores ? "Fetching..." : "Refresh Stores"}
-                    </button>
-                  </div>
-
-                  {stores.length > 0 ? (
-                    <div className="relative group/dropdown max-w-md">
-                      <select
-                        value={pathaoConfig.store_id || ""}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setPathaoConfig(prev => ({ ...prev, store_id: val }));
-                          // Auto save store ID selection
-                          api.post("/courier/config/", { ...pathaoConfig, store_id: val })
-                            .then(() => toast.success("Default pickup store updated!", { icon: "🏪" }))
-                            .catch(() => toast.error("Failed to save default store."));
-                        }}
-                        className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/10 text-sm shadow-sm flex items-center justify-between group hover:border-indigo-300 transition-all cursor-pointer"
-                      >
-                        <option value="" disabled>Select Pickup Store</option>
-                        {stores.map(store => (
-                          <option key={store.store_id} value={store.store_id}>
-                            {store.store_name} ({store.store_address || "No Address"})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : (
-                    <div className="p-6 bg-slate-50 border border-slate-200 border-dashed rounded-xl text-center">
-                      <p className="text-xs font-medium text-slate-400 italic">
-                        {loadingStores ? "Retrieving merchant stores..." : "No stores found. Verify your credentials or confirm you have created a store in the Pathao Merchant panel."}
-                      </p>
-                    </div>
-                  )}
-                </section>
               )}
             </div>
+          </section>
+
+          {/* Recovery Codes */}
+          <section className="pt-6 border-t border-slate-100">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">Backup Recovery Codes</h3>
+              <button
+                onClick={handleGenerateCodes}
+                className="text-[10px] font-black text-indigo-600 uppercase hover:underline"
+              >
+                Generate New Codes
+              </button>
+            </div>
+
+            <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100">
+              <div className="flex items-start gap-4 mb-4">
+                <div className="p-2 bg-white rounded-lg border border-indigo-100 text-indigo-600">
+                  <FaShieldAlt />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-slate-800">You have {securityData.recovery_codes_count} unused codes</p>
+                  <p className="text-xs text-slate-500 font-medium">Use these if you lose access to your email and phone.</p>
+                </div>
+              </div>
+
+              {securityData.recovery_codes_available.length > 0 && (
+                <div className="mt-4">
+                  <button
+                    onClick={() => setShowCodes(!showCodes)}
+                    className="text-xs font-bold text-slate-600 bg-white border border-slate-200 px-4 py-2 rounded-lg hover:bg-slate-50 mb-4"
+                  >
+                    {showCodes ? "Hide Codes" : "Show Available Codes"}
+                  </button>
+
+                  {showCodes && (
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 animate-in fade-in zoom-in-95">
+                      {securityData.recovery_codes_available.map((code, i) => (
+                        <div key={i} className="bg-white border border-indigo-100 p-3 rounded-xl text-center font-mono font-bold text-indigo-600 text-sm shadow-sm select-all">
+                          {code}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Login History */}
+          <section className="pt-6 border-t border-slate-100">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4">Recent Login Activity</h3>
+            <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-sm">
+              <table className="w-full text-left bg-white text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="px-6 py-4 font-bold text-slate-500 uppercase tracking-widest text-[10px]">Device / Browser</th>
+                    <th className="px-6 py-4 font-bold text-slate-500 uppercase tracking-widest text-[10px]">IP Address</th>
+                    <th className="px-6 py-4 font-bold text-slate-500 uppercase tracking-widest text-[10px]">Time</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {loginHistory.length > 0 ? loginHistory.map((login, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4 font-bold text-slate-800">
+                        <div className="flex items-center gap-3">
+                          <FaGlobe className="text-slate-300" />
+                          {login.device_name || "Unknown Browser"}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 font-mono text-xs text-slate-500">{login.ip_address}</td>
+                      <td className="px-6 py-4 text-slate-400 font-medium">
+                        {new Date(login.created_at).toLocaleString()}
+                      </td>
+                    </tr>
+                  )) : (
+                    <tr>
+                      <td colSpan="3" className="px-6 py-10 text-center text-slate-400 italic font-medium">No recent activity logged.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {activeTab === "voice" && (
+        <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+          {/* Section Header */}
+          <div>
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-600">
+                <FaPhoneVolume className="text-xl" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">AI Voice Call & Auto Courier Dispatch</h3>
+                <p className="text-xs text-slate-500 font-medium">অর্ডার নিশ্চিতকরণে স্বয়ংক্রিয় ওয়েব কল এবং কুরিয়ার বুকিং নিয়ন্ত্রণ করুন।</p>
+              </div>
+            </div>
+          </div>
+
+          {/* 1. Auto Courier Booking Card */}
+          <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl space-y-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <FaTruck className="text-indigo-600 text-sm" />
+                  <h4 className="text-sm font-black text-slate-900">অটো কুরিয়ার পার্সেল বুকিং (Auto Courier Booking)</h4>
+                </div>
+                <p className="text-xs text-slate-500 mt-1 max-w-xl leading-relaxed">
+                  গ্রাহক কল কনফার্মেশনে ১ চাপলে অথবা অর্ডার কনফার্ম হওয়ামাত্র স্বয়ংক্রিয়ভাবে SteadFast বা Pathao কুরিয়ারে পার্সেল তৈরি হয়ে ট্র্যাকিং আইডি জেনারেট হবে।
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1">
+                <input
+                  type="checkbox"
+                  checked={voiceSettings.auto_courier_booking}
+                  onChange={(e) => saveVoiceSettings({ auto_courier_booking: e.target.checked })}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+              </label>
+            </div>
+
+            {voiceSettings.auto_courier_booking && (
+              <div className="pt-4 border-t border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-4 animate-in fade-in">
+                <div>
+                  <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 block mb-1.5">ডিফল্ট কুরিয়ার সার্ভিস</label>
+                  <select
+                    value={voiceSettings.default_courier_provider}
+                    onChange={(e) => saveVoiceSettings({ default_courier_provider: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 text-xs shadow-sm focus:ring-2 focus:ring-indigo-500/20"
+                  >
+                    <option value="steadfast">SteadFast Courier (স্টেডফাস্ট)</option>
+                    <option value="pathao">Pathao Courier (পাঠাও)</option>
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 2. AI Voice Confirmation Engine */}
+          <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl space-y-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <FaMicrophone className="text-indigo-600 text-sm" />
+                  <h4 className="text-sm font-black text-slate-900">এআই ভয়েস কল কনফার্মেশন (AI Voice Confirmation)</h4>
+                </div>
+                <p className="text-xs text-slate-500 mt-1 max-w-xl leading-relaxed">
+                  অর্ডার প্লেসের পর গ্রাহককে স্বয়ংক্রিয়ভাবে অডিও কল করা হবে (১ চাপলে কনফার্ম, ২ চাপলে বাতিল, ৩ চাপলে প্রতিনিধি)।
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1">
+                <input
+                  type="checkbox"
+                  checked={voiceSettings.ai_voice_enabled}
+                  onChange={(e) => saveVoiceSettings({ ai_voice_enabled: e.target.checked })}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+              </label>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-slate-200">
+              <div>
+                <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 block mb-1.5">ভয়েস পদ্ধতি (Voice Mode)</label>
+                <select
+                  value={voiceSettings.voice_preference}
+                  onChange={(e) => saveVoiceSettings({ voice_preference: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 text-xs shadow-sm focus:ring-2 focus:ring-indigo-500/20"
+                >
+                  <option value="auto">Auto (Smart 4-Tier Selection)</option>
+                  <option value="seller_upload">পদ্ধতি ১: সেলার আপলোড করা অডিও</option>
+                  <option value="ai_generated">পদ্ধতি ২: এআই ভয়েস জেনারেট (স্মার্ট ক্যাশ)</option>
+
+                  <option value="default_audio">পদ্ধতি ৪: সিস্টেম ডিফল্ট ভয়েস</option>
+                </select>
+              </div>
+
+              <div className="bg-white p-3 rounded-xl border border-slate-200 flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 block uppercase">অ্যাকাউন্ট ব্যালেন্স</span>
+                  <span className="text-xs font-black text-slate-800">{voiceSettings.word_balance?.toLocaleString()} Words / Tokens</span>
+                </div>
+                <span className="text-[10px] bg-indigo-50 text-indigo-600 font-bold px-2 py-1 rounded-lg border border-indigo-100">
+                  স্মার্ট পার-প্রোডাক্ট ক্যাশ সক্রিয়
+                </span>
+              </div>
+            </div>
+
+            {/* Shop-wide Default Custom Voice Upload Card */}
+            <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h5 className="text-xs font-black text-slate-800">শপের কমন কাস্টম ভয়েস (Shop Default Custom Audio)</h5>
+                  <p className="text-[11px] text-slate-500">
+                    যেসব পণ্যে আলাদা ভয়েস আপলোড করা নেই, সেগুলোতে এই রেকর্ড করা অডিওটি বেজে উঠবে।
+                  </p>
+                </div>
+                {voiceSettings.default_voice_audio_url && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveDefaultAudio}
+                    disabled={uploadingDefaultAudio}
+                    className="text-[11px] font-bold text-rose-600 hover:text-rose-700 hover:underline cursor-pointer"
+                  >
+                    অডিও রিমুভ করুন
+                  </button>
+                )}
+              </div>
+
+              {voiceSettings.default_voice_audio_url ? (
+                <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                  <audio controls className="h-8 max-w-xs" src={voiceSettings.default_voice_audio_url}>
+                    Your browser does not support the audio element.
+                  </audio>
+                  <label className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 cursor-pointer ml-auto">
+                    <span>পরিবর্তন করুন</span>
+                    <input
+                      type="file"
+                      accept="audio/mp3,audio/wav,audio/mpeg,audio/ogg"
+                      onChange={handleDefaultAudioUpload}
+                      className="hidden"
+                      disabled={uploadingDefaultAudio}
+                    />
+                  </label>
+                </div>
+              ) : (
+                <div>
+                  <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-slate-200 hover:border-indigo-400 rounded-xl cursor-pointer bg-slate-50 hover:bg-indigo-50/30 transition-all">
+                    <FaMicrophone className="text-indigo-600 text-sm" />
+                    <span className="text-xs font-bold text-slate-700">
+                      {uploadingDefaultAudio ? "আপলোড হচ্ছে..." : "কাস্টম ভয়েস ফাইল আপলোড করুন (MP3 / WAV)"}
+                    </span>
+                    <input
+                      type="file"
+                      accept="audio/mp3,audio/wav,audio/mpeg,audio/ogg"
+                      onChange={handleDefaultAudioUpload}
+                      className="hidden"
+                      disabled={uploadingDefaultAudio}
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+
+            <div className="p-3.5 bg-indigo-50/60 border border-indigo-100 rounded-xl text-xs text-indigo-900 leading-relaxed space-y-1">
+              <p className="font-bold flex items-center gap-1.5">
+                💡 স্মার্ট টোকেন নীতি:
+              </p>
+              <p className="text-[11px] text-slate-600">
+                • কোনো ফিক্সড চার্জ নেই—প্রম্পটের প্রকৃত শব্দ সংখ্যার ওপর নির্ভুল টোকেন খরচ হয়।<br />
+                • একই প্রোডাক্টের জন্য ভয়েস শুধুমাত্র ১ বার তৈরি হয়। পণ্যের দাম বা অফার না বদলানো পর্যন্ত পরবর্তী সকল অর্ডারে সম্পূর্ণ ফ্রি ক্যাশ থেকে চলবে।
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "courier" && (
+        <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+          <section>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Pathao Courier Credentials</h3>
+                <p className="text-xs text-slate-400 font-medium">Connect your Pathao Merchant account to book deliveries instantly.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${pathaoConfig.is_active ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-100 text-slate-400 border border-slate-200'}`}>
+                  {pathaoConfig.is_active ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Client ID</label>
+                <input
+                  type="text"
+                  placeholder="Enter Client ID"
+                  value={pathaoConfig.client_id}
+                  onChange={(e) => setPathaoConfig(prev => ({ ...prev, client_id: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10 focus:bg-white transition-all shadow-sm"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Client Secret</label>
+                <input
+                  type="password"
+                  placeholder="Enter Client Secret"
+                  value={pathaoConfig.client_secret}
+                  onChange={(e) => setPathaoConfig(prev => ({ ...prev, client_secret: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10 focus:bg-white transition-all shadow-sm"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Merchant Username (Email)</label>
+                <input
+                  type="email"
+                  placeholder="merchant@example.com"
+                  value={pathaoConfig.username}
+                  onChange={(e) => setPathaoConfig(prev => ({ ...prev, username: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10 focus:bg-white transition-all shadow-sm"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Merchant Password</label>
+                <input
+                  type="password"
+                  placeholder={pathaoConfig.client_id ? "•••••••• (Leave blank to keep current)" : "Enter password"}
+                  value={pathaoConfig.password}
+                  onChange={(e) => setPathaoConfig(prev => ({ ...prev, password: e.target.value }))}
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 text-sm outline-none focus:ring-2 focus:ring-indigo-500/10 focus:bg-white transition-all shadow-sm"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col lg:flex-row gap-6 mb-6 pt-4 border-t border-slate-100">
+              <div className="flex-1 flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-white transition-all">
+                <div>
+                  <h4 className="font-bold text-slate-800 text-sm">Sandbox Environment</h4>
+                  <p className="text-xs text-slate-500 font-medium">Use the Pathao test sandbox for fake booking/testing.</p>
+                </div>
+                <button
+                  onClick={() => setPathaoConfig(prev => ({ ...prev, is_sandbox: !prev.is_sandbox }))}
+                  className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus:outline-none ring-1 ring-inset ${pathaoConfig.is_sandbox ? 'bg-amber-500 ring-amber-500' : 'bg-slate-300 ring-slate-300'}`}
+                >
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${pathaoConfig.is_sandbox ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+
+              <div className="flex-1 flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl hover:bg-white transition-all">
+                <div>
+                  <h4 className="font-bold text-slate-800 text-sm">Enable Service</h4>
+                  <p className="text-xs text-slate-500 font-medium">Make courier booking options visible on your orders dashboard.</p>
+                </div>
+                <button
+                  onClick={() => setPathaoConfig(prev => ({ ...prev, is_active: !prev.is_active }))}
+                  className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors focus:outline-none ring-1 ring-inset ${pathaoConfig.is_active ? 'bg-indigo-600 ring-indigo-600' : 'bg-slate-300 ring-slate-300'}`}
+                >
+                  <span className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${pathaoConfig.is_active ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                disabled={isSaving || fetchingConfig}
+                onClick={handleSavePathaoConfig}
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm px-6 py-3 rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-50"
+              >
+                <FaSave className="text-sm" />
+                <span>{isSaving ? "Verifying & Saving..." : "Verify & Save Credentials"}</span>
+              </button>
+            </div>
+          </section>
+
+          {pathaoConfig.client_id && (
+            <section className="pt-8 border-t border-slate-100 animate-in fade-in duration-500">
+              <div className="flex items-center justify-between gap-4 mb-4">
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">Select Default Store</h3>
+                  <p className="text-xs text-slate-400 font-medium">Select which store will be the default pickup address for your parcels.</p>
+                </div>
+                <button
+                  onClick={fetchStores}
+                  disabled={loadingStores}
+                  className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                >
+                  {loadingStores ? "Fetching..." : "Refresh Stores"}
+                </button>
+              </div>
+
+              {stores.length > 0 ? (
+                <div className="relative group/dropdown max-w-md">
+                  <select
+                    value={pathaoConfig.store_id || ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setPathaoConfig(prev => ({ ...prev, store_id: val }));
+                      // Auto save store ID selection
+                      api.post("/courier/config/", { ...pathaoConfig, store_id: val })
+                        .then(() => toast.success("Default pickup store updated!", { icon: "🏪" }))
+                        .catch(() => toast.error("Failed to save default store."));
+                    }}
+                    className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl font-semibold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/10 text-sm shadow-sm flex items-center justify-between group hover:border-indigo-300 transition-all cursor-pointer"
+                  >
+                    <option value="" disabled>Select Pickup Store</option>
+                    {stores.map(store => (
+                      <option key={store.store_id} value={store.store_id}>
+                        {store.store_name} ({store.store_address || "No Address"})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="p-6 bg-slate-50 border border-slate-200 border-dashed rounded-xl text-center">
+                  <p className="text-xs font-medium text-slate-400 italic">
+                    {loadingStores ? "Retrieving merchant stores..." : "No stores found. Verify your credentials or confirm you have created a store in the Pathao Merchant panel."}
+                  </p>
+                </div>
+              )}
+            </section>
           )}
         </div>
-      </div>
+      )}
     </div>
-  );
+  </div>
+);
 }

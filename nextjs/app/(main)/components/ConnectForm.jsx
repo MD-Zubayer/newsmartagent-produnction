@@ -580,7 +580,7 @@ export default function IntegrationManager() {
 
                   <button
                     onClick={() => {
-                      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://newsmartagent.com/api";
+                      const apiUrl = process.env.NEXT_PUBLIC_API_URL || `${window.location.origin}/api`;
                       window.location.href = `${apiUrl}/facebook/login/`;
                     }}
                     className="group relative flex items-center justify-center gap-4 md:gap-5 bg-[#1877F2] text-white px-6 md:px-10 py-4 md:py-6 rounded-[1.5rem] md:rounded-[2rem] text-[10px] md:text-[11px] font-black uppercase tracking-[0.15em] md:tracking-[0.2em] hover:bg-[#166fe5] transition-all shadow-[0_20px_40px_-10px_rgba(24,119,242,0.3)] active:scale-95 overflow-hidden w-full lg:w-auto"
@@ -609,8 +609,17 @@ export default function IntegrationManager() {
                       {connectedPages.map(page => (
                         <div key={page.id} className="flex items-center justify-between bg-white p-5 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] shadow-[0_16px_32px_-12px_rgba(0,0,0,0.03)] border border-slate-50 hover:border-blue-100 hover:shadow-[0_32px_64px_-16px_rgba(24,119,242,0.12)] transition-all duration-700 group/page hover:-translate-y-1 min-w-0">
                           <div className="flex items-center gap-3 md:gap-6 min-w-0">
-                            <div className="w-12 h-12 md:w-16 md:h-16 shrink-0 bg-gradient-to-br from-blue-50 to-white rounded-[1.2rem] md:rounded-[1.5rem] flex items-center justify-center text-[#1877F2] shadow-inner group-hover/page:scale-110 transition-transform duration-700">
+                            <div className="relative w-12 h-12 md:w-16 md:h-16 shrink-0 bg-gradient-to-br from-blue-50 to-white rounded-[1.2rem] md:rounded-[1.5rem] flex items-center justify-center text-[#1877F2] shadow-inner overflow-hidden group-hover/page:scale-110 transition-transform duration-700">
                               <FaFacebook className="text-2xl md:text-3xl" />
+                              {/* Public Facebook page picture (no token needed); hides itself if it fails to load */}
+                              <img
+                                src={`https://graph.facebook.com/${page.id}/picture?type=large`}
+                                alt={page.name}
+                                loading="lazy"
+                                referrerPolicy="no-referrer"
+                                onError={(e) => { e.currentTarget.style.display = "none"; }}
+                                className="absolute inset-0 w-full h-full object-cover"
+                              />
                             </div>
                             <div className="space-y-1 min-w-0">
                               <p className="font-black text-base md:text-xl text-slate-900 tracking-tight italic truncate text-left">{page.name}</p>
@@ -664,7 +673,7 @@ export default function IntegrationManager() {
 
                   <button
                     onClick={() => {
-                      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://newsmartagent.com/api";
+                      const apiUrl = process.env.NEXT_PUBLIC_API_URL || `${window.location.origin}/api`;
                       window.location.href = `${apiUrl}/facebook/login/`;
                     }}
                     className="group relative flex items-center justify-center gap-4 md:gap-5 bg-gradient-to-r from-pink-600 via-rose-600 to-purple-700 text-white px-6 md:px-10 py-4 md:py-6 rounded-[1.5rem] md:rounded-[2rem] text-[10px] md:text-[11px] font-black uppercase tracking-[0.15em] md:tracking-[0.2em] hover:opacity-90 transition-all shadow-[0_20px_40px_-10px_rgba(219,39,119,0.3)] active:scale-95 overflow-hidden w-full lg:w-auto"
@@ -747,7 +756,7 @@ export default function IntegrationManager() {
 
                   <button
                     onClick={() => {
-                      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://newsmartagent.com/api";
+                      const apiUrl = process.env.NEXT_PUBLIC_API_URL || `${window.location.origin}/api`;
                       // Full-page redirect (more reliable than popup for OAuth)
                       window.location.href = `${apiUrl}/youtube/login/`;
                     }}
@@ -865,7 +874,7 @@ export default function IntegrationManager() {
 
                   <button
                     onClick={() => {
-                      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://newsmartagent.com/api";
+                      const apiUrl = process.env.NEXT_PUBLIC_API_URL || `${window.location.origin}/api`;
                       // Full-page redirect (more reliable than popup for OAuth)
                       window.location.href = `${apiUrl}/youtube/login/?type=gbp`;
                     }}
@@ -982,7 +991,7 @@ export default function IntegrationManager() {
 
                   <button
                     onClick={() => {
-                      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://newsmartagent.com/api";
+                      const apiUrl = process.env.NEXT_PUBLIC_API_URL || `${window.location.origin}/api`;
                       const width = 600, height = 700;
                       const left = (window.innerWidth - width) / 2;
                       const top = (window.innerHeight - height) / 2;

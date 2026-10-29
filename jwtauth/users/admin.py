@@ -115,7 +115,7 @@ class PlatformInline(admin.TabularInline):
 
 @admin.register(Offer)
 class OfferAdmin(ModelAdmin):
-    list_display = ['name', 'tokens', 'schedule_messages', 'price', 'duration_days', 'is_active', 'platform_count', 'target_audience']
+    list_display = ['name', 'tokens', 'schedule_messages', 'price', 'duration_days', 'is_active', 'platform_count', 'target_audience', 'max_agents_per_platform']
     inlines = [PlatformInline]
     exclude = ('allowed_platforms',)
 

@@ -48,11 +48,42 @@ def extract_and_update_memory(ai_agent, sender_id, chat_history):
     """
 
     try:
+        try:
+            from ai_extensions.resolver import apply_text_override
+            extract_prompt, _ = apply_text_override(
+                "memory-extraction-prompt", extract_prompt, agent=ai_agent,
+                user=getattr(ai_agent, "user", None), context={"sender_id": sender_id},
+            )
+        except Exception:
+            pass
+        try:
+            from ai_extensions.resolver import apply_text_override
+            memory_system_prompt, _ = apply_text_override(
+                "memory-extraction-system",
+                "You are an advanced Relationship Intelligence Engine. Your goal is to build deep, useful memories of users.",
+                agent=ai_agent, user=getattr(ai_agent, "user", None), context={"sender_id": sender_id},
+            )
+        except Exception:
+            memory_system_prompt = "You are an advanced Relationship Intelligence Engine. Your goal is to build deep, useful memories of users."
         reply_json = {}
         total_tokens = 0
+        provider_override = None
+        try:
+            from ai_extensions.provider_hooks import run_provider_override
+            provider_override, override_version = run_provider_override(
+                key="memory-provider",
+                payload={"system_prompt": memory_system_prompt, "prompt": extract_prompt, "message": extract_prompt},
+                agent=ai_agent, user=getattr(ai_agent, "user", None),
+                context={"sender_id": sender_id}, base_fallback=None,
+            )
+            if override_version:
+                reply_json = provider_override.get("data", {}) if isinstance(provider_override, dict) else {}
+                total_tokens = provider_override.get("total_tokens", 0) if isinstance(provider_override, dict) else 0
+        except Exception:
+            provider_override = None
 
         # 2. Dispatch to the selected provider
-        if provider == 'openai' or provider == 'openrouter' or provider == 'grok':
+        if provider_override is None and (provider == 'openai' or provider == 'openrouter' or provider == 'grok'):
             # Grok and OpenRouter are OpenAI-compatible in this setup
             if provider == 'grok':
                 from openai import OpenAI as GrokClient
@@ -64,7 +95,7 @@ def extract_and_update_memory(ai_agent, sender_id, chat_history):
             response = client.chat.completions.create(
                 model=model_id,
                 messages=[
-                    {'role': 'system', 'content': "You are an advanced Relationship Intelligence Engine. Your goal is to build deep, useful memories of users."},
+                    {'role': 'system', 'content': memory_system_prompt},
                     {'role': 'user', 'content': extract_prompt}
                 ],
                 temperature=0,
@@ -73,12 +104,12 @@ def extract_and_update_memory(ai_agent, sender_id, chat_history):
             reply_json = json.loads(response.choices[0].message.content)
             total_tokens = response.usage.total_tokens
 
-        elif provider == 'gemini':
+        elif provider_override is None and provider == 'gemini':
             response = gemini_client.models.generate_content(
                 model=model_id,
                 contents=[extract_prompt],
                 config=gemini_types.GenerateContentConfig(
-                    system_instruction="You are an advanced Relationship Intelligence Engine. Your goal is to build deep, useful memories of users. Return ONLY valid JSON.",
+                    system_instruction=f"{memory_system_prompt} Return ONLY valid JSON.",
                     temperature=0,
                     response_mime_type="application/json"
                 )
@@ -110,7 +141,10 @@ def extract_and_update_memory(ai_agent, sender_id, chat_history):
                 )
 
             # Robust Token Extraction (provider-agnostic)
-            if provider == 'gemini':
+            if provider_override is not None:
+                i_tokens = provider_override.get("input_tokens", 0)
+                o_tokens = provider_override.get("output_tokens", 0)
+            elif provider == 'gemini':
                 i_tokens = response.usage_metadata.prompt_token_count
                 o_tokens = response.usage_metadata.candidates_token_count
             else:

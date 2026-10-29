@@ -31,21 +31,25 @@ class ContactListView(APIView):
 
     def get(self, request, agent_id):
         try:
+            owner = request.user.get_workspace_owner()
+            tm = request.user.get_active_team_member()
             query = request.GET.get('q', '')
             platform_filter = request.GET.get('platform')
             comments_only = request.GET.get('comments_only') == 'true'
             
             if agent_id == 'all':
-                # Fetch contacts for all agents of this user
-                contacts = Contact.objects.filter(agent__user=request.user)
+                # Fetch contacts for all agents of this owner/workspace
+                contacts = Contact.objects.filter(agent__user=owner)
+                if tm and tm.allowed_agents.exists():
+                    contacts = contacts.filter(agent__in=tm.allowed_agents.all())
             else:
                 if agent_id.isdigit():
                     try:
-                        agent = AgentAI.objects.get(id=int(agent_id), user=request.user)
+                        agent = AgentAI.objects.get(id=int(agent_id), user=owner)
                     except AgentAI.DoesNotExist:
-                        agent = AgentAI.objects.get(models.Q(page_id=agent_id) | models.Q(number=agent_id), user=request.user)
+                        agent = AgentAI.objects.get(models.Q(page_id=agent_id) | models.Q(number=agent_id), user=owner)
                 else:
-                    agent = AgentAI.objects.get(models.Q(page_id=agent_id) | models.Q(number=agent_id), user=request.user)
+                    agent = AgentAI.objects.get(models.Q(page_id=agent_id) | models.Q(number=agent_id), user=owner)
                 contacts = Contact.objects.filter(agent=agent)
             
             if query:
@@ -68,6 +72,26 @@ class ContactListView(APIView):
             else:
                 contacts = contacts.exclude(platform__in=comment_platforms)
 
+            # Queue filter: all | waiting | mine | unassigned
+            queue = request.GET.get('queue', 'all')
+            active_support_q = (
+                models.Q(is_human_needed=True) |
+                models.Q(support_status__in=['waiting_human', 'in_progress']) |
+                models.Q(waiting_since__isnull=False)
+            ) & ~models.Q(support_status='resolved', is_human_needed=False)
+
+            if queue == 'waiting':
+                contacts = contacts.filter(active_support_q)
+            elif queue == 'mine':
+                if tm:
+                    contacts = contacts.filter(assigned_to=tm).exclude(support_status='resolved', is_human_needed=False)
+                else:
+                    contacts = contacts.filter(
+                        models.Q(assigned_by=request.user) | models.Q(assigned_to__user=request.user)
+                    ).exclude(support_status='resolved', is_human_needed=False)
+            elif queue == 'unassigned':
+                contacts = contacts.filter(active_support_q, assigned_to__isnull=True)
+
             contacts = contacts.order_by('-updated_at')
             serializer = ContactSerializer(contacts[:500], many=True)
             
@@ -87,21 +111,72 @@ class ContactSummaryView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        qs = Contact.objects.filter(agent__user=request.user)
+        owner = request.user.get_workspace_owner()
+        qs = Contact.objects.filter(agent__user=owner)
+        
+        tm = request.user.get_active_team_member()
+        if tm and tm.allowed_agents.exists():
+            qs = qs.filter(agent__in=tm.allowed_agents.all())
+
         summary = qs.values('platform').annotate(total=Count('id'))
         data = {item['platform']: item['total'] for item in summary}
         data.setdefault('youtube', 0)
         data.setdefault('facebook_comment', 0)
         data['comments'] = qs.filter(platform__in=['youtube', 'facebook_comment']).count()
         data['messages'] = qs.exclude(platform__in=['youtube', 'facebook_comment']).count()
+
+        # Priority waiting queue counts
+        from django.db.models import Q
+        waiting_q = (
+            Q(is_human_needed=True) |
+            Q(support_status__in=['waiting_human', 'in_progress']) |
+            Q(waiting_since__isnull=False)
+        ) & ~Q(support_status='resolved', is_human_needed=False)
+        data['waiting_human'] = qs.filter(waiting_q).count()
+        data['unassigned_human'] = qs.filter(waiting_q, assigned_to__isnull=True).count()
+        if tm:
+            data['my_assigned'] = qs.filter(assigned_to=tm).exclude(support_status='resolved', is_human_needed=False).count()
+        else:
+            data['my_assigned'] = qs.filter(
+                Q(assigned_by=request.user) | Q(assigned_to__user=request.user)
+            ).exclude(support_status='resolved', is_human_needed=False).count()
+
         return Response(data, status=status.HTTP_200_OK)
+
+def _resolve_and_enable_ai(contact, user=None):
+    """Fully resolve human handoff / team assignment and re-enable AI auto-reply."""
+    contact.is_auto_reply_enabled = True
+    contact.is_human_needed = False
+    contact.support_status = 'resolved'
+    contact.waiting_since = None
+    contact.assigned_to = None
+    contact.assigned_by = None
+    contact.assigned_department = ''
+    contact.assignment_note = ''
+    contact.resolved_at = timezone.now()
+    if user and getattr(user, 'is_authenticated', False):
+        contact.resolved_by = user
+
+    try:
+        from aiAgent.models import UserMemory
+        memory = UserMemory.objects.filter(ai_agent=contact.agent, sender_id=contact.identifier).first()
+        if memory and isinstance(memory.data, dict):
+            internal = memory.data.get('_internal')
+            if isinstance(internal, dict) and 'failed_attempts' in internal:
+                internal['failed_attempts'] = {}
+                memory.data['_internal'] = internal
+                memory.save(update_fields=['data'])
+    except Exception:
+        pass
+
 
 class ContactDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, contact_id):
         try:
-            contact = Contact.objects.get(id=contact_id, agent__user=request.user)
+            owner = request.user.get_workspace_owner()
+            contact = Contact.objects.get(id=contact_id, agent__user=owner)
             serializer = ContactSerializer(contact)
             return Response(serializer.data, status=status.HTTP_200_OK)
         except Contact.DoesNotExist:
@@ -109,7 +184,8 @@ class ContactDetailView(APIView):
 
     def patch(self, request, contact_id):
         try:
-            contact = Contact.objects.get(id=contact_id, agent__user=request.user)
+            owner = request.user.get_workspace_owner()
+            contact = Contact.objects.get(id=contact_id, agent__user=owner)
             
             crm_data = request.data.get('crm_data')
             if crm_data and isinstance(crm_data, dict):
@@ -125,8 +201,17 @@ class ContactDetailView(APIView):
 
             serializer = ContactSerializer(contact, data=request.data, partial=True)
             if serializer.is_valid():
-                serializer.save()
-                return Response(serializer.data, status=status.HTTP_200_OK)
+                contact = serializer.save()
+                if 'is_auto_reply_enabled' in request.data:
+                    if bool(request.data.get('is_auto_reply_enabled')):
+                        _resolve_and_enable_ai(contact, request.user)
+                    else:
+                        contact.is_auto_reply_enabled = False
+                        contact.is_human_needed = True
+                        contact.support_status = 'in_progress'
+                        contact.waiting_since = None
+                    contact.save()
+                return Response(ContactSerializer(contact).data, status=status.HTTP_200_OK)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Contact.DoesNotExist:
             return Response({"error": "Contact not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -136,12 +221,35 @@ class ToggleAutoReplyView(APIView):
 
     def post(self, request, contact_id):
         try:
-            contact = Contact.objects.get(id=contact_id, agent__user=request.user)
-            contact.is_auto_reply_enabled = not contact.is_auto_reply_enabled
+            owner = request.user.get_workspace_owner()
+            contact = Contact.objects.get(id=contact_id, agent__user=owner)
+            explicit_enable = request.data.get('enable') if hasattr(request, 'data') and isinstance(request.data, dict) else None
+            if explicit_enable is not None:
+                enable_ai = bool(explicit_enable)
+            else:
+                # If contact is in human handoff, assigned/in_progress, or auto-reply is off,
+                # toggling from the UI should TURN ON auto-reply and resolve the handoff.
+                currently_ai_active = bool(
+                    contact.is_auto_reply_enabled
+                    and not contact.is_human_needed
+                    and contact.support_status not in ['waiting_human', 'in_progress']
+                )
+                enable_ai = not currently_ai_active
+
+            if enable_ai:
+                _resolve_and_enable_ai(contact, request.user)
+            else:
+                contact.is_auto_reply_enabled = False
+                contact.is_human_needed = True
+                contact.support_status = 'in_progress'
+                contact.waiting_since = None
+
             contact.save()
+            serialized = ContactSerializer(contact).data
             return Response({
-                "success": True, 
-                "is_auto_reply_enabled": contact.is_auto_reply_enabled
+                "success": True,
+                **serialized,
+                "contact": serialized,
             }, status=status.HTTP_200_OK)
         except Contact.DoesNotExist:
             return Response({"error": "Contact not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -157,6 +265,8 @@ class ContactMessageHistoryView(APIView):
     def get(self, request, contact_id):
         try:
             contact = Contact.objects.get(id=contact_id, agent__user=request.user)
+            owner = request.user.get_workspace_owner()
+            contact = Contact.objects.get(id=contact_id, agent__user=owner)
             
             platform_val = contact.platform or ""
             identifier_val = contact.identifier or ""
@@ -504,23 +614,49 @@ class UnifiedReplyView(APIView):
     def post(self, request):
         contact_id = request.data.get('contact_id')
         message_text = request.data.get('message')
+        is_internal_note = bool(request.data.get('is_internal_note'))
 
         if not contact_id or not message_text:
             return Response({"error": "contact_id and message are required"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            contact = Contact.objects.get(id=contact_id, agent__user=request.user)
+            owner = request.user.get_workspace_owner()
+            contact = Contact.objects.get(id=contact_id, agent__user=owner)
             agent = contact.agent
             platform = contact.platform
             identifier = contact.identifier
 
-            # ── Auto-Reply Pause Logic ──
-            # When a human agent replies manually, we pause the AI to prevent overlapping
-            # Also clear the is_human_needed flag as the human has now responded.
-            if contact.is_auto_reply_enabled or contact.is_human_needed:
-                contact.is_auto_reply_enabled = False
-                contact.is_human_needed = False
-                contact.save()
+            # ── 1. Internal Team Note (Never delivered to customer) ──
+            if is_internal_note:
+                from chat.models import Conversation, Message
+                conv = Conversation.objects.filter(agentAi=agent, contact_id__iexact=identifier).first()
+                if not conv:
+                    conv = Conversation.objects.create(agentAi=agent, contact_id=identifier, platform=platform)
+                Message.objects.create(
+                    conversation=conv,
+                    role='assistant',
+                    content=message_text,
+                    is_internal_note=True,
+                    sent_by_user=request.user,
+                    sender_name=request.user.name or request.user.email.split('@')[0],
+                )
+                contact.updated_at = timezone.now()
+                contact.save(update_fields=['updated_at'])
+                return Response({"success": True, "is_internal_note": True}, status=status.HTTP_200_OK)
+
+            # ── 2. Direct Reply to Customer ──
+            # When a human agent replies manually, pause AI to prevent overlapping
+            contact.is_auto_reply_enabled = False
+            contact.is_human_needed = True
+            contact.waiting_since = None
+            contact.support_status = 'in_progress'
+            if not contact.assigned_to and not contact.assigned_by:
+                tm = request.user.get_active_team_member()
+                if tm and tm.owner_id == owner.id:
+                    contact.assigned_to = tm
+                contact.assigned_by = request.user
+                contact.assigned_at = timezone.now()
+            contact.save()
 
             from aiAgent.business_logic import logic_handler
             from chat.services import save_message
@@ -536,8 +672,6 @@ class UnifiedReplyView(APIView):
                 }
                 success = logic_handler.deliver_whatsapp_reply(data, message_text)
             elif platform == 'messenger' or platform == 'facebook_comment':
-                # FacebookPage থেকে সর্বশেষ refreshed token নেওয়া হচ্ছে
-                # AgentAI.access_token পুরনো হতে পারে; FacebookPage.access_token সবসময় আপডেট থাকে
                 from users.models import FacebookPage
                 fb_page = FacebookPage.objects.filter(page_id=agent.page_id, is_active=True).first()
                 effective_token = fb_page.access_token if fb_page else agent.access_token
@@ -555,15 +689,32 @@ class UnifiedReplyView(APIView):
                     'type': platform
                 }
                 success = logic_handler.deliver_instagram_reply(data, message_text, agent.page_id, effective_token)
-            elif platform == 'web_widget':
-                 # For Web Widget, save the message to history. The visitor sees it on next fetch/message.
-                 # Also update the dashboard context via WebSocket.
-                 success = logic_handler.deliver_dashboard_reply(request.user.id, message_text, str(uuid.uuid4()))
+            elif platform in ['web_widget', 'web', 'shop']:
+                 logic_handler.deliver_dashboard_reply(request.user.id, message_text, str(uuid.uuid4()))
+                 success = True
+            elif platform == 'telegram':
+                 token = None
+                 bot = TelegramBot.objects.filter(agent=agent, is_active=True).first()
+                 if bot and bot.bot_token:
+                     token = bot.bot_token
+                 if token:
+                     success = logic_handler.deliver_telegram_reply(
+                         {"sender_id": identifier, "chat_id": identifier},
+                         message_text,
+                         token
+                     )
             
             if success:
                 # Save the manual reply in history
                 save_message(agent, identifier, message_text, 'assistant', platform=platform)
-                return Response({"success": True}, status=status.HTTP_200_OK)
+                contact.updated_at = timezone.now()
+                contact.save(update_fields=['updated_at'])
+                serialized = ContactSerializer(contact).data
+                return Response({
+                    "success": True,
+                    **serialized,
+                    "contact": serialized,
+                }, status=status.HTTP_200_OK)
             else:
                 return Response({"error": "Failed to deliver message to platform"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -571,17 +722,132 @@ class UnifiedReplyView(APIView):
             return Response({"error": "Contact not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 class ResolveHumanHandoffView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, contact_id):
         try:
-            contact = Contact.objects.get(id=contact_id, agent__user=request.user)
-            contact.is_human_needed = False
+            owner = request.user.get_workspace_owner()
+            contact = Contact.objects.get(id=contact_id, agent__user=owner)
+            _resolve_and_enable_ai(contact, request.user)
             contact.save()
-            return Response({"success": True, "is_human_needed": False}, status=status.HTTP_200_OK)
+            serialized = ContactSerializer(contact).data
+            return Response({
+                "success": True,
+                **serialized,
+                "contact": serialized,
+            }, status=status.HTTP_200_OK)
         except Contact.DoesNotExist:
             return Response({"error": "Contact not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+class ContactAssignView(APIView):
+    """Claim, forward, auto-assign, or unassign customer chat with support for departments & instructions."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, contact_id):
+        owner = request.user.get_workspace_owner()
+        try:
+            contact = Contact.objects.get(id=contact_id, agent__user=owner)
+        except Contact.DoesNotExist:
+            return Response({"error": "Contact not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        mode = request.data.get("mode") or "claim"  # claim | assign | auto | unassign
+        department = request.data.get("department") or ""
+        note = (request.data.get("note") or "").strip()
+
+        from users.models import TeamMember
+        from django.utils import timezone
+
+        if mode == "claim":
+            tm = request.user.get_active_team_member()
+            if tm and tm.owner_id == owner.id:
+                contact.assigned_to = tm
+            else:
+                contact.assigned_to = None
+            contact.assigned_by = request.user
+            contact.assigned_at = timezone.now()
+            contact.support_status = "in_progress"
+            contact.is_human_needed = True
+            contact.is_auto_reply_enabled = False
+            contact.waiting_since = None
+            contact.save()
+
+        elif mode == "assign":
+            member_id = request.data.get("member_id")
+            if not member_id:
+                return Response({"error": "টিম মেম্বার নির্বাচন করুন"}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                tm = TeamMember.objects.get(id=member_id, owner=owner, is_active=True)
+            except TeamMember.DoesNotExist:
+                return Response({"error": "টিম মেম্বার পাওয়া যায়নি"}, status=status.HTTP_404_NOT_FOUND)
+
+            contact.assigned_to = tm
+            contact.assigned_by = request.user
+            contact.assigned_at = timezone.now()
+            contact.assigned_department = department or tm.department
+            contact.assignment_note = note
+            contact.support_status = "in_progress"
+            contact.is_human_needed = True
+            contact.is_auto_reply_enabled = False
+            contact.waiting_since = None
+            contact.save()
+
+            if note:
+                from chat.models import Conversation, Message
+                conversations = Conversation.objects.filter(agentAi=contact.agent, contact_id__iexact=contact.identifier)
+                conv = conversations.first()
+                if conv:
+                    Message.objects.create(
+                        conversation=conv,
+                        role="assistant",
+                        content=f"📌 ফরওয়ার্ড নির্দেশনা ({tm.user.name or tm.user.email}): {note}",
+                        is_internal_note=True,
+                        sent_by_user=request.user,
+                        sender_name=request.user.name or request.user.email.split('@')[0],
+                    )
+
+        elif mode == "auto":
+            from django.db.models import Count, Q
+            qs = TeamMember.objects.filter(owner=owner, is_active=True, availability_status="online")
+            if department and department != "all":
+                qs = qs.filter(Q(department="all") | Q(department__icontains=department))
+
+            qs = qs.filter(Q(allowed_agents__isnull=True) | Q(allowed_agents=contact.agent)).distinct()
+            qs = qs.annotate(active_chat_count=Count('assigned_contacts', filter=Q(assigned_contacts__support_status='in_progress'))).order_by('active_chat_count', 'last_assigned_at')
+            assigned_tm = qs.first()
+            if not assigned_tm:
+                return Response({"error": "এই মুহূর্তে কোনো অনলাইন টিম মেম্বার খালি পাওয়া যায়নি। ম্যানুয়ালি বেছে নিন।"}, status=status.HTTP_400_BAD_REQUEST)
+
+            contact.assigned_to = assigned_tm
+            contact.assigned_by = request.user
+            contact.assigned_at = timezone.now()
+            contact.assigned_department = department or assigned_tm.department
+            contact.assignment_note = note
+            contact.support_status = "in_progress"
+            contact.is_human_needed = True
+            contact.is_auto_reply_enabled = False
+            contact.waiting_since = None
+            contact.save()
+            assigned_tm.last_assigned_at = timezone.now()
+            assigned_tm.save(update_fields=['last_assigned_at'])
+
+        elif mode == "unassign":
+            contact.assigned_to = None
+            contact.assigned_by = None
+            contact.assigned_department = ""
+            contact.assignment_note = ""
+            contact.support_status = "waiting_human"
+            contact.is_human_needed = True
+            contact.is_auto_reply_enabled = False
+            if not contact.waiting_since:
+                contact.waiting_since = timezone.now()
+            contact.save()
+
+        serializer = ContactSerializer(contact)
+        return Response({"success": True, "contact": serializer.data}, status=status.HTTP_200_OK)
 
 class HumanHelpView(APIView):
     """Marks contact as needing human help and disables AI auto-reply"""
@@ -589,14 +855,19 @@ class HumanHelpView(APIView):
 
     def post(self, request, contact_id):
         try:
-            contact = Contact.objects.get(id=contact_id, agent__user=request.user)
+            owner = request.user.get_workspace_owner()
+            contact = Contact.objects.get(id=contact_id, agent__user=owner)
             contact.is_human_needed = True
             contact.is_auto_reply_enabled = False
+            contact.support_status = "waiting_human"
+            if not contact.waiting_since:
+                contact.waiting_since = timezone.now()
             contact.save()
+            serialized = ContactSerializer(contact).data
             return Response({
                 "success": True, 
-                "is_human_needed": True,
-                "is_auto_reply_enabled": False
+                **serialized,
+                "contact": serialized,
             }, status=status.HTTP_200_OK)
         except Contact.DoesNotExist:
             return Response({"error": "Contact not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -621,12 +892,17 @@ class WhatsAppButtonClickView(APIView):
             if action == 'HUMAN_HELP':
                 contact.is_human_needed = True
                 contact.is_auto_reply_enabled = False
+                contact.support_status = 'waiting_human'
+                if not contact.waiting_since:
+                    contact.waiting_since = timezone.now()
                 msg = "🙋 Human Help: A human agent has been notified and AI is paused."
             elif action == 'STOP_AI_REPLY':
                 contact.is_auto_reply_enabled = False
+                contact.is_human_needed = True
+                contact.support_status = 'in_progress'
                 msg = "🔇 Stop AI: Auto-reply has been disabled for this conversation."
-            elif action == 'ON_AI_REPLY':
-                contact.is_auto_reply_enabled = True
+            elif action in ['ON_AI_REPLY', 'RESOLVE_HUMAN']:
+                _resolve_and_enable_ai(contact)
                 msg = "▶️ Start AI: Auto-reply has been re-enabled."
             else:
                 return Response({"error": "Unknown action"}, status=status.HTTP_400_BAD_REQUEST)

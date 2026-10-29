@@ -14,10 +14,25 @@ from .views import (
     SteadFastAreaListView,
     SteadFastBookOrderView,
     SteadFastOrderInfoView,
-    SteadFastPriceCalculatorView
+    SteadFastPriceCalculatorView,
+    PathaoWebhookView,
+    SteadFastWebhookView
 )
+from .reset_views import ResetCourierBookingView
 
 urlpatterns = [
+    # Courier Booking Reset (Unlink / Reset for re-booking)
+    path('reset-booking/', ResetCourierBookingView.as_view(), name='courier-reset-booking'),
+    # Courier Webhook endpoints (Real-time parcel status sync - with and without trailing slash)
+    path('webhooks/pathao/', PathaoWebhookView.as_view(), name='courier-webhook-pathao'),
+    path('webhooks/pathao', PathaoWebhookView.as_view(), name='courier-webhook-pathao-noslash'),
+    path('webhooks/pathao/<str:merchant_identifier>/', PathaoWebhookView.as_view(), name='courier-webhook-pathao-merchant'),
+    path('webhooks/pathao/<str:merchant_identifier>', PathaoWebhookView.as_view(), name='courier-webhook-pathao-merchant-noslash'),
+    path('webhooks/steadfast/', SteadFastWebhookView.as_view(), name='courier-webhook-steadfast'),
+    path('webhooks/steadfast', SteadFastWebhookView.as_view(), name='courier-webhook-steadfast-noslash'),
+    path('webhooks/steadfast/<str:merchant_identifier>/', SteadFastWebhookView.as_view(), name='courier-webhook-steadfast-merchant'),
+    path('webhooks/steadfast/<str:merchant_identifier>', SteadFastWebhookView.as_view(), name='courier-webhook-steadfast-merchant-noslash'),
+
     # Pathao routes
     path('config/', PathaoCourierConfigView.as_view(), name='pathao-config'),
     path('stores/', PathaoStoreListView.as_view(), name='pathao-stores'),

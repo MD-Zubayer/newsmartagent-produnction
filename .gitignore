@@ -47,3 +47,13 @@ jwtauth/logs/*.log
 *.sql.gz
 backups/
 jwtauth/backups/*.sql.gz
+shop/node_modules/
+shop/.next/
+
+# Core dump files
+jwtauth/core
+core
+core.*
+*.dump
+*.txt
+
