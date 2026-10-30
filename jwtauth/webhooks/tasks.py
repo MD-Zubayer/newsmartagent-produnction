@@ -937,8 +937,20 @@ def _save_order_fields_to_memory(user_memory, order_data, source='ai_extraction'
                 'updated_at': timezone.now().isoformat()
             }
         else:
+            val_str = str(value).strip()
+            if key in ('phone_number', 'quantity'):
+                bn_to_en = str.maketrans('০১২৩৪৫৬৭৮৯', '0123456789')
+                val_str = val_str.translate(bn_to_en)
+                if key == 'phone_number':
+                    digits = ''.join(ch for ch in val_str if '0' <= ch <= '9')
+                    if digits.startswith('880') and len(digits) == 13:
+                        digits = '0' + digits[3:]
+                    elif len(digits) == 10 and digits.startswith('1'):
+                        digits = '0' + digits
+                    if digits:
+                        val_str = digits
             order_fields[key] = {
-                'value': str(value).strip(),
+                'value': val_str,
                 'confidence': metadata.get('confidence', existing.get('confidence', 0.95 if source == 'regex_validated' else 0.85)),
                 'source': metadata.get('source', source),
                 'updated_at': timezone.now().isoformat()
@@ -1202,7 +1214,15 @@ def create_customer_order_from_memory(agent_config, sender_id, request_type, msg
     customer_name = str(seeded_fields.get('customer_name') or input_fields.get('customer_name') or sender_id).strip()
     product_name = str(seeded_fields.get('product_name') or input_fields.get('product_name') or 'Product').strip()
     address = str(seeded_fields.get('address') or input_fields.get('address') or '').strip()
-    phone_number = str(seeded_fields.get('phone_number') or input_fields.get('phone_number') or sender_id).strip()
+    raw_phone_val = str(seeded_fields.get('phone_number') or input_fields.get('phone_number') or sender_id).strip()
+    bn_to_en = str.maketrans('০১২৩৪৫৬৭৮৯', '0123456789')
+    ascii_phone = raw_phone_val.translate(bn_to_en)
+    phone_digits = ''.join(ch for ch in ascii_phone if '0' <= ch <= '9')
+    if phone_digits.startswith('880') and len(phone_digits) == 13:
+        phone_digits = '0' + phone_digits[3:]
+    elif len(phone_digits) == 10 and phone_digits.startswith('1'):
+        phone_digits = '0' + phone_digits
+    phone_number = phone_digits if len(phone_digits) == 11 else ascii_phone
     extra_info = str(seeded_fields.get('extra_info') or input_fields.get('extra_info') or '').strip()
 
     quantity = seeded_fields.get('quantity') or input_fields.get('quantity')

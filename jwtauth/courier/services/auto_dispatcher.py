@@ -13,7 +13,9 @@ logger = logging.getLogger(__name__)
 
 
 def _normalize_bd_phone(raw_phone: str) -> str:
-    digits = ''.join(ch for ch in str(raw_phone or '') if ch.isdigit())
+    bn_to_en = str.maketrans('০১২৩৪৫৬৭৮৯', '0123456789')
+    ascii_phone = str(raw_phone or '').translate(bn_to_en)
+    digits = ''.join(ch for ch in ascii_phone if '0' <= ch <= '9')
     if digits.startswith('880') and len(digits) == 13:
         digits = '0' + digits[3:]
     elif len(digits) == 10 and digits.startswith('1'):
@@ -166,12 +168,8 @@ def attempt_auto_courier_booking(order: CustomerOrder) -> dict:
     clean_phone = _normalize_bd_phone(order.phone_number)
     last_error = None
 
-    # Build ordered provider attempt list: preferred provider first, then fallback to the other active provider
+    # Dispatch strictly to the merchant's configured active courier provider (no silent cross-courier fallback)
     providers_to_try = [provider]
-    if 'steadfast' not in providers_to_try:
-        providers_to_try.append('steadfast')
-    if 'pathao' not in providers_to_try:
-        providers_to_try.append('pathao')
 
     for current_provider in providers_to_try:
         if current_provider == 'steadfast':
