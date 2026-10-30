@@ -108,9 +108,19 @@ def generate_openai_reply(system_promt, messages, current_message, agent_config,
                                         "quantity", "price", "extra_info", "items"
                                     ],
                                     "additionalProperties": False
+                                },
+                                "extracted_memory": {
+                                    "type": ["object", "null"],
+                                    "properties": {
+                                        "name": {"type": ["string", "null"]},
+                                        "phone_number": {"type": ["string", "null"]},
+                                        "location": {"type": ["string", "null"]}
+                                    },
+                                    "required": ["name", "phone_number", "location"],
+                                    "additionalProperties": False
                                 }
                             },
-                            "required": ["reply", "cache_type", "human_handoff", "image_intent", "image_ids", "image_style", "order_intent", "order_data"],
+                            "required": ["reply", "cache_type", "human_handoff", "image_intent", "image_ids", "image_style", "order_intent", "order_data", "extracted_memory"],
                             "additionalProperties": False
                         }
                     }

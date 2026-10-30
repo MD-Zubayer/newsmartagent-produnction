@@ -25,7 +25,8 @@ def build_classification_dsl(
         '"reply": "string (Conversational reply in matched customer language)"',
         '"human_handoff": "boolean (true ONLY if user explicitly requests human representative)"',
         '"order_intent": "enum[\'create\', \'confirm\', \'cancel\', \'interrupted\', null]"',
-        '"order_data": "object or null (Contains product_name, price, customer details, items array)"',
+        '"order_data": "object or null (Temporary active order draft slots: customer_name, phone_number, address, district, upazila, product_name, price, quantity, extra_info, items)"',
+        '"extracted_memory": "object or null (Permanent customer profile {\'name\', \'phone_number\', \'location\'}: set when customer states/updates their own permanent identity, or set \'name\': \'\' to clear any invalid/corrupted non-name word in memory)"',
         '"courier_check": "object or null (When customer mentions district/upazila/thana, set {\'district\': \'DistrictInEnglish\', \'upazila\': \'UpazilaInEnglish\', \'address\': \'raw address\'})"',
     ]
     if redis_cache_enabled:

@@ -3678,18 +3678,31 @@ def process_ai_reply_task(self, data):
                             )
                             logger.info("🎨 [AI-Driven Memory Sync] Saved extra_info='%s' from AI order_data.", extra_info_val)
 
-                    # Real-time In-Chat AI Memory Sync (Zero extra LLM cost)
+                    # Real-time In-Chat AI Memory Sync (Zero extra LLM cost: AI decides permanent vs temporary)
                     extracted_mem = parsed.get('extracted_memory')
                     if isinstance(extracted_mem, dict) and extracted_mem:
                         try:
                             user_memory = _get_or_create_user_memory(agent_config, sender_id)
                             curr_data = user_memory.data or {}
+                            updated_keys = []
+                            bn_to_en = str.maketrans('০১২৩৪৫৬৭৮৯', '0123456789')
                             for k, v in extracted_mem.items():
-                                if v is not None and not str(k).startswith('_'):
-                                    curr_data[k] = v
-                            user_memory.data = curr_data
-                            user_memory.save(update_fields=['data'])
-                            logger.info("🧠 [Live AI Memory Ingestion] Updated UserMemory for %s with keys: %s", sender_id, list(extracted_mem.keys()))
+                                if str(k).startswith('_'):
+                                    continue
+                                if isinstance(v, str) and v.strip() == "":
+                                    # AI explicitly cleared an invalid/corrupted permanent memory field
+                                    curr_data.pop(k, None)
+                                    updated_keys.append(f"-{k}")
+                                elif v is not None:
+                                    val_clean = str(v).strip() if isinstance(v, str) else v
+                                    if k in ('phone_number', 'phone') and isinstance(val_clean, str):
+                                        val_clean = val_clean.translate(bn_to_en)
+                                    curr_data[k] = val_clean
+                                    updated_keys.append(k)
+                            if updated_keys:
+                                user_memory.data = curr_data
+                                user_memory.save(update_fields=['data'])
+                                logger.info("🧠 [Live AI Memory Ingestion] Updated UserMemory for %s with keys: %s", sender_id, updated_keys)
                         except Exception as mem_sync_err:
                             logger.warning("Failed to sync live AI extracted memory: %s", mem_sync_err)
 
@@ -3940,15 +3953,10 @@ def process_ai_reply_task(self, data):
             if not isinstance(parsed, dict):
                 parsed = {'reply': parsed_reply}
 
-            user_msg_clean = (text or '').lower()
             if has_markdown_img:
                 parsed['image_intent'] = True
             elif not parsed.get('image_intent'):
                 parsed['image_intent'] = False
-            else:
-                is_just_order_field = any(f in user_msg_clean for f in ['নাম', 'name', 'phone', 'নম্বর', 'ঠিকানা', 'address', 'পিস', 'টা', 'হবে'])
-                if is_just_order_field:
-                    parsed['image_intent'] = False
 
             # Update ai_data with the cleaned reply. Provider/base failures must
             # never crash the task because an optional key is missing.
