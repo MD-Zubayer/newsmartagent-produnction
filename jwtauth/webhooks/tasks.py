@@ -1323,29 +1323,31 @@ def create_customer_order_from_memory(agent_config, sender_id, request_type, msg
         pathao_active = PathaoCourierConfig.objects.filter(user=agent_config.user, is_active=True).exists()
         steadfast_active = SteadFastCourierConfig.objects.filter(user=agent_config.user, is_active=True).exists()
         
-        district_val = input_fields.get('district')
-        upazila_val = input_fields.get('upazila')
-        address_val = input_fields.get('address')
-        
-        if not district_val or not upazila_val:
-            ext_district, ext_upazila = extract_location_from_address(address_val)
-            if not district_val:
-                district_val = ext_district
-            if not upazila_val:
-                upazila_val = ext_upazila
-        
-        # Read locked courier IDs from memory first (locked during live courier validation)
+        # Read locked courier IDs and canonical matched names from memory first (locked during live courier validation)
         from aiAgent.tools.courier_validation_tool import get_active_courier_for_merchant
         active_provider = get_active_courier_for_merchant(agent_config.user)
         internal_mem = (user_memory.data or {}).get('_internal', {})
-        saved_loc_ids = (internal_mem.get('courier_location_ids') or {}).get(active_provider) or {}
+        all_saved_locs = internal_mem.get('courier_location_ids') or {}
+        saved_loc_ids = all_saved_locs.get(active_provider) or {}
+        saved_matched_names = internal_mem.get('courier_matched_names') or {}
 
         city_id = saved_loc_ids.get('city_id')
         zone_id = saved_loc_ids.get('zone_id')
         area_id = saved_loc_ids.get('area_id')
 
-        # Fallback to cache matcher only if not locked in memory
+        district_val = saved_matched_names.get('city') or input_fields.get('district')
+        upazila_val = saved_matched_names.get('zone') or input_fields.get('upazila')
+        address_val = input_fields.get('address')
+
+        # Only fallback to heuristic/cache matcher if live tool IDs were never locked in memory
         if not city_id:
+            if not district_val or not upazila_val:
+                ext_district, ext_upazila = extract_location_from_address(address_val)
+                if not district_val:
+                    district_val = ext_district
+                if not upazila_val:
+                    upazila_val = ext_upazila
+
             suggestions = match_address_redis(district_val, upazila_val, full_address=address_val)
             if active_provider == 'pathao' and pathao_active:
                 city_id = suggestions.get('pathao', {}).get('city_id')
@@ -1378,6 +1380,7 @@ def create_customer_order_from_memory(agent_config, sender_id, request_type, msg
                             'full_address': address,
                             'district': district_val or '',
                             'upazila': upazila_val or '',
+                            'courier_location_ids': all_saved_locs if isinstance(all_saved_locs, dict) else {},
                             'is_default': True,
                         }
                     )
@@ -3496,14 +3499,17 @@ def process_ai_reply_task(self, data):
             # Ingest executed native tool results from live AI turn
             live_tool_data = ai_data.get('tool_execution_data') if isinstance(ai_data, dict) else None
             if live_tool_data and isinstance(live_tool_data, dict):
-                logger.info("📦 [AI Live Tool Return Ingested]: %s", live_tool_data.get('status'))
+                logger.info("📦 [AI Live Tool Return Ingested]: status=%s loc_ids=%s", live_tool_data.get('status'), live_tool_data.get('location_ids'))
                 loc_ids = live_tool_data.get('location_ids') or {}
+                matched_names = live_tool_data.get('matched_names') or {}
                 user_memory = _get_or_create_user_memory(agent_config, sender_id)
                 mem_d = user_memory.data or {}
                 if any(loc_ids.values()):
                     mem_d.setdefault('_internal', {})['courier_location_ids'] = {live_tool_data.get('provider'): loc_ids}
+                if any(matched_names.values()):
+                    mem_d.setdefault('_internal', {})['courier_matched_names'] = matched_names
                 if live_tool_data.get('status') == 'needs_clarification' and live_tool_data.get('suggested_areas'):
-                    mem_d.setdefault('_internal', {})['pending_courier_area_suggestions'] = live_tool_data.get('suggested_areas')[:8]
+                    mem_d.setdefault('_internal', {})['pending_courier_area_suggestions'] = live_tool_data.get('suggested_areas')
                     _set_order_state(user_memory, 'collecting_details')
                 elif live_tool_data.get('status') == 'valid':
                     mem_d.setdefault('_internal', {}).pop('pending_courier_area_suggestions', None)
@@ -3761,154 +3767,73 @@ def process_ai_reply_task(self, data):
                             if intent_conf is None:
                                 intent_conf = 1.0
 
-                            # If AI called courier_check intent directly, execute native courier validation tool immediately
+                            # If AI returned courier_check in JSON (and did not already run live_tool_data), execute tool with AI's arguments
                             ai_courier_call = parsed.get('courier_check')
-                            if isinstance(ai_courier_call, dict) and (ai_courier_call.get('district') or ai_courier_call.get('upazila')):
+                            if not live_tool_data and isinstance(ai_courier_call, dict) and (ai_courier_call.get('district') or ai_courier_call.get('upazila')):
                                 try:
                                     from aiAgent.tools.courier_validation_tool import validate_and_suggest_courier_area
                                     call_dist = ai_courier_call.get('district')
                                     call_upz = ai_courier_call.get('upazila')
                                     call_addr = ai_courier_call.get('address') or order_data.get('address')
                                     call_hint = ai_courier_call.get('sub_area_hint')
+                                    call_area_id = ai_courier_call.get('area_id')
                                     fail_cnt = (user_memory.data or {}).get('_internal', {}).get('failed_attempts', {}).get('address', {}).get('count', 0)
-                                    logger.info("🤖 AI directly triggered courier_check tool: district=%s, upazila=%s, address=%s, hint=%s", call_dist, call_upz, call_addr, call_hint)
+                                    logger.info("🤖 AI directly triggered courier_check tool: district=%s, upazila=%s, address=%s, hint=%s, area_id=%s", call_dist, call_upz, call_addr, call_hint, call_area_id)
                                     direct_res = validate_and_suggest_courier_area(
                                         merchant=agent_config.user,
                                         district=call_dist,
                                         upazila=call_upz,
                                         full_address=call_addr,
                                         sub_area_hint=call_hint,
+                                        area_id=call_area_id,
                                         address_fail_count=fail_cnt
                                     )
                                     loc_ids = direct_res.get('location_ids') or {}
+                                    matched_names = direct_res.get('matched_names') or {}
+                                    mem_d = user_memory.data or {}
                                     if any(loc_ids.values()):
-                                        mem_d = user_memory.data or {}
                                         mem_d.setdefault('_internal', {})['courier_location_ids'] = {direct_res.get('provider'): loc_ids}
-                                        user_memory.data = mem_d
-                                        user_memory.save(update_fields=['data'])
+                                    if any(matched_names.values()):
+                                        mem_d.setdefault('_internal', {})['courier_matched_names'] = matched_names
                                     if direct_res.get('status') == 'needs_clarification' and direct_res.get('suggested_areas'):
-                                        suggestions = direct_res.get('suggested_areas')[:8]
-                                        mem_d = user_memory.data or {}
-                                        mem_d.setdefault('_internal', {})['pending_courier_area_suggestions'] = suggestions
-                                        user_memory.data = mem_d
-                                        user_memory.save(update_fields=['data'])
-                                        sugg_lines = []
-                                        for s in suggestions:
-                                            idx = s.get('index', '•')
-                                            s_name = s.get('name', '')
-                                            sugg_lines.append(f"{idx}. {s_name}")
-                                        sugg_text = "\n".join(sugg_lines)
-                                        area_clarification = (
-                                            f"\n\nআপনার এলাকাটি কুরিয়ারে নিখুঁতভাবে ডেলিভারির জন্য নিচের এরিয়াগুলোর মধ্যে কোনটি আপনার সবচেয়ে কাছে?\n{sugg_text}\n"
-                                            "অনুগ্রহ করে শুধু নম্বর (যেমন ১, ২) অথবা এরিয়ার নামটি জানান।"
-                                        )
-                                        parsed_reply = (parsed_reply or "").strip() + area_clarification
+                                        mem_d.setdefault('_internal', {})['pending_courier_area_suggestions'] = direct_res.get('suggested_areas')
                                         _set_order_state(user_memory, 'collecting_details')
+                                    elif direct_res.get('status') == 'valid':
+                                        mem_d.setdefault('_internal', {}).pop('pending_courier_area_suggestions', None)
+                                    user_memory.data = mem_d
+                                    user_memory.save(update_fields=['data'])
                                 except Exception as direct_tool_err:
                                     logger.warning("Error running AI-triggered courier check: %s", direct_tool_err)
 
-                            # If memory now has complete order fields, validate with active courier tool before confirmation
-                            if _has_complete_order_fields(user_memory):
-                                # Validate against merchant's active courier provider (Pathao or Steadfast)
-                                try:
-                                    from aiAgent.tools.courier_validation_tool import validate_and_suggest_courier_area
-                                    plain_slots = _get_plain_order_values(user_memory)
-                                    fail_cnt = (user_memory.data or {}).get('_internal', {}).get('failed_attempts', {}).get('address', {}).get('count', 0)
-                                    val_res = validate_and_suggest_courier_area(
-                                        merchant=agent_config.user,
-                                        district=plain_slots.get('district'),
-                                        upazila=plain_slots.get('upazila'),
-                                        full_address=plain_slots.get('address'),
-                                        address_fail_count=fail_cnt
-                                    )
-
-                                    if val_res.get('status') == 'needs_clarification' and val_res.get('suggested_areas'):
-                                        # Save resolved IDs if any were found
-                                        loc_ids = val_res.get('location_ids') or {}
-                                        if any(loc_ids.values()):
-                                            mem_d = user_memory.data or {}
-                                            mem_d.setdefault('_internal', {})['courier_location_ids'] = {val_res.get('provider'): loc_ids}
-                                            user_memory.data = mem_d
-                                            user_memory.save(update_fields=['data'])
-
-                                        suggestions = val_res.get('suggested_areas')[:8]
-                                        mem_d = user_memory.data or {}
-                                        mem_d.setdefault('_internal', {})['pending_courier_area_suggestions'] = suggestions
-                                        user_memory.data = mem_d
-                                        user_memory.save(update_fields=['data'])
-
-                                        # Step 3: Downgrade any confirm intent to create; never confirm before courier hub is locked
-                                        if order_intent == 'confirm':
-                                            order_intent = 'create'
-
-                                        sugg_lines = []
-                                        for s in suggestions:
-                                            idx = s.get('index', '•')
-                                            s_name = s.get('name', '')
-                                            sugg_lines.append(f"{idx}. {s_name}")
-                                        sugg_text = "\n".join(sugg_lines)
-                                        area_clarification = (
-                                            f"\n\nআপনার এলাকাটি কুরিয়ারে নিখুঁতভাবে ডেলিভারির জন্য নিচের এরিয়াগুলোর মধ্যে কোনটি আপনার সবচেয়ে কাছে?\n{sugg_text}\n"
-                                            "অনুগ্রহ করে শুধু নম্বর (যেমন ১, ২) অথবা এরিয়ার নামটি জানান।"
-                                        )
-                                        parsed_reply = (parsed_reply or "").strip() + area_clarification
-                                        _set_order_state(user_memory, 'collecting_details')
-                                    else:
-                                        # Area valid or accepted, transition to draft confirmation
-                                        loc_ids = val_res.get('location_ids') or {}
-                                        if any(loc_ids.values()):
-                                            mem_d = user_memory.data or {}
-                                            mem_d.setdefault('_internal', {})['courier_location_ids'] = {val_res.get('provider'): loc_ids}
-                                            # Clean pending suggestions once locked
-                                            mem_d['_internal'].pop('pending_courier_area_suggestions', None)
-                                            user_memory.data = mem_d
-                                            user_memory.save(update_fields=['data'])
-
-                                        _set_order_state(user_memory, 'awaiting_confirmation')
-                                        confirmation = _get_confirmation_prompt(user_memory)
-                                        if confirmation:
-                                            ai_natural_reply = (parsed_reply or "").strip()
-                                            if ai_natural_reply:
-                                                parsed_reply = f"{ai_natural_reply}\n\n{confirmation}"
-                                            else:
-                                                parsed_reply = confirmation
-                                except Exception as courier_tool_err:
-                                    logger.warning(f"Courier validation tool error: {courier_tool_err}")
-                                    _set_order_state(user_memory, 'awaiting_confirmation')
-                                    confirmation = _get_confirmation_prompt(user_memory)
-                                    if confirmation:
-                                        ai_natural_reply = (parsed_reply or "").strip()
-                                        if ai_natural_reply:
-                                            parsed_reply = f"{ai_natural_reply}\n\n{confirmation}"
-                                        else:
-                                            parsed_reply = confirmation
-                                cache_type = 'no_cache'
+                            # Pure State & AI-Driven Transition: Never run a redundant backend courier check without sub_area_hint
+                            # or append hardcoded alphabetical area lists onto AI's reply!
+                            pending_suggs_now = (user_memory.data or {}).get('_internal', {}).get('pending_courier_area_suggestions') or []
+                            if _has_complete_order_fields(user_memory) and not pending_suggs_now:
+                                _set_order_state(user_memory, 'awaiting_confirmation')
                             else:
-                                prev_order_state = _get_order_state(user_memory)
                                 _set_order_state(user_memory, 'collecting_details')
 
-                                # Keep CheckoutSession synced with latest in-chat order fields,
-                                # and append text link ONLY on WhatsApp (button platforms attach the 🛒 অর্ডার button).
-                                try:
-                                    from aiAgent.business_logic.logic_handler import _get_checkout_url_for_contact
-                                    from aiAgent.models import Contact
-                                    contact = Contact.objects.filter(agent=agent_config, identifier=sender_id).first() if sender_id else None
-                                    checkout_url = _get_checkout_url_for_contact(contact) if contact else None
-                                    eff_platform = (request_type or (agent_config.platform if agent_config else 'whatsapp')).lower()
-                                    if eff_platform in ['whatsapp'] and checkout_url and checkout_url not in parsed_reply:
-                                        if _has_complete_order_fields(user_memory):
-                                            link_cta = (
-                                                f"\n\n🛒 নিচের লিংকে ক্লিক করে শপ থেকে ১-ক্লিকে অর্ডার কনফার্ম করতে পারেন:\n👉 {checkout_url}"
-                                            )
-                                        else:
-                                            link_cta = (
-                                                f"\n\n🛒 নিচের লিংকে ক্লিক করে শপ থেকে ১-ক্লিকে অর্ডার কনফার্ম করতে পারেন:\n👉 {checkout_url}\n"
-                                                "(অথবা আপনি চাইলে এখানে চ্যাটেও আপনার নাম, মোবাইল নম্বর এবং পূর্ণ ঠিকানা দিতে পারেন)"
-                                            )
-                                        parsed_reply = parsed_reply.rstrip() + link_cta
-                                    cache_type = 'no_cache'
-                                except Exception as link_err:
-                                    logger.warning(f"Error syncing/appending 1-click checkout link on order intent: {link_err}")
+                            # Keep CheckoutSession synced with latest in-chat order fields and locked courier_location_ids
+                            try:
+                                from aiAgent.business_logic.logic_handler import _get_checkout_url_for_contact
+                                from aiAgent.models import Contact
+                                contact = Contact.objects.filter(agent=agent_config, identifier=sender_id).first() if sender_id else None
+                                checkout_url = _get_checkout_url_for_contact(contact) if contact else None
+                                eff_platform = (request_type or (agent_config.platform if agent_config else 'whatsapp')).lower()
+                                if eff_platform in ['whatsapp'] and checkout_url and checkout_url not in parsed_reply:
+                                    if _has_complete_order_fields(user_memory):
+                                        link_cta = (
+                                            f"\n\n🛒 নিচের লিংকে ক্লিক করে শপ থেকে ১-ক্লিকে অর্ডার কনফার্ম করতে পারেন:\n👉 {checkout_url}"
+                                        )
+                                    else:
+                                        link_cta = (
+                                            f"\n\n🛒 নিচের লিংকে ক্লিক করে শপ থেকে ১-ক্লিকে অর্ডার কনফার্ম করতে পারেন:\n👉 {checkout_url}\n"
+                                            "(অথবা আপনি চাইলে এখানে চ্যাটেও আপনার নাম, মোবাইল নম্বর এবং পূর্ণ ঠিকানা দিতে পারেন)"
+                                        )
+                                    parsed_reply = parsed_reply.rstrip() + link_cta
+                                cache_type = 'no_cache'
+                            except Exception as link_err:
+                                logger.warning(f"Error syncing/appending 1-click checkout link on order intent: {link_err}")
                         except Exception as seed_err:
                             logger.error(f"Failed to seed AI order into memory: {seed_err}", exc_info=True)
                 else:

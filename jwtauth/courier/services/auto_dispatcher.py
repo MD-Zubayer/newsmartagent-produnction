@@ -38,18 +38,15 @@ def _resolve_pathao_location_ids(order: CustomerOrder) -> tuple:
     zone_id = None
     area_id = None
 
-    # 1. Validate raw order IDs ONLY if they form a valid Pathao hierarchy AND match order.district when present
+    # 1. Trust locked order IDs immediately if they form a valid Pathao parent-child hierarchy in DB
     if raw_city_id and raw_zone_id:
         zone_check = PathaoZone.objects.filter(zone_id=raw_zone_id, city__city_id=raw_city_id).select_related('city').first()
         if zone_check:
-            if not district_str or district_str.lower() in zone_check.city.city_name.lower() or zone_check.city.city_name.lower() in district_str.lower():
-                city_id = zone_check.city.city_id
-                zone_id = zone_check.zone_id
-                if raw_area_id and PathaoArea.objects.filter(area_id=raw_area_id, zone__zone_id=zone_id).exists():
-                    area_id = raw_area_id
-
-    if city_id and zone_id:
-        return city_id, zone_id, area_id
+            city_id = zone_check.city.city_id
+            zone_id = zone_check.zone_id
+            if raw_area_id and PathaoArea.objects.filter(area_id=raw_area_id, zone__zone_id=zone_id).exists():
+                area_id = raw_area_id
+            return city_id, zone_id, area_id
 
     # 2. Try resolve_courier_mapping_for_address (Redis + AI/heuristics)
     try:

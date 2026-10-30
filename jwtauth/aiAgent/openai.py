@@ -164,11 +164,14 @@ def generate_openai_reply(system_promt, messages, current_message, agent_config,
         with provider_call("openai", "chat_completion"):
             response = client.chat.completions.create(timeout=30.0, **payload)
         
-        # --- রিপ্লাই এক্সট্রাক্ট করা ও ফাংশন কল লুপ ---
+        # --- রিপ্লাই এক্সট্রাক্ট করা ও ফাংশন কল লুপ (সর্বোচ্চ ২ রাউন্ড যাতে জোন লিস্ট থেকে AI সরাসরি area_id লক করতে পারে) ---
         message = response.choices[0].message
         executed_tool_data = None
 
-        if getattr(message, 'tool_calls', None):
+        for _tool_round in range(2):
+            if not getattr(message, 'tool_calls', None):
+                break
+            handled_call = False
             for tc in message.tool_calls:
                 fn_name = tc.function.name
                 if fn_name == 'validate_courier_coverage':
@@ -182,7 +185,8 @@ def generate_openai_reply(system_promt, messages, current_message, agent_config,
                         district=args.get('district'),
                         upazila=args.get('upazila'),
                         full_address=args.get('address'),
-                        sub_area_hint=args.get('sub_area_hint')
+                        sub_area_hint=args.get('sub_area_hint'),
+                        area_id=args.get('area_id')
                     )
                     executed_tool_data = tool_result
                     formatted_messages.append(message)
@@ -196,7 +200,10 @@ def generate_openai_reply(system_promt, messages, current_message, agent_config,
                     with provider_call("openai", "chat_completion"):
                         response = client.chat.completions.create(timeout=30.0, **payload)
                     message = response.choices[0].message
+                    handled_call = True
                     break
+            if not handled_call:
+                break
 
         raw_reply = message.content
         print(f"\n--- [DEBUG] Raw AI Reply Length: {len(raw_reply) if raw_reply else 0} ---")

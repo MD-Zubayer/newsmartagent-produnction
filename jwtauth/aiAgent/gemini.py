@@ -70,7 +70,8 @@ def generate_gemini_reply(prompt, history, current_message, agent_config, _skip_
                     'district': {'type': 'STRING', 'description': 'District name in English'},
                     'upazila': {'type': 'STRING', 'description': 'Upazila or thana in English'},
                     'address': {'type': 'STRING', 'description': 'Full address'},
-                    'sub_area_hint': {'type': 'STRING', 'description': 'Specific village, union, bazar, or landmark translated to English (e.g. Shahmollikdi, Pirerchor)'}
+                    'sub_area_hint': {'type': 'STRING', 'description': 'Specific village, union, bazar, or landmark translated to English (e.g. Shahmollikdi, Pirerchor)'},
+                    'area_id': {'type': 'INTEGER', 'description': 'Optional exact area_id selected from available_areas_in_zone returned by a previous tool call'}
                 },
                 'required': ['district', 'upazila', 'address']
             }
@@ -85,8 +86,11 @@ def generate_gemini_reply(prompt, history, current_message, agent_config, _skip_
                 config=types.GenerateContentConfig(**gen_config_kwargs)
             )
 
-            # Native tool execution loop if Gemini requested a function call
-            if getattr(response, 'function_calls', None):
+            # Native tool execution loop (up to 2 rounds so AI can pick area_id from zone list)
+            for _tool_round in range(2):
+                if not getattr(response, 'function_calls', None):
+                    break
+                handled_call = False
                 for fc in response.function_calls:
                     if fc.name == 'validate_courier_coverage':
                         args = dict(fc.args or {})
@@ -96,7 +100,8 @@ def generate_gemini_reply(prompt, history, current_message, agent_config, _skip_
                             district=args.get('district'),
                             upazila=args.get('upazila'),
                             full_address=args.get('address'),
-                            sub_area_hint=args.get('sub_area_hint')
+                            sub_area_hint=args.get('sub_area_hint'),
+                            area_id=args.get('area_id')
                         )
                         executed_tool_data = tool_result
                         formatted_history.append(response.candidates[0].content)
@@ -110,7 +115,10 @@ def generate_gemini_reply(prompt, history, current_message, agent_config, _skip_
                             contents=formatted_history,
                             config=types.GenerateContentConfig(**gen_config_kwargs)
                         )
+                        handled_call = True
                         break
+                if not handled_call:
+                    break
 
         reply = response.text.strip() if response.text else ""
         total_tokens = response.usage_metadata.total_token_count or 0
